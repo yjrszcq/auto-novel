@@ -17,7 +17,7 @@
    docker run -d --name auto-novel -p 8011:80 --restart unless-stopped szcq/auto-novel
    ```
 
-2. 浏览器访问 `http://localhost:8011`。
+2. 浏览器访问 `http://localhost:8011`
 
 ## 声明
 
