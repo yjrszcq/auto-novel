@@ -46,16 +46,6 @@ const playSound = (source: string) => {
 
       <n-list-item>
         <n-flex vertical>
-          <b>显示的翻译按钮</b>
-          <translator-check
-            v-model:value="setting.enabledTranslator"
-            size="small"
-          />
-        </n-flex>
-      </n-list-item>
-
-      <n-list-item>
-        <n-flex vertical>
           <b>工作区语音提醒</b>
           <n-flex :wrap="false" :size="0">
             <n-checkbox v-model:checked="setting.workspaceSound">
@@ -71,17 +61,6 @@ const playSound = (source: string) => {
             />
             ]
           </n-flex>
-        </n-flex>
-      </n-list-item>
-
-      <n-list-item>
-        <n-flex vertical>
-          <b>语言</b>
-          <c-radio-group
-            v-model:value="setting.locale"
-            :options="Setting.localeOptions"
-            size="small"
-          />
         </n-flex>
       </n-list-item>
     </n-list>
