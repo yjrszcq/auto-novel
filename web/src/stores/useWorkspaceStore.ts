@@ -26,12 +26,22 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
     uncompletedJobs: [],
   });
 
+  const ensureConcurrency = (worker: W) => {
+    const typed = worker as W & { concurrency?: number };
+    if (typeof typed.concurrency !== 'number' || typed.concurrency < 1) {
+      typed.concurrency = 1;
+    }
+    return typed;
+  };
+
   if (migrate) {
     migrate(ref);
   }
 
+  ref.value.workers.forEach(ensureConcurrency);
+
   const addWorker = (worker: W) => {
-    ref.value.workers.push(worker);
+    ref.value.workers.push(ensureConcurrency(worker));
   };
   const deleteWorker = (id: string) => {
     ref.value.workers = ref.value.workers.filter((w) => w.id !== id);
@@ -140,9 +150,9 @@ const createSakuraWorkspaceStore = () =>
   createWorkspaceStore<SakuraWorker>(
     LSKey.WorkspaceSakura,
     [
-      { id: '共享', endpoint: 'https://sakura-share.one' },
-      { id: '本机', endpoint: 'http://127.0.0.1:8080' },
-      { id: 'AutoDL', endpoint: 'http://127.0.0.1:6006' },
+      { id: '共享', endpoint: 'https://sakura-share.one', concurrency: 1 },
+      { id: '本机', endpoint: 'http://127.0.0.1:8080', concurrency: 1 },
+      { id: 'AutoDL', endpoint: 'http://127.0.0.1:6006', concurrency: 1 },
     ],
     (workspace) => {
       // 2024-5-14

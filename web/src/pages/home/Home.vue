@@ -1,104 +1,113 @@
 <script lang="ts" setup>
-import {
-  BookOutlined,
-  ForumOutlined,
-  LanguageOutlined,
-  ReadMoreOutlined,
-  StarBorderOutlined,
-} from '@vicons/material';
+import { WorkspacesOutlined } from '@vicons/material';
 
-import { FavoredApi } from '@/api';
-import { WebNovelRepo, WenkuNovelRepo } from '@/repos';
 import bannerUrl from '@/image/banner.webp';
-import type { WebNovelOutlineDto } from '@/model/WebNovel';
+import type { LocalVolumeMetadata } from '@/model/LocalVolume';
+import type { TranslateJobRecord } from '@/model/Translator';
+import { useLocalVolumeStore, useWorkspaceStore } from '@/stores';
 import { useBreakPoints } from '@/pages/util';
-import { useWhoamiStore } from '@/stores';
-import { WebUtil } from '@/util/web';
 
 const bp = useBreakPoints();
 const showShortcut = bp.smaller('tablet');
 
-const router = useRouter();
 const vars = useThemeVars();
 
-const whoamiStore = useWhoamiStore();
-const { whoami } = storeToRefs(whoamiStore);
+const keyword = ref('');
+const infoPanelHtml = ref<string | null>(null);
 
-const url = ref('');
-const query = (url: string) => {
-  if (url.length === 0) return;
-  const parseResult = WebUtil.parseUrl(url);
-  if (parseResult !== undefined) {
-    const { providerId, novelId } = parseResult;
-    router.push({ path: `/novel/${providerId}/${novelId}` });
-  } else {
-    router.push({ path: '/novel', query: { query: url } });
-  }
-};
-
-const favoriteList = ref<{
-  data?: WebNovelOutlineDto[];
-  error: Error | null;
-}>({ error: null });
-const loadFavorite = async () => {
-  try {
-    const data = await FavoredApi.listFavoredWebNovel('default', {
-      page: 0,
-      pageSize: 8,
-      query: '',
-      provider: 'kakuyomu,syosetu,novelup,hameln,pixiv,alphapolis',
-      type: 0,
-      level: 0,
-      translate: 0,
-      sort: 'update',
-    }).then((it) => it.items);
-    favoriteList.value = { data, error: null };
-  } catch (e) {
-    favoriteList.value = { error: e as Error };
-  }
-};
-watch(
-  () => whoami.value.isSignedIn,
-  (isSignedIn) => {
-    if (isSignedIn) {
-      loadFavorite();
-    }
-  },
-  { immediate: true },
-);
-
-const { data: mostVisitedWeb, error: mostVisitedWebError } =
-  WebNovelRepo.useWebNovelList(1, {
-    provider: 'kakuyomu,syosetu,novelup,hameln,pixiv,alphapolis',
-    sort: 1,
-    level: 1,
-  });
-
-const { data: latestUpdateWenku, error: latestUpdateWenkuError } =
-  WenkuNovelRepo.useWenkuNovelList(1, { level: 1 });
-
-const showHowToUseModal = ref(false);
-const linkExample = [
-  ['Kakuyomu', 'https://kakuyomu.jp/works/16817139555217983105'],
-  [
-    '成为小说家吧',
-    'https://ncode.syosetu.com/n0833hi <br /> https://novel18.syosetu.com/n3192gh',
-  ],
-  ['Novelup', 'https://novelup.plus/story/206612087'],
-  ['Hameln', 'https://syosetu.org/novel/297874/'],
-  [
-    'Pixiv系列/短篇',
-    'https://www.pixiv.net/novel/series/9406879 <br/> https://www.pixiv.net/novel/show.php?id=18304868',
-  ],
-  ['Alphapolis', 'https://www.alphapolis.co.jp/novel/638978238/525733370'],
+const quickActions = [
+  { label: '小说工具箱', to: '/workspace/toolbox', icon: WorkspacesOutlined },
+  { label: 'GPT工作区', to: '/workspace/gpt', icon: WorkspacesOutlined },
+  { label: 'Sakura工作区', to: '/workspace/sakura', icon: WorkspacesOutlined },
+  { label: '交互翻译', to: '/workspace/interactive', icon: WorkspacesOutlined },
 ];
 
-const showQQModal = ref(false);
-const qqLink =
-  'http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=Qa0SOMBYZoJZ4vuykz3MbPS0zbpeN0pW&authKey=q75E7fr5CIBSDhqX%2F4kuC%2B0mcPiDvj%2FSDfP%2FGZ8Rl8kDn6Z3M6XPSZ91yt4ZWonq&noverify=0&group_code=819513328';
+const loadInfoPanel = async () => {
+  try {
+    const response = await fetch('/panel-content/info.html', {
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      infoPanelHtml.value = null;
+      return;
+    }
+    const content = (await response.text()).trim();
+    infoPanelHtml.value = content.length > 0 ? content : null;
+  } catch (error) {
+    console.warn('加载说明面板失败', error);
+    infoPanelHtml.value = null;
+  }
+};
 
-const telegramLink = 'https://t.me/+Mphy0wV4LYZkNTI1';
-const githubLink = 'https://github.com/auto-novel/auto-novel';
+onMounted(loadInfoPanel);
+
+const localRepo = shallowRef<Awaited<ReturnType<typeof useLocalVolumeStore>>>();
+const ensureLocalRepo = async () => {
+  if (!localRepo.value) {
+    localRepo.value = await useLocalVolumeStore();
+  }
+  return localRepo.value;
+};
+
+const gptWorkspace = useWorkspaceStore('gpt');
+const sakuraWorkspace = useWorkspaceStore('sakura');
+const gptRecordsSource = computed(
+  () => gptWorkspace.ref.value.uncompletedJobs,
+);
+const sakuraRecordsSource = computed(
+  () => sakuraWorkspace.ref.value.uncompletedJobs,
+);
+
+interface SearchResult {
+  keyword: string;
+  volumes: LocalVolumeMetadata[];
+  gptRecords: TranslateJobRecord[];
+  sakuraRecords: TranslateJobRecord[];
+}
+
+const searchResults = ref<SearchResult | null>(null);
+const searchState = reactive({ loading: false, error: null as string | null });
+const showSearchPanel = computed(() => keyword.value.trim().length > 0);
+
+const filterRecords = (
+  records: TranslateJobRecord[],
+  keywordLower: string,
+) => {
+  return records.filter((record) => {
+    const text = `${record.task} ${record.description ?? ''}`.toLowerCase();
+    return text.includes(keywordLower);
+  });
+};
+
+const handleSearch = async () => {
+  const query = keyword.value.trim();
+  if (query.length === 0) {
+    searchResults.value = null;
+    searchState.error = null;
+    return;
+  }
+  searchState.loading = true;
+  searchState.error = null;
+  const lower = query.toLowerCase();
+  try {
+    const repo = await ensureLocalRepo();
+    const volumes = await repo.listVolume();
+    const volumeMatches = volumes.filter((volume) =>
+      volume.id.toLowerCase().includes(lower),
+    );
+    searchResults.value = {
+      keyword: query,
+      volumes: volumeMatches,
+      gptRecords: filterRecords(gptRecordsSource.value, lower),
+      sakuraRecords: filterRecords(sakuraRecordsSource.value, lower),
+    };
+  } catch (error) {
+    searchState.error = `${error}`;
+  } finally {
+    searchState.loading = false;
+  }
+};
+
 </script>
 
 <template>
@@ -119,14 +128,14 @@ const githubLink = 'https://github.com/auto-novel/auto-novel';
       </n-h1>
       <n-input-group>
         <n-input
-          v-model:value="url"
+          v-model:value="keyword"
           size="large"
-          placeholder="输入网络小说链接直接跳转，或搜索本站缓存..."
+          placeholder="输入小说文件名或任务描述，搜索上传的小说与缓存的翻译"
           :input-props="{ spellcheck: false }"
-          @keyup.enter="query(url)"
+          @keyup.enter="handleSearch"
           :style="{ 'background-color': vars.bodyColor }"
         />
-        <n-button size="large" type="primary" @click="query(url)">
+        <n-button size="large" type="primary" @click="handleSearch">
           搜索
         </n-button>
       </n-input-group>
@@ -142,131 +151,156 @@ const githubLink = 'https://github.com/auto-novel/auto-novel';
       style="margin: 8px 0px"
     >
       <router-link
-        :to="whoami.isSignedIn ? '/favorite/web' : '/favorite/local'"
+        v-for="action in quickActions"
+        :key="action.to"
+        :to="action.to"
         style="flex: 1"
       >
         <n-button quaternary style="width: 100%; height: 64px">
           <n-flex align="center" vertical style="font-size: 12px">
-            <n-icon size="24" :component="StarBorderOutlined" />
-            我的收藏
-          </n-flex>
-        </n-button>
-      </router-link>
-
-      <router-link to="/novel" style="flex: 1">
-        <n-button quaternary style="width: 100%; height: 64px">
-          <n-flex align="center" vertical style="font-size: 12px">
-            <n-icon size="24" :component="LanguageOutlined" />
-            网络小说
-          </n-flex>
-        </n-button>
-      </router-link>
-
-      <router-link to="/wenku" style="flex: 1">
-        <n-button quaternary style="width: 100%; height: 64px">
-          <n-flex align="center" vertical style="font-size: 12px">
-            <n-icon size="24" :component="BookOutlined" />
-            文库小说
-          </n-flex>
-        </n-button>
-      </router-link>
-
-      <router-link to="/forum" style="flex: 1">
-        <n-button quaternary style="width: 100%; height: 64px">
-          <n-flex align="center" vertical style="font-size: 12px">
-            <n-icon size="24" :component="ForumOutlined" />
-            论坛
+            <n-icon size="24" :component="action.icon" />
+            {{ action.label }}
           </n-flex>
         </n-button>
       </router-link>
     </n-flex>
     <div v-else style="height: 16px" />
 
-    <bulletin>
-      <Migrate />
-      <n-flex>
-        <n-button text type="primary" @click="showHowToUseModal = true">
-          使用说明
-        </n-button>
-        /
-        <n-button text type="primary" @click="showQQModal = true">
-          QQ群
-        </n-button>
-        /
-        <n-a :href="telegramLink" target="_blank">Telegram</n-a>
-        /
-        <n-a :href="githubLink" target="_blank">Github</n-a>
-      </n-flex>
-      <n-p>
-        禁止使用脚本绕过翻译器提交翻译文本，哪怕你觉得自己提交的是正经翻译。
-      </n-p>
-      <n-p>
-        FishHawk长期996，网站开发速度大幅下降已成常态，论坛反馈目前没有精力维护，有问题加群@吧
-      </n-p>
+    <bulletin v-if="infoPanelHtml">
+      <!-- eslint-disable-next-line vue/no-v-html -->
+      <div v-html="infoPanelHtml" />
     </bulletin>
 
-    <template v-if="whoami.isSignedIn">
-      <section-header title="我的收藏">
-        <router-link to="/favorite/web">
-          <c-button label="更多" :icon="ReadMoreOutlined" />
-        </router-link>
-      </section-header>
-      <PanelWebNovel
-        :novels="favoriteList?.data?.slice(0, 8)"
-        :error="favoriteList?.error"
-      />
-      <n-divider />
-    </template>
+    <n-card v-if="showSearchPanel" class="search-result-card" size="small">
+      <template #header>
+        <n-text>
+          {{
+            searchResults ? `搜索：${searchResults.keyword}` : '搜索结果'
+          }}
+        </n-text>
+      </template>
 
-    <section-header title="网络小说-最多点击">
-      <router-link to="/novel">
-        <c-button label="更多" :icon="ReadMoreOutlined" />
-      </router-link>
-    </section-header>
-    <PanelWebNovel
-      :novels="mostVisitedWeb?.items?.slice(0, 8)"
-      :error="mostVisitedWebError"
+      <n-skeleton v-if="searchState.loading" text :repeat="3" />
+
+      <n-alert
+        v-else-if="searchState.error"
+        type="error"
+        :title="'搜索失败'"
+      >
+        {{ searchState.error }}
+      </n-alert>
+
+      <n-empty v-else-if="!searchResults" description="点击搜索以开始查询" />
+
+      <template v-else>
+        <n-space vertical :size="16">
+          <div>
+            <n-h3>上传的小说</n-h3>
+            <n-empty
+              v-if="searchResults.volumes.length === 0"
+              description="没有匹配的小说"
+            />
+            <n-list v-else>
+              <n-list-item
+                v-for="volume in searchResults.volumes"
+                :key="volume.id"
+              >
+                <n-thing :title="volume.id">
+                  <template #description>
+                    <n-text depth="3">
+                      创建于
+                      <n-time :time="volume.createAt" type="relative" />
+                      ，共 {{ volume.toc.length }} 个分段
+                    </n-text>
+                  </template>
+                </n-thing>
+              </n-list-item>
+            </n-list>
+          </div>
+
+          <div>
+            <n-h3>缓存的翻译</n-h3>
+            <n-empty
+              v-if="
+                searchResults.gptRecords.length === 0 &&
+                searchResults.sakuraRecords.length === 0
+              "
+              description="没有匹配的任务"
+            />
+            <template v-else>
+              <div class="record-group">
+                <n-h4>GPT 工作区</n-h4>
+                <n-empty
+                  v-if="searchResults.gptRecords.length === 0"
+                  size="small"
+                  description="未找到任务"
+                />
+                <n-list v-else>
+                  <n-list-item
+                    v-for="record in searchResults.gptRecords"
+                    :key="`${record.task}-gpt`"
+                  >
+                    <n-thing :title="record.description || '未命名任务'">
+                      <template #description>
+                        <n-text depth="3">
+                          {{ record.task }}
+                        </n-text>
+                      </template>
+                      <template #footer>
+                        <n-text depth="3">请前往 GPT 工作区执行操作</n-text>
+                      </template>
+                    </n-thing>
+                  </n-list-item>
+                </n-list>
+              </div>
+
+              <div class="record-group">
+                <n-h4>Sakura 工作区</n-h4>
+                <n-empty
+                  v-if="searchResults.sakuraRecords.length === 0"
+                  size="small"
+                  description="未找到任务"
+                />
+                <n-list v-else>
+                  <n-list-item
+                    v-for="record in searchResults.sakuraRecords"
+                    :key="`${record.task}-sakura`"
+                  >
+                    <n-thing :title="record.description || '未命名任务'">
+                      <template #description>
+                        <n-text depth="3">
+                          {{ record.task }}
+                        </n-text>
+                      </template>
+                      <template #footer>
+                        <n-text depth="3">请前往 Sakura 工作区执行操作</n-text>
+                      </template>
+                    </n-thing>
+                  </n-list-item>
+                </n-list>
+              </div>
+            </template>
+          </div>
+        </n-space>
+      </template>
+    </n-card>
+
+    <job-record-section
+      id="gpt"
+      title="GPT工作区任务记录"
+      :enable-retry="false"
+      redirect-to="/workspace/gpt"
     />
+
     <n-divider />
 
-    <section-header title="文库小说-最新更新">
-      <router-link to="/wenku">
-        <c-button label="更多" :icon="ReadMoreOutlined" />
-      </router-link>
-    </section-header>
-    <PanelWenkuNovel
-      :novels="latestUpdateWenku?.items?.slice(0, 12)"
-      :error="latestUpdateWenkuError"
+    <job-record-section
+      id="sakura"
+      title="Sakura工作区任务记录"
+      :enable-retry="false"
+      redirect-to="/workspace/sakura"
     />
-    <n-divider />
   </div>
-
-  <c-modal title="使用说明" v-model:show="showHowToUseModal">
-    <n-p>
-      将小说链接复制到网站首页的输入框里，点击搜索，如果链接正确，将会跳转到小说页面。更高级的用法，例如生成机翻、高级搜索等，参见
-      <c-a to="/forum/64f3d63f794cbb1321145c07">使用教程</c-a>
-      。有什么问题和建议请在
-      <c-a to="/forum">论坛</c-a>
-      中发帖讨论。
-    </n-p>
-    <n-p>支持的小说站如下:</n-p>
-    <n-p v-for="[name, link] of linkExample" :key="name">
-      <b>{{ name }}</b>
-      <br />
-      <!-- eslint-disable-next-line vue/no-v-html -->
-      <span v-html="link" />
-    </n-p>
-  </c-modal>
-
-  <c-modal title="QQ群" v-model:show="showQQModal">
-    <n-p>
-      交流群：
-      <n-a :href="qqLink" target="_blank">819513328</n-a>
-      ，验证答案是“绿色”。
-      <br />
-      <n-qr-code :size="150" :value="qqLink" />
-    </n-p>
-  </c-modal>
 </template>
 
 <style scoped>

@@ -1,56 +1,26 @@
 # 轻小说机翻机器人
 
-[![GPL-3.0](https://img.shields.io/github/license/auto-novel/auto-novel)](https://github.com/auto-novel/auto-novel#license)
-[![cd-web](https://github.com/auto-novel/auto-novel/actions/workflows/cd-web.yml/badge.svg)](https://github.com/auto-novel/auto-novel/actions/workflows/cd-web.yml)
-[![cd-api](https://github.com/auto-novel/auto-novel/actions/workflows/cd-api.yml/badge.svg)](https://github.com/auto-novel/auto-novel/actions/workflows/cd-api.yml)
-
-> 重建巴别塔！！
-
-[轻小说机翻机器人](https://books.fishhawk.top/)是一个自动生成轻小说机翻并分享的网站。在这里，你可以浏览日文网络小说/文库小说，或者上传你自己的 EPUB/TXT 文件，然后生成机翻版本。
+本仓库将[轻小说机翻机器人](https://n.novelia.cc/)精简为了纯前端应用，专注于管理 GPT / Sakura 工作区与本地小说翻译任务。
 
 ## 功能
 
-- 浏览日本网络小说，支持的网站有：[Kakuyomu](https://kakuyomu.jp/)、[小説家になろう](https://syosetu.com/)、[Novelup](https://novelup.plus/)、[Hameln](https://syosetu.org/)、[Pixiv](https://www.pixiv.net/)、[Alphapolis](https://www.alphapolis.co.jp/)。
-- 生成多种机翻，支持的翻译器有：百度、有道、OpenAI-like API（例如 DeepSeek API）、[Sakura](https://huggingface.co/SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF)。
-- 支持术语表。
-- 支持多种格式，包括日文、中文以及中日对比。
-- 支持生成 EPUB 和 TXT 文件。
-- 支持翻译 EPUB 和 TXT 文件。
-- 支持在线阅读。
-
-## 贡献
-
-请参考 [CONTRIBUTING.md](https://github.com/auto-novel/auto-novel/blob/main/CONTRIBUTING.md)
-
-<a href="https://next.ossinsight.io/widgets/official/compose-recent-top-contributors?repo_id=559577341" target="_blank" style="display: block" align="left">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://next.ossinsight.io/widgets/official/compose-recent-top-contributors/thumbnail.png?repo_id=559577341&image_size=auto&color_scheme=dark" width="280">
-    <img alt="Top Contributors of ant-design/ant-design - Last 28 days" src="https://next.ossinsight.io/widgets/official/compose-recent-top-contributors/thumbnail.png?repo_id=559577341&image_size=auto&color_scheme=light" width="280">
-  </picture>
-</a>
+- 管理 GPT / Sakura 工作区，排队并追踪翻译任务。
+- 通过本地文件创建翻译项目，并导出 EPUB / TXT。
+- 搜索本地上传的小说与缓存的任务记录。
+- 支持设置并发翻译。
 
 ## 部署
 
-> [!WARNING]
-> 注意：本项目并不是为了个人部署设计的，不保证所有功能可用和前向兼容。
+1. 使用以下命令快速部署项目
 
-下载项目：
+   ```bash
+   docker run -d --name auto-novel -p 8011:80 --restart unless-stopped szcq/auto-novel
+   ```
 
-```bash
-> git clone https://github.com/auto-novel/auto-novel.git
-> cd auto-novel
-```
+2. 浏览器访问 `http://localhost:8011`。
 
-创建并编辑 `.env` 文件，内容如下:
+## 声明
 
-```bash
-DATA_PATH=./data                      # 数据的存储位置
-HTTPS_PROXY=https://127.0.0.1:7890    # web 小说代理，可以为空
-PIXIV_COOKIE_PHPSESSID=               # Pixiv cookies，不使用 Pixiv 可以不填
-```
+- 本仓库基于[轻小说机翻机器人](https://n.novelia.cc/)进行修改，在此致敬原作者：[auto-novel/auto-novel](https://github.com/auto-novel/auto-novel)。
 
-打开 `docker-compose.yml` 文件，酌情修改。
-
-运行 `docker compose up [-d]` (`-d` 为后台运行)。
-
-访问 `http://localhost` 即可。
+- 感谢使用。

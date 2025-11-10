@@ -1,26 +1,18 @@
 <script lang="ts" setup>
 import {
-  BookOutlined,
-  CandlestickChartOutlined,
   DarkModeOutlined,
-  ForumOutlined,
-  HistoryOutlined,
   HomeOutlined,
-  LanguageOutlined,
-  LocalFireDepartmentOutlined,
-  LogOutOutlined,
   MenuOutlined,
   SettingsOutlined,
-  StarBorderOutlined,
   WbSunnyOutlined,
   WorkspacesOutlined,
 } from '@vicons/material';
 import type { MenuOption } from 'naive-ui';
-import { NButton, NIcon, NText, NTime, useOsTheme } from 'naive-ui';
+import { NIcon, useOsTheme } from 'naive-ui';
 import { RouterLink } from 'vue-router';
 
 import { useBreakPoints } from '@/pages/util';
-import { useSettingStore, useWhoamiStore } from '@/stores';
+import { useSettingStore } from '@/stores';
 
 const bp = useBreakPoints();
 const hasSider = bp.greater('tablet');
@@ -31,11 +23,20 @@ watch(hasSider, () => (showMenuModal.value = false));
 
 const route = useRoute();
 
-const whoamiStore = useWhoamiStore();
-const { whoami } = storeToRefs(whoamiStore);
-
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
+
+const osTheme = useOsTheme();
+const activeTheme = computed<'light' | 'dark'>(() => {
+  if (setting.value.theme === 'system') {
+    return osTheme.value ?? 'light';
+  }
+  return setting.value.theme;
+});
+
+const toggleTheme = () => {
+  setting.value.theme = activeTheme.value === 'light' ? 'dark' : 'light';
+};
 
 const menuCollapsed = computed(() => {
   if (menuShowTrigger.value) {
@@ -50,210 +51,72 @@ const renderLabel = (text: string, href: string) => () =>
 const renderIcon = (icon: Component) => () =>
   h(NIcon, null, { default: () => h(icon) });
 
-const menuOptions = computed<MenuOption[]>(() => {
-  const resolveTheme = () => {
-    if (setting.value.theme === 'system') {
-      const osTheme = useOsTheme();
-      return osTheme.value ?? 'light';
-    } else {
-      return setting.value.theme;
-    }
-  };
-  const theme = resolveTheme();
-
-  return [
-    {
-      label: renderLabel('首页', '/'),
-      icon: renderIcon(HomeOutlined),
-      key: '/',
-    },
-    {
-      label: renderLabel(
-        '我的收藏',
-        whoami.value.isSignedIn ? '/favorite/web' : '/favorite/local',
+const menuOptions = computed<MenuOption[]>(() => [
+  {
+    label: renderLabel('首页', '/'),
+    icon: renderIcon(HomeOutlined),
+    key: '/',
+  },
+  {
+    label: '工作区',
+    icon: renderIcon(WorkspacesOutlined),
+    key: '/workspace',
+    children: [
+      {
+        label: renderLabel('小说工具箱', '/workspace/toolbox'),
+        key: '/workspace/toolbox',
+      },
+      {
+        label: renderLabel('GPT工作区', '/workspace/gpt'),
+        key: '/workspace/gpt',
+      },
+      {
+        label: renderLabel('Sakura工作区', '/workspace/sakura'),
+        key: '/workspace/sakura',
+      },
+      {
+        label: renderLabel('交互翻译', '/workspace/interactive'),
+        key: '/workspace/interactive',
+      },
+    ],
+  },
+  {
+    label: renderLabel('设置', '/setting'),
+    icon: renderIcon(SettingsOutlined),
+    key: '/setting',
+  },
+  {
+    label: () =>
+      h(
+        'a',
+        {
+          onClick: toggleTheme,
+        },
+        { default: () => '切换主题' },
       ),
-      icon: renderIcon(StarBorderOutlined),
-      key: '/favorite',
-    },
-    {
-      label: renderLabel('阅读历史', '/read-history'),
-      icon: renderIcon(HistoryOutlined),
-      key: '/read-history',
-      show: whoami.value.isSignedIn,
-    },
-    {
-      label: renderLabel('网络小说', '/novel'),
-      icon: renderIcon(LanguageOutlined),
-      key: '/novel',
-    },
-    {
-      label: renderLabel('文库小说', '/wenku'),
-      icon: renderIcon(BookOutlined),
-      key: '/wenku',
-    },
-    {
-      label: '小说排行',
-      icon: renderIcon(LocalFireDepartmentOutlined),
-      key: '/rank',
-      children: [
-        {
-          label: renderLabel('成为小说家：流派', '/rank/web/syosetu/1'),
-          key: '/rank/web/syosetu/1',
-        },
-        {
-          label: renderLabel('成为小说家：综合', '/rank/web/syosetu/2'),
-          key: '/rank/web/syosetu/2',
-        },
-        {
-          label: renderLabel(
-            '成为小说家：异世界转移/转生',
-            '/rank/web/syosetu/3',
-          ),
-          key: '/rank/web/syosetu/3',
-        },
-        {
-          label: renderLabel('Kakuyomu：流派', '/rank/web/kakuyomu/1'),
-          key: '/rank/web/kakuyomu/1',
-        },
-      ],
-    },
-    {
-      type: 'divider',
-      key: 'divider',
-      props: { style: { marginTop: '16px', marginBottom: '16px' } },
-    },
-    {
-      label: '工作区',
-      icon: renderIcon(WorkspacesOutlined),
-      key: '/workspace',
-      children: [
-        {
-          label: renderLabel('小说工具箱', '/workspace/toolbox'),
-          key: '/workspace/toolbox',
-        },
-        {
-          label: renderLabel('GPT工作区', '/workspace/gpt'),
-          key: '/workspace/gpt',
-        },
-        {
-          label: renderLabel('Sakura工作区', '/workspace/sakura'),
-          key: '/workspace/sakura',
-        },
-        {
-          label: renderLabel('交互翻译', '/workspace/interactive'),
-          key: '/workspace/interactive',
-        },
-      ],
-    },
-    {
-      label: renderLabel('论坛', '/forum'),
-      icon: renderIcon(ForumOutlined),
-      key: '/forum',
-    },
-    {
-      label: renderLabel('设置', '/setting'),
-      icon: renderIcon(SettingsOutlined),
-      key: '/setting',
-    },
-    {
-      label: () =>
-        h(
-          'a',
-          {
-            onClick: () => {
-              if (theme === 'light') {
-                setting.value.theme = 'dark';
-              } else {
-                setting.value.theme = 'light';
-              }
-            },
-          },
-          { default: () => '切换主题' },
-        ),
-      icon: renderIcon(theme === 'light' ? WbSunnyOutlined : DarkModeOutlined),
-      key: 'theme',
-    },
-    {
-      label: renderLabel('控制台', '/admin'),
-      icon: renderIcon(CandlestickChartOutlined),
-      key: '/admin',
-      show: whoami.value.asAdmin,
-    },
-  ];
-});
+    icon: renderIcon(
+      activeTheme.value === 'light' ? WbSunnyOutlined : DarkModeOutlined,
+    ),
+    key: 'theme',
+  },
+]);
 
 const menuKey = computed(() => {
   const path = route.path;
-  for (const key of ['/novel', '/wenku', '/favorite', '/forum']) {
-    if (path.startsWith(key)) {
-      return key;
-    }
-  }
-  return path;
-});
-
-const userDropdownOptions = computed<MenuOption[]>(() => {
-  const renderHeader = () =>
-    h(
-      'div',
-      {
-        onClick: () => {
-          if (whoami.value.isAdmin) {
-            whoamiStore.toggleManageMode();
-          }
-        },
-        style: {
-          'margin-left': '36px',
-          'margin-right': '8px',
-        },
-      },
-      [
-        h('div', null, [
-          h(
-            NText,
-            { depth: 2 },
-            {
-              default: () => whoami.value.user.role,
-            },
-          ),
-        ]),
-        h('div', null, [
-          h(
-            NText,
-            { depth: 3, style: 'font-size: 12px;' },
-            {
-              default: () =>
-                h(NTime, {
-                  time: whoami.value.user.createAt * 1000,
-                  type: 'date',
-                }),
-            },
-          ),
-        ]),
-      ],
-    );
-  return [
-    {
-      key: 'header',
-      type: 'render',
-      render: renderHeader,
-    },
-    {
-      key: 'header-divider',
-      type: 'divider',
-    },
-    {
-      label: '退出账号',
-      key: 'logout',
-      icon: renderIcon(LogOutOutlined),
-    },
+  const workspaceMenus = [
+    '/workspace/toolbox',
+    '/workspace/gpt',
+    '/workspace/sakura',
+    '/workspace/interactive',
   ];
-});
-const handleUserDropdownSelect = (key: string | number) => {
-  if (key === 'logout') {
-    whoamiStore.logout();
+  const matchedWorkspace = workspaceMenus.find((item) =>
+    path.startsWith(item),
+  );
+  if (matchedWorkspace) {
+    return matchedWorkspace;
   }
-};
+  return path === '/' ? '/' : path;
+});
 
 watch(
   () => route.path,
@@ -282,36 +145,19 @@ watch(
 
         <div style="flex: 1" />
 
-        <router-link
-          v-if="!hasSider"
-          :to="whoami.isSignedIn ? '/favorite/web' : '/favorite/local'"
+        <n-button
+          size="large"
+          quaternary
+          circle
+          :focusable="false"
+          style="margin-right: 8px"
+          @click="toggleTheme"
         >
-          <n-button size="large" quaternary circle :focusable="false">
-            <n-icon size="20" :component="StarBorderOutlined" />
-          </n-button>
-        </router-link>
-
-        <div style="margin-right: 8px">
-          <n-dropdown
-            v-if="whoami.isSignedIn"
-            trigger="hover"
-            placement="bottom-end"
-            :keyboard="false"
-            :options="userDropdownOptions"
-            @select="handleUserDropdownSelect"
-          >
-            <n-button :focusable="false" quaternary>
-              @{{ whoami.user.username }}
-            </n-button>
-          </n-dropdown>
-
-          <router-link
-            v-else
-            :to="{ name: 'auth', query: { from: route.fullPath } }"
-          >
-            <n-button quaternary>登录/注册</n-button>
-          </router-link>
-        </div>
+          <n-icon
+            size="20"
+            :component="activeTheme === 'light' ? WbSunnyOutlined : DarkModeOutlined"
+          />
+        </n-button>
       </n-flex>
     </n-layout-header>
 
@@ -355,20 +201,7 @@ watch(
       "
     >
       <router-view v-slot="{ Component }">
-        <keep-alive
-          :include="[
-            'Forum',
-            'Index',
-            'BookshelfWeb',
-            'BookshelfWenku',
-            'ReadHistoryList',
-            'WebNovelList',
-            'WebNovelRank',
-            'WenkuNovelList',
-          ]"
-        >
-          <component :is="Component" />
-        </keep-alive>
+        <component :is="Component" />
       </router-view>
     </n-layout-content>
   </n-layout>

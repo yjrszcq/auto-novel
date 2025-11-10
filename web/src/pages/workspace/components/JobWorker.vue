@@ -71,6 +71,9 @@ const endpointPrefix = computed(() => {
 });
 
 const enableAutoMode = ref(true);
+const workerConcurrency = computed(
+  () => Math.max(1, props.worker.concurrency ?? 1),
+);
 
 const translateTask = useTemplateRef('translateTask');
 const currentJob = ref<{
@@ -247,7 +250,11 @@ const showEditWorkerModal = ref(false);
     </template>
   </n-thing>
 
-  <TranslateTask ref="translateTask" style="margin-top: 20px" />
+  <TranslateTask
+    ref="translateTask"
+    :concurrency="workerConcurrency"
+    style="margin-top: 20px"
+  />
 
   <sakura-worker-modal
     v-if="worker.translatorId === 'sakura'"

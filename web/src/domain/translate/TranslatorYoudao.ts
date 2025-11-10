@@ -25,14 +25,20 @@ export class YoudaoTranslator implements SegmentTranslator {
 
   async translate(
     seg: string[],
-    { glossary, signal }: SegmentContext,
+    context: SegmentContext,
   ): Promise<string[]> {
+    const { glossary, signal } = context;
+    const log = context.logger ?? this.log;
     return createGlossaryWrapper(glossary)(seg, (seg) =>
-      this.translateInner(seg, signal),
+      this.translateInner(seg, signal, log),
     );
   }
 
-  async translateInner(seg: string[], signal?: AbortSignal): Promise<string[]> {
+  async translateInner(
+    seg: string[],
+    signal: AbortSignal | undefined,
+    log: Logger,
+  ): Promise<string[]> {
     let from = 'auto';
     const segText = seg.join('\n');
     if (RegexUtil.hasHangulChars(segText)) {
@@ -51,7 +57,7 @@ export class YoudaoTranslator implements SegmentTranslator {
     );
 
     if (decodedJson === undefined) {
-      this.log(`　错误：${decoded}`);
+      log(`错误：${decoded}`);
       throw 'quit';
     } else {
       try {
@@ -60,7 +66,7 @@ export class YoudaoTranslator implements SegmentTranslator {
         );
         return result;
       } catch (e) {
-        this.log(`　错误：${decoded}`);
+        log(`错误：${decoded}`);
         throw 'quit';
       }
     }

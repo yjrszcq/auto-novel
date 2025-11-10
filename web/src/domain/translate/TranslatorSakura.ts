@@ -80,8 +80,10 @@ export class SakuraTranslator implements SegmentTranslator {
 
   async translate(
     seg: string[],
-    { glossary, prevSegs, signal }: SegmentContext,
+    context: SegmentContext,
   ): Promise<string[]> {
+    const { glossary, prevSegs, signal } = context;
+    const log = context.logger ?? this.log;
     const concatedSeg = seg.join('\n');
     const prevSegCount = -Math.ceil(this.prevSegLength / this.segLength);
 
@@ -110,7 +112,7 @@ export class SakuraTranslator implements SegmentTranslator {
         parts.push('成功');
       }
       const detail = [seg.join('\n'), text];
-      this.log(parts.join('　'), detail);
+      log(parts.join('　'), detail);
 
       if (!hasDegradation && !linesNotMatched) {
         return splitText;
@@ -121,7 +123,7 @@ export class SakuraTranslator implements SegmentTranslator {
 
     // 逐行翻译
     {
-      this.log('逐行翻译');
+      log('逐行翻译');
       let degradationLineCount = 0;
       const resultPerLine = [];
       for (const line of seg) {
@@ -134,7 +136,7 @@ export class SakuraTranslator implements SegmentTranslator {
         );
         if (hasDegradation) {
           degradationLineCount += 1;
-          this.log(`单行退化${degradationLineCount}次`, [line, text]);
+          log(`单行退化${degradationLineCount}次`, [line, text]);
           if (degradationLineCount >= 2) {
             throw Error('单个分段有2行退化，Sakura翻译器可能存在异常');
           } else {

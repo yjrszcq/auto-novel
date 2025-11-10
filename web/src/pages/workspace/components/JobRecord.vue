@@ -6,6 +6,7 @@ import { TranslateJob } from '@/model/Translator';
 
 const props = defineProps<{
   job: TranslateJobRecord;
+  retryTooltip?: string;
 }>();
 const emit = defineEmits<{
   retryJob: [];
@@ -23,7 +24,7 @@ const isFinished = computed(() => TranslateJob.isFinished(props.job));
       <n-flex :size="6" :wrap="false">
         <c-icon-button
           v-if="!isFinished"
-          tooltip="重试"
+          :tooltip="props.retryTooltip ?? '重试'"
           :icon="RefreshOutlined"
           @action="emit('retryJob')"
         />

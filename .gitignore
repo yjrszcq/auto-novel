@@ -5,14 +5,9 @@
 script/dist/
 script/node_modules/
 
-# Server
-server/.gradle/
-server/.kotlin
-server/build/
-server/data/
-
 # Web extension
 web-extension/src/_metadata/
 
 # Deploy
 .env
+!web/.env

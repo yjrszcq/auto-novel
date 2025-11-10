@@ -23,9 +23,10 @@ const initFormValue = () => {
       endpoint: '',
       segLength: 500,
       prevSegLength: 500,
+      concurrency: 1,
     };
   } else {
-    return { ...worker };
+    return { ...worker, concurrency: worker.concurrency ?? 1 };
   }
 };
 
@@ -66,6 +67,14 @@ const formRules: FormRules = {
       trigger: 'input',
     },
   ],
+  concurrency: [
+    {
+      validator: (rule: FormItemRule, value: number) =>
+        Number.isFinite(value) && value >= 1,
+      message: '并发量至少为1',
+      trigger: 'input',
+    },
+  ],
 };
 
 const submit = async () => {
@@ -80,6 +89,7 @@ const submit = async () => {
   const worker = { ...formValue.value };
   worker.id = worker.id.trim();
   worker.endpoint = worker.endpoint.trim();
+  worker.concurrency = Math.max(1, Number(worker.concurrency) || 1);
 
   if (props.worker === undefined) {
     workspace.addWorker(worker);
@@ -136,6 +146,14 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
           v-model:value="formValue.prevSegLength"
           :show-button="false"
           :min="0"
+        />
+      </n-form-item-row>
+
+      <n-form-item-row path="concurrency" label="并发量">
+        <n-input-number
+          v-model:value="formValue.concurrency"
+          :show-button="false"
+          :min="1"
         />
       </n-form-item-row>
 

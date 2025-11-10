@@ -67,32 +67,6 @@ export default defineConfig(({ command, mode }) => {
     ],
   };
 
-  if (command === 'serve') {
-    const apiUrl = env.VITE_API_URL ?? 'https://n.novelia.cc';
-    userConfig.server = {
-      proxy: {
-        '/api': {
-          target: apiUrl,
-          changeOrigin: true,
-          bypass: (req, _res, _options) => {
-            if (
-              apiUrl === 'https://n.novelia.cc' &&
-              req.url &&
-              req.url.includes('/translate-v2/')
-            ) {
-              console.log('检测到小说章节翻译请求，已拦截');
-              return false;
-            }
-          },
-        },
-        '/files-temp': {
-          target: apiUrl,
-          changeOrigin: true,
-        },
-      },
-    };
-  }
-
   const enableSonda = env.VITE_ENABLE_SONDA === 'true';
   if (enableSonda) {
     userConfig.build!.sourcemap = true;

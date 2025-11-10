@@ -4,13 +4,23 @@ import { Translator } from '@/domain/translate';
 import type { Glossary } from '@/model/Glossary';
 import type { GptWorker, SakuraWorker, TranslatorId } from '@/model/Translator';
 import { useGptWorkspaceStore, useSakuraWorkspaceStore } from '@/stores';
+import { useLocalStorage } from '@/util';
 
 const message = useMessage();
 
 const textJp = ref('');
 const textZh = ref('');
 
-const translatorId = ref<TranslatorId>('sakura');
+const translatorConfig = useLocalStorage('interactive-translator', {
+  translatorId: 'sakura' as TranslatorId,
+  selectedGptWorkerId: undefined as string | undefined,
+  selectedSakuraWorkerId: undefined as string | undefined,
+});
+
+const translatorId = computed({
+  get: () => translatorConfig.value.translatorId,
+  set: (value: TranslatorId) => (translatorConfig.value.translatorId = value),
+});
 const translationOptions: { label: string; value: TranslatorId }[] = [
   { label: '百度', value: 'baidu' },
   { label: '有道', value: 'youdao' },
@@ -26,10 +36,48 @@ watch(translatorId, () => {
 });
 
 const gptWorkspaceRef = useGptWorkspaceStore().ref;
-const selectedGptWorkerId = ref(gptWorkspaceRef.value.workers[0]?.id);
-
 const sakuraWorkspaceRef = useSakuraWorkspaceStore().ref;
-const selectedSakuraWorkerId = ref(sakuraWorkspaceRef.value.workers[0]?.id);
+
+const selectedGptWorkerId = computed({
+  get: () => translatorConfig.value.selectedGptWorkerId,
+  set: (value: string | undefined) =>
+    (translatorConfig.value.selectedGptWorkerId = value),
+});
+const selectedSakuraWorkerId = computed({
+  get: () => translatorConfig.value.selectedSakuraWorkerId,
+  set: (value: string | undefined) =>
+    (translatorConfig.value.selectedSakuraWorkerId = value),
+});
+
+watch(
+  () => gptWorkspaceRef.value.workers.map((worker) => worker.id),
+  (workerIds) => {
+    if (
+      workerIds.length > 0 &&
+      !workerIds.includes(selectedGptWorkerId.value || '')
+    ) {
+      selectedGptWorkerId.value = workerIds[0];
+    } else if (workerIds.length === 0) {
+      selectedGptWorkerId.value = undefined;
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => sakuraWorkspaceRef.value.workers.map((worker) => worker.id),
+  (workerIds) => {
+    if (
+      workerIds.length > 0 &&
+      !workerIds.includes(selectedSakuraWorkerId.value || '')
+    ) {
+      selectedSakuraWorkerId.value = workerIds[0];
+    } else if (workerIds.length === 0) {
+      selectedSakuraWorkerId.value = undefined;
+    }
+  },
+  { immediate: true },
+);
 
 interface SavedTranslation {
   id: TranslatorId;
@@ -128,10 +176,7 @@ const clearSavedTranslation = () => {
             size="small"
           />
 
-          <n-radio-group
-            v-if="translatorId === 'gpt'"
-            v-model:value="selectedGptWorkerId"
-          >
+          <n-radio-group v-if="translatorId === 'gpt'" v-model:value="selectedGptWorkerId">
             <n-flex vertical>
               <n-radio
                 v-for="worker of gptWorkspaceRef.workers"

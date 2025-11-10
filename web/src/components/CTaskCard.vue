@@ -29,6 +29,9 @@ const pushLog = (line: LogLine) => {
 const logRef = ref<ScrollbarInst>();
 const enableAutoScroll = ref(true);
 const expandLog = ref(false);
+const emit = defineEmits<{
+  'update:logExpand': [boolean];
+}>();
 
 watch(
   logs,
@@ -51,13 +54,15 @@ const showDetail = (message: string, detail: string[]) => {
   showLogDetailModal.value = true;
 };
 
-defineExpose({
+const exposeValue = {
   clearLog,
   pushLog,
   hide: () => {
     show.value = false;
   },
-});
+};
+
+defineExpose(exposeValue);
 </script>
 
 <template>
@@ -77,7 +82,12 @@ defineExpose({
         <c-button
           :label="expandLog ? '收起日志' : '展开日志'"
           size="small"
-          @action="expandLog = !expandLog"
+          @action="
+            () => {
+              expandLog = !expandLog;
+              emit('update:logExpand', expandLog);
+            }
+          "
         />
       </n-flex>
     </template>
@@ -94,7 +104,7 @@ defineExpose({
           </span>
         </div>
       </n-scrollbar>
-      <slot />
+      <slot :log-expand="expandLog" />
     </n-flex>
 
     <c-modal

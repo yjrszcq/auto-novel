@@ -84,18 +84,16 @@ const clearCache = async () =>
 
     <bulletin>
       <n-flex>
-        <c-a to="/forum/64f3d63f794cbb1321145c07" target="_blank">使用教程</c-a>
-        /
         <n-a href="https://chat.deepseek.com" target="_blank">
           DeepSeek Chat
         </n-a>
         /
         <n-a href="https://platform.deepseek.com/usage" target="_blank">
-          DeepSeek API
+          DeepSeek API 控制台
         </n-a>
       </n-flex>
-      <n-p>不再支持GPT web，推荐使用deepseek API，价格很低。</n-p>
-      <n-p>本地小说支持韩语等其他语种，网络小说/文库小说暂时只允许日语。</n-p>
+      <n-p>不再支持 GPT Web，推荐使用 DeepSeek API，价格更低且稳定。</n-p>
+      <n-p>本地小说支持日语及其他语种；若需多账号共享，请在工作区设置里开启任务置顶选项。</n-p>
     </bulletin>
 
     <section-header title="翻译器">

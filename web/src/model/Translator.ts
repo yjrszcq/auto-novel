@@ -8,6 +8,7 @@ export interface GptWorker {
   type: 'web' | 'api';
   model: string;
   key: string;
+  concurrency?: number;
 }
 
 export interface SakuraWorker {
@@ -15,6 +16,7 @@ export interface SakuraWorker {
   endpoint: string;
   segLength?: number;
   prevSegLength?: number;
+  concurrency?: number;
 }
 
 export interface TranslateJob {

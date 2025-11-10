@@ -1,3 +1,9 @@
+<script lang="ts" setup>
+const logoImageUrl =
+  (import.meta.env.VITE_LOGO_IMAGE_URL as string | undefined)?.trim() ?? '';
+const canShowLogo = computed(() => logoImageUrl.length > 0);
+</script>
+
 <template>
   <n-drawer :width="280" :auto-focus="false" placement="left">
     <n-drawer-content
@@ -16,8 +22,10 @@
           "
         />
         <img
-          src="https://n.novelia.cc/files-extra/girl.6e4fe22c238737fd028247f8f0cfd4ee.webp"
+          v-if="canShowLogo"
+          :src="logoImageUrl"
           style="position: absolute; top: 0; height: 120px; margin: 8px 0 0 8px"
+          alt="logo"
         />
       </template>
       <div style="margin-top: 36px">

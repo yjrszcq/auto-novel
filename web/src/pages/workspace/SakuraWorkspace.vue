@@ -93,22 +93,12 @@ const clearCache = async () =>
 
     <bulletin>
       <n-flex>
-        <c-a to="/forum/656d60530286f15e3384fcf8" target="_blank">
-          本地部署教程
-        </c-a>
-        /
-        <span>
-          <c-a to="/forum/65719bf16843e12bd3a4dc98" target="_blank">
-            AutoDL教程
-          </c-a>
-          :
-          <n-a
-            href="https://www.autodl.com/console/instance/list"
-            target="_blank"
-          >
-            控制台
-          </n-a>
-        </span>
+        <n-a
+          href="https://www.autodl.com/console/instance/list"
+          target="_blank"
+        >
+          AutoDL 控制台
+        </n-a>
         /
         <n-a
           href="https://monitor.novelia.cc/public-dashboards/be71c46fcc0e40eeaf06d9e7a2e26f95?refresh=auto&from=now-5m&to=now&timezone=browser"
@@ -118,7 +108,7 @@ const clearCache = async () =>
         </n-a>
       </n-flex>
 
-      <n-p>允许上传的模型如下，禁止一切试图突破上传检查的操作。</n-p>
+      <n-p>允许上传的模型如下，禁止任何试图绕过模型检查的操作。</n-p>
       <n-ul>
         <n-li
           v-for="({ repo }, model) in SakuraTranslator.allowModels"

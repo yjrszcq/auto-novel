@@ -16,6 +16,7 @@ export type SegmentContext = {
   glossary: Glossary;
   prevSegs: string[][];
   signal?: AbortSignal;
+  logger?: Logger;
 };
 
 export interface SegmentTranslator {

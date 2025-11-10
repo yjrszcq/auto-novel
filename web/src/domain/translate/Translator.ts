@@ -10,12 +10,30 @@ import { YoudaoTranslator } from './TranslatorYoudao';
 import type { Logger, SegmentCache, SegmentTranslator } from './Common';
 import { createSegIndexedDbCache } from './Common';
 import { RegexUtil } from '@/util';
+import { runWithConcurrency } from './Concurrency';
+
+export type SegmentProgressInfo = {
+  chapter?: { index?: number; total?: number; id?: string };
+  segmentIndex: number;
+  segmentTotal: number;
+  status: 'start' | 'success' | 'complete' | 'failed';
+};
 
 export type TranslatorConfig =
   | { id: 'baidu' }
   | { id: 'youdao' }
   | ({ id: 'gpt' } & OpenAiTranslator.Config)
   | ({ id: 'sakura' } & SakuraTranslator.Config);
+
+type TranslateRuntimeOptions = {
+  concurrency?: number;
+  chapter?: {
+    index: number;
+    total: number;
+    id?: string;
+  };
+  onSegmentProgress?: (info: SegmentProgressInfo) => void;
+};
 
 export class Translator {
   id: TranslatorId;
@@ -63,6 +81,7 @@ export class Translator {
       force?: boolean;
       signal?: AbortSignal;
     },
+    options?: TranslateRuntimeOptions,
   ): Promise<string[]> {
     const oldTextZh = context?.oldTextZh;
     const textZh = await emptyLineFilterWrapper(
@@ -71,22 +90,58 @@ export class Translator {
       async (textJp, oldTextZh) => {
         if (textJp.length === 0) return [];
 
-        const segsZh: string[][] = [];
         const segs = this.segTranslator.segmentor(textJp, oldTextZh);
         const size = segs.length;
-        for (const [index, [segJp, oldSegZh]] of segs.entries()) {
-          const segZh = await this.translateSeg(segJp, {
-            logPrefix: `分段${index + 1}/${size}`,
-            ...context,
-            prevSegs: segsZh,
-            oldSegZh,
-          });
-          if (segJp.length !== segZh.length) {
-            throw new Error('翻译结果行数不匹配。不应当出现，请反馈给站长。');
-          }
-          segsZh.push(segZh);
-        }
-        return segsZh.flat();
+        const segsZh: Array<string[] | undefined> = new Array(size);
+        const concurrency = Math.max(1, options?.concurrency ?? 1);
+
+        options?.onSegmentProgress?.({
+          chapter: options?.chapter,
+          segmentIndex: 0,
+          segmentTotal: size,
+          status: 'start',
+        });
+
+        await runWithConcurrency(
+          Array.from({ length: size }, (_, i) => i),
+          concurrency,
+          async (segIndex) => {
+            const [segJp, oldSegZh] = segs[segIndex];
+            const logLabel = buildLogLabel(
+              options?.chapter,
+              segIndex + 1,
+              size,
+            );
+            const logger = (message: string, detail?: string[]) =>
+              this.log(`${logLabel} ${message}`, detail);
+            const segZh = await this.translateSeg(
+              segJp,
+              {
+                ...context,
+                prevSegs: segsZh
+                  .slice(0, segIndex)
+                  .filter((it): it is string[] => Array.isArray(it)),
+                oldSegZh,
+                logger,
+              },
+              logLabel,
+            );
+            if (segJp.length !== segZh.length) {
+              throw new Error('翻译结果行数不匹配。不应当出现，请反馈给站长。');
+            }
+            segsZh[segIndex] = segZh;
+            options?.onSegmentProgress?.({
+              chapter: options?.chapter,
+              segmentIndex: segIndex + 1,
+              segmentTotal: size,
+              status: 'success',
+            });
+
+          },
+          context?.signal,
+        );
+
+        return segsZh.flat() as string[];
       },
     );
     return textZh;
@@ -95,7 +150,7 @@ export class Translator {
   private async translateSeg(
     seg: string[],
     {
-      logPrefix,
+      logger,
       glossary,
       oldSegZh,
       oldGlossary,
@@ -103,7 +158,7 @@ export class Translator {
       force,
       signal,
     }: {
-      logPrefix: string;
+      logger: Logger;
       glossary?: Glossary;
       oldSegZh?: string[];
       oldGlossary?: Glossary;
@@ -111,16 +166,20 @@ export class Translator {
       force?: boolean;
       signal?: AbortSignal;
     },
+    logLabel: string,
   ) {
     glossary = glossary || {};
     oldGlossary = oldGlossary || {};
+
+    const log = (message: string, detail?: string[]) =>
+      logger(`${message}`, detail);
 
     // 检测分段是否需要重新翻译
     const segGlossary = filterGlossary(glossary, seg);
     if (!force && oldSegZh !== undefined) {
       const segOldGlossary = filterGlossary(oldGlossary, seg);
       if (isEqual(segGlossary, segOldGlossary)) {
-        this.log(logPrefix + '　术语表无变化，无需翻译');
+        log('术语表无变化，无需翻译');
         return oldSegZh;
       }
     }
@@ -138,7 +197,7 @@ export class Translator {
         cacheKey = this.segCache.cacheKey(seg, extra);
         const cachedSegOutput = await this.segCache.get(cacheKey);
         if (cachedSegOutput && cachedSegOutput.length === seg.length) {
-          this.log(logPrefix + '　从缓存恢复');
+          log('从缓存恢复');
           return cachedSegOutput;
         }
       } catch (e) {
@@ -148,11 +207,12 @@ export class Translator {
     }
 
     // 翻译
-    this.log(logPrefix);
     const segOutput = await this.segTranslator.translate(seg, {
       glossary: segGlossary,
       prevSegs,
       signal,
+      logger: (msg, detail) =>
+        this.log(`${logLabel} ${msg}`, detail),
     });
     if (segOutput.length !== seg.length) {
       throw new Error('分段翻译结果行数不匹配，请反馈给站长');
@@ -265,4 +325,21 @@ const emptyLineFilterWrapper = async (
     }
   }
   return recoveredTextZh;
+};
+
+const buildLogLabel = (
+  chapter:
+    | {
+        index: number;
+        total: number;
+      }
+    | undefined,
+  segmentIndex: number,
+  segmentTotal: number,
+) => {
+  const chapterPart = chapter
+    ? `章节${chapter.index}/${chapter.total}`
+    : '章节?/?';
+  const segmentPart = `分段${segmentIndex}/${segmentTotal}`;
+  return `${chapterPart}  ${segmentPart}`;
 };

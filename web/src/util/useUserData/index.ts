@@ -123,9 +123,5 @@ function useUserDataWithAuth(app: string) {
 }
 
 export function useUserData(app: string) {
-  if (import.meta.env.VITE_NO_AUTH === 'true') {
-    return useUserDataWithoutAuth(app);
-  } else {
-    return useUserDataWithAuth(app);
-  }
+  return useUserDataWithoutAuth(app);
 }

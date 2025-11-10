@@ -13,10 +13,10 @@ const link = computed(() => {
   let url: string | undefined;
   if (desc.type === 'web') {
     text = `web/${desc.providerId}/${desc.novelId}`;
-    url = `/novel/${desc.providerId}/${desc.novelId}`;
+    url = undefined;
   } else if (desc.type === 'wenku') {
     text = `wenku/${desc.novelId}`;
-    url = `/wenku/${desc.novelId}`;
+    url = undefined;
   } else {
     text = 'local';
     url = undefined;

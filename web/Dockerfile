@@ -1,4 +1,6 @@
 FROM node:21-alpine AS builder
+ARG VITE_LOGO_IMAGE_URL
+ENV VITE_LOGO_IMAGE_URL="${VITE_LOGO_IMAGE_URL}"
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
@@ -11,3 +13,4 @@ RUN pnpm run build
 FROM caddy:2.7.4
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /web/dist /dist
+COPY panel-content /panel-content

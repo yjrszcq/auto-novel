@@ -1,15 +1,8 @@
 <script lang="ts" setup>
 import { darkTheme, dateZhCN, useOsTheme, zhCN } from 'naive-ui';
 
-import {
-  useReaderSettingStore,
-  useSettingStore,
-  useWhoamiStore,
-} from '@/stores';
+import { useReaderSettingStore, useSettingStore } from '@/stores';
 import { RegexUtil } from '@/util';
-
-// 激活权限
-useWhoamiStore();
 
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);

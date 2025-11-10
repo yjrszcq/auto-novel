@@ -1,6 +1,15 @@
 <script lang="ts" setup>
 const vars = useThemeVars();
 const showGirl = ref(false);
+
+const logoImageUrl =
+  (import.meta.env.VITE_LOGO_IMAGE_URL as string | undefined)?.trim() ?? '';
+const canShowImage = computed(() => logoImageUrl.length > 0);
+
+const toggle = () => {
+  if (!canShowImage.value) return;
+  showGirl.value = !showGirl.value;
+};
 </script>
 
 <template>
@@ -8,7 +17,7 @@ const showGirl = ref(false);
     v-bind="$attrs"
     :color="vars.primaryColor"
     style="cursor: pointer"
-    @click="showGirl = !showGirl"
+    @click="toggle"
   >
     <svg
       version="1.0"
@@ -40,8 +49,8 @@ const showGirl = ref(false);
   </n-icon>
 
   <img
-    v-if="showGirl"
-    src="https://n.novelia.cc/files-extra/girl.6e4fe22c238737fd028247f8f0cfd4ee.webp"
+    v-if="showGirl && canShowImage"
+    :src="logoImageUrl"
     style="
       width: 200px;
       position: fixed;
@@ -49,6 +58,8 @@ const showGirl = ref(false);
       bottom: -30px;
       transform: rotate(-15deg);
       user-select: none;
+      pointer-events: none;
     "
+    alt="logo"
   />
 </template>
