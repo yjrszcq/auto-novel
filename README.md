@@ -23,6 +23,6 @@
 
 - 本仓库基于[轻小说机翻机器人](https://n.novelia.cc/)进行修改，在此致敬原作者：[auto-novel/auto-novel](https://github.com/auto-novel/auto-novel)。
 
-- 镜像 `szcq/auto-novel` 由 GitHub Actions 自动构建打包，完全基于公开的开源代码生成，请放心使用。
+- 镜像 [`szcq/auto-novel`](https://hub.docker.com/r/szcq/auto-novel) 由 GitHub Actions 自动构建打包，完全基于公开的开源代码生成，请放心使用。
 
 - 感谢使用。
