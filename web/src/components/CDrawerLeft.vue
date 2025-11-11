@@ -1,7 +1,9 @@
 <script lang="ts" setup>
-const logoImageUrl =
-  (import.meta.env.VITE_LOGO_IMAGE_URL as string | undefined)?.trim() ?? '';
-const canShowLogo = computed(() => logoImageUrl.length > 0);
+import { useRuntimeConfigStore } from '@/stores';
+
+const runtimeConfigStore = useRuntimeConfigStore();
+const { logoImageUrl } = storeToRefs(runtimeConfigStore);
+const canShowLogo = computed(() => logoImageUrl.value.length > 0);
 </script>
 
 <template>

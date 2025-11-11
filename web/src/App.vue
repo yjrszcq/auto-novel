@@ -1,7 +1,11 @@
 <script lang="ts" setup>
 import { darkTheme, dateZhCN, useOsTheme, zhCN } from 'naive-ui';
 
-import { useReaderSettingStore, useSettingStore } from '@/stores';
+import {
+  useReaderSettingStore,
+  useRuntimeConfigStore,
+  useSettingStore,
+} from '@/stores';
 import { RegexUtil } from '@/util';
 
 const settingStore = useSettingStore();
@@ -9,6 +13,9 @@ const { setting } = storeToRefs(settingStore);
 
 const readerSettingStore = useReaderSettingStore();
 const { readerSetting } = storeToRefs(readerSettingStore);
+
+const runtimeConfigStore = useRuntimeConfigStore();
+void runtimeConfigStore.loadRuntimeConfig();
 
 // 主题
 const route = useRoute();

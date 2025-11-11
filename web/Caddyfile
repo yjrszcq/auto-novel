@@ -18,8 +18,14 @@
 		query filename=*
 	}
 
+	handle /api/runtime-config {
+		root * /root/.config
+		rewrite * /config.json
+		file_server
+	}
+
 	handle_path /panel-content* {
-		root * /root/.config/notice
+		root * /root/.config
 		file_server
 	}
 }

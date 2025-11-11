@@ -1,10 +1,12 @@
 <script lang="ts" setup>
+import { useRuntimeConfigStore } from '@/stores';
+
 const vars = useThemeVars();
 const showGirl = ref(false);
 
-const logoImageUrl =
-  (import.meta.env.VITE_LOGO_IMAGE_URL as string | undefined)?.trim() ?? '';
-const canShowImage = computed(() => logoImageUrl.length > 0);
+const runtimeConfigStore = useRuntimeConfigStore();
+const { logoImageUrl } = storeToRefs(runtimeConfigStore);
+const canShowImage = computed(() => logoImageUrl.value.length > 0);
 
 const toggle = () => {
   if (!canShowImage.value) return;
