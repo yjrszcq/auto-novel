@@ -8,13 +8,14 @@
 - 通过本地文件创建翻译项目，并导出 EPUB / TXT。
 - 搜索本地上传的小说与缓存的任务记录。
 - 支持设置并发翻译。
+- 支持自定义首页公告与网站 Logo。
 
 ## 部署
 
 1. 使用以下命令快速部署项目
 
    ```bash
-   docker run -d --name auto-novel -p 8011:80 --restart unless-stopped szcq/auto-novel
+   docker run -d --name auto-novel -p 8011:80 -v ./config:/root/.config/auto-novel --restart unless-stopped szcq/auto-novel
    ```
 
 2. 浏览器访问 `http://localhost:8011`
