@@ -6,4 +6,6 @@ services:
     image: auto-novel:beta
     ports:
       - 8011:80
+    volumes:
+      - ./web/config:/root/.config/auto-novel
     restart: unless-stopped

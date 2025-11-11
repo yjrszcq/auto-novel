@@ -11,7 +11,7 @@ RUN pnpm run build
 FROM caddy:2.7.4
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /web/dist /dist
-COPY config/. /root/.config/
+COPY config/. /root/.config/auto-novel/
 COPY config/. /opt/app/default-config/
 COPY scripts/ensure-runtime-config.sh /usr/local/bin/ensure-runtime-config.sh
 RUN chmod +x /usr/local/bin/ensure-runtime-config.sh

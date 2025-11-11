@@ -148,15 +148,14 @@ watch(
         <n-button
           size="large"
           quaternary
-          circle
           :focusable="false"
+          tag="a"
+          href="https://github.com/yjrszcq/auto-novel"
+          target="_blank"
+          rel="noopener noreferrer"
           style="margin-right: 8px"
-          @click="toggleTheme"
         >
-          <n-icon
-            size="20"
-            :component="activeTheme === 'light' ? WbSunnyOutlined : DarkModeOutlined"
-          />
+          GitHub
         </n-button>
       </n-flex>
     </n-layout-header>
