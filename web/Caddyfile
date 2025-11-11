@@ -19,13 +19,13 @@
 	}
 
 	handle /api/runtime-config {
-		root * /root/.config/auto-novel
+		root * /opt/auto-novel/config
 		rewrite * /config.json
 		file_server
 	}
 
 	handle_path /panel-content* {
-		root * /root/.config/auto-novel
+		root * /opt/auto-novel/config
 		file_server
 	}
 }

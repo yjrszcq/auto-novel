@@ -15,7 +15,7 @@
 1. 使用以下命令快速部署项目
 
    ```bash
-   docker run -d --name auto-novel -p 8011:80 -v ./config:/root/.config/auto-novel --restart unless-stopped szcq/auto-novel
+   docker run -d --name auto-novel -p 8011:80 -v ./config:/opt/auto-novel/config --restart unless-stopped szcq/auto-novel
    ```
 
 2. 浏览器访问 `http://localhost:8011`
