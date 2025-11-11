@@ -33,5 +33,5 @@ jobs:
           context: ./web
           push: true
           tags: |
-            ${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_VERSION }}
+            ${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:latest
