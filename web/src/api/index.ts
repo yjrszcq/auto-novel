@@ -1,7 +1,5 @@
 import { HTTPError, TimeoutError } from 'ky';
 
-export * from './auth';
-export * from './novel';
 export * from './third-party';
 
 export const formatError = async (error: unknown) => {

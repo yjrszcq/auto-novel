@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { createReusableTemplate, onKeyDown } from '@vueuse/core';
 
-import { ReadHistoryApi } from '@/api';
 import { GenericNovelId } from '@/model/Common';
 import type { TranslatorId } from '@/model/Translator';
 import { checkIsMobile } from '@/pages/util';
@@ -9,7 +8,6 @@ import { ReadPositionRepo } from '@/repos';
 import {
   useLocalVolumeStore,
   useReaderSettingStore,
-  useWhoamiStore,
 } from '@/stores';
 import type { Result } from '@/util/result';
 import type { ReaderChapter } from './ReaderStore';
@@ -27,24 +25,10 @@ const route = useRoute();
 const router = useRouter();
 const isMobile = checkIsMobile();
 
-const whoamiStore = useWhoamiStore();
-const { whoami } = storeToRefs(whoamiStore);
-
 const readerSettingStore = useReaderSettingStore();
 const { readerSetting } = storeToRefs(readerSettingStore);
 
-const gnid = ((): GenericNovelId => {
-  const path = route.path;
-  const params = route.params;
-  if (path.startsWith('/novel')) {
-    const providerId = params.providerId as string;
-    const novelId = params.novelId as string;
-    return GenericNovelId.web(providerId, novelId);
-  } else {
-    const volumeId = params.novelId as string;
-    return GenericNovelId.local(volumeId);
-  }
-})();
+const gnid = GenericNovelId.local(route.params.novelId as string);
 
 const store = useReaderStore(gnid);
 
@@ -56,12 +40,6 @@ const chapterList = ref<
 >([]);
 const loadingBar = useLoadingBar();
 
-const novelUrl = (() => {
-  if (gnid.type === 'web') {
-    return `/novel/${gnid.providerId}/${gnid.novelId}`;
-  }
-})();
-
 const updateChapter = (
   chapterId: string,
   result: Result<ReaderChapter>,
@@ -69,28 +47,13 @@ const updateChapter = (
 ) => {
   if (result.ok) {
     document.title = result.value.titleJp;
-    if (gnid.type === 'web' && whoami.value.isSignedIn) {
-      ReadHistoryApi.updateReadHistoryWeb(
-        gnid.providerId,
-        gnid.novelId,
-        chapterId,
-      );
-    } else if (gnid.type === 'local') {
-      useLocalVolumeStore().then((it) => it.updateReadAt(gnid.volumeId));
-    }
+    useLocalVolumeStore().then((it) => it.updateReadAt(gnid.volumeId));
     if (result.value.nextId) {
       store.preloadChapter(result.value.nextId);
     }
   }
 
-  let prefix: string;
-  if (gnid.type === 'web') {
-    prefix = `/novel/${gnid.providerId}/${gnid.novelId}`;
-  } else if (gnid.type === 'wenku') {
-    throw '不支持文库';
-  } else {
-    prefix = `/workspace/reader/${encodeURIComponent(gnid.volumeId)}`;
-  }
+  const prefix = `/workspace/reader/${encodeURIComponent(gnid.volumeId)}`;
   currentChapterId.value = chapterId;
 
   if (replace) {
@@ -284,7 +247,6 @@ onKeyDown(['Enter'], (e) => {
     <c-result :result="chapterResult" v-slot="{ value: chapter }">
       <component
         :is="isMobile ? ReaderLayoutMobile : ReaderLayoutDesktop"
-        :novel-url="novelUrl"
         :chapter="chapter"
         @nav="navToChapter"
         @require-catalog-modal="showCatalogModal = true"
@@ -292,7 +254,6 @@ onKeyDown(['Enter'], (e) => {
       >
         <template v-if="readerSetting.pageTurnMode === 'page'">
           <reader-content
-            :gnid="gnid"
             :chapter-id="chapter.chapterId"
             :chapter="chapter"
           />
@@ -310,7 +271,6 @@ onKeyDown(['Enter'], (e) => {
           <c-result :result="item.result" v-slot="{ value: chapterItem }">
             <n-divider v-if="idx > 0 && chapterList.length > 0" />
             <reader-content
-              :gnid="gnid"
               :chapter-id="chapterItem.chapterId"
               :chapter="chapterItem"
             />

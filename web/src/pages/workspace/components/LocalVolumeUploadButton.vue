@@ -2,7 +2,7 @@
 import { PlusOutlined } from '@vicons/material';
 import type { UploadCustomRequestOptions, UploadFileInfo } from 'naive-ui';
 
-import { useBookshelfLocalStore } from '../BookshelfLocalStore';
+import { useLocalVolumeManager } from '../LocalVolumeManager';
 
 const props = defineProps<{
   favoredId?: string;
@@ -12,26 +12,23 @@ const emit = defineEmits<{
 }>();
 
 const message = useMessage();
+const store = useLocalVolumeManager();
 
-const store = useBookshelfLocalStore();
-
-const onFinish = ({ file }: { file: UploadFileInfo }) => {
-  emit('done', file.file!);
+const handleFinish = ({ file }: { file: UploadFileInfo }) => {
+  if (file.file) {
+    emit('done', file.file);
+  }
 };
 
 const beforeUpload = ({ file }: { file: UploadFileInfo }) => {
-  if (
-    !(
-      file.name.endsWith('.txt') ||
-      file.name.endsWith('.srt') ||
-      file.name.endsWith('.epub')
-    )
-  ) {
-    message.error(`上传失败:文件类型不允许\n文件名： ${file.name}`);
+  const filename = file.name.toLowerCase();
+  if (!filename.endsWith('.txt') && !filename.endsWith('.epub') && !filename.endsWith('.srt')) {
+    message.error(`上传失败: 文件类型不允许\n文件名：${file.name}`);
     return false;
   }
-  if (file.file?.size && file.file.size > 1024 * 1024 * 100) {
-    message.error(`上传失败:文件大小不能超过100MB\n文件名: ${file.name}`);
+  const size = file.file?.size ?? 0;
+  if (size > 100 * 1024 * 1024) {
+    message.error(`上传失败: 文件大小不能超过100MB\n文件名：${file.name}`);
     return false;
   }
 };
@@ -45,7 +42,7 @@ const customRequest = ({
     .addVolume(file.file!, props.favoredId ?? 'default')
     .then(onFinish)
     .catch((error) => {
-      message.error(`上传失败:${error}\n文件名: ${file.name}`);
+      message.error(`上传失败: ${error}\n文件名：${file.name}`);
       onError();
     });
 };
@@ -59,19 +56,17 @@ const customRequest = ({
     directory-dnd
     :custom-request="customRequest"
     @before-upload="beforeUpload"
-    @finish="onFinish"
+    @finish="handleFinish"
   >
     <n-tooltip trigger="hover">
       <template #trigger>
         <c-button label="添加" :icon="PlusOutlined" />
       </template>
-      支持拖拽上传Epub/Txt/Srt文件
-      <br />
-      百度/有道/GPT支持韩语/英语小说
+      支持拖拽上传 EPUB/TXT/SRT 文件
     </n-tooltip>
   </n-upload>
   <DropZone
-    @finish="onFinish"
+    @finish="handleFinish"
     accept=".txt,.epub,.srt"
     multiple
     directory-dnd

@@ -1,4 +1,3 @@
-import { WebNovelApi } from '@/api';
 import { GenericNovelId } from '@/model/Common';
 import { useLocalVolumeStore } from '@/stores';
 import type { Result } from '@/util/result';
@@ -75,37 +74,26 @@ const getChapter = async (
   gnid: GenericNovelId,
   chapterId: string,
 ): Promise<ReaderChapter> => {
-  if (gnid.type === 'web') {
-    const res = await WebNovelApi.getChapter(
-      gnid.providerId,
-      gnid.novelId,
-      chapterId,
-    );
-    return { ...res, chapterId };
-  } else if (gnid.type === 'wenku') {
-    throw '不支持文库';
-  } else {
-    const repo = await useLocalVolumeStore();
+  const repo = await useLocalVolumeStore();
 
-    const volumeId = gnid.volumeId;
-    const volume = await repo.getVolume(volumeId);
-    if (volume === undefined) throw Error('小说不存在');
+  const volumeId = gnid.volumeId;
+  const volume = await repo.getVolume(volumeId);
+  if (volume === undefined) throw Error('小说不存在');
 
-    const chapter = await repo.getChapter(volumeId, chapterId);
-    if (chapter === undefined) throw Error('章节不存在');
+  const chapter = await repo.getChapter(volumeId, chapterId);
+  if (chapter === undefined) throw Error('章节不存在');
 
-    const currIndex = volume.toc.findIndex((it) => it.chapterId == chapterId);
-    return <ReaderChapter>{
-      chapterId,
-      titleJp: `${volumeId} - ${chapterId}`,
-      titleZh: undefined,
-      prevId: volume.toc[currIndex - 1]?.chapterId,
-      nextId: volume.toc[currIndex + 1]?.chapterId,
-      paragraphs: chapter.paragraphs,
-      baiduParagraphs: chapter.baidu?.paragraphs,
-      youdaoParagraphs: chapter.youdao?.paragraphs,
-      gptParagraphs: chapter.gpt?.paragraphs,
-      sakuraParagraphs: chapter.sakura?.paragraphs,
-    };
-  }
+  const currIndex = volume.toc.findIndex((it) => it.chapterId == chapterId);
+  return <ReaderChapter>{
+    chapterId,
+    titleJp: `${volumeId} - ${chapterId}`,
+    titleZh: undefined,
+    prevId: volume.toc[currIndex - 1]?.chapterId,
+    nextId: volume.toc[currIndex + 1]?.chapterId,
+    paragraphs: chapter.paragraphs,
+    baiduParagraphs: chapter.baidu?.paragraphs,
+    youdaoParagraphs: chapter.youdao?.paragraphs,
+    gptParagraphs: chapter.gpt?.paragraphs,
+    sakuraParagraphs: chapter.sakura?.paragraphs,
+  };
 };

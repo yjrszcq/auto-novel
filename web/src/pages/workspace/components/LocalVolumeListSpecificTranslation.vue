@@ -4,7 +4,7 @@ import { useKeyModifier } from '@vueuse/core';
 
 import { GenericNovelId } from '@/model/Common';
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
-import { useBookshelfLocalStore } from '@/pages/bookshelf/BookshelfLocalStore';
+import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { doAction } from '@/pages/util';
 import { Setting, useLocalVolumeStore, useSettingStore } from '@/stores';
 import { downloadFile } from '@/util';
@@ -20,7 +20,7 @@ const message = useMessage();
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
 
-const store = useBookshelfLocalStore();
+const store = useLocalVolumeManager();
 
 const deleteVolume = (volumeId: string) =>
   doAction(store.deleteVolume(volumeId), '删除', message);
@@ -125,11 +125,7 @@ const progressFilterFunc = computed(() => {
     @volume-add="queueVolume($event.name)"
   >
     <template #extra>
-      <TranslateOptions
-        ref="translateOptions"
-        :gnid="GenericNovelId.local('')"
-        :glossary="{}"
-      />
+      <local-translate-options ref="translateOptions" />
       <n-divider style="margin: 12px 0" />
       <c-action-wrapper title="状态">
         <c-radio-group

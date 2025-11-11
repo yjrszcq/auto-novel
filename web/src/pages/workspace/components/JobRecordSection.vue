@@ -10,7 +10,7 @@ import {
   TranslateTaskDescriptor,
   type TranslateJobRecord,
 } from '@/model/Translator';
-import { useBookshelfLocalStore } from '@/pages/bookshelf/BookshelfLocalStore';
+import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { useWorkspaceStore } from '@/stores';
 
 const props = defineProps<{
@@ -27,7 +27,7 @@ const route = useRoute();
 const workspace = useWorkspaceStore(props.id);
 const workspaceRef = workspace.ref;
 
-const store = useBookshelfLocalStore();
+const store = useLocalVolumeManager();
 
 const progressFilter = ref<'all' | 'finished' | 'unfinished'>('all');
 const progressFilterOptions = [

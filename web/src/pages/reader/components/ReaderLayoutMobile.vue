@@ -3,16 +3,14 @@ import {
   ArrowBackIosOutlined,
   ArrowForwardIosOutlined,
   FormatListBulletedOutlined,
-  LibraryBooksOutlined,
   TuneOutlined,
 } from '@vicons/material';
 
-import type { WebNovelChapterDto } from '@/model/WebNovel';
+import type { ReaderChapter } from '../ReaderStore';
 import { useReaderSettingStore } from '@/stores';
 
 defineProps<{
-  novelUrl?: string;
-  chapter: WebNovelChapterDto;
+  chapter: ReaderChapter;
 }>();
 
 const emit = defineEmits<{
@@ -91,14 +89,6 @@ const onGlobalClick = (event: MouseEvent) => {
           style="width: 100%"
         />
       </div>
-      <router-link v-if="novelUrl" :to="novelUrl" style="flex: 1">
-        <side-button
-          quaternary
-          text="详情"
-          :icon="LibraryBooksOutlined"
-          style="width: 100%"
-        />
-      </router-link>
       <div style="flex: 1 1 0px">
         <side-button
           quaternary

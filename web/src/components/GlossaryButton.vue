@@ -1,11 +1,10 @@
 <script lang="ts" setup>
 import { DeleteOutlineOutlined } from '@vicons/material';
 
-import { WebNovelApi, WenkuNovelApi } from '@/api';
 import { GenericNovelId } from '@/model/Common';
 import { Glossary } from '@/model/Glossary';
 import { copyToClipBoard, doAction } from '@/pages/util';
-import { useLocalVolumeStore, useWhoamiStore } from '@/stores';
+import { useLocalVolumeStore } from '@/stores';
 import { downloadFile } from '@/util';
 
 const props = defineProps<{
@@ -14,9 +13,6 @@ const props = defineProps<{
 }>();
 
 const message = useMessage();
-
-const whoamiStore = useWhoamiStore();
-const { whoami } = storeToRefs(whoamiStore);
 
 const glossary = ref<Glossary>({});
 
@@ -44,18 +40,8 @@ const updateGlossary = async () => {
     return;
   }
   const glossaryValue = toRaw(glossary.value);
-  if (gnid.type === 'web') {
-    await WebNovelApi.updateGlossary(
-      gnid.providerId,
-      gnid.novelId,
-      glossaryValue,
-    );
-  } else if (gnid.type === 'wenku') {
-    await WenkuNovelApi.updateGlossary(gnid.novelId, glossaryValue);
-  } else {
-    const repo = await useLocalVolumeStore();
-    await repo.updateGlossary(gnid.volumeId, glossaryValue);
-  }
+  const repo = await useLocalVolumeStore();
+  await repo.updateGlossary(gnid.volumeId, glossaryValue);
 };
 
 const submitGlossary = () =>
@@ -223,7 +209,6 @@ const downloadGlossaryAsJsonFile = async (ev: MouseEvent) => {
             @action="downloadGlossaryAsJsonFile"
           />
           <c-button
-            v-if="whoami.isAdmin"
             secondary
             type="error"
             label="清空"

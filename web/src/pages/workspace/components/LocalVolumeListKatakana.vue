@@ -2,8 +2,7 @@
 import { DeleteOutlineOutlined } from '@vicons/material';
 
 import { GenericNovelId } from '@/model/Common';
-
-import { useBookshelfLocalStore } from '@/pages/bookshelf/BookshelfLocalStore';
+import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { doAction } from '@/pages/util';
 
 defineEmits<{
@@ -12,7 +11,7 @@ defineEmits<{
 
 const message = useMessage();
 
-const store = useBookshelfLocalStore();
+const store = useLocalVolumeManager();
 
 const deleteVolume = (volumeId: string) =>
   doAction(store.deleteVolume(volumeId), '删除', message);

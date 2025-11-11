@@ -1,16 +1,15 @@
 <script lang="ts" setup>
-import type { WebNovelChapterDto } from '@/model/WebNovel';
 import {
   FormatListBulletedOutlined,
-  LibraryBooksOutlined,
   TuneOutlined,
   ArrowUpwardOutlined,
   ArrowDownwardOutlined,
 } from '@vicons/material';
 
+import type { ReaderChapter } from '../ReaderStore';
+
 defineProps<{
-  novelUrl?: string;
-  chapter: WebNovelChapterDto;
+  chapter: ReaderChapter;
 }>();
 
 const emit = defineEmits<{
@@ -19,7 +18,6 @@ const emit = defineEmits<{
   requireSettingModal: [];
 }>();
 
-const router = useRouter();
 </script>
 
 <template>
@@ -41,12 +39,6 @@ const router = useRouter();
           text="下一章"
           :icon="ArrowDownwardOutlined"
           @click="emit('nav', chapter.nextId!)"
-        />
-        <side-button
-          v-if="novelUrl"
-          text="详情"
-          :icon="LibraryBooksOutlined"
-          @click="router.push(novelUrl)"
         />
         <side-button
           text="目录"

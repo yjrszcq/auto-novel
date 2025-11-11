@@ -3,10 +3,10 @@ import { FileDownloadOutlined, MoreVertOutlined } from '@vicons/material';
 
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
 import {
-  BookshelfLocalUtil,
-  useBookshelfLocalStore,
-} from '@/pages/bookshelf/BookshelfLocalStore';
-import { FavoredRepo, Setting, useSettingStore } from '@/stores';
+  LocalVolumeManagerUtil,
+  useLocalVolumeManager,
+} from '@/pages/workspace/LocalVolumeManager';
+import { Setting, useSettingStore } from '@/stores';
 
 const props = defineProps<{
   options?: { [key: string]: (volumes: LocalVolumeMetadata[]) => void };
@@ -22,7 +22,7 @@ const message = useMessage();
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
 
-const store = useBookshelfLocalStore();
+const store = useLocalVolumeManager();
 const { volumes } = storeToRefs(store);
 
 store.loadVolumes();
@@ -76,25 +76,13 @@ const search = reactive({
   enableRegexMode: false,
 });
 
-const favoredStore = FavoredRepo.useFavoredStore();
-const { favoreds } = storeToRefs(favoredStore);
-
-const selectedFavored = ref<string | undefined>(favoreds.value.local[0]?.id);
-const favoredsOptions = computed(() => {
-  return favoreds.value.local.map(({ id, title }) => ({
-    label: title,
-    value: id,
-  }));
-});
-
 const sortedVolumes = computed(() => {
   const filteredVolumes =
     props.filter === undefined
       ? volumes.value
       : volumes.value.filter(props.filter);
-  return BookshelfLocalUtil.filterAndSortVolumes(filteredVolumes, {
+  return LocalVolumeManagerUtil.filterAndSortVolumes(filteredVolumes, {
     ...search,
-    favoredId: selectedFavored.value,
     order: setting.value.localVolumeOrder,
   });
 });
@@ -103,10 +91,7 @@ const sortedVolumes = computed(() => {
 <template>
   <c-drawer-right title="本地小说">
     <template #action>
-      <bookshelf-local-add-button
-        :favored-id="selectedFavored"
-        @done="emit('volumeAdd', $event)"
-      />
+      <local-volume-upload-button @done="emit('volumeAdd', $event)" />
       <c-button
         label="下载"
         :icon="FileDownloadOutlined"
@@ -130,14 +115,6 @@ const sortedVolumes = computed(() => {
           <search-input
             v-model:value="search"
             placeholder="搜索文件名"
-            style="max-width: 400px"
-          />
-        </c-action-wrapper>
-
-        <c-action-wrapper v-if="favoreds.local.length > 1" title="收藏">
-          <n-select
-            v-model:value="selectedFavored"
-            :options="favoredsOptions"
             style="max-width: 400px"
           />
         </c-action-wrapper>

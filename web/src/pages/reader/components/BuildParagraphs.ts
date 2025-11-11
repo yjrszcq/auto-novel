@@ -1,4 +1,3 @@
-import type { GenericNovelId } from '@/model/Common';
 import type { TranslatorId } from '@/model/Translator';
 import { useReaderSettingStore, useSettingStore } from '@/stores';
 import type { ReaderChapter } from '../ReaderStore';
@@ -14,10 +13,7 @@ export type ReaderParagraph =
   | { imageUrl: string }
   | undefined;
 
-export const buildParagraphs = (
-  gnid: GenericNovelId,
-  chapter: ReaderChapter,
-): ReaderParagraph[] => {
+export const buildParagraphs = (chapter: ReaderChapter): ReaderParagraph[] => {
   const cc = useSettingStore().cc;
   const setting = useReaderSettingStore().readerSetting;
 

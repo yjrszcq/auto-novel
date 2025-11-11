@@ -7,22 +7,21 @@ import {
 } from '@/stores';
 import { downloadFile, querySearch } from '@/util';
 
-type BookshelfLocalStore = {
+type LocalVolumeManagerState = {
   volumes: LocalVolumeMetadata[];
 };
 
-export const useBookshelfLocalStore = defineStore('BookshelfLocal', {
-  state: () =>
-    <BookshelfLocalStore>{
-      volumes: [],
-    },
+export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
+  state: (): LocalVolumeManagerState => ({
+    volumes: [],
+  }),
   actions: {
     async loadVolumes() {
       const repo = await useLocalVolumeStore();
       this.volumes = await repo.listVolume();
       return this.volumes;
     },
-    async addVolume(file: File, favoredId: string) {
+    async addVolume(file: File, favoredId: string = 'default') {
       const repo = await useLocalVolumeStore();
       await repo.createVolume(file, favoredId);
       await this.loadVolumes();
@@ -133,7 +132,7 @@ export const useBookshelfLocalStore = defineStore('BookshelfLocal', {
         taskNumber,
         total,
       }: {
-        level: 'expire' | 'all' | 'normal' | 'sync';
+        level: 'normal' | 'expire' | 'all';
         type: 'gpt' | 'sakura';
         shouldTop: boolean;
         startIndex: number;
@@ -222,18 +221,16 @@ export const useBookshelfLocalStore = defineStore('BookshelfLocal', {
   },
 });
 
-export namespace BookshelfLocalUtil {
+export namespace LocalVolumeManagerUtil {
   export const filterAndSortVolumes = (
     volumes: LocalVolumeMetadata[],
     {
       query,
       enableRegexMode,
-      favoredId,
       order,
     }: {
       query: string;
       enableRegexMode: boolean;
-      favoredId?: string;
       order: {
         value: 'byCreateAt' | 'byReadAt' | 'byId';
         desc: boolean;
@@ -245,27 +242,25 @@ export namespace BookshelfLocalUtil {
       enableRegexMode,
     });
 
-    return volumes
-      .filter((v) => favoredId === undefined || v.favoredId === favoredId)
-      .sort((a, b) => {
-        let delta = 0;
-        switch (order.value) {
-          case 'byId':
-            delta = b.id.localeCompare(a.id);
-            break;
-          case 'byCreateAt': {
-            delta = a.createAt - b.createAt;
-            break;
-          }
-          case 'byReadAt': {
-            delta = (a.readAt ?? 0) - (b.readAt ?? 0);
-            break;
-          }
-          default:
-            console.error(`未支持${order.value}排序`);
-            break;
+    return volumes.sort((a, b) => {
+      let delta = 0;
+      switch (order.value) {
+        case 'byId':
+          delta = b.id.localeCompare(a.id);
+          break;
+        case 'byCreateAt': {
+          delta = a.createAt - b.createAt;
+          break;
         }
-        return order.desc ? -delta : delta;
-      });
+        case 'byReadAt': {
+          delta = (a.readAt ?? 0) - (b.readAt ?? 0);
+          break;
+        }
+        default:
+          console.error(`未支持${order.value}排序`);
+          break;
+      }
+      return order.desc ? -delta : delta;
+    });
   };
 }

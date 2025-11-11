@@ -213,4 +213,3 @@ export const lazy = <T>(factory: () => T) => {
 
 export * from './useOpenCC';
 export * from './useStorage';
-export * from './useUserData';

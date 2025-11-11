@@ -1,27 +1,17 @@
 <script lang="ts" setup>
-import { useWhoamiStore } from '@/stores';
-
 const props = defineProps<{
   label?: string;
   icon?: Component;
-  requireLogin?: boolean;
   onAction?: (e: MouseEvent) => unknown;
 }>();
 
 const message = useMessage();
-
-const whoamiStore = useWhoamiStore();
-const { whoami } = storeToRefs(whoamiStore);
 
 const running = ref(false);
 
 const onClick = async (e: MouseEvent) => {
   if (!props.onAction) return;
 
-  if (props.requireLogin === true && !whoami.value.isSignedIn) {
-    message.info('请先登录');
-    return;
-  }
   if (running.value) {
     message.warning('处理中...');
     return;

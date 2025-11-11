@@ -1,21 +1,18 @@
 <script lang="ts" setup>
 import { useOsTheme } from 'naive-ui';
 
-import type { GenericNovelId } from '@/model/Common';
 import type { ReaderChapter } from '../ReaderStore';
 import { useReaderSettingStore } from '@/stores';
 import { buildParagraphs } from './BuildParagraphs';
-import { WebUtil } from '@/util/web';
 
 const props = defineProps<{
-  gnid: GenericNovelId;
   chapterId: string;
   chapter: ReaderChapter;
 }>();
 
 const osThemeRef = useOsTheme();
 
-const paragraphs = computed(() => buildParagraphs(props.gnid, props.chapter));
+const paragraphs = computed(() => buildParagraphs(props.chapter));
 
 const readerSettingStore = useReaderSettingStore();
 const { readerSetting } = storeToRefs(readerSettingStore);
@@ -43,23 +40,12 @@ const textUnderlineOffset = computed(() => {
   return `${offset}px`;
 });
 
-const chapterHref = computed(() => {
-  const chapterId = props.chapterId;
-  const gnid = props.gnid;
-  if (gnid.type === 'web') {
-    return WebUtil.buildChapterUrl(gnid.providerId, gnid.novelId, chapterId);
-  } else if (gnid.type === 'wenku') {
-    throw '不支持文库';
-  } else {
-    return '/workspace';
-  }
-});
 </script>
 
 <template>
   <div class="chapter" data-chapter :data-id="chapterId">
     <n-h4 class="chapter-title">
-      <n-a :href="chapterHref">{{ chapter.titleJp }}</n-a>
+      <span>{{ chapter.titleJp }}</span>
       <br />
       <n-text depth="3">{{ chapter.titleZh }}</n-text>
       <br />
