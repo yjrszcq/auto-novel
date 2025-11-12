@@ -11,7 +11,6 @@ export class SakuraTranslator implements SegmentTranslator {
   version: string = '0.9';
   model?: {
     id: string;
-    meta: SakuraTranslator.ModelMeta;
   };
   segmentor = createLengthSegmentor(500);
   segLength = 500;
@@ -45,38 +44,6 @@ export class SakuraTranslator implements SegmentTranslator {
     console.log(this.model);
     return this;
   }
-
-  allowUpload = () => {
-    if (this.segLength !== 500) {
-      this.log('分段长度不是500');
-      return false;
-    }
-    if (this.prevSegLength !== 500) {
-      this.log('前文长度不是500');
-      return false;
-    }
-
-    if (this.model === undefined) {
-      this.log('无法获取模型数据');
-      return false;
-    }
-
-    const metaCurrent = this.model.meta;
-    const metaExpected = SakuraTranslator.allowModels[this.model.id]?.meta;
-    if (metaExpected === undefined) {
-      this.log(`模型为${this.model.id}，禁止上传`);
-      return false;
-    }
-
-    for (const key in metaExpected) {
-      if (metaCurrent[key] !== metaExpected[key]) {
-        this.log(`模型检查未通过，不要尝试欺骗模型检查`);
-        return false;
-      }
-    }
-    this.log(`模型为${this.model.id}，允许上传`);
-    return true;
-  };
 
   async translate(
     seg: string[],
@@ -164,7 +131,7 @@ export class SakuraTranslator implements SegmentTranslator {
     if (model === undefined) {
       return undefined;
     }
-    return { id: model.id.replace(/(.gguf)$/, ''), meta: model.meta };
+    return { id: model.id.replace(/(.gguf)$/, '') };
   }
 
   private async createChatCompletions(
@@ -278,54 +245,4 @@ export namespace SakuraTranslator {
   }
   export const create = (log: Logger, config: Config) =>
     new SakuraTranslator(log, config).init();
-
-  export type ModelMeta = Record<string, number>;
-  export const allowModels: {
-    [key: string]: { repo: string; meta: ModelMeta };
-  } = {
-    'sakura-14b-qwen2.5-v1.0-iq4xs': {
-      repo: 'SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF',
-      meta: {
-        vocab_type: 2,
-        n_vocab: 152064,
-        n_ctx_train: 131072,
-        n_embd: 5120,
-        n_params: 14770033664,
-        size: 8180228096,
-      },
-    },
-    'sakura-14b-qwen2.5-v1.0-q6k': {
-      repo: 'SakuraLLM/Sakura-14B-Qwen2.5-v1.0-GGUF',
-      meta: {
-        vocab_type: 2,
-        n_vocab: 152064,
-        n_ctx_train: 131072,
-        n_embd: 5120,
-        n_params: 14770033664,
-        size: 12118716416,
-      },
-    },
-    'sakura-14b-qwen2beta-v0.9.2-iq4xs': {
-      repo: 'SakuraLLM/Sakura-14B-Qwen2beta-v0.9.2-GGUF',
-      meta: {
-        vocab_type: 2,
-        n_vocab: 152064,
-        n_ctx_train: 32768,
-        n_embd: 5120,
-        n_params: 14167290880,
-        size: 7908392960,
-      },
-    },
-    'sakura-32b-qwen2beta-v0.9-iq4xs': {
-      repo: 'SakuraLLM/Sakura-32B-Qwen2beta-v0.9-GGUF',
-      meta: {
-        vocab_type: 2,
-        n_vocab: 152064,
-        n_ctx_train: 32768,
-        n_embd: 5120,
-        n_params: 32512218112,
-        size: 17728790528,
-      },
-    },
-  };
 }

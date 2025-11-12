@@ -6,12 +6,12 @@ import {
 } from '@vicons/material';
 import { VueDraggable } from 'vue-draggable-plus';
 
-import { SakuraTranslator } from '@/domain/translate';
 import { TranslationCacheRepo } from '@/repos';
 import type { TranslateJob } from '@/model/Translator';
 import { doAction } from '@/pages/util';
 import SoundAllTaskCompleted from '@/sound/all_task_completed.mp3';
 import { useSakuraWorkspaceStore, useSettingStore } from '@/stores';
+import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const message = useMessage();
 
@@ -23,6 +23,7 @@ const workspaceRef = workspace.ref;
 
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
+const { html: infoPanelHtml } = useRuntimePanel('info-sakura.html');
 
 type ProcessedJob = TranslateJob & {
   progress?: { finished: number; error: number; total: number };
@@ -91,47 +92,9 @@ const clearCache = async () =>
   <div class="layout-content">
     <n-h1>Sakura工作区</n-h1>
 
-    <bulletin>
-      <n-flex>
-        <n-a
-          href="https://www.autodl.com/console/instance/list"
-          target="_blank"
-        >
-          AutoDL 控制台
-        </n-a>
-        /
-        <n-a
-          href="https://monitor.novelia.cc/public-dashboards/be71c46fcc0e40eeaf06d9e7a2e26f95?refresh=auto&from=now-5m&to=now&timezone=browser"
-          target="_blank"
-        >
-          共享 Sakura 当前负载
-        </n-a>
-      </n-flex>
-
-      <n-p>允许上传的模型如下，禁止任何试图绕过模型检查的操作。</n-p>
-      <n-ul>
-        <n-li
-          v-for="({ repo }, model) in SakuraTranslator.allowModels"
-          :key="model"
-        >
-          [
-          <n-a
-            target="_blank"
-            :href="`https://huggingface.co/${repo}/blob/main/${model}.gguf`"
-          >
-            HF
-          </n-a>
-          /
-          <n-a
-            target="_blank"
-            :href="`https://hf-mirror.com/${repo}/blob/main/${model}.gguf`"
-          >
-            国内镜像
-          </n-a>
-          ]
-          {{ model }}
-        </n-li>
-      </n-ul>
+    <bulletin v-if="infoPanelHtml">
+      <!-- eslint-disable-next-line vue/no-v-html -->
+      <div v-html="infoPanelHtml" />
     </bulletin>
 
     <section-header title="翻译器">

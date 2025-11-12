@@ -6,6 +6,7 @@ import type { LocalVolumeMetadata } from '@/model/LocalVolume';
 import type { TranslateJobRecord } from '@/model/Translator';
 import { useLocalVolumeStore, useWorkspaceStore } from '@/stores';
 import { useBreakPoints } from '@/pages/util';
+import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const bp = useBreakPoints();
 const showShortcut = bp.smaller('tablet');
@@ -13,7 +14,7 @@ const showShortcut = bp.smaller('tablet');
 const vars = useThemeVars();
 
 const keyword = ref('');
-const infoPanelHtml = ref<string | null>(null);
+const { html: infoPanelHtml } = useRuntimePanel('info.html');
 
 const quickActions = [
   { label: '小说工具箱', to: '/workspace/toolbox', icon: WorkspacesOutlined },
@@ -21,25 +22,6 @@ const quickActions = [
   { label: 'Sakura工作区', to: '/workspace/sakura', icon: WorkspacesOutlined },
   { label: '交互翻译', to: '/workspace/interactive', icon: WorkspacesOutlined },
 ];
-
-const loadInfoPanel = async () => {
-  try {
-    const response = await fetch('/panel-content/info.html', {
-      cache: 'no-store',
-    });
-    if (!response.ok) {
-      infoPanelHtml.value = null;
-      return;
-    }
-    const content = (await response.text()).trim();
-    infoPanelHtml.value = content.length > 0 ? content : null;
-  } catch (error) {
-    console.warn('加载说明面板失败', error);
-    infoPanelHtml.value = null;
-  }
-};
-
-onMounted(loadInfoPanel);
 
 const localRepo = shallowRef<Awaited<ReturnType<typeof useLocalVolumeStore>>>();
 const ensureLocalRepo = async () => {

@@ -52,13 +52,6 @@ export class Translator {
     this.log = log ?? (() => {});
   }
 
-  allowUpload() {
-    return !(
-      this.segTranslator instanceof SakuraTranslator &&
-      !this.segTranslator.allowUpload()
-    );
-  }
-
   sakuraModel() {
     if (this.segTranslator instanceof SakuraTranslator) {
       return this.segTranslator.model?.id ?? '未知';

@@ -10,6 +10,7 @@ import { TranslationCacheRepo } from '@/repos';
 import type { TranslateJob } from '@/model/Translator';
 import { doAction } from '@/pages/util';
 import { useGptWorkspaceStore } from '@/stores';
+import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const message = useMessage();
 
@@ -18,6 +19,7 @@ const workspaceRef = workspace.ref;
 
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
+const { html: infoPanelHtml } = useRuntimePanel('info-gpt.html');
 
 type ProcessedJob = TranslateJob & {
   progress?: { finished: number; error: number; total: number };
@@ -82,18 +84,9 @@ const clearCache = async () =>
   <div class="layout-content">
     <n-h1>GPT工作区</n-h1>
 
-    <bulletin>
-      <n-flex>
-        <n-a href="https://chat.deepseek.com" target="_blank">
-          DeepSeek Chat
-        </n-a>
-        /
-        <n-a href="https://platform.deepseek.com/usage" target="_blank">
-          DeepSeek API 控制台
-        </n-a>
-      </n-flex>
-      <n-p>不再支持 GPT Web，推荐使用 DeepSeek API，价格更低且稳定。</n-p>
-      <n-p>本地小说支持日语及其他语种；若需多账号共享，请在工作区设置里开启任务置顶选项。</n-p>
+    <bulletin v-if="infoPanelHtml">
+      <!-- eslint-disable-next-line vue/no-v-html -->
+      <div v-html="infoPanelHtml" />
     </bulletin>
 
     <section-header title="翻译器">

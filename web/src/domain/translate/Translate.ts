@@ -38,12 +38,6 @@ export const translate = async (
     return;
   }
 
-  if (taskDesc.type === 'web' || taskDesc.type === 'wenku') {
-    if (!translator.allowUpload()) {
-      return;
-    }
-  }
-
   if (taskDesc.type !== 'local') {
     taskCallback.log('远程翻译功能已移除，任务自动跳过');
     return 'uncomplete';

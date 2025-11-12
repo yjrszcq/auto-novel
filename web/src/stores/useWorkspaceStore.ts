@@ -150,7 +150,6 @@ const createSakuraWorkspaceStore = () =>
   createWorkspaceStore<SakuraWorker>(
     LSKey.WorkspaceSakura,
     [
-      { id: '共享', endpoint: 'https://sakura-share.one', concurrency: 1 },
       { id: '本机', endpoint: 'http://127.0.0.1:8080', concurrency: 1 },
       { id: 'AutoDL', endpoint: 'http://127.0.0.1:6006', concurrency: 1 },
     ],
@@ -166,17 +165,6 @@ const createSakuraWorkspaceStore = () =>
         }
       });
 
-      // 2025-2-21
-      if (
-        workspace.value.workers.find(
-          (it) => it.endpoint === 'https://sakura-share.one',
-        ) === undefined
-      ) {
-        workspace.value.workers.unshift({
-          id: '共享',
-          endpoint: 'https://sakura-share.one',
-        });
-      }
     },
   );
 

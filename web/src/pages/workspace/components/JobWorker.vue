@@ -157,9 +157,7 @@ const testWorker = async () => {
         [
           `原文：${lineJp}`,
           `译文：${lineZh}`,
-          `模型：${translator.sakuraModel()} ${
-            translator.allowUpload() ? '允许上传' : '禁止上传'
-          }`,
+          `模型：${translator.sakuraModel()}`,
         ].join('\n'),
       );
     }
