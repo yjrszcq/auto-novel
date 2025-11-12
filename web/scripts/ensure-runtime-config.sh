@@ -14,6 +14,8 @@ copy_default() {
 }
 
 copy_default "config.json"
+copy_default "info-gpt.html"
+copy_default "info-sakura.html"
 copy_default "info.html"
 
 if [ "$#" -gt 0 ]; then
