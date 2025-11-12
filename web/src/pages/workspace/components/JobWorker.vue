@@ -82,6 +82,7 @@ const currentJob = ref<{
   createAt: number;
 }>();
 const running = computed(() => currentJob.value !== undefined);
+const testingTranslator = ref(false);
 
 let abortHandler = () => {};
 
@@ -139,6 +140,8 @@ const deleteWorker = () => {
 };
 
 const testWorker = async () => {
+  if (testingTranslator.value) return;
+  testingTranslator.value = true;
   const worker = props.worker;
   const textJp = [
     '国境の長いトンネルを抜けると雪国であった。夜の底が白くなった。信号所に汽車が止まった。',
@@ -163,6 +166,8 @@ const testWorker = async () => {
     }
   } catch (e: unknown) {
     message.error(`翻译器错误：${e}`);
+  } finally {
+    testingTranslator.value = false;
   }
 };
 
@@ -216,6 +221,7 @@ const showEditWorkerModal = ref(false);
         <c-icon-button
           tooltip="测试"
           :icon="FlashOnOutlined"
+          :icon-hidden="testingTranslator"
           @action="testWorker"
         />
 
