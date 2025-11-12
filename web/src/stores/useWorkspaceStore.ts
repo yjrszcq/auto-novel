@@ -106,8 +106,13 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
     ref.value.uncompletedJobs = [];
   };
 
+  const save = () => {
+    ref.save?.();
+  };
+
   return {
     ref,
+    save,
     //
     addWorker,
     deleteWorker,

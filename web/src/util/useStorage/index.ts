@@ -1,5 +1,7 @@
 import { pausableWatch, useEventListener } from '@vueuse/core';
 
+type StorageRef<T> = Ref<T> & { save: () => void };
+
 export function useLocalStorage<T extends object>(key: string, defaults: T) {
   return useStorage<T>(key, defaults, window.localStorage);
 }
@@ -22,7 +24,7 @@ function useStorage<T extends object>(
     write: (v: T) => JSON.stringify(v),
   };
 
-  const data: Ref<T> = ref<T>(defaults) as Ref<T>;
+  const data: StorageRef<T> = ref<T>(defaults) as StorageRef<T>;
   try {
     data.value = read();
   } catch (e) {
@@ -82,6 +84,8 @@ function useStorage<T extends object>(
       return serializer.read(rawValue);
     }
   }
+
+  data.save = () => write(data.value);
 
   return data;
 }
