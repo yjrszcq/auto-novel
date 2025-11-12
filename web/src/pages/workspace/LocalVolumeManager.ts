@@ -232,7 +232,7 @@ export namespace LocalVolumeManagerUtil {
       query: string;
       enableRegexMode: boolean;
       order: {
-        value: 'byCreateAt' | 'byReadAt' | 'byId';
+        value: 'byCreateAt' | 'byId';
         desc: boolean;
       };
     },
@@ -250,10 +250,6 @@ export namespace LocalVolumeManagerUtil {
           break;
         case 'byCreateAt': {
           delta = a.createAt - b.createAt;
-          break;
-        }
-        case 'byReadAt': {
-          delta = (a.readAt ?? 0) - (b.readAt ?? 0);
           break;
         }
         default:

@@ -37,6 +37,26 @@ const playSound = (source: string) => {
 
       <n-list-item>
         <n-flex vertical>
+          <b>首页</b>
+          <c-action-wrapper title="下载语言">
+            <c-radio-group
+              v-model:value="setting.homeDownloadMode"
+              :options="Setting.downloadModeOptions"
+              size="small"
+            />
+          </c-action-wrapper>
+          <c-action-wrapper title="优先下载">
+            <c-radio-group
+              v-model:value="setting.homeDownloadPriority"
+              :options="Setting.homeDownloadPriorityOptions"
+              size="small"
+            />
+          </c-action-wrapper>
+        </n-flex>
+      </n-list-item>
+
+      <n-list-item>
+        <n-flex vertical>
           <b>工作区</b>
           <n-checkbox v-model:checked="setting.autoTopJobWhenAddTask">
             工作区添加时自动置顶

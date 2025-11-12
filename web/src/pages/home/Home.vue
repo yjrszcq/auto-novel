@@ -1,11 +1,23 @@
 <script lang="ts" setup>
-import { WorkspacesOutlined } from '@vicons/material';
+import {
+  DeleteOutlineOutlined,
+  MoreVertOutlined,
+  WorkspacesOutlined,
+} from '@vicons/material';
 
 import bannerUrl from '@/image/banner.webp';
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
-import type { TranslateJobRecord } from '@/model/Translator';
-import { useLocalVolumeStore, useWorkspaceStore } from '@/stores';
+import {
+  LocalVolumeManagerUtil,
+  useLocalVolumeManager,
+} from '@/pages/workspace/LocalVolumeManager';
+import {
+  Setting,
+  useLocalVolumeStore,
+  useSettingStore,
+} from '@/stores';
 import { useBreakPoints } from '@/pages/util';
+import { downloadFile } from '@/util';
 import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const bp = useBreakPoints();
@@ -31,62 +43,305 @@ const ensureLocalRepo = async () => {
   return localRepo.value;
 };
 
-const gptWorkspace = useWorkspaceStore('gpt');
-const sakuraWorkspace = useWorkspaceStore('sakura');
-const gptRecordsSource = computed(
-  () => gptWorkspace.ref.value.uncompletedJobs,
+const message = useMessage();
+
+const settingStore = useSettingStore();
+const { setting } = storeToRefs(settingStore);
+
+const localVolumeManager = useLocalVolumeManager();
+const { volumes } = storeToRefs(localVolumeManager);
+
+const localShelfSearch = reactive({ query: '', enableRegexMode: false });
+const localShelfLoading = ref(false);
+const showDeleteModal = ref(false);
+
+const progressFilter = ref<'all' | 'finished' | 'unfinished'>('all');
+const progressFilterOptions = [
+  { label: '全部', value: 'all' },
+  { label: '已完成', value: 'finished' },
+  { label: '未完成', value: 'unfinished' },
+];
+
+const batchMenuOptions = [
+  { label: '批量下载', key: 'batch-download' },
+  { label: '批量删除', key: 'batch-delete' },
+];
+
+type TranslatorType = 'gpt' | 'sakura';
+
+const isTranslatorFinished = (
+  volume: LocalVolumeMetadata,
+  type: TranslatorType,
+) =>
+  volume.toc.length > 0 &&
+  volume.toc.every((chapter) => {
+    const chapterGlossaryId = type === 'gpt' ? chapter.gpt : chapter.sakura;
+    return chapterGlossaryId === volume.glossaryId;
+  });
+
+const translatorPriority = computed<TranslatorType[]>(() =>
+  setting.value.homeDownloadPriority === 'gpt'
+    ? ['gpt', 'sakura']
+    : ['sakura', 'gpt'],
 );
-const sakuraRecordsSource = computed(
-  () => sakuraWorkspace.ref.value.uncompletedJobs,
+
+const pickPreferredTranslator = (volume: LocalVolumeMetadata) => {
+  for (const translator of translatorPriority.value) {
+    if (isTranslatorFinished(volume, translator)) {
+      return translator;
+    }
+  }
+  return null;
+};
+
+const sortedLocalVolumes = computed(() =>
+  LocalVolumeManagerUtil.filterAndSortVolumes(volumes.value ?? [], {
+    query: localShelfSearch.query,
+    enableRegexMode: localShelfSearch.enableRegexMode,
+    order: setting.value.localVolumeOrder,
+  }),
 );
 
-interface SearchResult {
-  keyword: string;
-  volumes: LocalVolumeMetadata[];
-  gptRecords: TranslateJobRecord[];
-  sakuraRecords: TranslateJobRecord[];
-}
+const filteredLocalVolumes = computed(() =>
+  sortedLocalVolumes.value.filter((volume) => {
+    switch (progressFilter.value) {
+      case 'finished':
+        return pickPreferredTranslator(volume) !== null;
+      case 'unfinished':
+        return pickPreferredTranslator(volume) === null;
+      default:
+        return true;
+    }
+  }),
+);
 
-const searchResults = ref<SearchResult | null>(null);
-const searchState = reactive({ loading: false, error: null as string | null });
-const showSearchPanel = computed(() => keyword.value.trim().length > 0);
+watch(
+  () => keyword.value,
+  (value) => {
+    localShelfSearch.query = value;
+  },
+);
 
-const filterRecords = (
-  records: TranslateJobRecord[],
-  keywordLower: string,
+const handleSearch = () => {
+  const trimmed = keyword.value.trim();
+  keyword.value = trimmed;
+  localShelfSearch.query = trimmed;
+};
+
+const loadLocalShelf = async () => {
+  localShelfLoading.value = true;
+  try {
+    await localVolumeManager.loadVolumes();
+  } catch (error) {
+    message.error(`本地书架加载失败：${error}`);
+  } finally {
+    localShelfLoading.value = false;
+  }
+};
+
+onMounted(() => {
+  loadLocalShelf();
+});
+
+const getTranslationStats = (
+  volume: LocalVolumeMetadata,
+  type: 'gpt' | 'sakura',
 ) => {
-  return records.filter((record) => {
-    const text = `${record.task} ${record.description ?? ''}`.toLowerCase();
-    return text.includes(keywordLower);
+  const finished = volume.toc.filter((chapter) => {
+    const chapterGlossaryId = type === 'gpt' ? chapter.gpt : chapter.sakura;
+    return chapterGlossaryId === volume.glossaryId;
+  }).length;
+  const expired = volume.toc.filter((chapter) => {
+    const chapterGlossaryId = type === 'gpt' ? chapter.gpt : chapter.sakura;
+    return (
+      chapterGlossaryId !== undefined &&
+      chapterGlossaryId !== volume.glossaryId
+    );
+  }).length;
+  return { finished, expired, total: volume.toc.length };
+};
+
+const formatTranslationSummary = (
+  volume: LocalVolumeMetadata,
+  type: 'gpt' | 'sakura',
+) => {
+  const { finished, expired, total } = getTranslationStats(volume, type);
+  if (total === 0) {
+    return '暂无章节';
+  }
+  return `完成 ${finished}/${total}${expired ? ` · 过期 ${expired}` : ''}`;
+};
+
+const queueVolumeToWorkspace = (
+  volume: LocalVolumeMetadata,
+  type: 'gpt' | 'sakura',
+) => {
+  const results = localVolumeManager.queueJobToWorkspace(volume.id, {
+    level: 'all',
+    type,
+    shouldTop: false,
+    startIndex: 0,
+    endIndex: 65535,
+    taskNumber: 1,
+    total: volume.toc.length ?? 65535,
+  });
+  const success = results.every((item) => item);
+  message[success ? 'success' : 'error'](
+    success
+      ? `${volume.id} 已加入${type === 'gpt' ? ' GPT' : ' Sakura'}工作区`
+      : `${volume.id} 已在对应工作区的队列中`,
+  );
+};
+
+const handleRefreshShelf = (event?: MouseEvent) => {
+  loadLocalShelf();
+  const target = event?.currentTarget as HTMLElement | undefined;
+  target?.blur?.();
+};
+
+const handleBatchDownload = async () => {
+  if (filteredLocalVolumes.value.length === 0) {
+    message.info('没有选中小说');
+    return;
+  }
+  const { BlobReader, BlobWriter, ZipWriter } = await import('@zip.js/zip.js');
+  const zipBlobWriter = new BlobWriter();
+  const zipWriter = new ZipWriter(zipBlobWriter);
+
+  let success = 0;
+  let failed = 0;
+
+  for (const volume of filteredLocalVolumes.value) {
+    try {
+      const { filename, blob } = await buildDownloadPayload(volume);
+      await zipWriter.add(filename, new BlobReader(blob));
+      success += 1;
+    } catch (error) {
+      failed += 1;
+      console.error(`批量下载失败：${error}\n标题:${volume.id}`);
+    }
+  }
+
+  await zipWriter.close();
+
+  if (success > 0) {
+    const zipBlob = await zipBlobWriter.getData();
+    downloadFile(`批量下载[${success}].zip`, zipBlob);
+  }
+  message.info(`${success}本小说被打包，${failed}本失败`);
+};
+
+const deleteAllFilteredVolumes = async () => {
+  if (filteredLocalVolumes.value.length === 0) {
+    message.info('没有选中小说');
+    return;
+  }
+  const ids = filteredLocalVolumes.value.map((it) => it.id);
+  const { success, failed } = await localVolumeManager.deleteVolumes(ids);
+  showDeleteModal.value = false;
+  message.info(`${success}本小说被删除，${failed}本失败`);
+};
+
+const handleBatchMenuSelect = (key: string) => {
+  if (filteredLocalVolumes.value.length === 0) {
+    message.info('没有选中小说');
+    return;
+  }
+  switch (key) {
+    case 'batch-download':
+      handleBatchDownload();
+      break;
+    case 'batch-delete':
+      showDeleteModal.value = true;
+      break;
+    default:
+      break;
+  }
+};
+
+const getTranslatedFile = async (
+  volumeId: string,
+  translator: TranslatorType,
+) => {
+  const repo = await ensureLocalRepo();
+  const { translationsMode } = setting.value.downloadFormat;
+  return repo.getTranslationFile({
+    id: volumeId,
+    mode: setting.value.homeDownloadMode,
+    translationsMode,
+    translations: [translator],
   });
 };
 
-const handleSearch = async () => {
-  const query = keyword.value.trim();
-  if (query.length === 0) {
-    searchResults.value = null;
-    searchState.error = null;
+const getRawFile = async (volumeId: string) => {
+  const repo = await ensureLocalRepo();
+  const file = await repo.getFile(volumeId);
+  if (!file) return undefined;
+  return { filename: volumeId, blob: file.file };
+};
+
+const downloadTranslatedVolume = async (
+  volumeId: string,
+  translator: TranslatorType,
+) => {
+  try {
+    const { filename, blob } = await getTranslatedFile(volumeId, translator);
+    downloadFile(filename, blob);
+    message.success('已开始下载译文');
+  } catch (error) {
+    message.error(`下载失败：${error}`);
+  }
+};
+
+const downloadRawVolume = async (volumeId: string) => {
+  try {
+    const file = await getRawFile(volumeId);
+    if (!file) {
+      message.error('原始文件不存在');
+      return;
+    }
+    downloadFile(file.filename, file.blob);
+    message.success('已开始下载原文');
+  } catch (error) {
+    message.error(`下载失败：${error}`);
+  }
+};
+
+const findVolumeById = (volumeId: string) =>
+  volumes.value?.find((volume) => volume.id === volumeId);
+
+const buildDownloadPayload = async (volume: LocalVolumeMetadata) => {
+  const preferredTranslator = pickPreferredTranslator(volume);
+  if (preferredTranslator) {
+    return getTranslatedFile(volume.id, preferredTranslator);
+  }
+  const raw = await getRawFile(volume.id);
+  if (!raw) {
+    throw new Error('原始文件不存在');
+  }
+  return raw;
+};
+
+const handleDownloadVolume = async (volumeId: string) => {
+  const targetVolume = findVolumeById(volumeId);
+  if (!targetVolume) {
+    message.error('未找到小说');
     return;
   }
-  searchState.loading = true;
-  searchState.error = null;
-  const lower = query.toLowerCase();
+  const translator = pickPreferredTranslator(targetVolume);
+  if (translator) {
+    await downloadTranslatedVolume(volumeId, translator);
+    return;
+  }
+  await downloadRawVolume(volumeId);
+};
+
+const deleteLocalVolume = async (volumeId: string) => {
   try {
-    const repo = await ensureLocalRepo();
-    const volumes = await repo.listVolume();
-    const volumeMatches = volumes.filter((volume) =>
-      volume.id.toLowerCase().includes(lower),
-    );
-    searchResults.value = {
-      keyword: query,
-      volumes: volumeMatches,
-      gptRecords: filterRecords(gptRecordsSource.value, lower),
-      sakuraRecords: filterRecords(sakuraRecordsSource.value, lower),
-    };
+    await localVolumeManager.deleteVolume(volumeId);
+    message.success(`已删除《${volumeId}》`);
   } catch (error) {
-    searchState.error = `${error}`;
-  } finally {
-    searchState.loading = false;
+    message.error(`删除失败：${error}`);
   }
 };
 
@@ -112,7 +367,7 @@ const handleSearch = async () => {
         <n-input
           v-model:value="keyword"
           size="large"
-          placeholder="输入小说文件名或任务描述，搜索上传的小说与缓存的翻译"
+          placeholder="输入小说文件名，搜索本地书架"
           :input-props="{ spellcheck: false }"
           @keyup.enter="handleSearch"
           :style="{ 'background-color': vars.bodyColor }"
@@ -153,135 +408,131 @@ const handleSearch = async () => {
       <div v-html="infoPanelHtml" />
     </bulletin>
 
-    <n-card v-if="showSearchPanel" class="search-result-card" size="small">
-      <template #header>
-        <n-text>
-          {{
-            searchResults ? `搜索：${searchResults.keyword}` : '搜索结果'
-          }}
-        </n-text>
-      </template>
-
-      <n-skeleton v-if="searchState.loading" text :repeat="3" />
-
-      <n-alert
-        v-else-if="searchState.error"
-        type="error"
-        :title="'搜索失败'"
+    <section-header title="本地书架">
+      <local-volume-upload-button />
+      <c-button label="刷新" @action="handleRefreshShelf" />
+      <n-dropdown
+        trigger="click"
+        :options="batchMenuOptions"
+        :keyboard="false"
+        @select="handleBatchMenuSelect"
       >
-        {{ searchState.error }}
-      </n-alert>
+        <n-button circle>
+          <n-icon :component="MoreVertOutlined" />
+        </n-button>
+      </n-dropdown>
+    </section-header>
 
-      <n-empty v-else-if="!searchResults" description="点击搜索以开始查询" />
+    <n-card class="local-shelf-card" size="small">
+      <n-flex vertical :size="12">
+        <c-action-wrapper title="排序" align="center">
+          <order-sort
+            v-model:value="setting.localVolumeOrder"
+            :options="Setting.localVolumeOrderOptions"
+          />
+        </c-action-wrapper>
 
-      <template v-else>
-        <n-space vertical :size="16">
-          <div>
-            <n-h3>上传的小说</n-h3>
-            <n-empty
-              v-if="searchResults.volumes.length === 0"
-              description="没有匹配的小说"
-            />
-            <n-list v-else>
-              <n-list-item
-                v-for="volume in searchResults.volumes"
-                :key="volume.id"
-              >
-                <n-thing :title="volume.id">
-                  <template #description>
-                    <n-text depth="3">
-                      创建于
-                      <n-time :time="volume.createAt" type="relative" />
-                      ，共 {{ volume.toc.length }} 个分段
-                    </n-text>
-                  </template>
-                </n-thing>
-              </n-list-item>
-            </n-list>
-          </div>
+        <c-action-wrapper title="状态">
+          <c-radio-group
+            v-model:value="progressFilter"
+            :options="progressFilterOptions"
+            size="small"
+          />
+        </c-action-wrapper>
+      </n-flex>
 
-          <div>
-            <n-h3>缓存的翻译</n-h3>
-            <n-empty
-              v-if="
-                searchResults.gptRecords.length === 0 &&
-                searchResults.sakuraRecords.length === 0
-              "
-              description="没有匹配的任务"
-            />
-            <template v-else>
-              <div class="record-group">
-                <n-h4>GPT 工作区</n-h4>
-                <n-empty
-                  v-if="searchResults.gptRecords.length === 0"
-                  size="small"
-                  description="未找到任务"
-                />
-                <n-list v-else>
-                  <n-list-item
-                    v-for="record in searchResults.gptRecords"
-                    :key="`${record.task}-gpt`"
-                  >
-                    <n-thing :title="record.description || '未命名任务'">
-                      <template #description>
-                        <n-text depth="3">
-                          {{ record.task }}
-                        </n-text>
-                      </template>
-                      <template #footer>
-                        <n-text depth="3">请前往 GPT 工作区执行操作</n-text>
-                      </template>
-                    </n-thing>
-                  </n-list-item>
-                </n-list>
-              </div>
+      <n-divider style="margin: 16px 0 8px" />
 
-              <div class="record-group">
-                <n-h4>Sakura 工作区</n-h4>
-                <n-empty
-                  v-if="searchResults.sakuraRecords.length === 0"
-                  size="small"
-                  description="未找到任务"
-                />
-                <n-list v-else>
-                  <n-list-item
-                    v-for="record in searchResults.sakuraRecords"
-                    :key="`${record.task}-sakura`"
-                  >
-                    <n-thing :title="record.description || '未命名任务'">
-                      <template #description>
-                        <n-text depth="3">
-                          {{ record.task }}
-                        </n-text>
-                      </template>
-                      <template #footer>
-                        <n-text depth="3">请前往 Sakura 工作区执行操作</n-text>
-                      </template>
-                    </n-thing>
-                  </n-list-item>
-                </n-list>
-              </div>
+      <n-skeleton v-if="localShelfLoading" text :repeat="3" />
+      <n-empty
+        v-else-if="filteredLocalVolumes.length === 0"
+        :description="keyword.length === 0 ? '还没有本地小说' : '没有匹配的小说'"
+      />
+      <n-list v-else class="local-shelf-list">
+        <n-list-item
+          v-for="volume in filteredLocalVolumes"
+          :key="volume.id"
+        >
+          <n-thing :title="volume.id">
+            <template #description>
+              <n-text depth="3">
+                创建于
+                <n-time :time="volume.createAt" type="relative" />
+                ，共 {{ volume.toc.length }} 个分段
+              </n-text>
             </template>
-          </div>
-        </n-space>
-      </template>
+            <template #footer>
+              <n-space :size="8" wrap>
+                <n-tag size="small" type="info">
+                  GPT · {{ formatTranslationSummary(volume, 'gpt') }}
+                </n-tag>
+                <n-tag size="small" type="success">
+                  Sakura · {{ formatTranslationSummary(volume, 'sakura') }}
+                </n-tag>
+              </n-space>
+
+              <n-flex :size="8" wrap style="margin-top: 8px">
+                <c-button
+                  label="排队 GPT"
+                  size="tiny"
+                  secondary
+                  @action="queueVolumeToWorkspace(volume, 'gpt')"
+                />
+                <c-button
+                  label="排队 Sakura"
+                  size="tiny"
+                  secondary
+                  @action="queueVolumeToWorkspace(volume, 'sakura')"
+                />
+                <router-link
+                  v-if="!volume.id.endsWith('.epub')"
+                  :to="`/workspace/reader/${encodeURIComponent(volume.id)}/0`"
+                  target="_blank"
+                >
+                  <c-button label="阅读" size="tiny" secondary />
+                </router-link>
+                <c-button
+                  label="下载"
+                  size="tiny"
+                  secondary
+                  @action="handleDownloadVolume(volume.id)"
+                />
+                <c-button
+                  label="原文"
+                  size="tiny"
+                  secondary
+                  @action="downloadRawVolume(volume.id)"
+                />
+                <div style="flex: 1" />
+                <c-button-confirm
+                  :hint="`真的要删除《${volume.id}》吗？`"
+                  :icon="DeleteOutlineOutlined"
+                  size="tiny"
+                  secondary
+                  circle
+                  type="error"
+                  @action="deleteLocalVolume(volume.id)"
+                />
+              </n-flex>
+            </template>
+          </n-thing>
+        </n-list-item>
+      </n-list>
     </n-card>
 
-    <job-record-section
-      id="gpt"
-      title="GPT工作区任务记录"
-      :enable-retry="false"
-      redirect-to="/workspace/gpt"
-    />
+    <c-modal title="清空所有文件" v-model:show="showDeleteModal">
+      <n-p>
+        这将删除当前筛选结果中的所有EPUB/TXT文件，无法恢复。你确定吗？
+      </n-p>
 
-    <n-divider />
-
-    <job-record-section
-      id="sakura"
-      title="Sakura工作区任务记录"
-      :enable-retry="false"
-      redirect-to="/workspace/sakura"
-    />
+      <template #action>
+        <c-button
+          label="确定"
+          type="primary"
+          @action="deleteAllFilteredVolumes"
+        />
+      </template>
+    </c-modal>
   </div>
 </template>
 

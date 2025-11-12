@@ -28,9 +28,11 @@ export interface Setting {
   workspaceSound: boolean;
   paginationMode: 'pagination' | 'scroll';
   localVolumeOrder: {
-    value: 'byCreateAt' | 'byReadAt' | 'byId';
+    value: 'byCreateAt' | 'byId';
     desc: boolean;
   };
+  homeDownloadMode: 'zh' | 'zh-jp' | 'jp-zh';
+  homeDownloadPriority: 'gpt' | 'sakura';
   //
   locale: 'zh-cn' | 'zh-tw';
   searchLocaleAware: boolean;
@@ -66,6 +68,8 @@ export namespace Setting {
       value: 'byCreateAt',
       desc: true,
     },
+    homeDownloadMode: 'zh',
+    homeDownloadPriority: 'gpt',
     //
     locale: 'zh-cn',
     searchLocaleAware: false,
@@ -96,6 +100,12 @@ export namespace Setting {
     if ((setting.paginationMode as unknown) === 'auto') {
       setting.paginationMode = 'pagination';
     }
+    if (setting.homeDownloadMode === undefined) {
+      setting.homeDownloadMode = 'zh';
+    }
+    if (setting.homeDownloadPriority === undefined) {
+      setting.homeDownloadPriority = 'gpt';
+    }
   };
 
   export const downloadModeOptions = [
@@ -103,32 +113,18 @@ export namespace Setting {
     { label: '中日', value: 'zh-jp' },
     { label: '日中', value: 'jp-zh' },
   ];
-  export const downloadTranslationModeOptions = [
-    { label: '优先', value: 'priority' },
-    { label: '并列', value: 'parallel' },
-  ];
-  export const downloadTypeOptions = [
-    { label: 'EPUB', value: 'epub' },
-    { label: 'TXT', value: 'txt' },
-  ];
-
   export const themeOptions = [
     { label: '亮色主题', value: 'light' },
     { label: '暗色主题', value: 'dark' },
     { label: '跟随系统', value: 'system' },
   ];
-  export const paginationModeOptions = [
-    { label: '分页', value: 'pagination' },
-    { label: '滚动', value: 'scroll' },
-  ];
   export const localVolumeOrderOptions = [
     { value: 'byCreateAt', label: '添加时间' },
-    { value: 'byReadAt', label: '阅读时间' },
     { value: 'byId', label: '标题' },
   ];
-  export const localeOptions = [
-    { label: '简体中文', value: 'zh-cn' },
-    { label: '繁体中文', value: 'zh-tw' },
+  export const homeDownloadPriorityOptions = [
+    { label: 'GPT', value: 'gpt' },
+    { label: 'Sakura', value: 'sakura' },
   ];
 }
 
