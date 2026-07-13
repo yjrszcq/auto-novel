@@ -50,7 +50,6 @@ const records = computed(() => {
 const downloadVolumes = async () => {
   const volumeIds = records.value
     .map((it) => TranslateTaskDescriptor.parse(it.task).desc)
-    .filter((it) => it.type === 'local')
     .map((it) => it.volumeId);
 
   if (volumeIds.length === 0) {
@@ -79,7 +78,8 @@ const navigateAndRun = async (action: () => void) => {
   action();
 };
 
-const handleRetryAll = () => navigateAndRun(() => workspace.retryAllJobRecords());
+const handleRetryAll = () =>
+  navigateAndRun(() => workspace.retryAllJobRecords());
 
 const handleRetryJob = (job: TranslateJobRecord) =>
   navigateAndRun(() => workspace.retryJobRecord(job));

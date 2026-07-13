@@ -3,7 +3,7 @@ import type {
   SakuraWorker,
   TranslateJobRecord,
 } from '@/model/Translator';
-import { TranslateJob } from '@/model/Translator';
+import { TranslateJob, TranslateTaskDescriptor } from '@/model/Translator';
 import { lazy, useLocalStorage } from '@/util';
 
 import { LSKey } from './key';
@@ -14,6 +14,18 @@ interface Workspace<T> {
   // 为了兼容性，仍使用 uncompletedJobs
   uncompletedJobs: TranslateJobRecord[];
 }
+
+export const removeRemoteTasks = (workspace: {
+  jobs: TranslateJob[];
+  uncompletedJobs: TranslateJobRecord[];
+}) => {
+  workspace.jobs = workspace.jobs.filter((job) =>
+    TranslateTaskDescriptor.isLocal(job.task),
+  );
+  workspace.uncompletedJobs = workspace.uncompletedJobs.filter((job) =>
+    TranslateTaskDescriptor.isLocal(job.task),
+  );
+};
 
 const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
   id: string,
@@ -37,6 +49,7 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
   if (migrate) {
     migrate(ref);
   }
+  removeRemoteTasks(ref.value);
 
   ref.value.workers.forEach(ensureConcurrency);
 
@@ -169,7 +182,6 @@ const createSakuraWorkspaceStore = () =>
           it.testSegLength = undefined;
         }
       });
-
     },
   );
 
