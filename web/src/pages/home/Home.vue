@@ -14,6 +14,7 @@ import {
 import {
   Setting,
   useLocalVolumeStore,
+  useRuntimeConfigStore,
   useSettingStore,
 } from '@/stores';
 import { useBreakPoints } from '@/pages/util';
@@ -24,6 +25,12 @@ const bp = useBreakPoints();
 const showShortcut = bp.smaller('tablet');
 
 const vars = useThemeVars();
+
+const runtimeConfigStore = useRuntimeConfigStore();
+const { homeBackgroundImageUrl } = storeToRefs(runtimeConfigStore);
+const bannerBackgroundUrl = computed(
+  () => homeBackgroundImageUrl.value || bannerUrl,
+);
 
 const keyword = ref('');
 const { html: infoPanelHtml } = useRuntimePanel('info.html');
@@ -349,7 +356,9 @@ const deleteLocalVolume = async (volumeId: string) => {
 
 <template>
   <div
-    :style="{ background: `rgba(0, 0, 0, .25) url(${bannerUrl})` }"
+    :style="{
+      background: `rgba(0, 0, 0, .25) url(${bannerBackgroundUrl})`,
+    }"
     style="background-blend-mode: darken"
   >
     <div id="banner" class="layout-content">

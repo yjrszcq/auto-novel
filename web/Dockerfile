@@ -1,7 +1,7 @@
 FROM node:21-alpine AS builder
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /web
 COPY package.json pnpm-lock.yaml .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
@@ -10,9 +10,9 @@ RUN pnpm run build
 
 FROM caddy:2.7.4
 COPY Caddyfile /etc/caddy/Caddyfile
-COPY --from=builder /web/dist /dist
-COPY config/. /opt/auto-novel/config/
-COPY config/. /opt/auto-novel/default-config/
+COPY --from=builder /web/dist /app/dist
+COPY config/. /app/config/
+COPY config/. /app/default-config/
 COPY scripts/ensure-runtime-config.sh /usr/local/bin/ensure-runtime-config.sh
 RUN chmod +x /usr/local/bin/ensure-runtime-config.sh
 

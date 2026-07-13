@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-CONFIG_DIR="/opt/auto-novel/config"
-DEFAULT_DIR="/opt/auto-novel/default-config"
+CONFIG_DIR="/app/config"
+DEFAULT_DIR="/app/default-config"
 
 mkdir -p "$CONFIG_DIR"
 

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 
 interface RuntimeConfigPayload {
   logoImageUrl?: string;
+  homeBackgroundImageUrl?: string;
 }
 
 export const useRuntimeConfigStore = defineStore(
@@ -21,6 +22,7 @@ export const useRuntimeConfigStore = defineStore(
       }
       config.value = {
         logoImageUrl: payload.logoImageUrl?.trim() ?? '',
+        homeBackgroundImageUrl: payload.homeBackgroundImageUrl?.trim() ?? '',
       };
     };
 
@@ -67,6 +69,10 @@ export const useRuntimeConfigStore = defineStore(
 
     const hasLogoImage = computed(() => logoImageUrl.value.length > 0);
 
+    const homeBackgroundImageUrl = computed(
+      () => config.value?.homeBackgroundImageUrl?.trim() ?? '',
+    );
+
     return {
       config,
       loading,
@@ -75,6 +81,7 @@ export const useRuntimeConfigStore = defineStore(
       loadRuntimeConfig,
       logoImageUrl,
       hasLogoImage,
+      homeBackgroundImageUrl,
     };
   },
 );

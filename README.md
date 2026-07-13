@@ -15,10 +15,21 @@
 1. 使用以下命令快速部署项目
 
    ```bash
-   docker run -d --name auto-novel -p 8011:80 -v ./config:/opt/auto-novel/config --restart unless-stopped szcq/auto-novel
+   docker run -d --name auto-novel -p 8011:80 -v ./config:/app/config --restart unless-stopped szcq/auto-novel
    ```
 
 2. 浏览器访问 `http://localhost:8011`
+
+首页背景与 Logo 可通过挂载目录中的 `config.json` 配置：
+
+```json
+{
+  "logoImageUrl": "https://example.com/logo.png",
+  "homeBackgroundImageUrl": "https://example.com/home-background.webp"
+}
+```
+
+`homeBackgroundImageUrl` 留空时，首页继续使用仓库内置的默认背景图。
 
 ## 声明
 

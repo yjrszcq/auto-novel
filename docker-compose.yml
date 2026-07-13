@@ -7,5 +7,5 @@ services:
     ports:
       - 8011:80
     volumes:
-      - ./web/config:/opt/auto-novel/config
+      - ./web/config:/app/config
     restart: unless-stopped
