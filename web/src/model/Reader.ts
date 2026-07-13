@@ -17,6 +17,11 @@ export interface ReaderSettingsRecord {
   id: 'default';
   defaultMode: ReaderMode;
   translationPriority: ('gpt' | 'sakura' | 'youdao' | 'baidu')[];
+  fontSize?: number;
+  lineHeight?: number;
+  contentWidth?: number;
+  horizontalPadding?: number;
+  theme?: 'light' | 'dark' | 'sepia' | 'system';
   updatedAt: number;
 }
 
