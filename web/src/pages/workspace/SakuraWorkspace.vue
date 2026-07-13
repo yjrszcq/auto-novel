@@ -23,7 +23,7 @@ const workspaceRef = workspace.ref;
 
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
-const { html: infoPanelHtml } = useRuntimePanel('info-sakura.html');
+const { html: infoPanelHtml } = useRuntimePanel('html/info-sakura.html');
 
 type ProcessedJob = TranslateJob & {
   progress?: { finished: number; error: number; total: number };

@@ -29,6 +29,6 @@ pnpm run build    # 生产构建与类型检查
 pnpm run lint     # 检查 src 目录
 ```
 
-运行时默认配置位于 `web/config/`。Docker 镜像会将其复制到 `/app/default-config`，并在启动时为挂载的 `/app/config` 补齐缺失文件。请通过挂载目录修改 `config.json` 和三个 `info*.html` 文件，不要将个人配置或密钥提交到仓库。
+运行时默认配置位于 `web/config/`。Docker 镜像会将其复制到 `/app/default-config`，并在启动时为挂载的 `/app/config` 补齐缺失文件。请通过挂载目录修改 `config.json`、`html/info*.html` 和 `images/` 中的本地图片；`config.json` 中的图片路径均相对 `/app/config`。不要将个人配置或密钥提交到仓库。
 
 提交前请至少运行与改动相符的检查；涉及构建、路由、任务模型或运行时配置时，运行 `pnpm test` 与 `pnpm run build`。

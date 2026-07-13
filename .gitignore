@@ -1,6 +1,8 @@
 .vscode
 .idea/
 
+goal/
+
 # Script
 script/dist/
 script/node_modules/

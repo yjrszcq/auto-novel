@@ -27,13 +27,14 @@ const showShortcut = bp.smaller('tablet');
 const vars = useThemeVars();
 
 const runtimeConfigStore = useRuntimeConfigStore();
-const { homeBackgroundImageUrl } = storeToRefs(runtimeConfigStore);
-const bannerBackgroundUrl = computed(
-  () => homeBackgroundImageUrl.value || bannerUrl,
+const { homeBackgroundImage, loaded, loading } =
+  storeToRefs(runtimeConfigStore);
+const bannerBackgroundUrl = computed(() =>
+  loading.value && !loaded.value ? '' : homeBackgroundImage.value || bannerUrl,
 );
 
 const keyword = ref('');
-const { html: infoPanelHtml } = useRuntimePanel('info.html');
+const { html: infoPanelHtml } = useRuntimePanel('html/info.html');
 
 const quickActions = [
   { label: '小说工具箱', to: '/workspace/toolbox', icon: WorkspacesOutlined },
@@ -161,8 +162,7 @@ const getTranslationStats = (
   const expired = volume.toc.filter((chapter) => {
     const chapterGlossaryId = type === 'gpt' ? chapter.gpt : chapter.sakura;
     return (
-      chapterGlossaryId !== undefined &&
-      chapterGlossaryId !== volume.glossaryId
+      chapterGlossaryId !== undefined && chapterGlossaryId !== volume.glossaryId
     );
   }).length;
   return { finished, expired, total: volume.toc.length };
@@ -351,13 +351,17 @@ const deleteLocalVolume = async (volumeId: string) => {
     message.error(`删除失败：${error}`);
   }
 };
-
 </script>
 
 <template>
   <div
     :style="{
-      background: `rgba(0, 0, 0, .25) url(${bannerBackgroundUrl})`,
+      background: bannerBackgroundUrl
+        ? `rgba(0, 0, 0, .25) url(${bannerBackgroundUrl})`
+        : 'rgba(0, 0, 0, .25)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
     }"
     style="background-blend-mode: darken"
   >
@@ -455,13 +459,12 @@ const deleteLocalVolume = async (volumeId: string) => {
       <n-skeleton v-if="localShelfLoading" text :repeat="3" />
       <n-empty
         v-else-if="filteredLocalVolumes.length === 0"
-        :description="keyword.length === 0 ? '还没有本地小说' : '没有匹配的小说'"
+        :description="
+          keyword.length === 0 ? '还没有本地小说' : '没有匹配的小说'
+        "
       />
       <n-list v-else class="local-shelf-list">
-        <n-list-item
-          v-for="volume in filteredLocalVolumes"
-          :key="volume.id"
-        >
+        <n-list-item v-for="volume in filteredLocalVolumes" :key="volume.id">
           <n-thing :title="volume.id">
             <template #description>
               <n-text depth="3">
@@ -530,9 +533,7 @@ const deleteLocalVolume = async (volumeId: string) => {
     </n-card>
 
     <c-modal title="清空所有文件" v-model:show="showDeleteModal">
-      <n-p>
-        这将删除当前筛选结果中的所有EPUB/TXT文件，无法恢复。你确定吗？
-      </n-p>
+      <n-p>这将删除当前筛选结果中的所有EPUB/TXT文件，无法恢复。你确定吗？</n-p>
 
       <template #action>
         <c-button

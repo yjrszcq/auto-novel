@@ -5,8 +5,8 @@ const vars = useThemeVars();
 const showGirl = ref(false);
 
 const runtimeConfigStore = useRuntimeConfigStore();
-const { logoImageUrl } = storeToRefs(runtimeConfigStore);
-const canShowImage = computed(() => logoImageUrl.value.length > 0);
+const { logoImage } = storeToRefs(runtimeConfigStore);
+const canShowImage = computed(() => logoImage.value.length > 0);
 
 const toggle = () => {
   if (!canShowImage.value) return;
@@ -52,7 +52,7 @@ const toggle = () => {
 
   <img
     v-if="showGirl && canShowImage"
-    :src="logoImageUrl"
+    :src="logoImage"
     style="
       width: 200px;
       position: fixed;

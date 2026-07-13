@@ -19,7 +19,7 @@ const workspaceRef = workspace.ref;
 
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
-const { html: infoPanelHtml } = useRuntimePanel('info-gpt.html');
+const { html: infoPanelHtml } = useRuntimePanel('html/info-gpt.html');
 
 type ProcessedJob = TranslateJob & {
   progress?: { finished: number; error: number; total: number };

@@ -2,8 +2,8 @@
 import { useRuntimeConfigStore } from '@/stores';
 
 const runtimeConfigStore = useRuntimeConfigStore();
-const { logoImageUrl } = storeToRefs(runtimeConfigStore);
-const canShowLogo = computed(() => logoImageUrl.value.length > 0);
+const { logoImage } = storeToRefs(runtimeConfigStore);
+const canShowLogo = computed(() => logoImage.value.length > 0);
 </script>
 
 <template>
@@ -25,7 +25,7 @@ const canShowLogo = computed(() => logoImageUrl.value.length > 0);
         />
         <img
           v-if="canShowLogo"
-          :src="logoImageUrl"
+          :src="logoImage"
           style="position: absolute; top: 0; height: 120px; margin: 8px 0 0 8px"
           alt="logo"
         />

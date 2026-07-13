@@ -26,18 +26,24 @@
 
 ```json
 {
+  "logoImageFile": "images/logo.png",
   "logoImageUrl": "https://example.com/logo.png",
+  "homeBackgroundImageFile": "images/home-background.webp",
   "homeBackgroundImageUrl": "https://example.com/home-background.webp"
 }
 ```
 
-`homeBackgroundImageUrl` 留空时，首页继续使用仓库内置的默认背景图。
+将 Logo 或背景图上传到映射目录的 `images/` 后，在 `logoImageFile` 或 `homeBackgroundImageFile` 填入相对路径，例如 `images/logo.png`。本地文件优先于对应的 URL 配置，`logoImageUrl` 和 `homeBackgroundImageUrl` 仍可用于远程图片。
 
-同一目录下的 HTML 文件也可直接编辑，用于显示应用内说明：
+背景图的两个配置均留空时，首页继续使用仓库内置的默认背景图。
 
-- `info.html`：首页公告。
-- `info-gpt.html`：GPT 工作区说明。
-- `info-sakura.html`：Sakura 工作区说明。
+`html/` 中的 HTML 文件也可直接编辑，用于显示应用内说明：
+
+- `html/info.html`：首页公告。
+- `html/info-gpt.html`：GPT 工作区说明。
+- `html/info-sakura.html`：Sakura 工作区说明。
+
+已有配置目录根部的 `info*.html` 会在容器启动时自动复制到新的 `html/` 目录（若目标文件不存在），无需手动迁移。
 
 ## 声明
 
