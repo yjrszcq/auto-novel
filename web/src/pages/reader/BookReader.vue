@@ -1,8 +1,9 @@
 <script lang="ts" setup>
-import type { ReaderSettingsRecord } from '@/model/Reader';
+import type { ReaderMode, ReaderSettingsRecord } from '@/model/Reader';
 import { useThrottleFn } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
+import ReaderModeDialog from './components/ReaderModeDialog.vue';
 import { createLocalVolumeReaderAdapter } from './adapters/LocalVolumeReaderAdapter';
 import {
   createReaderProgress,
@@ -10,6 +11,7 @@ import {
 } from './core/ReaderProgress';
 import type { ReaderPageLoadResult } from './core/ReaderPageState';
 import { createReaderPageController } from './core/ReaderPageState';
+import { getAvailableReaderModes, resolveReaderMode } from './core/ReaderMode';
 import {
   defaultReaderSettings,
   normalizeReaderSettings,
@@ -22,6 +24,19 @@ const router = useRouter();
 const loading = ref(false);
 const result = shallowRef<ReaderPageLoadResult>();
 const showSettings = ref(false);
+const showModePrompt = ref(false);
+const rememberModeChoice = ref(false);
+const readingMode = ref<ReaderMode>('original');
+const availableModes = ref<ReaderMode[]>(['original']);
+const modeLabel = (mode: ReaderMode) =>
+  ({
+    ask: '每次询问',
+    translated: '译文',
+    'translated-original': '译文-原文',
+    'original-translated': '原文-译文',
+    original: '原文',
+  })[mode];
+let temporaryMode: Exclude<ReaderMode, 'ask'> | undefined;
 const settings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 let settingsLoaded = false;
 
@@ -69,7 +84,40 @@ const load = async () => {
     );
   }
   if (loaded.kind === 'ready') {
-    await restoreProgress(loaded);
+    await Promise.all([restoreProgress(loaded), resolveMode(loaded)]);
+  }
+};
+
+const resolveMode = async (
+  loaded: Extract<ReaderPageLoadResult, { kind: 'ready' }>,
+) => {
+  const repository = await repositoryPromise;
+  const adapter = createLocalVolumeReaderAdapter(repository);
+  const [preference, capabilities] = await Promise.all([
+    repository.getReaderBookPreference(loaded.book.id),
+    adapter.getCapabilities(loaded.book.id),
+  ]);
+  availableModes.value = getAvailableReaderModes(capabilities);
+  readingMode.value = resolveReaderMode({
+    temporaryMode,
+    preference,
+    settings: normalizeReaderSettings(await repository.getReaderSettings()),
+    capabilities,
+  });
+  showModePrompt.value = readingMode.value === 'ask';
+};
+
+const chooseMode = async (mode: Exclude<ReaderMode, 'ask'>) => {
+  temporaryMode = mode;
+  readingMode.value = mode;
+  showModePrompt.value = false;
+  if (rememberModeChoice.value) {
+    const repository = await repositoryPromise;
+    await repository.putReaderBookPreference({
+      bookId: bookId.value,
+      preferredMode: mode,
+      updatedAt: Date.now(),
+    });
   }
 };
 
@@ -248,6 +296,13 @@ onBeforeUnmount(() => {
         </n-button>
       </footer>
     </template>
+
+    <ReaderModeDialog
+      v-model:show="showModePrompt"
+      v-model:remember="rememberModeChoice"
+      :modes="availableModes"
+      @select="chooseMode"
+    />
 
     <n-drawer v-model:show="showSettings" :width="320" placement="right">
       <n-drawer-content title="阅读设置">
