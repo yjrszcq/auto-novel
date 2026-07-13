@@ -74,3 +74,66 @@ export interface ReaderChapterCache {
   contentRevision: string;
   cachedAt: number;
 }
+
+export type ReaderTranslationStatus = 'none' | 'partial' | 'complete';
+
+export interface ReaderBook {
+  id: string;
+  title: string;
+  author?: string;
+  coverUrl?: string;
+  sourceLanguage: string;
+  targetLanguage?: string;
+  chapterCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ReaderChapterSummary {
+  id: string;
+  bookId: string;
+  index: number;
+  title: string;
+  hasOriginal: boolean;
+  translationStatus: ReaderTranslationStatus;
+  translatedSegmentCount: number;
+  totalSegmentCount: number;
+  translationSources: string[];
+}
+
+export interface ReaderSegment {
+  id: string;
+  index: number;
+  original: string;
+  translated?: string;
+}
+
+export interface ReaderChapterContent {
+  bookId: string;
+  chapterId: string;
+  chapterIndex: number;
+  title: string;
+  segments: ReaderSegment[];
+  translationSource?: string;
+}
+
+export interface BookReadingCapabilities {
+  hasOriginal: boolean;
+  hasAnyTranslation: boolean;
+  hasCompleteTranslation: boolean;
+  translatedChapterCount: number;
+  totalChapterCount: number;
+  availableTranslationSources: string[];
+}
+
+export interface GetReaderChapterInput {
+  bookId: string;
+  chapterId: string;
+}
+
+export interface ReaderContentAdapter {
+  getBook(bookId: string): Promise<ReaderBook>;
+  getChapters(bookId: string): Promise<ReaderChapterSummary[]>;
+  getChapter(input: GetReaderChapterInput): Promise<ReaderChapterContent>;
+  getCapabilities(bookId: string): Promise<BookReadingCapabilities>;
+}
