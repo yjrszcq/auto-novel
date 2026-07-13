@@ -26,16 +26,14 @@
 
 ```json
 {
-  "logoImageFile": "images/logo.png",
-  "logoImageUrl": "https://example.com/logo.png",
-  "homeBackgroundImageFile": "images/home-background.webp",
-  "homeBackgroundImageUrl": "https://example.com/home-background.webp"
+  "logoImage": "images/logo.png",
+  "homeBackgroundImage": "images/banner.webp"
 }
 ```
 
-将 Logo 或背景图上传到映射目录的 `images/` 后，在 `logoImageFile` 或 `homeBackgroundImageFile` 填入相对路径，例如 `images/logo.png`。本地文件优先于对应的 URL 配置，`logoImageUrl` 和 `homeBackgroundImageUrl` 仍可用于远程图片。
+将 Logo 或背景图上传到映射目录的 `images/` 后，在 `logoImage` 或 `homeBackgroundImage` 填入相对路径，例如 `images/logo.png`。值以 `http://` 或 `https://` 开头时会被当作远程图片链接，其他非空值均作为相对 `/app/config` 的本地文件路径处理。
 
-背景图的两个配置均留空时，首页继续使用仓库内置的默认背景图。
+默认背景已复制到 `images/banner.webp` 并写入 `homeBackgroundImage`。该配置留空时，首页仍会使用源码内置的同一张默认背景图兜底。
 
 `html/` 中的 HTML 文件也可直接编辑，用于显示应用内说明：
 

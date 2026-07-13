@@ -2,10 +2,8 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 
 interface RuntimeConfigPayload {
-  logoImageUrl?: string;
-  logoImageFile?: string;
-  homeBackgroundImageUrl?: string;
-  homeBackgroundImageFile?: string;
+  logoImage?: string;
+  homeBackgroundImage?: string;
 }
 
 export const useRuntimeConfigStore = defineStore('runtime-config', () => {
@@ -21,10 +19,8 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
       return;
     }
     config.value = {
-      logoImageUrl: payload.logoImageUrl?.trim() ?? '',
-      logoImageFile: payload.logoImageFile?.trim() ?? '',
-      homeBackgroundImageUrl: payload.homeBackgroundImageUrl?.trim() ?? '',
-      homeBackgroundImageFile: payload.homeBackgroundImageFile?.trim() ?? '',
+      logoImage: payload.logoImage?.trim() ?? '',
+      homeBackgroundImage: payload.homeBackgroundImage?.trim() ?? '',
     };
   };
 
@@ -76,32 +72,18 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
     return `/panel-content/${segments.map(encodeURIComponent).join('/')}`;
   };
 
-  const logoImageUrl = computed(() => config.value?.logoImageUrl?.trim() ?? '');
+  const resolveImageSource = (source: string) =>
+    /^https?:\/\//i.test(source) ? source : getLocalConfigFileUrl(source);
 
-  const logoImageFile = computed(
-    () => config.value?.logoImageFile?.trim() ?? '',
-  );
-
-  const logoImage = computed(
-    () => getLocalConfigFileUrl(logoImageFile.value) || logoImageUrl.value,
+  const logoImage = computed(() =>
+    resolveImageSource(config.value?.logoImage?.trim() ?? ''),
   );
 
   const hasLogoImage = computed(() => logoImage.value.length > 0);
 
-  const homeBackgroundImageUrl = computed(
-    () => config.value?.homeBackgroundImageUrl?.trim() ?? '',
+  const homeBackgroundImage = computed(() =>
+    resolveImageSource(config.value?.homeBackgroundImage?.trim() ?? ''),
   );
-
-  const homeBackgroundImageFile = computed(
-    () => config.value?.homeBackgroundImageFile?.trim() ?? '',
-  );
-
-  const homeBackgroundImage = computed(() => {
-    return (
-      getLocalConfigFileUrl(homeBackgroundImageFile.value) ||
-      homeBackgroundImageUrl.value
-    );
-  });
 
   return {
     config,
@@ -109,10 +91,8 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
     loaded,
     error,
     loadRuntimeConfig,
-    logoImageUrl,
     logoImage,
     hasLogoImage,
-    homeBackgroundImageUrl,
     homeBackgroundImage,
   };
 });

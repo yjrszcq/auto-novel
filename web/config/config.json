@@ -1,6 +1,4 @@
 {
-  "logoImageUrl": "",
-  "logoImageFile": "",
-  "homeBackgroundImageUrl": "",
-  "homeBackgroundImageFile": ""
+  "logoImage": "",
+  "homeBackgroundImage": "images/banner.webp"
 }
