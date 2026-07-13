@@ -33,6 +33,7 @@ const createRepository = (states: ReaderBookshelfState[]) => {
     listVolume: async () => volumes,
     getVolume: async (bookId) => volumes.find((volume) => volume.id === bookId),
     getReaderBookshelf: async (bookId) => records.get(bookId),
+    getReaderProgress: async () => undefined,
     listReaderBookshelves: async () => [...records.values()],
     putReaderBookshelf: async (state) => {
       writes.push(state);

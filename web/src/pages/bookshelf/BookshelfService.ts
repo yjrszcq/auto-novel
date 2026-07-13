@@ -1,5 +1,5 @@
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
-import type { ReaderBookshelfState } from '@/model/Reader';
+import type { ReaderBookshelfState, ReaderProgress } from '@/model/Reader';
 import type { useLocalVolumeStore } from '@/stores';
 
 export type BookshelfRepository = Pick<
@@ -7,6 +7,7 @@ export type BookshelfRepository = Pick<
   | 'listVolume'
   | 'getVolume'
   | 'getReaderBookshelf'
+  | 'getReaderProgress'
   | 'listReaderBookshelves'
   | 'putReaderBookshelf'
 >;
@@ -14,6 +15,7 @@ export type BookshelfRepository = Pick<
 export interface BookshelfEntry {
   volume: LocalVolumeMetadata;
   state: ReaderBookshelfState;
+  progress?: ReaderProgress;
 }
 
 const createInitialState = (
@@ -63,8 +65,15 @@ export const createBookshelfService = (
     }));
   };
 
-  const list = async () =>
-    (await ensureIndex()).filter((entry) => entry.state.listed);
+  const list = async () => {
+    const entries = (await ensureIndex()).filter((entry) => entry.state.listed);
+    return Promise.all(
+      entries.map(async (entry) => ({
+        ...entry,
+        progress: await repository.getReaderProgress(entry.volume.id),
+      })),
+    );
+  };
 
   const setListed = async (bookId: string, listed: boolean) => {
     const volume = await ensureBook(bookId);
