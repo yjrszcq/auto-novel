@@ -1,2 +1,2 @@
 cd web
-pnpm pretty-quick --staged
+./node_modules/.bin/pretty-quick --staged

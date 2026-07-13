@@ -2,6 +2,7 @@
   "name": "auto-novel-web",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@9.15.4",
   "type": "module",
   "browserslist": [
     "edge>=88",
