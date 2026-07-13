@@ -26,6 +26,7 @@ export interface LocalVolumeChapter {
   id: string;
   volumeId: string;
   paragraphs: string[];
+  segmentIds: string[];
   baidu?: ChapterTranslation;
   youdao?: ChapterTranslation;
   gpt?: ChapterTranslation;

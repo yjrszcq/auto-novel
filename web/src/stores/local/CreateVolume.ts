@@ -43,6 +43,7 @@ export const createVolume = async (
       id: `${id}/${chapterId}`,
       volumeId: id,
       paragraphs,
+      segmentIds: paragraphs.map(() => uuidv4()),
     });
   }
   await dao.createMetadata({

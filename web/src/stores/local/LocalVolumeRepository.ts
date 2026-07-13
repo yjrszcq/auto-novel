@@ -21,6 +21,7 @@ export const createLocalVolumeStore = async () => {
       dao.deleteChapterByVolumeId(id),
       dao.deleteMetadata(id),
       dao.deleteFile(id),
+      dao.deleteReaderDataByVolumeId(id),
     ]);
 
   const updateGlossary = (id: string, glossary: Glossary) =>
