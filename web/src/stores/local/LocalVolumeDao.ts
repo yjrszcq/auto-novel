@@ -185,6 +185,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     db.put('reader-settings', value);
   const getReaderBookshelf = (bookId: string) =>
     db.get('reader-bookshelf', bookId);
+  const listReaderBookshelves = () => db.getAll('reader-bookshelf');
   const putReaderBookshelf = (value: ReaderBookshelfState) =>
     db.put('reader-bookshelf', value);
   const getReaderBookPreference = (bookId: string) =>
@@ -252,6 +253,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     getReaderSettings,
     putReaderSettings,
     getReaderBookshelf,
+    listReaderBookshelves,
     putReaderBookshelf,
     getReaderBookPreference,
     putReaderBookPreference,

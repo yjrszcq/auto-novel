@@ -2,6 +2,7 @@
 import {
   DarkModeOutlined,
   HomeOutlined,
+  MenuBookOutlined,
   MenuOutlined,
   SettingsOutlined,
   WbSunnyOutlined,
@@ -10,6 +11,8 @@ import {
 import type { MenuOption } from 'naive-ui';
 import { NIcon, useOsTheme } from 'naive-ui';
 import { RouterLink } from 'vue-router';
+
+import { getMainMenuKey } from './navigation';
 
 import { useBreakPoints } from '@/pages/util';
 import { useSettingStore } from '@/stores';
@@ -81,6 +84,11 @@ const menuOptions = computed<MenuOption[]>(() => [
     ],
   },
   {
+    label: renderLabel('书架', '/bookshelf'),
+    icon: renderIcon(MenuBookOutlined),
+    key: '/bookshelf',
+  },
+  {
     label: renderLabel('设置', '/setting'),
     icon: renderIcon(SettingsOutlined),
     key: '/setting',
@@ -101,22 +109,7 @@ const menuOptions = computed<MenuOption[]>(() => [
   },
 ]);
 
-const menuKey = computed(() => {
-  const path = route.path;
-  const workspaceMenus = [
-    '/workspace/toolbox',
-    '/workspace/gpt',
-    '/workspace/sakura',
-    '/workspace/interactive',
-  ];
-  const matchedWorkspace = workspaceMenus.find((item) =>
-    path.startsWith(item),
-  );
-  if (matchedWorkspace) {
-    return matchedWorkspace;
-  }
-  return path === '/' ? '/' : path;
-});
+const menuKey = computed(() => getMainMenuKey(route.path));
 
 watch(
   () => route.path,
