@@ -6,7 +6,7 @@ const props = defineProps<{
 }>();
 
 const link = computed(() => {
-  const { desc, params } = TranslateTaskDescriptor.parse(props.task);
+  const { params } = TranslateTaskDescriptor.parse(props.task);
   const { level, forceMetadata, startIndex, endIndex } = params;
 
   let text = 'local';
