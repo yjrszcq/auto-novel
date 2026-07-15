@@ -4,6 +4,7 @@ import { useThrottleFn } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
 import ReaderModeDialog from './components/ReaderModeDialog.vue';
+import ReaderSegmentLayout from './components/ReaderSegmentLayout.vue';
 import { createLocalVolumeReaderAdapter } from './adapters/LocalVolumeReaderAdapter';
 import {
   createReaderProgress,
@@ -11,6 +12,7 @@ import {
 } from './core/ReaderProgress';
 import type { ReaderPageLoadResult } from './core/ReaderPageState';
 import { createReaderPageController } from './core/ReaderPageState';
+import { resolveRenderedReaderMode } from './core/BilingualLayout';
 import { getAvailableReaderModes, resolveReaderMode } from './core/ReaderMode';
 import {
   defaultReaderSettings,
@@ -51,6 +53,15 @@ const requestedChapterId = computed(() =>
     ? route.params.chapterId
     : undefined,
 );
+const renderedMode = computed(() =>
+  result.value?.kind === 'ready'
+    ? resolveRenderedReaderMode(
+        readingMode.value,
+        result.value.chapter.segments,
+      )
+    : 'original',
+);
+
 const readerStyle = computed(() => ({
   '--reader-font-size': `${settings.value.fontSize}px`,
   '--reader-line-height': settings.value.lineHeight,
@@ -108,9 +119,18 @@ const resolveMode = async (
 };
 
 const chooseMode = async (mode: Exclude<ReaderMode, 'ask'>) => {
+  const segmentId =
+    getSegmentElements().find(
+      (element) => element.getBoundingClientRect().top >= 0,
+    )?.dataset.readerSegmentId ??
+    getSegmentElements()[0]?.dataset.readerSegmentId;
   temporaryMode = mode;
   readingMode.value = mode;
   showModePrompt.value = false;
+  await nextTick();
+  getSegmentElements()
+    .find((element) => element.dataset.readerSegmentId === segmentId)
+    ?.scrollIntoView({ block: 'start', behavior: 'auto' });
   if (rememberModeChoice.value) {
     const repository = await repositoryPromise;
     await repository.putReaderBookPreference({
@@ -237,6 +257,7 @@ onBeforeUnmount(() => {
     <header class="book-reader__header">
       <n-button text @click="backToBookshelf">返回书架</n-button>
       <n-button text @click="showSettings = true">阅读设置</n-button>
+      <n-button text @click="showModePrompt = true">切换模式</n-button>
       <n-button text @click="backToWorkspace">工作区</n-button>
     </header>
 
@@ -271,14 +292,18 @@ onBeforeUnmount(() => {
         />
       </header>
 
+      <n-alert
+        v-if="readingMode !== renderedMode"
+        type="info"
+        style="margin-bottom: 16px"
+      >
+        本章尚无可用译文，已显示原文。
+      </n-alert>
       <article class="book-reader__content">
-        <p
-          v-for="segment in result.chapter.segments"
-          :key="segment.id"
-          :data-reader-segment-id="segment.id"
-        >
-          {{ segment.original }}
-        </p>
+        <ReaderSegmentLayout
+          :segments="result.chapter.segments"
+          :mode="renderedMode"
+        />
       </article>
 
       <footer class="book-reader__navigation">
