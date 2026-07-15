@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { ReaderMode, ReaderSettingsRecord } from '@/model/Reader';
+import { TranslateTaskDescriptor } from '@/model/Translator';
 import { useThrottleFn } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
@@ -15,11 +16,20 @@ import { createReaderPageController } from './core/ReaderPageState';
 import { resolveRenderedReaderMode } from './core/BilingualLayout';
 import { getAvailableReaderModes, resolveReaderMode } from './core/ReaderMode';
 import {
+  getChapterTranslationParams,
+  getTranslationStatusLabel,
+} from './core/ReaderTranslationWorkflow';
+import {
   defaultReaderSettings,
   normalizeReaderSettings,
 } from './core/ReaderSettings';
 
-import { useLocalVolumeStore } from '@/stores';
+import {
+  useGptWorkspaceStore,
+  useLocalVolumeStore,
+  useSakuraWorkspaceStore,
+} from '@/stores';
+import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 
 const route = useRoute();
 const router = useRouter();
@@ -40,6 +50,10 @@ const modeLabel = (mode: ReaderMode) =>
   })[mode];
 let temporaryMode: Exclude<ReaderMode, 'ask'> | undefined;
 const settings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
+const message = useMessage();
+const localVolumeManager = useLocalVolumeManager();
+const gptWorkspace = useGptWorkspaceStore();
+const sakuraWorkspace = useSakuraWorkspaceStore();
 let settingsLoaded = false;
 
 const repositoryPromise = useLocalVolumeStore();
@@ -53,6 +67,49 @@ const requestedChapterId = computed(() =>
     ? route.params.chapterId
     : undefined,
 );
+const currentChapterSummary = computed(() =>
+  result.value?.kind === 'ready'
+    ? result.value.chapters.find(
+        (chapter) => chapter.id === result.value!.chapter.chapterId,
+      )
+    : undefined,
+);
+
+const queueChapterTranslation = (type: 'gpt' | 'sakura') => {
+  const chapter = currentChapterSummary.value;
+  if (chapter === undefined) {
+    return;
+  }
+  const results = localVolumeManager.queueJobToWorkspace(bookId.value, {
+    ...getChapterTranslationParams(chapter),
+    type,
+    shouldTop: true,
+    taskNumber: 1,
+    total: result.value?.kind === 'ready' ? result.value.chapters.length : 0,
+  });
+  if (results.some(Boolean)) {
+    message.success('已将本章翻译任务加入队列');
+  } else {
+    message.warning('该章节任务已在队列中');
+  }
+};
+
+const taskTargetsCurrentChapter = (task: string) => {
+  try {
+    const { desc, params } = TranslateTaskDescriptor.parse(task);
+    const chapter = currentChapterSummary.value;
+    return (
+      desc.type === 'local' &&
+      desc.volumeId === bookId.value &&
+      chapter !== undefined &&
+      params.startIndex <= chapter.index &&
+      chapter.index < params.endIndex
+    );
+  } catch {
+    return false;
+  }
+};
+
 const renderedMode = computed(() =>
   result.value?.kind === 'ready'
     ? resolveRenderedReaderMode(
@@ -225,6 +282,23 @@ watch(
   { immediate: true },
 );
 watch(
+  () => [
+    ...gptWorkspace.ref.value.uncompletedJobs.map((job) => job.task),
+    ...sakuraWorkspace.ref.value.uncompletedJobs.map((job) => job.task),
+  ],
+  (tasks, previousTasks) => {
+    if (
+      tasks.some(
+        (task) =>
+          !previousTasks.includes(task) && taskTargetsCurrentChapter(task),
+      )
+    ) {
+      void load();
+    }
+  },
+);
+
+watch(
   settings,
   async (value) => {
     if (!settingsLoaded) {
@@ -291,6 +365,27 @@ onBeforeUnmount(() => {
           @update:value="navigate"
         />
       </header>
+
+      <n-alert
+        v-if="currentChapterSummary?.translationStatus !== 'complete'"
+        type="warning"
+        style="margin-bottom: 16px"
+      >
+        <n-space align="center">
+          <span>
+            {{
+              getTranslationStatusLabel(currentChapterSummary.translationStatus)
+            }}
+          </span>
+          <n-button size="small" @click="queueChapterTranslation('gpt')">
+            GPT 翻译本章
+          </n-button>
+          <n-button size="small" @click="queueChapterTranslation('sakura')">
+            Sakura 翻译本章
+          </n-button>
+          <n-button size="small" @click="load">刷新本章</n-button>
+        </n-space>
+      </n-alert>
 
       <n-alert
         v-if="readingMode !== renderedMode"

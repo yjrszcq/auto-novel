@@ -162,8 +162,8 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
         const task = TranslateTaskDescriptor.local(id, {
           level,
           forceMetadata: false,
-          startIndex: 0,
-          endIndex: 65535,
+          startIndex,
+          endIndex,
         });
         tasks.push(task);
       }
