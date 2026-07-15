@@ -71,6 +71,34 @@ describe('reader storage migration', () => {
       segmentId: initialSegmentIds[0],
       createdAt: 1,
     });
+    expect(await reopened.listReaderBookmarks('book')).toHaveLength(1);
+    await reopened.deleteReaderBookmark('bookmark');
+    expect(await reopened.listReaderBookmarks('book')).toEqual([]);
+    await reopened.putReaderBookmark({
+      id: 'bookmark',
+      bookId: 'book',
+      chapterId: '0',
+      segmentId: initialSegmentIds[0],
+      createdAt: 1,
+    });
+
+    const cover = new Blob(['cover'], { type: 'image/png' });
+    await reopened.putReaderCover({
+      bookId: 'book',
+      blob: cover,
+      updatedAt: 1,
+    });
+    expect(await reopened.getReaderCover('book')).toMatchObject({
+      bookId: 'book',
+    });
+    await reopened.deleteReaderCover('book');
+    expect(await reopened.getReaderCover('book')).toBeUndefined();
+    await reopened.putReaderCover({
+      bookId: 'book',
+      blob: cover,
+      updatedAt: 1,
+    });
+
     await reopened.putReaderAnnotation({
       id: 'annotation',
       bookId: 'book',
@@ -97,6 +125,7 @@ describe('reader storage migration', () => {
     expect(await reopened.getReaderBookshelf('book')).toBeUndefined();
     expect(await reopened.getReaderProgress('book')).toBeUndefined();
     expect(await reopened.listReaderBookmarks('book')).toEqual([]);
+    expect(await reopened.getReaderCover('book')).toBeUndefined();
     expect(await reopened.listReaderAnnotations('book')).toEqual([]);
     reopened.close();
   });

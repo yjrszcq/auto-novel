@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { ReaderMode, ReaderSettingsRecord } from '@/model/Reader';
+import type {
+  ReaderBookmark,
+  ReaderMode,
+  ReaderSettingsRecord,
+} from '@/model/Reader';
 import { TranslateTaskDescriptor } from '@/model/Translator';
 import { useThrottleFn } from '@vueuse/core';
 import { useRouter } from 'vue-router';
@@ -14,6 +18,12 @@ import {
 import type { ReaderPageLoadResult } from './core/ReaderPageState';
 import { createReaderPageController } from './core/ReaderPageState';
 import { resolveRenderedReaderMode } from './core/BilingualLayout';
+import {
+  createReaderBookmark,
+  findBookmarkAtSegment,
+  getBookmarkTarget,
+  sortReaderBookmarks,
+} from './core/ReaderBookmarks';
 import { getAvailableReaderModes, resolveReaderMode } from './core/ReaderMode';
 import {
   getChapterTranslationParams,
@@ -37,6 +47,9 @@ const loading = ref(false);
 const result = shallowRef<ReaderPageLoadResult>();
 const showSettings = ref(false);
 const showModePrompt = ref(false);
+const showBookmarks = ref(false);
+const bookmarks = ref<ReaderBookmark[]>([]);
+let pendingBookmark: ReaderBookmark | undefined;
 const rememberModeChoice = ref(false);
 const readingMode = ref<ReaderMode>('original');
 const availableModes = ref<ReaderMode[]>(['original']);
@@ -152,7 +165,12 @@ const load = async () => {
     );
   }
   if (loaded.kind === 'ready') {
-    await Promise.all([restoreProgress(loaded), resolveMode(loaded)]);
+    await Promise.all([
+      restoreProgress(loaded),
+      resolveMode(loaded),
+      loadBookmarks(loaded.book.id),
+    ]);
+    await restorePendingBookmark(loaded);
   }
 };
 
@@ -201,6 +219,97 @@ const chooseMode = async (mode: Exclude<ReaderMode, 'ask'>) => {
 const getSegmentElements = () => [
   ...document.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
 ];
+
+const getActiveSegmentId = () => {
+  const elements = getSegmentElements();
+  return (
+    [...elements]
+      .reverse()
+      .find((element) => element.getBoundingClientRect().top <= 120)?.dataset
+      .readerSegmentId ?? elements[0]?.dataset.readerSegmentId
+  );
+};
+
+const scrollToSegment = (segmentId: string | undefined) => {
+  if (segmentId === undefined) {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    return;
+  }
+  getSegmentElements()
+    .find((element) => element.dataset.readerSegmentId === segmentId)
+    ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+};
+
+const loadBookmarks = async (targetBookId = bookId.value) => {
+  const repository = await repositoryPromise;
+  const values = await repository.listReaderBookmarks(targetBookId);
+  if (targetBookId === bookId.value) {
+    bookmarks.value = sortReaderBookmarks(values);
+  }
+};
+
+const toggleBookmark = async () => {
+  if (result.value?.kind !== 'ready') {
+    return;
+  }
+  const segmentId = getActiveSegmentId();
+  if (segmentId === undefined) {
+    message.warning('当前章节没有可书签定位的段落');
+    return;
+  }
+  const repository = await repositoryPromise;
+  const existing = findBookmarkAtSegment(
+    bookmarks.value,
+    result.value.chapter.chapterId,
+    segmentId,
+  );
+  if (existing !== undefined) {
+    await repository.deleteReaderBookmark(existing.id);
+    message.success('已移除书签');
+  } else {
+    await repository.putReaderBookmark(
+      createReaderBookmark({
+        bookId: result.value.book.id,
+        chapterId: result.value.chapter.chapterId,
+        segmentId,
+        label: result.value.chapter.title,
+      }),
+    );
+    message.success('已添加书签');
+  }
+  await loadBookmarks(result.value.book.id);
+};
+
+const openBookmark = (bookmark: ReaderBookmark) => {
+  const target = getBookmarkTarget(bookmark);
+  if (
+    result.value?.kind === 'ready' &&
+    result.value.chapter.chapterId === target.chapterId
+  ) {
+    scrollToSegment(target.segmentId);
+    return;
+  }
+  pendingBookmark = bookmark;
+  navigate(target.chapterId);
+};
+
+const deleteBookmark = async (bookmark: ReaderBookmark) => {
+  const repository = await repositoryPromise;
+  await repository.deleteReaderBookmark(bookmark.id);
+  await loadBookmarks(bookmark.bookId);
+};
+
+const restorePendingBookmark = async (
+  loaded: Extract<ReaderPageLoadResult, { kind: 'ready' }>,
+) => {
+  const bookmark = pendingBookmark;
+  if (bookmark?.chapterId !== loaded.chapter.chapterId) {
+    return;
+  }
+  pendingBookmark = undefined;
+  await nextTick();
+  scrollToSegment(bookmark.segmentId);
+};
 
 const restoreProgress = async (
   loaded: Extract<ReaderPageLoadResult, { kind: 'ready' }>,
@@ -255,6 +364,8 @@ const navigate = (chapterId: string) => {
 };
 
 const backToBookshelf = () => void router.push('/bookshelf');
+const openDetails = () =>
+  void router.push('/books/' + encodeURIComponent(bookId.value) + '/details');
 const backToWorkspace = () => void router.push('/workspace/toolbox');
 
 const currentChapterIndex = computed(() => {
@@ -330,6 +441,11 @@ onBeforeUnmount(() => {
   >
     <header class="book-reader__header">
       <n-button text @click="backToBookshelf">返回书架</n-button>
+      <n-button text @click="toggleBookmark">添加书签</n-button>
+      <n-button text @click="showBookmarks = true">
+        书签 ({{ bookmarks.length }})
+      </n-button>
+      <n-button text @click="openDetails">书籍详情</n-button>
       <n-button text @click="showSettings = true">阅读设置</n-button>
       <n-button text @click="showModePrompt = true">切换模式</n-button>
       <n-button text @click="backToWorkspace">工作区</n-button>
@@ -416,6 +532,33 @@ onBeforeUnmount(() => {
         </n-button>
       </footer>
     </template>
+
+    <n-drawer v-model:show="showBookmarks" :width="320" placement="right">
+      <n-drawer-content title="书签">
+        <n-empty v-if="bookmarks.length === 0" description="本书还没有书签" />
+        <n-list v-else hoverable clickable>
+          <n-list-item
+            v-for="bookmark in bookmarks"
+            :key="bookmark.id"
+            @click="openBookmark(bookmark)"
+          >
+            <n-thing
+              :title="bookmark.label ?? '章节书签'"
+              :description="'章节：' + bookmark.chapterId"
+            />
+            <template #suffix>
+              <n-button
+                text
+                type="error"
+                @click.stop="deleteBookmark(bookmark)"
+              >
+                删除
+              </n-button>
+            </template>
+          </n-list-item>
+        </n-list>
+      </n-drawer-content>
+    </n-drawer>
 
     <ReaderModeDialog
       v-model:show="showModePrompt"

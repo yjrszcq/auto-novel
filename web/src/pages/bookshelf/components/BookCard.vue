@@ -9,6 +9,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   continue: [book: BookshelfDisplayBook];
   workspace: [book: BookshelfDisplayBook];
+  details: [book: BookshelfDisplayBook];
   pin: [book: BookshelfDisplayBook];
   remove: [book: BookshelfDisplayBook];
 }>();
@@ -21,7 +22,7 @@ const progressText = (label: string, value: number) =>
 
 <template>
   <article class="book-card">
-    <BookCover :title="props.book.title" />
+    <BookCover :book-id="props.book.volume.id" :title="props.book.title" />
     <div class="book-card__body">
       <div class="book-card__heading">
         <h2 :title="props.book.title">{{ props.book.title }}</h2>
@@ -55,6 +56,9 @@ const progressText = (label: string, value: number) =>
       <div class="book-card__actions">
         <n-button size="tiny" text @click="emit('workspace', props.book)">
           工作区
+        </n-button>
+        <n-button size="tiny" text @click="emit('details', props.book)">
+          详情
         </n-button>
         <n-button size="tiny" text @click="emit('pin', props.book)">
           {{ props.book.state.pinned ? '取消置顶' : '置顶' }}

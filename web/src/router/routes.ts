@@ -60,6 +60,11 @@ export const applicationRoutes: RouteRecordRaw[] = [
         component: () => import('../pages/bookshelf/Bookshelf.vue'),
       },
       {
+        path: '/books/:bookId/details',
+        meta: { title: '书籍详情' },
+        component: () => import('../pages/bookshelf/BookDetails.vue'),
+      },
+      {
         path: '/setting',
         meta: { title: '设置' },
         component: () => import('../pages/other/Setting.vue'),

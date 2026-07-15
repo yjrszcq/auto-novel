@@ -1,9 +1,42 @@
 <script lang="ts" setup>
+import { useLocalVolumeStore } from '@/stores';
+
 const props = defineProps<{
+  bookId: string;
   title: string;
+  refreshKey?: number;
 }>();
 
 const palette = ['#3f6e8d', '#7d5a8e', '#9b5b48', '#45766e', '#8a713d'];
+const coverUrl = ref<string>();
+const repositoryPromise = useLocalVolumeStore();
+
+const clearCoverUrl = () => {
+  if (coverUrl.value !== undefined) {
+    URL.revokeObjectURL(coverUrl.value);
+    coverUrl.value = undefined;
+  }
+};
+
+const loadCover = async () => {
+  const bookId = props.bookId;
+  const repository = await repositoryPromise;
+  const cover = await repository.getReaderCover(bookId);
+  if (bookId !== props.bookId) {
+    return;
+  }
+  clearCoverUrl();
+  if (cover !== undefined) {
+    coverUrl.value = URL.createObjectURL(cover.blob);
+  }
+};
+
+watch(
+  () => [props.bookId, props.refreshKey],
+  () => void loadCover(),
+  { immediate: true },
+);
+onBeforeUnmount(clearCoverUrl);
 
 const color = computed(() => {
   const total = Array.from(props.title).reduce(
@@ -20,14 +53,23 @@ const initials = computed(() =>
 
 <template>
   <div class="book-cover" :style="{ backgroundColor: color }">
-    <span class="book-cover__eyebrow">LOCAL BOOK</span>
-    <strong class="book-cover__initials">{{ initials || '书' }}</strong>
-    <span class="book-cover__title">{{ title }}</span>
+    <img
+      v-if="coverUrl !== undefined"
+      class="book-cover__image"
+      :src="coverUrl"
+      :alt="props.title + ' 封面'"
+    />
+    <template v-else>
+      <span class="book-cover__eyebrow">LOCAL BOOK</span>
+      <strong class="book-cover__initials">{{ initials || '书' }}</strong>
+      <span class="book-cover__title">{{ props.title }}</span>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .book-cover {
+  position: relative;
   aspect-ratio: 3 / 4;
   box-sizing: border-box;
   display: flex;
@@ -36,6 +78,14 @@ const initials = computed(() =>
   overflow: hidden;
   padding: 14px;
   color: #fff;
+}
+
+.book-cover__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .book-cover__eyebrow {

@@ -198,10 +198,14 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     db.put('reader-progress', value);
   const putReaderBookmark = (value: ReaderBookmark) =>
     db.put('reader-bookmark', value);
+  const deleteReaderBookmark = (id: string) => db.delete('reader-bookmark', id);
   const listReaderBookmarks = async (bookId: string) =>
     (await db.getAll('reader-bookmark')).filter(
       (bookmark) => bookmark.bookId === bookId,
     );
+  const getReaderCover = (bookId: string) => db.get('reader-cover', bookId);
+  const deleteReaderCover = (bookId: string) =>
+    db.delete('reader-cover', bookId);
   const putReaderAnnotation = (value: ReaderAnnotation) =>
     db.put('reader-annotation', value);
   const listReaderAnnotations = async (bookId: string) =>
@@ -260,12 +264,15 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     getReaderProgress,
     putReaderProgress,
     putReaderBookmark,
+    deleteReaderBookmark,
     listReaderBookmarks,
     putReaderAnnotation,
     listReaderAnnotations,
     deleteReaderDataByVolumeId,
     close,
+    getReaderCover,
     putReaderCover,
+    deleteReaderCover,
     putReaderChapterCache,
   };
 };

@@ -77,6 +77,10 @@ const openWorkspace = () => {
   void router.push('/workspace/toolbox');
 };
 
+const openDetails = (book: BookshelfDisplayBook) => {
+  void router.push('/books/' + encodeURIComponent(book.volume.id) + '/details');
+};
+
 const removeBook = async (book: BookshelfDisplayBook) => {
   const repository = await useLocalVolumeStore();
   await createBookshelfService(repository).setListed(book.volume.id, false);
@@ -163,6 +167,7 @@ onMounted(reload);
           :book="book"
           @continue="openBook"
           @workspace="openWorkspace"
+          @details="openDetails"
           @pin="togglePin"
           @remove="removeBook"
         />
