@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import type {
+  ReaderAnnotation,
   ReaderBookmark,
+  ReaderBookStyleOverride,
   ReaderMode,
   ReaderSettingsRecord,
 } from '@/model/Reader';
@@ -18,6 +20,7 @@ import {
 import type { ReaderPageLoadResult } from './core/ReaderPageState';
 import { createReaderPageController } from './core/ReaderPageState';
 import { resolveRenderedReaderMode } from './core/BilingualLayout';
+import { createReaderAnnotation } from './core/ReaderAnnotations';
 import {
   createReaderBookmark,
   findBookmarkAtSegment,
@@ -48,6 +51,8 @@ const result = shallowRef<ReaderPageLoadResult>();
 const showSettings = ref(false);
 const showModePrompt = ref(false);
 const showBookmarks = ref(false);
+const showAnnotations = ref(false);
+const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
 let pendingBookmark: ReaderBookmark | undefined;
 const rememberModeChoice = ref(false);
@@ -62,6 +67,7 @@ const modeLabel = (mode: ReaderMode) =>
     original: '原文',
   })[mode];
 let temporaryMode: Exclude<ReaderMode, 'ask'> | undefined;
+const bookStyle = ref<ReaderBookStyleOverride>();
 const settings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 const message = useMessage();
 const localVolumeManager = useLocalVolumeManager();
@@ -80,6 +86,10 @@ const requestedChapterId = computed(() =>
     ? route.params.chapterId
     : undefined,
 );
+const requestedSegmentId = computed(() =>
+  typeof route.query.segment === 'string' ? route.query.segment : undefined,
+);
+
 const currentChapterSummary = computed(() =>
   result.value?.kind === 'ready'
     ? result.value.chapters.find(
@@ -132,11 +142,16 @@ const renderedMode = computed(() =>
     : 'original',
 );
 
+const activeSettings = computed(() => ({
+  ...settings.value,
+  ...bookStyle.value,
+}));
+
 const readerStyle = computed(() => ({
-  '--reader-font-size': `${settings.value.fontSize}px`,
-  '--reader-line-height': settings.value.lineHeight,
-  '--reader-content-width': `${settings.value.contentWidth}px`,
-  '--reader-padding': `${settings.value.horizontalPadding}px`,
+  '--reader-font-size': `${activeSettings.value.fontSize}px`,
+  '--reader-line-height': activeSettings.value.lineHeight,
+  '--reader-content-width': `${activeSettings.value.contentWidth}px`,
+  '--reader-padding': `${activeSettings.value.horizontalPadding}px`,
 }));
 
 const loadSettings = async () => {
@@ -169,8 +184,13 @@ const load = async () => {
       restoreProgress(loaded),
       resolveMode(loaded),
       loadBookmarks(loaded.book.id),
+      loadAnnotations(loaded.book.id),
     ]);
     await restorePendingBookmark(loaded);
+    if (requestedSegmentId.value !== undefined) {
+      await nextTick();
+      scrollToSegment(requestedSegmentId.value);
+    }
   }
 };
 
@@ -190,6 +210,7 @@ const resolveMode = async (
     settings: normalizeReaderSettings(await repository.getReaderSettings()),
     capabilities,
   });
+  bookStyle.value = preference?.style;
   showModePrompt.value = readingMode.value === 'ask';
 };
 
@@ -208,7 +229,9 @@ const chooseMode = async (mode: Exclude<ReaderMode, 'ask'>) => {
     ?.scrollIntoView({ block: 'start', behavior: 'auto' });
   if (rememberModeChoice.value) {
     const repository = await repositoryPromise;
+    const preference = await repository.getReaderBookPreference(bookId.value);
     await repository.putReaderBookPreference({
+      ...preference,
       bookId: bookId.value,
       preferredMode: mode,
       updatedAt: Date.now(),
@@ -246,6 +269,77 @@ const loadBookmarks = async (targetBookId = bookId.value) => {
   if (targetBookId === bookId.value) {
     bookmarks.value = sortReaderBookmarks(values);
   }
+};
+
+const loadAnnotations = async (targetBookId = bookId.value) => {
+  const repository = await repositoryPromise;
+  const values = await repository.listReaderAnnotations(targetBookId);
+  if (targetBookId === bookId.value) {
+    annotations.value = values;
+  }
+};
+
+const getSelectedParagraph = (node: Node) =>
+  (node.nodeType === Node.ELEMENT_NODE
+    ? (node as Element)
+    : node.parentElement
+  )?.closest<HTMLElement>('p[data-reader-language-side]');
+
+const addAnnotation = async () => {
+  if (result.value?.kind !== 'ready') {
+    return;
+  }
+  const selection = window.getSelection();
+  if (selection?.rangeCount !== 1 || selection.isCollapsed) {
+    message.warning('请先在同一段文字中选择要高亮的内容');
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  const paragraph = getSelectedParagraph(range.startContainer);
+  if (
+    paragraph == null ||
+    paragraph !== getSelectedParagraph(range.endContainer)
+  ) {
+    message.warning('批注暂时只能标记同一段文字');
+    return;
+  }
+  const segmentId = paragraph.closest<HTMLElement>('[data-reader-segment-id]')
+    ?.dataset.readerSegmentId;
+  const languageSide = paragraph.dataset.readerLanguageSide;
+  const quote = range.toString();
+  if (
+    segmentId === undefined ||
+    (languageSide !== 'original' && languageSide !== 'translated') ||
+    quote.length === 0
+  ) {
+    return;
+  }
+  const before = range.cloneRange();
+  before.selectNodeContents(paragraph);
+  before.setEnd(range.startContainer, range.startOffset);
+  const startOffset = before.toString().length;
+  const repository = await repositoryPromise;
+  await repository.putReaderAnnotation(
+    createReaderAnnotation({
+      bookId: result.value.book.id,
+      chapterId: result.value.chapter.chapterId,
+      segmentId,
+      languageSide,
+      startOffset,
+      endOffset: startOffset + quote.length,
+      quote,
+      style: 'highlight',
+    }),
+  );
+  selection.removeAllRanges();
+  await loadAnnotations(result.value.book.id);
+  message.success('已添加高亮批注');
+};
+
+const deleteAnnotation = async (annotation: ReaderAnnotation) => {
+  const repository = await repositoryPromise;
+  await repository.deleteReaderAnnotation(annotation.id);
+  await loadAnnotations(annotation.bookId);
 };
 
 const toggleBookmark = async () => {
@@ -436,12 +530,16 @@ onBeforeUnmount(() => {
 <template>
   <main
     class="book-reader"
-    :class="`book-reader--${settings.theme}`"
+    :class="`book-reader--${activeSettings.theme}`"
     :style="readerStyle"
   >
     <header class="book-reader__header">
       <n-button text @click="backToBookshelf">返回书架</n-button>
       <n-button text @click="toggleBookmark">添加书签</n-button>
+      <n-button text @click="addAnnotation">高亮选中</n-button>
+      <n-button text @click="showAnnotations = true">
+        批注 ({{ annotations.length }})
+      </n-button>
       <n-button text @click="showBookmarks = true">
         书签 ({{ bookmarks.length }})
       </n-button>
@@ -514,6 +612,7 @@ onBeforeUnmount(() => {
         <ReaderSegmentLayout
           :segments="result.chapter.segments"
           :mode="renderedMode"
+          :annotations="annotations"
         />
       </article>
 
@@ -532,6 +631,25 @@ onBeforeUnmount(() => {
         </n-button>
       </footer>
     </template>
+
+    <n-drawer v-model:show="showAnnotations" :width="320" placement="right">
+      <n-drawer-content title="批注">
+        <n-empty v-if="annotations.length === 0" description="本书还没有批注" />
+        <n-list v-else>
+          <n-list-item v-for="annotation in annotations" :key="annotation.id">
+            <n-thing
+              :title="annotation.quote"
+              :description="annotation.note ?? annotation.style"
+            />
+            <template #suffix>
+              <n-button text type="error" @click="deleteAnnotation(annotation)">
+                删除
+              </n-button>
+            </template>
+          </n-list-item>
+        </n-list>
+      </n-drawer-content>
+    </n-drawer>
 
     <n-drawer v-model:show="showBookmarks" :width="320" placement="right">
       <n-drawer-content title="书签">

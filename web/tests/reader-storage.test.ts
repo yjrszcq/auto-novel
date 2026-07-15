@@ -112,6 +112,23 @@ describe('reader storage migration', () => {
       createdAt: 1,
       updatedAt: 1,
     });
+    expect(await reopened.listReaderAnnotations('book')).toHaveLength(1);
+    await reopened.deleteReaderAnnotation('annotation');
+    expect(await reopened.listReaderAnnotations('book')).toEqual([]);
+    await reopened.putReaderAnnotation({
+      id: 'annotation',
+      bookId: 'book',
+      chapterId: '0',
+      segmentId: initialSegmentIds[0],
+      languageSide: 'original',
+      startOffset: 0,
+      endOffset: 5,
+      quote: 'first',
+      style: 'highlight',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
     await reopened.putReaderChapterCache({
       key: 'book/0/current',
       bookId: 'book',

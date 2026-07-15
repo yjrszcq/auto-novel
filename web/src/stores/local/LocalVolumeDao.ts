@@ -208,6 +208,8 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     db.delete('reader-cover', bookId);
   const putReaderAnnotation = (value: ReaderAnnotation) =>
     db.put('reader-annotation', value);
+  const deleteReaderAnnotation = (id: string) =>
+    db.delete('reader-annotation', id);
   const listReaderAnnotations = async (bookId: string) =>
     (await db.getAll('reader-annotation')).filter(
       (annotation) => annotation.bookId === bookId,
@@ -267,6 +269,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     deleteReaderBookmark,
     listReaderBookmarks,
     putReaderAnnotation,
+    deleteReaderAnnotation,
     listReaderAnnotations,
     deleteReaderDataByVolumeId,
     close,

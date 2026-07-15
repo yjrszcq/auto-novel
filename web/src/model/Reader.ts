@@ -25,9 +25,18 @@ export interface ReaderSettingsRecord {
   updatedAt: number;
 }
 
+export interface ReaderBookStyleOverride {
+  fontSize?: number;
+  lineHeight?: number;
+  contentWidth?: number;
+  horizontalPadding?: number;
+  theme?: ReaderSettingsRecord['theme'];
+}
+
 export interface ReaderBookPreference {
   bookId: string;
   preferredMode?: Exclude<ReaderMode, 'ask'>;
+  style?: ReaderBookStyleOverride;
   updatedAt: number;
 }
 
