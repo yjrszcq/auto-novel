@@ -31,6 +31,7 @@ import { downloadFile } from '@/util';
 const route = useRoute();
 const router = useRouter();
 const message = useMessage();
+const vars = useThemeVars();
 const loading = ref(true);
 const error = ref<string>();
 const book = shallowRef<ReaderBook>();
@@ -330,7 +331,15 @@ onMounted(() => void load());
 
     <template v-else-if="book !== undefined && entry !== undefined">
       <section class="book-details__hero">
-        <div class="book-details__backdrop" aria-hidden="true">
+        <div
+          class="book-details__backdrop"
+          aria-hidden="true"
+          :style="{
+            '--book-details-overlay-start':
+              vars.bodyColor == '#fff' ? '#ffffff80' : 'rgba(16, 16, 20, 0.5)',
+            '--book-details-overlay-end': vars.bodyColor,
+          }"
+        >
           <BookCover
             :book-id="book.id"
             :refresh-key="coverVersion"
@@ -512,11 +521,8 @@ onMounted(() => void load());
 
 .book-details__backdrop {
   position: absolute;
-  inset: -24px;
+  inset: 0;
   overflow: hidden;
-  filter: blur(12px);
-  opacity: 0.72;
-  transform: scale(1.08);
 }
 
 .book-details__backdrop::after {
@@ -524,9 +530,10 @@ onMounted(() => void load());
   inset: 0;
   background: linear-gradient(
     to bottom,
-    rgb(16 16 20 / 46%),
-    var(--n-body-color)
+    var(--book-details-overlay-start),
+    var(--book-details-overlay-end)
   );
+  backdrop-filter: blur(8px);
   content: '';
 }
 
