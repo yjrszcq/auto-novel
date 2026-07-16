@@ -484,12 +484,21 @@ onMounted(() => void load());
       <n-drawer
         v-model:show="showCatalog"
         placement="right"
-        width="min(440px, 92vw)"
+        width="min(440px, 84vw)"
       >
-        <n-drawer-content title="打开目录">
-          <p class="book-details__catalog-summary">
-            共 {{ chapters.length }} 章
-          </p>
+        <n-drawer-content :closable="false">
+          <template #header>
+            <div class="book-details__catalog-header">
+              <button
+                class="book-details__catalog-close"
+                type="button"
+                @click="showCatalog = false"
+              >
+                目录
+              </button>
+              <n-text depth="3">共 {{ chapters.length }} 章</n-text>
+            </div>
+          </template>
           <n-list hoverable>
             <n-list-item v-for="chapter in chapters" :key="chapter.id">
               <n-button
@@ -623,8 +632,7 @@ onMounted(() => void load());
   margin: 12px 0;
 }
 
-.book-details__queue-hint,
-.book-details__catalog-summary {
+.book-details__queue-hint {
   color: var(--n-text-color-3);
 }
 
@@ -670,25 +678,41 @@ onMounted(() => void load());
   padding-top: 12px;
 }
 
-.book-details__queue-hint,
-.book-details__catalog-summary {
+.book-details__queue-hint {
   margin: 12px 0 0;
   font-size: 13px;
 }
 
-.book-details__catalog-summary {
-  margin-bottom: 12px;
+.book-details__catalog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% + 8px);
+  gap: 12px;
+  margin: 0 -4px;
+}
+
+.book-details__catalog-close {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
 }
 
 .book-details__catalog-button {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
   width: 100%;
-  gap: 10px;
   padding: 8px 0;
   text-align: left;
 }
 
+.book-details__catalog-button :deep(.n-button__content) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: 100%;
+  gap: 10px;
+}
 .book-details__catalog-index {
   color: var(--n-text-color-2);
   white-space: nowrap;

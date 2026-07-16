@@ -114,7 +114,43 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     page.getByRole('button', { name: '移除自定义封面' }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: '打开目录', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '目录', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
+  const expectCatalogAlignment = async () => {
+    const catalogLayout = await page.evaluate(() => {
+      const bounds = (selector: string) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (element === null) {
+          throw new Error(`缺少目录布局元素：${selector}`);
+        }
+        const { left, right } = element.getBoundingClientRect();
+        return { left: Math.round(left), right: Math.round(right) };
+      };
+      return {
+        chapterIndex: bounds('.book-details__catalog-index'),
+        chapterStatus: bounds('.book-details__catalog-button .n-tag'),
+        title: bounds('.book-details__catalog-close'),
+        total: bounds('.book-details__catalog-header .n-text'),
+      };
+    });
+    expect(catalogLayout.title.left).toBe(catalogLayout.chapterIndex.left);
+    expect(catalogLayout.total.right).toBe(catalogLayout.chapterStatus.right);
+  };
+  await expectCatalogAlignment();
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '目录', exact: true }),
+  ).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '打开目录', exact: true }).click();
+  await expectCatalogAlignment();
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '目录', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '打开目录', exact: true }).click();
   await page.getByRole('button', { name: /第 2 章/ }).click();
   await expect
     .poll(() => new URL(page.url()).pathname)
