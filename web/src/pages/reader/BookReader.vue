@@ -283,14 +283,14 @@ const scrollReaderPage = async (delta: number) => {
     );
     viewport.scrollTo({
       left: pageIndex * expandedMetrics.pageWidth,
-      behavior: 'smooth',
+      behavior: 'auto',
     });
     return;
   }
   if (turn.kind !== 'page') return;
   viewport.scrollTo({
     left: turn.pageIndex * metrics.pageWidth,
-    behavior: 'smooth',
+    behavior: 'auto',
   });
 };
 
@@ -641,14 +641,33 @@ const scrollToSegment = (segmentId: string | undefined) => {
     }
     return;
   }
-  const scroll = () =>
-    getSegmentElements()
-      .find((element) => element.dataset.readerSegmentId === segmentId)
-      ?.scrollIntoView({
-        block: resolvedFlow.value === 'paginated' ? 'nearest' : 'start',
-        inline: resolvedFlow.value === 'paginated' ? 'start' : 'nearest',
+  const scroll = () => {
+    const element = getSegmentElements().find(
+      (item) => item.dataset.readerSegmentId === segmentId,
+    );
+    if (element === undefined) return;
+    if (resolvedFlow.value === 'paginated') {
+      const viewport = readerViewport.value;
+      const rect = element.getClientRects()[0];
+      if (viewport === null || rect === undefined) return;
+      const viewportRect = viewport.getBoundingClientRect();
+      const absoluteLeft = viewport.scrollLeft + rect.left - viewportRect.left;
+      const pageIndex = Math.max(
+        0,
+        Math.floor((absoluteLeft + 1) / Math.max(1, viewport.clientWidth)),
+      );
+      viewport.scrollTo({
+        left: pageIndex * viewport.clientWidth,
         behavior: 'auto',
       });
+      return;
+    }
+    element.scrollIntoView({
+      block: 'start',
+      inline: 'nearest',
+      behavior: 'auto',
+    });
+  };
   if (
     getSegmentElements().some(
       (element) => element.dataset.readerSegmentId === segmentId,
@@ -1839,13 +1858,16 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__content--paginated {
+  --reader-page-padding: max(28px, var(--reader-padding));
   width: 100%;
   height: calc(100dvh - 32px);
   margin: 0;
-  padding: 24px max(28px, var(--reader-padding));
-  overflow-x: auto;
+  padding: 0;
+  overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior: contain;
+  contain: paint;
+  scroll-behavior: auto;
   scrollbar-width: none;
 }
 
@@ -1861,10 +1883,12 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__content--paginated :deep(.reader-segment-layout) {
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
+  padding: 24px var(--reader-page-padding);
   column-count: 1;
-  column-gap: 64px;
+  column-gap: calc(var(--reader-page-padding) * 2);
   column-fill: auto;
 }
 
@@ -1874,6 +1898,8 @@ onBeforeUnmount(() => {
 
 .book-reader__content p {
   scroll-margin-top: calc(var(--reader-app-bar-height) + 12px);
+  max-width: 100%;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -2002,8 +2028,9 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__content--paginated {
+    --reader-page-padding: max(22px, env(safe-area-inset-left));
     height: calc(100dvh - 34px);
-    padding-bottom: 18px;
+    padding: 0;
   }
 
   .book-reader__content--paginated.book-reader__content--controls-visible {
@@ -2014,8 +2041,9 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__content--paginated :deep(.reader-segment-layout) {
+    padding: 18px var(--reader-page-padding);
     column-count: 1;
-    column-gap: 44px;
+    column-gap: calc(var(--reader-page-padding) * 2);
   }
 
   .book-reader__bottom-navigation button {

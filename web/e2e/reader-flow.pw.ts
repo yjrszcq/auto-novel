@@ -254,6 +254,31 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect
     .poll(() => readerContent.evaluate((element) => element.scrollLeft))
     .toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const page = element.scrollLeft / Math.max(1, element.clientWidth);
+        return Math.abs(page - Math.round(page));
+      }),
+    )
+    .toBeLessThan(0.01);
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const viewport = element.getBoundingClientRect();
+        return [...element.querySelectorAll('p')]
+          .flatMap((paragraph) => [...paragraph.getClientRects()])
+          .filter(
+            (rect) => rect.right > viewport.left && rect.left < viewport.right,
+          )
+          .every(
+            (rect) =>
+              rect.left >= viewport.left - 0.5 &&
+              rect.right <= viewport.right + 0.5,
+          );
+      }),
+    )
+    .toBe(true);
   await readerContent.evaluate((element) =>
     element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
   );
