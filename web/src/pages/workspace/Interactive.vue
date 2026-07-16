@@ -6,10 +6,19 @@ import type { GptWorker, SakuraWorker, TranslatorId } from '@/model/Translator';
 import { useGptWorkspaceStore, useSakuraWorkspaceStore } from '@/stores';
 import { useLocalStorage } from '@/util';
 
+import { consumeReaderInteractiveSelection } from '../reader/core/ReaderInteractiveHandoff';
+
 const message = useMessage();
 
 const textJp = ref('');
 const textZh = ref('');
+
+onMounted(() => {
+  const selection = consumeReaderInteractiveSelection(sessionStorage);
+  if (selection !== undefined) {
+    textJp.value = selection;
+  }
+});
 
 const translatorConfig = useLocalStorage('interactive-translator', {
   translatorId: 'sakura' as TranslatorId,
@@ -176,7 +185,10 @@ const clearSavedTranslation = () => {
             size="small"
           />
 
-          <n-radio-group v-if="translatorId === 'gpt'" v-model:value="selectedGptWorkerId">
+          <n-radio-group
+            v-if="translatorId === 'gpt'"
+            v-model:value="selectedGptWorkerId"
+          >
             <n-flex vertical>
               <n-radio
                 v-for="worker of gptWorkspaceRef.workers"

@@ -21,6 +21,9 @@ import type { ReaderPageLoadResult } from './core/ReaderPageState';
 import { createReaderPageController } from './core/ReaderPageState';
 import { resolveRenderedReaderMode } from './core/BilingualLayout';
 import { createReaderAnnotation } from './core/ReaderAnnotations';
+import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
+import { createBrowserSpeechController } from './core/ReaderSpeech';
+import { addReadingTime } from './core/ReaderStats';
 import {
   createReaderBookmark,
   findBookmarkAtSegment,
@@ -66,6 +69,9 @@ const modeLabel = (mode: ReaderMode) =>
     'original-translated': '原文-译文',
     original: '原文',
   })[mode];
+let readingStartedAt: number | undefined;
+let readingBookId: string | undefined;
+let readingStatsWrite = Promise.resolve();
 let temporaryMode: Exclude<ReaderMode, 'ask'> | undefined;
 const bookStyle = ref<ReaderBookStyleOverride>();
 const settings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
@@ -163,6 +169,7 @@ const loadSettings = async () => {
 };
 
 const load = async () => {
+  await recordReadingTime();
   loading.value = true;
   const controller = await controllerPromise;
   const loaded = await controller.load(bookId.value, requestedChapterId.value);
@@ -191,6 +198,7 @@ const load = async () => {
       await nextTick();
       scrollToSegment(requestedSegmentId.value);
     }
+    startReadingTime(loaded.book.id);
   }
 };
 
@@ -261,6 +269,83 @@ const scrollToSegment = (segmentId: string | undefined) => {
   getSegmentElements()
     .find((element) => element.dataset.readerSegmentId === segmentId)
     ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+};
+
+const startReadingTime = (targetBookId: string) => {
+  readingBookId = targetBookId;
+  readingStartedAt = Date.now();
+};
+
+const recordReadingTime = async () => {
+  if (readingBookId === undefined || readingStartedAt === undefined) {
+    return;
+  }
+  const elapsedMs = Date.now() - readingStartedAt;
+  const targetBookId = readingBookId;
+  readingStartedAt = undefined;
+  readingBookId = undefined;
+  const writeReadingTime = async () => {
+    try {
+      const repository = await repositoryPromise;
+      await repository.putReaderReadingStats(
+        addReadingTime(
+          await repository.getReaderReadingStats(targetBookId),
+          targetBookId,
+          elapsedMs,
+        ),
+      );
+    } catch {
+      // Statistics must not prevent local reading when IndexedDB is unavailable.
+    }
+  };
+  readingStatsWrite = readingStatsWrite.then(
+    writeReadingTime,
+    writeReadingTime,
+  );
+  await readingStatsWrite;
+};
+
+const getSpeechController = () =>
+  createBrowserSpeechController(
+    typeof window === 'undefined' ? undefined : window.speechSynthesis,
+    typeof SpeechSynthesisUtterance === 'undefined'
+      ? undefined
+      : (text) => new SpeechSynthesisUtterance(text),
+  );
+
+const speakCurrentSegment = () => {
+  if (result.value?.kind !== 'ready') {
+    return;
+  }
+  const segment = result.value.chapter.segments.find(
+    (item) => item.id === getActiveSegmentId(),
+  );
+  const text =
+    renderedMode.value === 'original' || segment?.translated === undefined
+      ? segment?.original
+      : segment.translated;
+  const spoken = getSpeechController().speak(
+    text ?? '',
+    renderedMode.value === 'original' ? 'ja-JP' : 'zh-CN',
+  );
+  if (!spoken) {
+    message.warning('当前浏览器不支持朗读，或没有可朗读的段落');
+  }
+};
+
+const stopSpeaking = () => getSpeechController().stop();
+
+const openSelectedInInteractive = () => {
+  const text = window.getSelection()?.toString().trim() ?? '';
+  if (text.length === 0) {
+    message.warning('请先选择要查询的词语或文本');
+    return;
+  }
+  if (!storeReaderInteractiveSelection(sessionStorage, text)) {
+    message.warning('当前浏览器无法临时保存选中文本');
+    return;
+  }
+  void router.push('/workspace/interactive');
 };
 
 const loadBookmarks = async (targetBookId = bookId.value) => {
@@ -450,8 +535,18 @@ const saveProgress = async () => {
 
 const saveProgressThrottled = useThrottleFn(() => void saveProgress(), 400);
 
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    void saveProgress();
+    void recordReadingTime();
+  } else if (result.value?.kind === 'ready') {
+    startReadingTime(result.value.book.id);
+  }
+};
+
 const navigate = (chapterId: string) => {
   void saveProgress();
+  void recordReadingTime();
   void router.push(
     `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(chapterId)}`,
   );
@@ -518,12 +613,14 @@ watch(
 onMounted(() => {
   void loadSettings();
   window.addEventListener('scroll', saveProgressThrottled, { passive: true });
-  document.addEventListener('visibilitychange', saveProgress);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', saveProgressThrottled);
-  document.removeEventListener('visibilitychange', saveProgress);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
   void saveProgress();
+  void recordReadingTime();
+  stopSpeaking();
 });
 </script>
 
@@ -546,6 +643,9 @@ onBeforeUnmount(() => {
       <n-button text @click="openDetails">书籍详情</n-button>
       <n-button text @click="showSettings = true">阅读设置</n-button>
       <n-button text @click="showModePrompt = true">切换模式</n-button>
+      <n-button text @click="speakCurrentSegment">朗读当前段</n-button>
+      <n-button text @click="stopSpeaking">停止朗读</n-button>
+      <n-button text @click="openSelectedInInteractive">查词 / AI</n-button>
       <n-button text @click="backToWorkspace">工作区</n-button>
     </header>
 
@@ -755,6 +855,10 @@ onBeforeUnmount(() => {
 .book-reader--sepia {
   --reader-text-color: #4a3925;
   --reader-background: #f4ecd8;
+}
+
+.book-reader__header {
+  flex-wrap: wrap;
 }
 
 .book-reader__header,

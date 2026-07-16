@@ -64,6 +64,15 @@ describe('reader storage migration', () => {
       segmentId: initialSegmentIds[0],
       updatedAt: 1,
     });
+    await reopened.putReaderReadingStats({
+      bookId: 'book',
+      totalReadingMs: 60_000,
+      lastReadAt: 1,
+    });
+    expect(await reopened.getReaderReadingStats('book')).toMatchObject({
+      totalReadingMs: 60_000,
+    });
+
     await reopened.putReaderBookmark({
       id: 'bookmark',
       bookId: 'book',
@@ -141,6 +150,7 @@ describe('reader storage migration', () => {
 
     expect(await reopened.getReaderBookshelf('book')).toBeUndefined();
     expect(await reopened.getReaderProgress('book')).toBeUndefined();
+    expect(await reopened.getReaderReadingStats('book')).toBeUndefined();
     expect(await reopened.listReaderBookmarks('book')).toEqual([]);
     expect(await reopened.getReaderCover('book')).toBeUndefined();
     expect(await reopened.listReaderAnnotations('book')).toEqual([]);

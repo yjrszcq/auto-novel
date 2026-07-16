@@ -51,6 +51,12 @@ export interface ReaderProgress {
   updatedAt: number;
 }
 
+export interface ReaderReadingStats {
+  bookId: string;
+  totalReadingMs: number;
+  lastReadAt: number;
+}
+
 export interface ReaderBookmark {
   id: string;
   bookId: string;

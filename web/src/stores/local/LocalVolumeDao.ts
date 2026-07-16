@@ -14,6 +14,7 @@ import type {
   ReaderChapterCache,
   ReaderCover,
   ReaderProgress,
+  ReaderReadingStats,
   ReaderSettingsRecord,
 } from '@/model/Reader';
 
@@ -52,6 +53,10 @@ interface VolumesDBSchema extends DBSchema {
     key: string;
     value: ReaderProgress;
   };
+  'reader-reading-stats': {
+    key: string;
+    value: ReaderReadingStats;
+  };
   'reader-bookmark': {
     key: string;
     value: ReaderBookmark;
@@ -71,7 +76,7 @@ interface VolumesDBSchema extends DBSchema {
 }
 
 export const createLocalVolumeDao = async (databaseName = 'volumes') => {
-  const db = await openDB<VolumesDBSchema>(databaseName, 3, {
+  const db = await openDB<VolumesDBSchema>(databaseName, 4, {
     async upgrade(db, oldVersion, _newVersion, _transaction, _event) {
       if (oldVersion <= 0) {
         db.createObjectStore('metadata', { keyPath: 'id' });
@@ -88,6 +93,9 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
         db.createObjectStore('reader-annotation', { keyPath: 'id' });
         db.createObjectStore('reader-cover', { keyPath: 'bookId' });
         db.createObjectStore('reader-chapter-cache', { keyPath: 'key' });
+      }
+      if (oldVersion < 4) {
+        db.createObjectStore('reader-reading-stats', { keyPath: 'bookId' });
       }
     },
   });
@@ -196,6 +204,10 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     db.get('reader-progress', bookId);
   const putReaderProgress = (value: ReaderProgress) =>
     db.put('reader-progress', value);
+  const getReaderReadingStats = (bookId: string) =>
+    db.get('reader-reading-stats', bookId);
+  const putReaderReadingStats = (value: ReaderReadingStats) =>
+    db.put('reader-reading-stats', value);
   const putReaderBookmark = (value: ReaderBookmark) =>
     db.put('reader-bookmark', value);
   const deleteReaderBookmark = (id: string) => db.delete('reader-bookmark', id);
@@ -227,6 +239,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       db.delete('reader-bookshelf', bookId),
       db.delete('reader-book-preference', bookId),
       db.delete('reader-progress', bookId),
+      db.delete('reader-reading-stats', bookId),
       db.delete('reader-cover', bookId),
       ...bookmarks
         .filter((bookmark) => bookmark.bookId === bookId)
@@ -265,6 +278,8 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     putReaderBookPreference,
     getReaderProgress,
     putReaderProgress,
+    getReaderReadingStats,
+    putReaderReadingStats,
     putReaderBookmark,
     deleteReaderBookmark,
     listReaderBookmarks,

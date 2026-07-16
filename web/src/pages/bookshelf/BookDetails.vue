@@ -4,6 +4,7 @@ import type {
   ReaderBookStyleOverride,
   ReaderChapterSummary,
   ReaderProgress,
+  ReaderReadingStats,
 } from '@/model/Reader';
 import { useRouter } from 'vue-router';
 
@@ -25,6 +26,7 @@ import {
   searchReaderChapters,
   type ReaderSearchResult,
 } from '../reader/core/ReaderSearch';
+import { formatReadingDuration } from '../reader/core/ReaderStats';
 
 import { useLocalVolumeStore } from '@/stores';
 
@@ -43,6 +45,7 @@ const searching = ref(false);
 const entry = shallowRef<BookshelfEntry>();
 const chapters = ref<ReaderChapterSummary[]>([]);
 const progress = shallowRef<ReaderProgress>();
+const readingStats = shallowRef<ReaderReadingStats>();
 const bookmarkCount = ref(0);
 const preferredMode = ref<'global' | SelectableReaderMode>('global');
 const coverInput = ref<HTMLInputElement>();
@@ -88,6 +91,7 @@ const load = async () => {
       loadedBook,
       loadedChapters,
       loadedProgress,
+      loadedReadingStats,
       preference,
       bookmarks,
     ] = await Promise.all([
@@ -95,6 +99,7 @@ const load = async () => {
       adapter.getBook(bookId.value),
       adapter.getChapters(bookId.value),
       repository.getReaderProgress(bookId.value),
+      repository.getReaderReadingStats(bookId.value),
       repository.getReaderBookPreference(bookId.value),
       repository.listReaderBookmarks(bookId.value),
     ]);
@@ -108,6 +113,7 @@ const load = async () => {
     book.value = loadedBook;
     chapters.value = loadedChapters;
     progress.value = loadedProgress;
+    readingStats.value = loadedReadingStats;
     bookmarkCount.value = bookmarks.length;
     preferredMode.value = preference?.preferredMode ?? 'global';
     bookTheme.value = preference?.style?.theme ?? 'global';
@@ -294,6 +300,12 @@ onMounted(() => void load());
               <div>
                 <dt>上次阅读</dt>
                 <dd>{{ formatDate(progress?.updatedAt) }}</dd>
+              </div>
+              <div>
+                <dt>累计阅读</dt>
+                <dd>
+                  {{ formatReadingDuration(readingStats?.totalReadingMs ?? 0) }}
+                </dd>
               </div>
               <div>
                 <dt>书签</dt>
