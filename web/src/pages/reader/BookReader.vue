@@ -88,7 +88,7 @@ const showAnnotations = ref(false);
 const showMobileTranslationNotice = ref(false);
 const controlsVisible = ref(true);
 const readerRoot = ref<HTMLElement>();
-const readerViewport = ref<HTMLElement>();
+const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
@@ -227,10 +227,7 @@ const openTools = () => {
 };
 
 const updateViewportMetrics = () => {
-  if (
-    resolvedFlow.value === 'paginated' &&
-    readerViewport.value !== undefined
-  ) {
+  if (resolvedFlow.value === 'paginated' && readerViewport.value !== null) {
     const metrics = getReaderPageMetrics(readerViewport.value);
     readerPageCount.value = metrics.pageCount;
     readerPageIndex.value = metrics.pageIndex;
@@ -246,7 +243,7 @@ const updateViewportMetrics = () => {
 
 const scrollReaderPage = async (delta: number) => {
   const viewport = readerViewport.value;
-  if (resolvedFlow.value !== 'paginated' || viewport === undefined) return;
+  if (resolvedFlow.value !== 'paginated' || viewport === null) return;
   const metrics = getReaderPageMetrics(viewport);
   const turn = resolveReaderPageTurn({
     pageIndex: metrics.pageIndex,
@@ -556,7 +553,7 @@ const getSegmentElements = () => [
 
 const getActiveSegmentId = (flow = resolvedFlow.value) => {
   const elements = getSegmentElements();
-  if (flow === 'paginated' && readerViewport.value !== undefined) {
+  if (flow === 'paginated' && readerViewport.value !== null) {
     const viewportRect = readerViewport.value.getBoundingClientRect();
     return (
       elements.find((element) => {
@@ -852,7 +849,7 @@ const restoreProgress = async (
   } else if (
     resolvedFlow.value === 'paginated' &&
     progress?.scrollRatio !== undefined &&
-    readerViewport.value !== undefined
+    readerViewport.value !== null
   ) {
     readerViewport.value.scrollTo({
       left:
@@ -886,7 +883,7 @@ const saveProgress = async () => {
       .find((element) => element.getBoundingClientRect().top <= 120) ??
     elements[0];
   const scrollRatio =
-    resolvedFlow.value === 'paginated' && readerViewport.value !== undefined
+    resolvedFlow.value === 'paginated' && readerViewport.value !== null
       ? getReaderPageMetrics(readerViewport.value).ratio
       : (() => {
           const scrollable =
@@ -1790,13 +1787,13 @@ onBeforeUnmount(() => {
 .book-reader__content--paginated :deep(.reader-segment-layout) {
   width: 100%;
   height: 100%;
-  column-width: calc(100vw - 56px);
+  column-count: 1;
   column-gap: 64px;
   column-fill: auto;
 }
 
 .book-reader__content--double-spread :deep(.reader-segment-layout) {
-  column-width: calc((100vw - 120px) / 2);
+  column-count: 2;
 }
 
 .book-reader__content p {
@@ -1941,7 +1938,7 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__content--paginated :deep(.reader-segment-layout) {
-    column-width: calc(100vw - 44px);
+    column-count: 1;
     column-gap: 44px;
   }
 
