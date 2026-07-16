@@ -36,6 +36,10 @@ describe('reader performance helpers', () => {
     await cached.getChapter({ bookId: 'book', chapterId: '2' });
     await cached.getChapter({ bookId: 'book', chapterId: '0' });
     expect(getChapter).toHaveBeenCalledTimes(4);
+
+    cached.invalidateChapter({ bookId: 'book', chapterId: '0' });
+    await cached.getChapter({ bookId: 'book', chapterId: '0' });
+    expect(getChapter).toHaveBeenCalledTimes(5);
   });
 
   it('prefetches only adjacent chapters when the adapter supports it', async () => {

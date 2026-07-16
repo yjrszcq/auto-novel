@@ -2,6 +2,7 @@
 import type { ReaderAnnotation, ReaderSegment } from '@/model/Reader';
 
 import type { RenderedReaderMode } from '../core/BilingualLayout';
+import type { ResolvedReaderFlow } from '../core/ReaderFlow';
 import { hasTranslation } from '../core/BilingualLayout';
 import {
   expandSegmentRange,
@@ -14,6 +15,12 @@ const props = defineProps<{
   mode: RenderedReaderMode;
   annotations: ReaderAnnotation[];
   initialSegmentId?: string;
+  flow: ResolvedReaderFlow;
+  scrollRoot?: HTMLElement;
+}>();
+
+const emit = defineEmits<{
+  'content-change': [anchorId?: string];
 }>();
 
 const getInitialRange = () =>
@@ -37,20 +44,25 @@ const hasMoreSegments = computed(
 const afterSentinel = ref<HTMLElement>();
 let loadMoreObserver: IntersectionObserver | undefined;
 
-const loadPreviousSegments = () => {
+const loadPreviousSegments = async () => {
+  const anchorId = renderedSegments.value[0]?.id;
   segmentRange.value = expandSegmentRange(
     segmentRange.value,
     props.segments.length,
     'before',
   );
+  await nextTick();
+  emit('content-change', anchorId);
 };
 
-const loadMoreSegments = () => {
+const loadMoreSegments = async () => {
   segmentRange.value = expandSegmentRange(
     segmentRange.value,
     props.segments.length,
     'after',
   );
+  await nextTick();
+  emit('content-change');
 };
 
 const observeMoreSegments = () => {
@@ -67,10 +79,14 @@ const observeMoreSegments = () => {
     (entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
         loadMoreObserver?.disconnect();
-        loadMoreSegments();
+        void loadMoreSegments();
       }
     },
-    { rootMargin: '640px' },
+    {
+      root: props.flow === 'paginated' ? props.scrollRoot : null,
+      rootMargin:
+        props.flow === 'paginated' ? '0px 640px 0px 0px' : '640px 0px',
+    },
   );
   loadMoreObserver.observe(afterSentinel.value);
 };
@@ -84,7 +100,7 @@ watch(
   { immediate: true },
 );
 watch(
-  () => segmentRange.value.end,
+  () => [segmentRange.value.end, props.flow, props.scrollRoot],
   () => void nextTick().then(observeMoreSegments),
 );
 onBeforeUnmount(() => loadMoreObserver?.disconnect());

@@ -17,7 +17,7 @@ import type {
   ReaderMode,
   ReaderSettingsRecord,
 } from '@/model/Reader';
-import { TranslateTaskDescriptor } from '@/model/Translator';
+import { TranslateJob, TranslateTaskDescriptor } from '@/model/Translator';
 import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
@@ -89,6 +89,7 @@ const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
 const viewportProgressRatio = ref(0);
 const isDesktopReader = useMediaQuery('(min-width: 1000px)');
+const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)');
 const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
 let pendingBookmark: ReaderBookmark | undefined;
@@ -108,13 +109,10 @@ const sakuraWorkspace = useSakuraWorkspaceStore();
 let settingsLoaded = false;
 
 const repositoryPromise = useLocalVolumeStore();
-const controllerPromise = repositoryPromise.then((repository) =>
-  createReaderPageController(
-    createCachedReaderContentAdapter(
-      createLocalVolumeReaderAdapter(repository),
-    ),
-  ),
+const cachedAdapterPromise = repositoryPromise.then((repository) =>
+  createCachedReaderContentAdapter(createLocalVolumeReaderAdapter(repository)),
 );
+const controllerPromise = cachedAdapterPromise.then(createReaderPageController);
 
 const bookId = computed(() => route.params.bookId as string);
 const requestedChapterId = computed(() =>
@@ -322,7 +320,11 @@ const resolvedFlow = computed(() =>
   resolveReaderFlow(settings.value.flow, isDesktopReader.value),
 );
 
-const isDarkReaderTheme = computed(() => activeSettings.value.theme === 'dark');
+const isDarkReaderTheme = computed(
+  () =>
+    activeSettings.value.theme === 'dark' ||
+    (activeSettings.value.theme === 'system' && systemPrefersDark.value),
+);
 
 const toggleQuickTheme = () => {
   settings.value.theme = isDarkReaderTheme.value ? 'light' : 'dark';
@@ -411,18 +413,14 @@ const resolveMode = async (
 };
 
 const chooseMode = async (mode: Exclude<ReaderMode, 'ask'>) => {
-  const segmentId =
-    getSegmentElements().find(
-      (element) => element.getBoundingClientRect().top >= 0,
-    )?.dataset.readerSegmentId ??
-    getSegmentElements()[0]?.dataset.readerSegmentId;
+  const segmentId = getActiveSegmentId();
   temporaryMode = mode;
   readingMode.value = mode;
   showModePrompt.value = false;
   await nextTick();
-  getSegmentElements()
-    .find((element) => element.dataset.readerSegmentId === segmentId)
-    ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+  scrollToSegment(segmentId);
+  await nextTick();
+  updateViewportMetrics();
   if (rememberModeChoice.value) {
     const repository = await repositoryPromise;
     const preference = await repository.getReaderBookPreference(bookId.value);
@@ -445,12 +443,12 @@ const getActiveSegmentId = (flow = resolvedFlow.value) => {
     const viewportRect = readerViewport.value.getBoundingClientRect();
     return (
       elements.find((element) => {
-        const rect = element.getBoundingClientRect();
-        return (
-          rect.right > viewportRect.left + 4 &&
-          rect.left < viewportRect.right - 4 &&
-          rect.bottom > viewportRect.top + 4 &&
-          rect.top < viewportRect.bottom - 4
+        return [...element.getClientRects()].some(
+          (rect) =>
+            rect.right > viewportRect.left + 4 &&
+            rect.left < viewportRect.right - 4 &&
+            rect.bottom > viewportRect.top + 4 &&
+            rect.top < viewportRect.bottom - 4,
         );
       })?.dataset.readerSegmentId ?? elements[0]?.dataset.readerSegmentId
     );
@@ -490,6 +488,12 @@ const scrollToSegment = (segmentId: string | undefined) => {
   }
   initialSegmentId.value = segmentId;
   void nextTick().then(scroll);
+};
+
+const handleSegmentContentChange = async (anchorId?: string) => {
+  await nextTick();
+  if (anchorId !== undefined) scrollToSegment(anchorId);
+  updateViewportMetrics();
 };
 
 const startReadingTime = (targetBookId: string) => {
@@ -681,6 +685,7 @@ const toggleBookmark = async () => {
 };
 
 const openBookmark = (bookmark: ReaderBookmark) => {
+  showBookmarks.value = false;
   const target = getBookmarkTarget(bookmark);
   if (
     result.value?.kind === 'ready' &&
@@ -799,6 +804,8 @@ const handleVisibilityChange = () => {
 const navigate = (chapterId: string) => {
   void saveProgress();
   void recordReadingTime();
+  stopSpeaking();
+  closeReaderPanels();
   void router.push(
     `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(chapterId)}`,
   );
@@ -854,27 +861,39 @@ const chapterProgressPercent = computed(() => {
   );
 });
 
+const completedTranslationTasks = computed(() =>
+  [
+    ...gptWorkspace.ref.value.uncompletedJobs,
+    ...sakuraWorkspace.ref.value.uncompletedJobs,
+  ]
+    .filter(TranslateJob.isFinished)
+    .map((job) => job.task),
+);
+
+const refreshCurrentChapter = async () => {
+  if (result.value?.kind !== 'ready') return;
+  const chapterId = result.value.chapter.chapterId;
+  await saveProgress();
+  const adapter = await cachedAdapterPromise;
+  adapter.invalidateChapter({ bookId: bookId.value, chapterId });
+  await load();
+};
+
 watch(
   () => [bookId.value, requestedChapterId.value],
   () => void load(),
   { immediate: true },
 );
-watch(
-  () => [
-    ...gptWorkspace.ref.value.uncompletedJobs.map((job) => job.task),
-    ...sakuraWorkspace.ref.value.uncompletedJobs.map((job) => job.task),
-  ],
-  (tasks, previousTasks) => {
-    if (
-      tasks.some(
-        (task) =>
-          !previousTasks.includes(task) && taskTargetsCurrentChapter(task),
-      )
-    ) {
-      void load();
-    }
-  },
-);
+watch(completedTranslationTasks, (tasks, previousTasks) => {
+  if (
+    tasks.some(
+      (task) =>
+        !previousTasks.includes(task) && taskTargetsCurrentChapter(task),
+    )
+  ) {
+    void refreshCurrentChapter();
+  }
+});
 
 watch(
   settings,
@@ -897,6 +916,21 @@ watch(resolvedFlow, async (_, previousFlow) => {
   scrollToSegment(segmentId);
   updateViewportMetrics();
 });
+
+watch(
+  () => [
+    activeSettings.value.fontSize,
+    activeSettings.value.lineHeight,
+    activeSettings.value.contentWidth,
+    activeSettings.value.horizontalPadding,
+  ],
+  async () => {
+    const segmentId = getActiveSegmentId();
+    await nextTick();
+    scrollToSegment(segmentId);
+    updateViewportMetrics();
+  },
+);
 
 onMounted(() => {
   void loadSettings();
@@ -1026,6 +1060,9 @@ onBeforeUnmount(() => {
           :mode="renderedMode"
           :annotations="annotations"
           :initial-segment-id="initialSegmentId"
+          :flow="resolvedFlow"
+          :scroll-root="readerViewport"
+          @content-change="handleSegmentContentChange"
         />
       </article>
     </template>
