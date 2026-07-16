@@ -199,7 +199,8 @@ const hasOpenReaderPanel = () =>
   showTools.value ||
   showBookmarks.value ||
   showAnnotations.value ||
-  showModePrompt.value;
+  showModePrompt.value ||
+  showMobileTranslationNotice.value;
 
 const closeReaderPanels = () => {
   showCatalog.value = false;
@@ -208,14 +209,21 @@ const closeReaderPanels = () => {
   showBookmarks.value = false;
   showAnnotations.value = false;
   showModePrompt.value = false;
+  showMobileTranslationNotice.value = false;
 };
 
 const openCatalog = async () => {
+  showMobileTranslationNotice.value = false;
   showCatalog.value = true;
   await nextTick();
   readerRoot.value
     ?.querySelector<HTMLElement>('.book-reader__catalog-item--active')
     ?.scrollIntoView({ block: 'center', behavior: 'auto' });
+};
+
+const openTools = () => {
+  showMobileTranslationNotice.value = false;
+  showTools.value = true;
 };
 
 const updateViewportMetrics = () => {
@@ -1127,11 +1135,38 @@ onBeforeUnmount(() => {
         class="book-reader__app-bar-action"
         type="button"
         aria-label="更多阅读工具"
-        @click="showTools = true"
+        @click="openTools"
       >
         <n-icon :component="MoreVertOutlined" />
       </button>
     </header>
+
+    <div
+      v-if="
+        controlsVisible && hasIncompleteChapter && showMobileTranslationNotice
+      "
+      class="book-reader__translation-popover-layer"
+      @click.self="showMobileTranslationNotice = false"
+    >
+      <n-alert
+        class="book-reader__translation-popover"
+        type="warning"
+        :show-icon="false"
+      >
+        <div class="book-reader__translation-panel">
+          <strong>{{ currentTranslationStatusLabel }}</strong>
+          <div class="book-reader__translation-panel-actions">
+            <n-button size="small" @click="queueChapterTranslation('gpt')">
+              GPT 翻译本章
+            </n-button>
+            <n-button size="small" @click="queueChapterTranslation('sakura')">
+              Sakura 翻译本章
+            </n-button>
+            <n-button size="small" @click="load">刷新本章</n-button>
+          </div>
+        </div>
+      </n-alert>
+    </div>
 
     <div
       v-else-if="result?.kind === 'ready'"
@@ -1146,26 +1181,6 @@ onBeforeUnmount(() => {
         {{ migrationWarning }}；现有书籍仍可继续阅读。
       </n-alert>
       <template v-if="result?.kind === 'ready'">
-        <n-alert
-          v-if="hasIncompleteChapter && showMobileTranslationNotice"
-          class="book-reader__translation-notice-mobile"
-          type="warning"
-          :show-icon="false"
-        >
-          <div class="book-reader__translation-panel">
-            <strong>{{ currentTranslationStatusLabel }}</strong>
-            <div class="book-reader__translation-panel-actions">
-              <n-button size="small" @click="queueChapterTranslation('gpt')">
-                GPT 翻译本章
-              </n-button>
-              <n-button size="small" @click="queueChapterTranslation('sakura')">
-                Sakura 翻译本章
-              </n-button>
-              <n-button size="small" @click="load">刷新本章</n-button>
-            </div>
-          </div>
-        </n-alert>
-
         <n-alert v-if="readingMode !== renderedMode" type="info">
           本章尚无可用译文，已显示原文。
         </n-alert>
@@ -1240,7 +1255,7 @@ onBeforeUnmount(() => {
         <n-icon :component="SettingsOutlined" />
         <span>设置</span>
       </button>
-      <button type="button" @click="showTools = true">
+      <button type="button" @click="openTools">
         <n-icon :component="BuildOutlined" />
         <span>工具</span>
       </button>
@@ -1621,8 +1636,14 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.book-reader__translation-notice-mobile {
+.book-reader__translation-popover-layer {
   display: none;
+}
+
+.book-reader__translation-popover {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
 }
 
 .book-reader__translation-panel {
@@ -1878,8 +1899,15 @@ onBeforeUnmount(() => {
     display: grid;
   }
 
-  .book-reader__translation-notice-mobile {
-    display: flex;
+  .book-reader__translation-popover-layer {
+    position: fixed;
+    top: var(--reader-app-bar-height);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 101;
+    display: block;
+    padding: 8px 14px;
   }
 
   .book-reader__chapter-status {

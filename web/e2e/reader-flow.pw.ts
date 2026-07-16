@@ -273,7 +273,27 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(
     page.getByRole('button', { name: 'GPT 翻译本章' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: '收起未翻译操作' }).click();
+  const translationLayer = page.locator(
+    '.book-reader__translation-popover-layer',
+  );
+  const translationPopover = page.locator('.book-reader__translation-popover');
+  await expect(translationLayer).toHaveCSS('position', 'fixed');
+  const popoverTop = await translationPopover.evaluate((element) =>
+    Math.round(element.getBoundingClientRect().top),
+  );
+  await page.evaluate(() => window.scrollBy(0, 300));
+  await expect
+    .poll(() =>
+      translationPopover.evaluate((element) =>
+        Math.round(element.getBoundingClientRect().top),
+      ),
+    )
+    .toBe(popoverTop);
+  const translationLayerBounds = await translationLayer.boundingBox();
+  if (translationLayerBounds === null) throw new Error('缺少翻译悬浮层');
+  await translationLayer.click({
+    position: { x: 4, y: translationLayerBounds.height - 4 },
+  });
   await expect(page.getByRole('button', { name: 'GPT 翻译本章' })).toBeHidden();
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
     'height',
