@@ -27,7 +27,19 @@ pnpm dev          # 启动开发服务器
 pnpm test         # 运行 Vitest
 pnpm run build    # 生产构建与类型检查
 pnpm run lint     # 检查 src 目录
+pnpm run test:e2e   # 运行本地 IndexedDB 阅读器浏览器流程
 ```
+
+首次运行浏览器流程前，请在 `web/` 目录执行一次
+`corepack pnpm exec playwright install chromium`；测试会自行启动 Vite 预览服务。
+Docker 变更可使用 `docker build -t auto-novel:local -f web/Dockerfile .` 验证。
+
+## 阅读器与隐私边界
+
+书架和阅读器的正文、译文与阅读状态均以浏览器本地数据为边界。请勿为这些
+数据添加账号、服务端同步或隐式正文上传；面向翻译服务的请求必须保留为用户
+主动操作。段落 ID 是进度、书签和批注的稳定定位键，修改导入器或章节结构时
+必须保留或安全迁移它们。正文和译文必须继续按纯文本渲染。
 
 运行时默认配置位于 `web/config/`。Docker 镜像会将其复制到 `/app/default-config`，并在启动时为挂载的 `/app/config` 补齐缺失文件。请通过挂载目录修改 `config.json`、`html/info*.html` 和 `images/` 中的本地图片；`config.json` 中的图片路径均相对 `/app/config`。不要将个人配置或密钥提交到仓库。
 
