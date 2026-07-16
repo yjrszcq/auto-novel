@@ -264,6 +264,10 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     )
     .toBe(true);
   await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(readerContent.locator('.reader-segment-layout')).toHaveCSS(
+    'padding-top',
+    '44px',
+  );
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
     'height',
     '52px',
@@ -464,11 +468,28 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     page.getByRole('button', { name: '添加书签', exact: true }),
   ).toBeHidden();
   await expect(page.locator('.n-drawer-mask')).toHaveCount(0);
-  const readerParagraph = readerContent.locator('p').first();
-  await readerParagraph.click();
+  await readerContent.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: Math.max(rect.top, 0) + 200,
+      }),
+    );
+  });
   await expect(readerTop).toHaveCount(0);
   await expect(page.locator('.book-reader__progress-track')).toBeVisible();
-  await readerParagraph.click();
+  await readerContent.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: Math.max(rect.top, 0) + 200,
+      }),
+    );
+  });
   await expect(readerTop).toBeVisible();
 
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -504,6 +525,10 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await flowSetting.locator('.n-base-selection').click();
   await page.getByText('分页', { exact: true }).click();
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
+  await expect(readerContent.locator('.reader-segment-layout')).toHaveCSS(
+    'padding-top',
+    '46px',
+  );
   await page.keyboard.press('Escape');
   const mobileReaderBounds = await readerContent.boundingBox();
   if (mobileReaderBounds === null) throw new Error('缺少手机分页正文视口');

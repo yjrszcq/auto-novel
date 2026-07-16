@@ -1909,7 +1909,7 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
-  padding: 24px var(--reader-page-padding);
+  padding: 44px var(--reader-page-padding) 24px;
   column-count: 1;
   column-gap: calc(var(--reader-page-padding) * 2);
   column-fill: auto;
@@ -2061,7 +2061,7 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__content--paginated :deep(.reader-segment-layout) {
-    padding: 18px var(--reader-page-padding);
+    padding: 46px var(--reader-page-padding) 18px;
     column-count: 1;
     column-gap: calc(var(--reader-page-padding) * 2);
   }
