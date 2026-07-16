@@ -207,6 +207,22 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
 
   const readerTop = page.locator('.book-reader__app-bar');
   await expect(readerTop).toBeVisible();
+  const readerColumnCount = () =>
+    page
+      .locator('.reader-segment-layout--original')
+      .evaluate((element) => getComputedStyle(element).columnCount);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect.poll(readerColumnCount).toBe('2');
+  await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
+    'height',
+    '52px',
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(readerColumnCount).toBe('auto');
+  await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
+    'height',
+    '76px',
+  );
   await page.evaluate(() =>
     window.scrollTo(0, document.documentElement.scrollHeight),
   );
