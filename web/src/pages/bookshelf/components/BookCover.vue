@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { DeleteOutlineOutlined } from '@vicons/material';
 import { Epub } from '@/util/file';
-import { useLocalVolumeStore } from '@/stores';
+import { useLocalVolumeStore, useRuntimeConfigStore } from '@/stores';
 
 const props = defineProps<{
   bookId: string;
@@ -24,6 +24,9 @@ const coverElement = ref<HTMLElement>();
 const isVisible = ref(false);
 let visibilityObserver: IntersectionObserver | undefined;
 const repositoryPromise = useLocalVolumeStore();
+const runtimeConfigStore = useRuntimeConfigStore();
+const { defaultBookCoverImage, loaded, loading } =
+  storeToRefs(runtimeConfigStore);
 
 const clearCoverUrl = () => {
   if (coverUrl.value !== undefined) {
@@ -151,6 +154,13 @@ const canRemoveCustomCover = computed(
   () =>
     !props.visualOnly && props.allowCustomCoverRemoval && isCustomCover.value,
 );
+const displayedCoverUrl = computed(
+  () => coverUrl.value ?? defaultBookCoverImage.value,
+);
+const shouldShowTextFallback = computed(
+  () =>
+    displayedCoverUrl.value.length === 0 && (loaded.value || !loading.value),
+);
 </script>
 
 <template>
@@ -178,14 +188,14 @@ const canRemoveCustomCover = computed(
       <DeleteOutlineOutlined class="book-cover__remove-icon" />
     </button>
     <img
-      v-if="coverUrl !== undefined"
+      v-if="displayedCoverUrl.length > 0"
       class="book-cover__image"
-      :src="coverUrl"
+      :src="displayedCoverUrl"
       :alt="`${props.title} 封面`"
       decoding="async"
       loading="lazy"
     />
-    <template v-else>
+    <template v-else-if="shouldShowTextFallback">
       <span class="book-cover__eyebrow">LOCAL BOOK</span>
       <strong class="book-cover__initials">{{ initials || '书' }}</strong>
       <span class="book-cover__title">{{ props.title }}</span>

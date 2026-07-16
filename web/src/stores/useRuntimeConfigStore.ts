@@ -4,6 +4,7 @@ import { defineStore } from 'pinia';
 interface RuntimeConfigPayload {
   logoImage?: string;
   homeBackgroundImage?: string;
+  defaultBookCoverImage?: string;
 }
 
 export const useRuntimeConfigStore = defineStore('runtime-config', () => {
@@ -21,6 +22,7 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
     config.value = {
       logoImage: payload.logoImage?.trim() ?? '',
       homeBackgroundImage: payload.homeBackgroundImage?.trim() ?? '',
+      defaultBookCoverImage: payload.defaultBookCoverImage?.trim() ?? '',
     };
   };
 
@@ -35,9 +37,12 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
     loading.value = true;
     loadPromise = (async () => {
       try {
-        const response = await fetch('/api/runtime-config', {
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          import.meta.env.DEV ? '/config/config.json' : '/api/runtime-config',
+          {
+            cache: 'no-store',
+          },
+        );
         if (!response.ok) {
           throw new Error(`获取运行时配置失败：HTTP ${response.status}`);
         }
@@ -69,7 +74,8 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
     ) {
       return '';
     }
-    return `/panel-content/${segments.map(encodeURIComponent).join('/')}`;
+    const prefix = import.meta.env.DEV ? '/config' : '/panel-content';
+    return prefix + '/' + segments.map(encodeURIComponent).join('/');
   };
 
   const resolveImageSource = (source: string) =>
@@ -80,6 +86,10 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
   );
 
   const hasLogoImage = computed(() => logoImage.value.length > 0);
+
+  const defaultBookCoverImage = computed(() =>
+    resolveImageSource(config.value?.defaultBookCoverImage?.trim() ?? ''),
+  );
 
   const homeBackgroundImage = computed(() =>
     resolveImageSource(config.value?.homeBackgroundImage?.trim() ?? ''),
@@ -94,5 +104,6 @@ export const useRuntimeConfigStore = defineStore('runtime-config', () => {
     logoImage,
     hasLogoImage,
     homeBackgroundImage,
+    defaultBookCoverImage,
   };
 });

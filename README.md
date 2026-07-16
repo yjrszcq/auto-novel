@@ -32,6 +32,10 @@
 触发；后者只在本次浏览器会话中交接选中文本，实际翻译仍使用用户已配置的
 服务。
 
+## 本地预览
+
+在仓库根目录运行 `./start-local.sh`，即可启动不使用 Docker 的 Vite 开发服务器。它会读取 `web/config/config.json` 和 `web/config/images/`，默认访问地址为 `http://127.0.0.1:5173`。
+
 ## 部署
 
 1. 使用以下命令快速部署项目
@@ -42,18 +46,21 @@
 
 2. 浏览器访问 `http://localhost:8011`
 
-容器首次启动时会在 `/app/config` 中补齐缺失的默认配置文件；因此应始终挂载该目录，保存自己的配置。首页背景与 Logo 可通过挂载目录中的 `config.json` 配置：
+容器首次启动时会在 `/app/config` 中补齐缺失的默认配置文件；因此应始终挂载该目录，保存自己的配置。首页背景、Logo 与无封面书籍的默认封面可通过挂载目录中的 `config.json` 配置：
 
 ```json
 {
   "logoImage": "images/logo.png",
-  "homeBackgroundImage": "images/banner.webp"
+  "homeBackgroundImage": "images/banner.webp",
+  "defaultBookCoverImage": "images/default-cover.webp"
 }
 ```
 
-将 Logo 或背景图上传到映射目录的 `images/` 后，在 `logoImage` 或 `homeBackgroundImage` 填入相对路径，例如 `images/logo.png`。值以 `http://` 或 `https://` 开头时会被当作远程图片链接，其他非空值均作为相对 `/app/config` 的本地文件路径处理。
+将 Logo、背景图或默认书籍封面上传到映射目录的 `images/` 后，在 `logoImage`、`homeBackgroundImage` 或 `defaultBookCoverImage` 填入相对路径，例如 `images/logo.png`。值以 `http://` 或 `https://` 开头时会被当作远程图片链接，其他非空值均作为相对 `/app/config` 的本地文件路径处理。
 
 默认背景已复制到 `images/banner.webp` 并写入 `homeBackgroundImage`。该配置留空时，首页仍会使用源码内置的同一张默认背景图兜底。
+
+`defaultBookCoverImage` 仅用于没有自定义封面或 EPUB 内嵌封面的书籍；留空时继续使用当前的彩色文字封面兜底。
 
 `html/` 中的 HTML 文件也可直接编辑，用于显示应用内说明：
 

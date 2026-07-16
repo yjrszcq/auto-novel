@@ -17,6 +17,7 @@ describe('runtime config', () => {
         json: async () => ({
           logoImage: ' images/logo.png ',
           homeBackgroundImage: ' images/home background.webp ',
+          defaultBookCoverImage: ' images/default cover.webp ',
         }),
       }),
     );
@@ -24,9 +25,12 @@ describe('runtime config', () => {
     const store = useRuntimeConfigStore();
     await store.loadRuntimeConfig();
 
-    expect(store.logoImage).toBe('/panel-content/images/logo.png');
+    expect(store.logoImage).toBe('/config/images/logo.png');
     expect(store.homeBackgroundImage).toBe(
-      '/panel-content/images/home%20background.webp',
+      '/config/images/home%20background.webp',
+    );
+    expect(store.defaultBookCoverImage).toBe(
+      '/config/images/default%20cover.webp',
     );
   });
 
@@ -45,6 +49,7 @@ describe('runtime config', () => {
 
     expect(store.logoImage).toBe('');
     expect(store.homeBackgroundImage).toBe('');
+    expect(store.defaultBookCoverImage).toBe('');
   });
 
   it('uses HTTPS URLs as image sources', async () => {
@@ -56,6 +61,7 @@ describe('runtime config', () => {
         json: async () => ({
           logoImage: ' https://example.com/logo.png ',
           homeBackgroundImage: ' https://example.com/home-background.webp ',
+          defaultBookCoverImage: ' https://example.com/default-cover.webp ',
         }),
       }),
     );
@@ -67,5 +73,8 @@ describe('runtime config', () => {
       'https://example.com/home-background.webp',
     );
     expect(store.logoImage).toBe('https://example.com/logo.png');
+    expect(store.defaultBookCoverImage).toBe(
+      'https://example.com/default-cover.webp',
+    );
   });
 });

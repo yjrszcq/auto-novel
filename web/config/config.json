@@ -1,4 +1,5 @@
 {
   "logoImage": "",
-  "homeBackgroundImage": "images/banner.webp"
+  "homeBackgroundImage": "images/banner.webp",
+  "defaultBookCoverImage": ""
 }

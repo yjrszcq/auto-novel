@@ -180,6 +180,80 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByText('安全文本', { exact: true })).toBeVisible();
 });
 
+test('uses a configured default cover for a local book without one', async ({
+  page,
+}) => {
+  await page.goto('/bookshelf');
+  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+
+  await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 4);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'chapter'],
+      'readwrite',
+    );
+    transaction.objectStore('metadata').put({
+      id: 'default-cover.txt',
+      createAt: 1,
+      toc: [{ chapterId: '0' }],
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+    });
+    transaction.objectStore('chapter').put({
+      id: 'default-cover.txt/0',
+      volumeId: 'default-cover.txt',
+      paragraphs: ['无内嵌封面的正文'],
+      segmentIds: ['segment-0'],
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  });
+  let releaseConfig!: () => void;
+  const configResponse = new Promise<void>((resolve) => {
+    releaseConfig = resolve;
+  });
+  let reportConfigRequest!: () => void;
+  const configRequested = new Promise<void>((resolve) => {
+    reportConfigRequest = resolve;
+  });
+  await page.route('**/config/config.json', async (route) => {
+    reportConfigRequest();
+    await configResponse;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ defaultBookCoverImage: 'images/banner.webp' }),
+    });
+  });
+
+  await page.reload();
+  await configRequested;
+  await expect(
+    page.getByRole('heading', { name: 'default-cover' }),
+  ).toBeVisible();
+  await expect(page.locator('.book-cover__initials')).toHaveCount(0);
+  releaseConfig();
+  const defaultCover = page.locator('img[alt="default-cover 封面"]');
+  await expect(defaultCover).toHaveAttribute(
+    'src',
+    '/config/images/banner.webp',
+  );
+  await expect
+    .poll(() =>
+      defaultCover.evaluate(
+        (image) => (image as HTMLImageElement).naturalWidth,
+      ),
+    )
+    .toBeGreaterThan(0);
+  await expect(page.locator('.book-cover__initials')).toHaveCount(0);
+});
 test('persists the global reading version selected in Settings', async ({
   page,
 }) => {
