@@ -102,3 +102,22 @@ export const resolveReaderBoundaryGesture = ({
   if (startedAtStart && distance >= minimumDistance) return 'previous';
   return undefined;
 };
+
+export const resolveReaderWheelBoundary = ({
+  deltaY,
+  scrollY,
+  scrollHeight,
+  viewportHeight,
+  tolerance = 2,
+}: {
+  deltaY: number;
+  scrollY: number;
+  scrollHeight: number;
+  viewportHeight: number;
+  tolerance?: number;
+}): 'previous' | 'next' | undefined => {
+  const scrollable = Math.max(0, scrollHeight - viewportHeight);
+  if (deltaY < 0 && scrollY <= tolerance) return 'previous';
+  if (deltaY > 0 && scrollY >= scrollable - tolerance) return 'next';
+  return undefined;
+};

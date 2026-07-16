@@ -6,6 +6,7 @@ import {
   resolveReaderBoundaryGesture,
   resolveReaderPageTurn,
   resolveReaderFlow,
+  resolveReaderWheelBoundary,
 } from '../src/pages/reader/core/ReaderFlow';
 
 describe('reader flow', () => {
@@ -114,6 +115,34 @@ describe('reader flow', () => {
         endY: 470,
         startedAtStart: false,
         startedAtEnd: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('turns desktop scrolling only when the wheel continues past a boundary', () => {
+    const viewport = {
+      scrollHeight: 2_000,
+      viewportHeight: 800,
+    };
+    expect(
+      resolveReaderWheelBoundary({
+        ...viewport,
+        deltaY: 120,
+        scrollY: 1_200,
+      }),
+    ).toBe('next');
+    expect(
+      resolveReaderWheelBoundary({
+        ...viewport,
+        deltaY: -120,
+        scrollY: 0,
+      }),
+    ).toBe('previous');
+    expect(
+      resolveReaderWheelBoundary({
+        ...viewport,
+        deltaY: 120,
+        scrollY: 600,
       }),
     ).toBeUndefined();
   });

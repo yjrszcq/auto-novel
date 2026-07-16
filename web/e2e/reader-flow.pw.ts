@@ -354,6 +354,22 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await readerParagraph.click();
   await expect(readerTop).toBeVisible();
 
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/books/reader-flow.txt/read/0');
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  const flowSetting = page
+    .locator('.book-reader__settings-theme')
+    .filter({ hasText: '阅读流' });
+  await flowSetting.locator('.n-base-selection').click();
+  await page.getByText('滚动', { exact: true }).click();
+  await expect(readerContent).toHaveClass(/book-reader__content--scrolled/);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  await readerContent.dispatchEvent('wheel', { deltaY: 120 });
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+
   await page.goto('/workspace/reader/reader-flow.txt/0');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect(page.getByText('安全文本', { exact: true })).toBeVisible();

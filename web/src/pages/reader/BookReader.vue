@@ -43,6 +43,7 @@ import {
   resolveReaderBoundaryGesture,
   resolveReaderPageTurn,
   resolveReaderFlow,
+  resolveReaderWheelBoundary,
 } from './core/ReaderFlow';
 import { createReaderAnnotation } from './core/ReaderAnnotations';
 import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
@@ -294,6 +295,7 @@ const scrollReaderPage = async (delta: number) => {
 };
 
 let lastWheelPageAt = 0;
+let lastWheelChapterAt = 0;
 let boundaryTouch:
   | { startY: number; startedAtStart: boolean; startedAtEnd: boolean }
   | undefined;
@@ -337,6 +339,34 @@ const handleBoundaryTouchEnd = (event: TouchEvent) => {
 };
 
 const handleViewportWheel = (event: WheelEvent) => {
+  if (
+    resolvedFlow.value === 'scrolled' &&
+    isDesktopReader.value &&
+    Math.abs(event.deltaY) > Math.abs(event.deltaX) &&
+    !hasOpenReaderPanel()
+  ) {
+    const direction = resolveReaderWheelBoundary({
+      deltaY: event.deltaY,
+      scrollY: window.scrollY,
+      scrollHeight: document.documentElement.scrollHeight,
+      viewportHeight: window.innerHeight,
+    });
+    const chapterId =
+      direction === 'previous'
+        ? previousChapterId.value
+        : direction === 'next'
+          ? nextChapterId.value
+          : undefined;
+    if (chapterId !== undefined) {
+      event.preventDefault();
+      const now = Date.now();
+      if (now - lastWheelChapterAt >= 500) {
+        lastWheelChapterAt = now;
+        navigate(chapterId, direction === 'previous' ? 'end' : 'start');
+      }
+    }
+    return;
+  }
   if (
     resolvedFlow.value !== 'paginated' ||
     Math.abs(event.deltaY) <= Math.abs(event.deltaX)
