@@ -403,6 +403,10 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   );
   const translationPopover = page.locator('.book-reader__translation-popover');
   await expect(translationLayer).toHaveCSS('position', 'fixed');
+  await expect(translationPopover).toHaveCSS(
+    'background-color',
+    'rgb(99, 55, 15)',
+  );
   const popoverTop = await translationPopover.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );

@@ -1756,6 +1756,9 @@ onBeforeUnmount(() => {
 .book-reader__translation-popover {
   width: min(100%, 720px);
   margin: 0 auto;
+  color: #f7e3cc;
+  background: #63370f;
+  border-color: #a65d0a;
   box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
 }
 
