@@ -94,6 +94,8 @@ const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
 const viewportProgressRatio = ref(0);
+let paginatedAnchorSegmentId: string | undefined;
+let viewportResizeFrame: number | undefined;
 const isDesktopReader = useMediaQuery('(min-width: 768px)');
 const usesDoublePageSpread = useMediaQuery('(min-width: 916px)');
 const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)');
@@ -285,6 +287,8 @@ const scrollReaderPage = async (delta: number) => {
       left: pageIndex * expandedMetrics.pageWidth,
       behavior: 'auto',
     });
+    await nextTick();
+    paginatedAnchorSegmentId = getActiveSegmentId('paginated');
     return;
   }
   if (turn.kind !== 'page') return;
@@ -292,6 +296,8 @@ const scrollReaderPage = async (delta: number) => {
     left: turn.pageIndex * metrics.pageWidth,
     behavior: 'auto',
   });
+  await nextTick();
+  paginatedAnchorSegmentId = getActiveSegmentId('paginated');
 };
 
 let lastWheelPageAt = 0;
@@ -383,6 +389,21 @@ const handleViewportWheel = (event: WheelEvent) => {
 const handleViewportScroll = () => {
   updateViewportMetrics();
   saveProgressThrottled();
+};
+
+const handleViewportResize = () => {
+  if (viewportResizeFrame !== undefined) {
+    cancelAnimationFrame(viewportResizeFrame);
+  }
+  viewportResizeFrame = requestAnimationFrame(() => {
+    viewportResizeFrame = undefined;
+    if (resolvedFlow.value !== 'paginated') {
+      updateViewportMetrics();
+      return;
+    }
+    scrollToSegment(paginatedAnchorSegmentId);
+    requestAnimationFrame(updateViewportMetrics);
+  });
 };
 
 const toggleControlsFromContent = (event: MouseEvent) => {
@@ -635,6 +656,7 @@ const getActiveSegmentId = (flow = resolvedFlow.value) => {
 const scrollToSegment = (segmentId: string | undefined) => {
   if (segmentId === undefined) {
     if (resolvedFlow.value === 'paginated') {
+      paginatedAnchorSegmentId = undefined;
       readerViewport.value?.scrollTo({ left: 0, behavior: 'auto' });
     } else {
       window.scrollTo({ top: 0, behavior: 'auto' });
@@ -647,6 +669,7 @@ const scrollToSegment = (segmentId: string | undefined) => {
     );
     if (element === undefined) return;
     if (resolvedFlow.value === 'paginated') {
+      paginatedAnchorSegmentId = segmentId;
       const viewport = readerViewport.value;
       const rect = element.getClientRects()[0];
       if (viewport === null || rect === undefined) return;
@@ -691,6 +714,7 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
       left: edge === 'start' ? 0 : viewport.scrollWidth,
       behavior: 'auto',
     });
+    paginatedAnchorSegmentId = getActiveSegmentId('paginated');
     return;
   }
   window.scrollTo({
@@ -1129,10 +1153,7 @@ watch(resolvedFlow, async (_, previousFlow) => {
 
 watch(usesDoublePageSpread, async () => {
   if (resolvedFlow.value !== 'paginated') return;
-  const segmentId = getActiveSegmentId();
-  await nextTick();
-  scrollToSegment(segmentId);
-  updateViewportMetrics();
+  handleViewportResize();
 });
 
 watch(
@@ -1153,13 +1174,16 @@ watch(
 onMounted(() => {
   void loadSettings();
   window.addEventListener('scroll', saveProgressThrottled, { passive: true });
-  window.addEventListener('resize', updateViewportMetrics, { passive: true });
+  window.addEventListener('resize', handleViewportResize, { passive: true });
   window.addEventListener('keydown', handleReaderKeydown);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', saveProgressThrottled);
-  window.removeEventListener('resize', updateViewportMetrics);
+  window.removeEventListener('resize', handleViewportResize);
+  if (viewportResizeFrame !== undefined) {
+    cancelAnimationFrame(viewportResizeFrame);
+  }
   window.removeEventListener('keydown', handleReaderKeydown);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   void saveProgress();

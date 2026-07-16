@@ -279,6 +279,30 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       }),
     )
     .toBe(true);
+  await page.setViewportSize({ width: 900, height: 800 });
+  await expect(readerContent).not.toHaveClass(
+    /book-reader__content--double-spread/,
+  );
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const page = element.scrollLeft / Math.max(1, element.clientWidth);
+        return Math.abs(page - Math.round(page));
+      }),
+    )
+    .toBeLessThan(0.01);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(readerContent).toHaveClass(
+    /book-reader__content--double-spread/,
+  );
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const page = element.scrollLeft / Math.max(1, element.clientWidth);
+        return Math.abs(page - Math.round(page));
+      }),
+    )
+    .toBeLessThan(0.01);
   await readerContent.evaluate((element) =>
     element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
   );
