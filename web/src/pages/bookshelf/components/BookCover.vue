@@ -6,6 +6,7 @@ const props = defineProps<{
   bookId: string;
   title: string;
   refreshKey?: number;
+  selectLabel?: string;
 }>();
 
 const emit = defineEmits<{
@@ -123,6 +124,9 @@ const color = computed(() => {
 const initials = computed(() =>
   Array.from(props.title.trim()).slice(0, 2).join(''),
 );
+const ariaLabel = computed(
+  () => props.selectLabel ?? '查看《' + props.title + '》详情',
+);
 </script>
 
 <template>
@@ -131,7 +135,7 @@ const initials = computed(() =>
     class="book-cover"
     role="button"
     tabindex="0"
-    :aria-label="`查看《${props.title}》详情`"
+    :aria-label="ariaLabel"
     :style="{ backgroundColor: color }"
     @click="emit('select')"
     @keydown.enter.prevent="emit('select')"
