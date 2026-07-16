@@ -1324,7 +1324,8 @@ onBeforeUnmount(() => {
           `book-reader__content--${resolvedFlow}`,
           {
             'book-reader__content--controls-visible': controlsVisible,
-            'book-reader__content--double-spread': usesDoublePageSpread,
+            'book-reader__content--double-spread':
+              resolvedFlow === 'paginated' && usesDoublePageSpread,
           },
         ]"
         :aria-label="
@@ -1916,7 +1917,8 @@ onBeforeUnmount(() => {
   column-fill: auto;
 }
 
-.book-reader__content--double-spread :deep(.reader-segment-layout) {
+.book-reader__content--paginated.book-reader__content--double-spread
+  :deep(.reader-segment-layout) {
   column-count: 2;
 }
 

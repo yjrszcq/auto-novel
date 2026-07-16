@@ -414,6 +414,16 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await flowSetting.locator('.n-base-selection').click();
   await page.getByText('滚动', { exact: true }).click();
   await expect(readerContent).toHaveClass(/book-reader__content--scrolled/);
+  await expect(readerContent).not.toHaveClass(
+    /book-reader__content--double-spread/,
+  );
+  await expect
+    .poll(() =>
+      readerContent
+        .locator('.reader-segment-layout')
+        .evaluate((element) => getComputedStyle(element).columnCount),
+    )
+    .toBe('auto');
   await page.keyboard.press('Escape');
   await page.evaluate(() =>
     window.scrollTo(0, document.documentElement.scrollHeight),
