@@ -93,6 +93,7 @@ const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
+const readerPageVisualOffset = ref(0);
 const viewportProgressRatio = ref(0);
 let paginatedAnchorSegmentId: string | undefined;
 let viewportResizeFrame: number | undefined;
@@ -244,6 +245,13 @@ const updateViewportMetrics = () => {
     scrollable <= 0 ? 0 : Math.max(0, Math.min(1, window.scrollY / scrollable));
 };
 
+const positionReaderPage = (viewport: HTMLElement, pageIndex: number) => {
+  readerPageVisualOffset.value = 0;
+  const targetLeft = Math.max(0, pageIndex) * viewport.clientWidth;
+  viewport.scrollTo({ left: targetLeft, behavior: 'auto' });
+  readerPageVisualOffset.value = Math.max(0, targetLeft - viewport.scrollLeft);
+};
+
 const scrollReaderPage = async (delta: number) => {
   const viewport = readerViewport.value;
   if (resolvedFlow.value !== 'paginated' || viewport === null) return;
@@ -283,19 +291,13 @@ const scrollReaderPage = async (delta: number) => {
         anchorPage + (turn.direction === 'previous' ? -1 : 1),
       ),
     );
-    viewport.scrollTo({
-      left: pageIndex * expandedMetrics.pageWidth,
-      behavior: 'auto',
-    });
+    positionReaderPage(viewport, pageIndex);
     await nextTick();
     paginatedAnchorSegmentId = getActiveSegmentId('paginated');
     return;
   }
   if (turn.kind !== 'page') return;
-  viewport.scrollTo({
-    left: turn.pageIndex * metrics.pageWidth,
-    behavior: 'auto',
-  });
+  positionReaderPage(viewport, turn.pageIndex);
   await nextTick();
   paginatedAnchorSegmentId = getActiveSegmentId('paginated');
 };
@@ -657,7 +659,9 @@ const scrollToSegment = (segmentId: string | undefined) => {
   if (segmentId === undefined) {
     if (resolvedFlow.value === 'paginated') {
       paginatedAnchorSegmentId = undefined;
-      readerViewport.value?.scrollTo({ left: 0, behavior: 'auto' });
+      if (readerViewport.value !== null) {
+        positionReaderPage(readerViewport.value, 0);
+      }
     } else {
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
@@ -679,10 +683,7 @@ const scrollToSegment = (segmentId: string | undefined) => {
         0,
         Math.floor((absoluteLeft + 1) / Math.max(1, viewport.clientWidth)),
       );
-      viewport.scrollTo({
-        left: pageIndex * viewport.clientWidth,
-        behavior: 'auto',
-      });
+      positionReaderPage(viewport, pageIndex);
       return;
     }
     element.scrollIntoView({
@@ -710,10 +711,8 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
   if (resolvedFlow.value === 'paginated') {
     const viewport = readerViewport.value;
     if (viewport === null) return;
-    viewport.scrollTo({
-      left: edge === 'start' ? 0 : viewport.scrollWidth,
-      behavior: 'auto',
-    });
+    const metrics = getReaderPageMetrics(viewport);
+    positionReaderPage(viewport, edge === 'start' ? 0 : metrics.pageCount - 1);
     paginatedAnchorSegmentId = getActiveSegmentId('paginated');
     return;
   }
@@ -970,15 +969,11 @@ const restoreProgress = async (
     progress?.scrollRatio !== undefined &&
     readerViewport.value !== null
   ) {
-    readerViewport.value.scrollTo({
-      left:
-        progress.scrollRatio *
-        Math.max(
-          0,
-          readerViewport.value.scrollWidth - readerViewport.value.clientWidth,
-        ),
-      behavior: 'auto',
-    });
+    const metrics = getReaderPageMetrics(readerViewport.value);
+    positionReaderPage(
+      readerViewport.value,
+      Math.round(progress.scrollRatio * Math.max(0, metrics.pageCount - 1)),
+    );
   } else if (progress?.scrollRatio !== undefined) {
     const scrollable =
       document.documentElement.scrollHeight - window.innerHeight;
@@ -1344,6 +1339,9 @@ onBeforeUnmount(() => {
           :initial-segment-id="initialSegmentId"
           :flow="resolvedFlow"
           :scroll-root="readerViewport"
+          :style="{
+            transform: `translate3d(${-readerPageVisualOffset}px, 0, 0)`,
+          }"
           @content-change="handleSegmentContentChange"
         />
       </article>

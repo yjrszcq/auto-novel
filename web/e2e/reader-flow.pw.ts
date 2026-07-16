@@ -524,6 +524,20 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       ),
     )
     .toBe(true);
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const viewport = element.getBoundingClientRect();
+        const visibleLefts = [...element.querySelectorAll('p')]
+          .flatMap((paragraph) => [...paragraph.getClientRects()])
+          .filter(
+            (rect) => rect.right > viewport.left && rect.left < viewport.right,
+          )
+          .map((rect) => rect.left - viewport.left);
+        return Math.min(...visibleLefts);
+      }),
+    )
+    .toBeGreaterThanOrEqual(21);
   await readerContent.click({
     position: {
       x: mobileReaderBounds.width * 0.9,
