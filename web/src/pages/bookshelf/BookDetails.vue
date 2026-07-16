@@ -436,7 +436,6 @@ onMounted(() => void load());
           </n-button>
         </n-flex>
 
-        <section-header title="目录" />
         <n-list class="book-details__volume-list">
           <n-list-item>
             <n-flex align="center" justify="space-between" :wrap="false">
