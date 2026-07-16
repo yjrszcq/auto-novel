@@ -10,6 +10,13 @@ import {
 describe('reader settings', () => {
   it('uses durable local defaults for original reading', () => {
     expect(normalizeReaderSettings(undefined)).toEqual(defaultReaderSettings);
+    expect(defaultReaderSettings.defaultMode).toBe('translated');
+  });
+
+  it('migrates the legacy ask preference to translated', () => {
+    expect(normalizeReaderSettings({ defaultMode: 'ask' })).toMatchObject({
+      defaultMode: 'translated',
+    });
   });
 
   it('keeps compatible partial records and clamps unsafe values', () => {

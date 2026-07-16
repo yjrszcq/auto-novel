@@ -19,7 +19,6 @@ const readerSettingsSaving = ref(false);
 const readerRepositoryPromise = useLocalVolumeStore();
 
 const readerModeOptions: { label: string; value: ReaderMode }[] = [
-  { label: '询问', value: 'ask' },
   { label: '中文', value: 'translated' },
   { label: '中日', value: 'translated-original' },
   { label: '日中', value: 'original-translated' },
@@ -137,7 +136,7 @@ onMounted(() => {
       <n-list-item>
         <n-flex vertical :size="8">
           <b>阅读</b>
-          <c-action-wrapper title="默认阅读版本">
+          <c-action-wrapper title="阅读偏好">
             <c-radio-group
               id="reader-default-mode"
               size="small"
@@ -147,9 +146,6 @@ onMounted(() => {
               @update:value="updateDefaultReaderMode"
             />
           </c-action-wrapper>
-          <n-text depth="3">
-            中文和双语模式有可用译文时按所选方式打开；没有译文时始终显示原文（日文）。
-          </n-text>
         </n-flex>
       </n-list-item>
 

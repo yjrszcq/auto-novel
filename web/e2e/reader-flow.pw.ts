@@ -125,10 +125,11 @@ test('persists the global reading version selected in Settings', async ({
   page,
 }) => {
   await page.goto('/setting');
-  await expect(page.getByText('默认阅读版本', { exact: true })).toBeVisible();
+  await expect(page.getByText('阅读偏好', { exact: true })).toBeVisible();
 
   const selector = page.locator('#reader-default-mode');
   await expect(selector).toHaveAttribute('aria-busy', 'false');
+  await expect(selector.getByRole('radio', { name: '询问' })).toHaveCount(0);
   await selector.getByText('日中', { exact: true }).click();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
 

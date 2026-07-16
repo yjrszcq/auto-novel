@@ -2,7 +2,7 @@ import type { ReaderSettingsRecord } from '@/model/Reader';
 
 export const defaultReaderSettings: ReaderSettingsRecord = {
   id: 'default',
-  defaultMode: 'ask',
+  defaultMode: 'translated',
   translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
   fontSize: 18,
   lineHeight: 1.9,
@@ -18,6 +18,10 @@ export const normalizeReaderSettings = (
   ...defaultReaderSettings,
   ...value,
   id: 'default',
+  defaultMode:
+    value?.defaultMode === 'ask'
+      ? defaultReaderSettings.defaultMode
+      : value?.defaultMode ?? defaultReaderSettings.defaultMode,
   fontSize: Math.max(12, Math.min(value?.fontSize ?? 18, 32)),
   lineHeight: Math.max(1.2, Math.min(value?.lineHeight ?? 1.9, 2.8)),
   contentWidth: Math.max(480, Math.min(value?.contentWidth ?? 840, 1200)),
