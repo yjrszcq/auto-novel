@@ -66,17 +66,6 @@ const reload = async () => {
   }
 };
 
-const openBook = (book: BookshelfDisplayBook) => {
-  const chapterId = book.progress?.chapterId ?? book.volume.toc[0]?.chapterId;
-  if (chapterId === undefined) {
-    void router.push('/workspace/toolbox');
-    return;
-  }
-  void router.push(
-    `/books/${encodeURIComponent(book.volume.id)}/read/${encodeURIComponent(chapterId)}`,
-  );
-};
-
 const openWorkspace = () => {
   void router.push('/workspace/toolbox');
 };
@@ -90,21 +79,6 @@ const addLocalBook = async (bookId: string) => {
 
 const openDetails = (book: BookshelfDisplayBook) => {
   void router.push('/books/' + encodeURIComponent(book.volume.id) + '/details');
-};
-
-const removeBook = async (book: BookshelfDisplayBook) => {
-  const repository = await useLocalVolumeStore();
-  await createBookshelfService(repository).setListed(book.volume.id, false);
-  await reload();
-};
-
-const togglePin = async (book: BookshelfDisplayBook) => {
-  const repository = await useLocalVolumeStore();
-  await createBookshelfService(repository).setPinned(
-    book.volume.id,
-    !book.state.pinned,
-  );
-  await reload();
 };
 
 const resetFilters = () => {
@@ -164,11 +138,7 @@ onMounted(reload);
           v-for="book in visibleBooks"
           :key="book.volume.id"
           :book="book"
-          @continue="openBook"
-          @workspace="openWorkspace"
           @details="openDetails"
-          @pin="togglePin"
-          @remove="removeBook"
         />
       </section>
       <local-volume-list

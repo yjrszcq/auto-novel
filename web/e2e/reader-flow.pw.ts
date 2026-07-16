@@ -66,6 +66,14 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(
     page.getByRole('heading', { name: 'reader-flow' }),
   ).toBeVisible();
+  await expect(page.getByText('阅读 0%', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('翻译 0%', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '开始阅读', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '移出书架', exact: true }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
   await expect(
@@ -112,8 +120,12 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     .poll(() => new URL(page.url()).pathname)
     .toBe('/books/reader-flow.txt/read/1');
 
+  await page.goto('/books/reader-flow.txt/details');
+  await page.getByRole('button', { name: '移出书架', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '加入书架', exact: true }),
+  ).toBeVisible();
   await page.goto('/bookshelf');
-  await page.getByRole('button', { name: '移出书架' }).click();
   await expect(
     page.getByText('书架中还没有书籍', { exact: true }),
   ).toBeVisible();
@@ -125,6 +137,8 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     page.getByRole('heading', { name: 'reader-flow' }),
   ).toBeVisible();
 
+  await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
   const startReadingButton = page.getByRole('button', { name: '开始阅读' });
   await startReadingButton.focus();
   await expect(startReadingButton).toBeFocused();
