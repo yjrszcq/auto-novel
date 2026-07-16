@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { ReaderMode } from '@/model/Reader';
+import { readerModeLabels } from '../core/ReaderMode';
 
 const props = defineProps<{
   show: boolean;
@@ -12,14 +13,6 @@ const emit = defineEmits<{
   'update:remember': [value: boolean];
   select: [mode: Exclude<ReaderMode, 'ask'>];
 }>();
-
-const labels: Record<ReaderMode, string> = {
-  ask: '每次询问',
-  translated: '译文',
-  'translated-original': '译文-原文',
-  'original-translated': '原文-译文',
-  original: '原文',
-};
 </script>
 
 <template>
@@ -36,7 +29,7 @@ const labels: Record<ReaderMode, string> = {
           block
           @click="emit('select', mode)"
         >
-          {{ labels[mode] }}
+          {{ readerModeLabels[mode] }}
         </n-button>
         <n-checkbox
           :checked="props.remember"

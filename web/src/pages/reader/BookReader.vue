@@ -31,7 +31,11 @@ import {
   getBookmarkTarget,
   sortReaderBookmarks,
 } from './core/ReaderBookmarks';
-import { getAvailableReaderModes, resolveReaderMode } from './core/ReaderMode';
+import {
+  getAvailableReaderModes,
+  readerModeLabels,
+  resolveReaderMode,
+} from './core/ReaderMode';
 import {
   getChapterTranslationParams,
   getTranslationStatusLabel,
@@ -64,14 +68,7 @@ let pendingBookmark: ReaderBookmark | undefined;
 const rememberModeChoice = ref(false);
 const readingMode = ref<ReaderMode>('original');
 const availableModes = ref<ReaderMode[]>(['original']);
-const modeLabel = (mode: ReaderMode) =>
-  ({
-    ask: '每次询问',
-    translated: '译文',
-    'translated-original': '译文-原文',
-    'original-translated': '原文-译文',
-    original: '原文',
-  })[mode];
+const modeLabel = (mode: ReaderMode) => readerModeLabels[mode];
 let readingStartedAt: number | undefined;
 let readingBookId: string | undefined;
 let readingStatsWrite = Promise.resolve();

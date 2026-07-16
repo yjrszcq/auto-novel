@@ -19,6 +19,7 @@ import {
 } from './BookshelfService';
 import { createLocalVolumeReaderAdapter } from '../reader/adapters/LocalVolumeReaderAdapter';
 import {
+  readerModeLabels,
   readerModes,
   type SelectableReaderMode,
 } from '../reader/core/ReaderMode';
@@ -66,15 +67,8 @@ const completedChapters = computed(
     chapters.value.filter((chapter) => chapter.translationStatus === 'complete')
       .length,
 );
-
 const modeLabel = (mode: 'global' | SelectableReaderMode) =>
-  ({
-    global: '跟随全局设置',
-    translated: '译文',
-    'translated-original': '译文-原文',
-    'original-translated': '原文-译文',
-    original: '原文',
-  })[mode];
+  mode === 'global' ? '跟随全局设置' : readerModeLabels[mode];
 
 const formatDate = (value: number | undefined) =>
   value === undefined ? '—' : new Date(value).toLocaleString('zh-CN');

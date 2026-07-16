@@ -6,8 +6,9 @@ import type {
 } from '../src/model/Reader';
 import {
   getAvailableReaderModes,
-  resolveReaderMode,
   readerModeLabels,
+  readerModes,
+  resolveReaderMode,
 } from '../src/pages/reader/core/ReaderMode';
 
 const settings: ReaderSettingsRecord = {
@@ -56,6 +57,17 @@ describe('reader open mode', () => {
     );
   });
 
+  it('uses every global translated preference when translation is available', () => {
+    for (const defaultMode of readerModes) {
+      expect(
+        resolveReaderMode({
+          settings: { ...settings, defaultMode },
+          capabilities: translated,
+        }),
+      ).toBe(defaultMode);
+    }
+  });
+
   it('forces original mode and hides translated choices without translations', () => {
     const capabilities = { ...translated, hasAnyTranslation: false };
 
@@ -69,6 +81,7 @@ describe('reader open mode', () => {
       'original',
     ]);
   });
+
   it('uses Japanese-to-Chinese labels', () => {
     expect(readerModeLabels).toMatchObject({
       translated: '中文',
