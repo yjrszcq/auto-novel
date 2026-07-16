@@ -370,6 +370,52 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await readerContent.dispatchEvent('wheel', { deltaY: 120 });
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
 
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await flowSetting.locator('.n-base-selection').click();
+  await page.getByText('分页', { exact: true }).click();
+  await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
+  await page.keyboard.press('Escape');
+  const mobileReaderBounds = await readerContent.boundingBox();
+  if (mobileReaderBounds === null) throw new Error('缺少手机分页正文视口');
+  await readerContent.click({
+    position: {
+      x: mobileReaderBounds.width * 0.1,
+      y: mobileReaderBounds.height * 0.5,
+    },
+  });
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await expect
+    .poll(() =>
+      readerContent.evaluate(
+        (element) =>
+          Math.abs(
+            element.scrollLeft - (element.scrollWidth - element.clientWidth),
+          ) <= 1,
+      ),
+    )
+    .toBe(true);
+  await readerContent.click({
+    position: {
+      x: mobileReaderBounds.width * 0.9,
+      y: mobileReaderBounds.height * 0.5,
+    },
+  });
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBe(0);
+  const firstChapterTwoSegment = readerContent.locator(
+    '[data-reader-segment-id="chapter-1-segment-0"]',
+  );
+  await expect(firstChapterTwoSegment).toBeVisible();
+  const firstSegmentBounds = await firstChapterTwoSegment.boundingBox();
+  const currentReaderBounds = await readerContent.boundingBox();
+  if (firstSegmentBounds === null || currentReaderBounds === null) {
+    throw new Error('缺少跨章后的首段布局');
+  }
+  expect(firstSegmentBounds.x).toBeGreaterThanOrEqual(currentReaderBounds.x);
+
   await page.goto('/workspace/reader/reader-flow.txt/0');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect(page.getByText('安全文本', { exact: true })).toBeVisible();

@@ -523,9 +523,7 @@ const load = async () => {
           ? loaded.chapter.segments.at(-1)
           : loaded.chapter.segments[0];
       initialSegmentId.value = targetSegment?.id;
-      await nextTick();
-      await nextTick();
-      scrollToSegment(targetSegment?.id);
+      await scrollToChapterEdge(chapterEdge);
     } else if (requestedSegmentId.value !== undefined) {
       await nextTick();
       scrollToSegment(requestedSegmentId.value);
@@ -632,6 +630,25 @@ const scrollToSegment = (segmentId: string | undefined) => {
   }
   initialSegmentId.value = segmentId;
   void nextTick().then(scroll);
+};
+
+const scrollToChapterEdge = async (edge: 'start' | 'end') => {
+  await nextTick();
+  await nextTick();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  if (resolvedFlow.value === 'paginated') {
+    const viewport = readerViewport.value;
+    if (viewport === null) return;
+    viewport.scrollTo({
+      left: edge === 'start' ? 0 : viewport.scrollWidth,
+      behavior: 'auto',
+    });
+    return;
+  }
+  window.scrollTo({
+    top: edge === 'start' ? 0 : document.documentElement.scrollHeight,
+    behavior: 'auto',
+  });
 };
 
 const handleSegmentContentChange = async (anchorId?: string) => {
