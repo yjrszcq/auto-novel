@@ -479,9 +479,16 @@ const loadSettings = async () => {
 
 const load = async () => {
   await recordReadingTime();
+  const chapterEdge = pendingChapterEdge;
+  const preservesScrolledContent =
+    chapterEdge !== undefined &&
+    resolvedFlow.value === 'scrolled' &&
+    result.value?.kind === 'ready';
   showMobileTranslationNotice.value = false;
-  initialSegmentId.value = undefined;
-  loading.value = true;
+  if (!preservesScrolledContent) {
+    initialSegmentId.value = undefined;
+    loading.value = true;
+  }
   migrationWarning.value = undefined;
   const repository = await repositoryPromise;
   const migration = await repository.ensureNativeEpubMigration(bookId.value);
@@ -494,11 +501,6 @@ const load = async () => {
       : requestedChapterId.value;
   const controller = await controllerPromise;
   const loaded = await controller.load(bookId.value, chapterId);
-  if (loaded.kind !== 'stale') {
-    result.value = loaded;
-  }
-  loading.value = false;
-
   if (
     loaded.kind === 'ready' &&
     requestedChapterId.value !== loaded.chapter.chapterId
@@ -507,6 +509,34 @@ const load = async () => {
       `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(loaded.chapter.chapterId)}`,
     );
   }
+  if (
+    loaded.kind === 'ready' &&
+    chapterEdge !== undefined &&
+    preservesScrolledContent
+  ) {
+    await Promise.all([
+      resolveMode(loaded),
+      loadBookmarks(loaded.book.id),
+      loadAnnotations(loaded.book.id),
+    ]);
+    const targetSegment =
+      chapterEdge === 'end'
+        ? loaded.chapter.segments.at(-1)
+        : loaded.chapter.segments[0];
+    initialSegmentId.value = targetSegment?.id;
+    result.value = loaded;
+    pendingChapterEdge = undefined;
+    loading.value = false;
+    await scrollToChapterEdge(chapterEdge);
+    updateViewportMetrics();
+    startReadingTime(loaded.book.id);
+    return;
+  }
+  if (loaded.kind !== 'stale') {
+    result.value = loaded;
+  }
+  loading.value = false;
+
   if (loaded.kind === 'ready') {
     await Promise.all([
       restoreProgress(loaded),
@@ -515,7 +545,6 @@ const load = async () => {
       loadAnnotations(loaded.book.id),
     ]);
     await restorePendingBookmark(loaded);
-    const chapterEdge = pendingChapterEdge;
     pendingChapterEdge = undefined;
     if (chapterEdge !== undefined) {
       const targetSegment =

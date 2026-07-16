@@ -329,7 +329,9 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await readerContent.dispatchEvent('touchend', {
     changedTouches: [{ identifier: 0, clientX: 180, clientY: 420 }],
   });
+  await expect(page.locator('.book-reader__loading')).toHaveCount(0);
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
   await expect
     .poll(() =>
       readerTop.evaluate((element) =>
@@ -368,7 +370,9 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     window.scrollTo(0, document.documentElement.scrollHeight),
   );
   await readerContent.dispatchEvent('wheel', { deltaY: 120 });
+  await expect(page.locator('.book-reader__loading')).toHaveCount(0);
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '设置', exact: true }).click();
