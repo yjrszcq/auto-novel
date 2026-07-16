@@ -357,29 +357,35 @@ onMounted(() => void load());
             @remove="removeCover"
             @select="selectCover"
           />
-          <n-flex class="book-details__hero-copy" vertical>
-            <n-h2 class="book-details__title" prefix="bar">
-              <b>{{ book.title }}</b>
-            </n-h2>
-            <n-flex :size="[4, 4]" vertical>
-              <n-flex :wrap="false">
-                <n-tag :bordered="false" size="small">章节</n-tag>
-                <n-text>{{ book.chapterCount }} 章</n-text>
+          <div class="book-details__hero-side">
+            <n-flex class="book-details__hero-copy" vertical>
+              <n-h2 class="book-details__title" prefix="bar">
+                <b>{{ book.title }}</b>
+              </n-h2>
+              <n-flex :size="[4, 4]" vertical>
+                <n-flex :wrap="false">
+                  <n-tag :bordered="false" size="small">章节</n-tag>
+                  <n-text>{{ book.chapterCount }} 章</n-text>
+                </n-flex>
               </n-flex>
+              <n-text class="book-details__reading-progress" depth="3">
+                阅读进度 {{ Math.round(readingProgress) }}%
+              </n-text>
             </n-flex>
-          </n-flex>
-          <n-flex
-            class="book-details__hero-shelf-actions"
-            size="small"
-            :wrap="false"
-          >
-            <n-button @click="togglePinned">
-              {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
-            </n-button>
-            <n-button type="warning" @click="toggleListed">
-              {{ entry.state.listed ? '移出书架' : '加入书架' }}
-            </n-button>
-          </n-flex>
+            <n-flex
+              class="book-details__hero-shelf-actions"
+              justify="end"
+              size="small"
+              :wrap="false"
+            >
+              <n-button @click="togglePinned">
+                {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
+              </n-button>
+              <n-button type="warning" @click="toggleListed">
+                {{ entry.state.listed ? '移出书架' : '加入书架' }}
+              </n-button>
+            </n-flex>
+          </div>
         </div>
       </section>
 
@@ -390,11 +396,13 @@ onMounted(() => void load());
               {{ progress === undefined ? '开始阅读' : '继续阅读' }}
             </n-button>
             <n-button @click="showCatalog = true">打开目录</n-button>
-            <n-button @click="returnToShelf">返回书架</n-button>
           </n-flex>
-          <n-text class="book-details__reading-progress" depth="3">
-            阅读进度 {{ Math.round(readingProgress) }}%
-          </n-text>
+          <n-button
+            class="book-details__return-to-shelf"
+            @click="returnToShelf"
+          >
+            返回书架
+          </n-button>
         </div>
 
         <n-p>本地文件：{{ book.id }}</n-p>
@@ -553,13 +561,20 @@ onMounted(() => void load());
 
 .book-details__hero-content > :deep(.book-cover) {
   width: 160px;
+  align-self: flex-start;
   flex: none;
   border-radius: 2px;
   box-shadow: 0 14px 28px rgb(0 0 0 / 24%);
 }
 
-.book-details__hero-copy {
+.book-details__hero-side {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.book-details__hero-copy {
   min-width: 0;
   padding-top: 8px;
 }
@@ -567,7 +582,7 @@ onMounted(() => void load());
 .book-details__hero-shelf-actions {
   align-self: flex-end;
   flex: none;
-  margin-left: auto;
+  margin-top: auto;
 }
 
 .book-details__title {
@@ -590,6 +605,11 @@ onMounted(() => void load());
 .book-details__reading-progress {
   flex: none;
   white-space: nowrap;
+}
+
+.book-details__return-to-shelf {
+  flex: none;
+  margin-left: auto;
 }
 
 .book-details__content :deep(.n-p) {
@@ -666,36 +686,24 @@ onMounted(() => void load());
     min-width: 0;
   }
 
-  .book-details__reading-progress {
-    align-self: center;
-    margin-left: auto;
-  }
-
   .book-details__hero-content {
-    display: grid;
-    grid-template-columns: minmax(0, min(160px, 40vw)) minmax(0, 1fr);
-    align-items: start;
     gap: 14px;
   }
 
   .book-details__hero-content > :deep(.book-cover) {
-    grid-row: 1 / span 2;
-    width: 100%;
+    width: min(160px, 40vw);
   }
 
+  .book-details__hero-side,
   .book-details__hero-copy {
-    grid-column: 2;
-    grid-row: 1;
     min-width: 0;
     padding-top: 0;
   }
 
   .book-details__hero-shelf-actions {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: start;
+    align-self: stretch;
     flex-wrap: wrap !important;
-    margin-left: 0;
+    justify-content: flex-end;
   }
 
   .book-details__setting-row {

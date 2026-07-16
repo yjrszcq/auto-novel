@@ -266,10 +266,13 @@ test('uses a configured default cover for a local book without one', async ({
       if (element === null) {
         throw new Error(`缺少移动端布局元素：${selector}`);
       }
-      const { height, left, top } = element.getBoundingClientRect();
+      const { bottom, height, left, right, top } =
+        element.getBoundingClientRect();
       return {
+        bottom: Math.round(bottom),
         height: Math.round(height),
         left: Math.round(left),
+        right: Math.round(right),
         top: Math.round(top),
       };
     };
@@ -277,20 +280,64 @@ test('uses a configured default cover for a local book without one', async ({
       cover: bounds('.book-details__hero-content > .book-cover'),
       copy: bounds('.book-details__hero-copy'),
       shelfActions: bounds('.book-details__hero-shelf-actions'),
+      shelfActionsLastButton: bounds(
+        '.book-details__hero-shelf-actions button:last-child',
+      ),
       primaryActions: bounds('.book-details__primary-actions'),
       readingProgress: bounds('.book-details__reading-progress'),
+      returnToShelf: bounds('.book-details__return-to-shelf'),
     };
   });
   expect(mobileLayout.copy.left).toBeGreaterThan(mobileLayout.cover.left);
   expect(mobileLayout.shelfActions.left).toBeGreaterThan(
     mobileLayout.cover.left,
   );
-  expect(
-    mobileLayout.readingProgress.top + mobileLayout.readingProgress.height / 2,
-  ).toBeCloseTo(
-    mobileLayout.primaryActions.top + mobileLayout.primaryActions.height / 2,
-    0,
+  expect(mobileLayout.readingProgress.left).toBeGreaterThan(
+    mobileLayout.cover.left,
   );
+  expect(mobileLayout.readingProgress.top).toBeGreaterThan(
+    mobileLayout.copy.top,
+  );
+  expect(
+    Math.abs(mobileLayout.shelfActions.bottom - mobileLayout.cover.bottom),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(
+      mobileLayout.returnToShelf.right - mobileLayout.primaryActions.right,
+    ),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(
+      mobileLayout.shelfActionsLastButton.right -
+        mobileLayout.returnToShelf.right,
+    ),
+  ).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width: 1280, height: 844 });
+  const desktopLayout = await page.evaluate(() => {
+    const bounds = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (element === null) {
+        throw new Error(`缺少桌面端详情元素：${selector}`);
+      }
+      const { bottom, right } = element.getBoundingClientRect();
+      return { bottom: Math.round(bottom), right: Math.round(right) };
+    };
+    return {
+      cover: bounds('.book-details__hero-content > .book-cover'),
+      primaryActions: bounds('.book-details__primary-actions'),
+      returnToShelf: bounds('.book-details__return-to-shelf'),
+      shelfActions: bounds('.book-details__hero-shelf-actions'),
+    };
+  });
+  expect(
+    Math.abs(desktopLayout.shelfActions.bottom - desktopLayout.cover.bottom),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(
+      desktopLayout.returnToShelf.right - desktopLayout.primaryActions.right,
+    ),
+  ).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/bookshelf');
   await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
   await expect(
