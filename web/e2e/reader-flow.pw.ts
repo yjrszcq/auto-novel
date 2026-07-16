@@ -62,17 +62,30 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   ).toBeVisible();
   await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
-  await expect(page.getByText('0 / 2', { exact: true })).toBeVisible();
-  await expect(page.locator('.book-details__progress .n-progress')).toHaveCount(
-    2,
+  await expect(
+    page.getByText('总计 2 / GPT 0 / Sakura 0', { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.book-details__reading-progress')).toHaveText(
+    '阅读进度 0%',
   );
+  await expect(page.getByText('翻译进度', { exact: true })).toHaveCount(0);
 
   await expect(page.getByText('本地全文检索', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '下载原文' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '下载译文' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '下载原文', exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: '下载译文', exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: '下载', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '打开目录', exact: true }),
+  ).toHaveCount(1);
   await expect(page.getByRole('button', { name: '排队GPT' })).toBeVisible();
   await expect(page.getByRole('button', { name: '排队Sakura' })).toBeVisible();
-  await page.getByRole('button', { name: '打开目录' }).first().click();
+  await page.getByRole('button', { name: '打开目录', exact: true }).click();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /第 2 章/ }).click();
   await expect

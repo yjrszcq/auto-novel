@@ -10,10 +10,7 @@ import { useKeyModifier } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
 import BookCover from './components/BookCover.vue';
-import {
-  getReadingProgress,
-  getTranslationProgress,
-} from './BookshelfPresentation';
+import { getReadingProgress } from './BookshelfPresentation';
 import {
   createBookshelfService,
   type BookshelfEntry,
@@ -60,14 +57,6 @@ const readingProgress = computed(() =>
   entry.value === undefined
     ? 0
     : getReadingProgress({ ...entry.value, progress: progress.value }),
-);
-const translationProgress = computed(() =>
-  entry.value === undefined ? 0 : getTranslationProgress(entry.value.volume),
-);
-const completedChapters = computed(
-  () =>
-    chapters.value.filter((chapter) => chapter.translationStatus === 'complete')
-      .length,
 );
 const translatorCompleted = (type: LocalTranslator) =>
   entry.value?.volume.toc.filter(
@@ -246,14 +235,6 @@ const downloadTranslated = async () => {
   }
 };
 
-const downloadBook = async () => {
-  if (completedChapters.value > 0) {
-    await downloadTranslated();
-    return;
-  }
-  await downloadOriginal();
-};
-
 const queueBook = (type: LocalTranslator) => {
   const results = localVolumeManager.queueJobToWorkspace(bookId.value, {
     level: 'all',
@@ -393,13 +374,18 @@ onMounted(() => void load());
       </section>
 
       <div class="layout-content book-details__content">
-        <n-flex class="book-details__primary-actions" size="small">
-          <n-button type="primary" @click="startReading">
-            {{ progress === undefined ? '开始阅读' : '继续阅读' }}
-          </n-button>
-          <n-button @click="showCatalog = true">打开目录</n-button>
-          <n-button @click="returnToShelf">返回书架</n-button>
-        </n-flex>
+        <div class="book-details__primary-actions">
+          <n-flex size="small" wrap>
+            <n-button type="primary" @click="startReading">
+              {{ progress === undefined ? '开始阅读' : '继续阅读' }}
+            </n-button>
+            <n-button @click="showCatalog = true">打开目录</n-button>
+            <n-button @click="returnToShelf">返回书架</n-button>
+          </n-flex>
+          <n-text class="book-details__reading-progress" depth="3">
+            阅读进度 {{ Math.round(readingProgress) }}%
+          </n-text>
+        </div>
 
         <n-p>本地文件：{{ book.id }}</n-p>
         <n-p>
@@ -408,31 +394,6 @@ onMounted(() => void load());
           {{ formatReadingDuration(readingStats?.totalReadingMs ?? 0) }} · 书签
           {{ bookmarkCount }}
         </n-p>
-
-        <div class="book-details__progress">
-          <div class="book-details__progress-item">
-            <div class="book-details__progress-label">
-              <span>阅读进度</span>
-              <strong>{{ Math.round(readingProgress) }}%</strong>
-            </div>
-            <n-progress
-              :percentage="Math.round(readingProgress)"
-              :show-indicator="false"
-              status="success"
-            />
-          </div>
-          <div class="book-details__progress-item">
-            <div class="book-details__progress-label">
-              <span>翻译进度</span>
-              <strong>{{ completedChapters }} / {{ chapters.length }}</strong>
-            </div>
-            <n-progress
-              :percentage="Math.round(translationProgress)"
-              :show-indicator="false"
-              type="info"
-            />
-          </div>
-        </div>
 
         <section-header title="阅读偏好" />
         <n-flex class="book-details__settings" vertical>
@@ -475,9 +436,7 @@ onMounted(() => void load());
           </n-button>
         </n-flex>
 
-        <section-header title="目录">
-          <n-button size="small" @click="showCatalog = true">打开目录</n-button>
-        </section-header>
+        <section-header title="目录" />
         <n-list class="book-details__volume-list">
           <n-list-item>
             <n-flex align="center" justify="space-between" :wrap="false">
@@ -496,18 +455,13 @@ onMounted(() => void load());
                   </n-button>
                 </n-flex>
               </n-flex>
-              <n-button @click="downloadBook">下载</n-button>
+              <n-flex size="small" :wrap="false">
+                <n-button @click="downloadTranslated">下载译文</n-button>
+                <n-button @click="downloadOriginal">下载原文</n-button>
+              </n-flex>
             </n-flex>
           </n-list-item>
         </n-list>
-        <n-flex class="book-details__download-actions" size="small">
-          <n-button size="small" tertiary @click="downloadTranslated">
-            下载译文
-          </n-button>
-          <n-button size="small" tertiary @click="downloadOriginal">
-            下载原文
-          </n-button>
-        </n-flex>
         <p class="book-details__queue-hint">
           按住 Ctrl 点击排队，可将任务自动置顶。
         </p>
@@ -622,32 +576,22 @@ onMounted(() => void load());
 }
 
 .book-details__primary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
+}
+
+.book-details__reading-progress {
+  flex: none;
+  white-space: nowrap;
 }
 
 .book-details__content :deep(.n-p) {
   margin: 12px 0;
 }
 
-.book-details__progress {
-  display: grid;
-  gap: 14px;
-  margin: 20px 0 8px;
-}
-
-.book-details__progress-item {
-  display: grid;
-  gap: 6px;
-}
-
-.book-details__progress-label {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.book-details__progress-label span,
 .book-details__queue-hint,
 .book-details__catalog-summary {
   color: var(--n-text-color-3);
@@ -669,10 +613,6 @@ onMounted(() => void load());
 
 .book-details__volume-list {
   margin-top: 12px;
-}
-
-.book-details__download-actions {
-  margin-top: 8px;
 }
 
 .book-details__queue-hint,
@@ -706,6 +646,15 @@ onMounted(() => void load());
 }
 
 @media only screen and (max-width: 600px) {
+  .book-details__primary-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .book-details__reading-progress {
+    align-self: flex-end;
+  }
+
   .book-details__hero-content {
     align-items: stretch;
     flex-direction: column;
