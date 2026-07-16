@@ -38,6 +38,32 @@ type EpubItemDoc = EpubItemBase & { doc: Document };
 type EpubItemBlob = EpubItemBase & { blob: Blob };
 type EpubItem = EpubItemDoc | EpubItemBlob;
 
+export interface EpubCoverManifestItem {
+  id: string;
+  href: string;
+  mediaType: string;
+  properties?: string[] | null;
+}
+
+const isImage = (item: EpubCoverManifestItem) =>
+  MIME.IMAGE.includes(item.mediaType);
+
+export const resolveEpubCoverId = (
+  items: Iterable<EpubCoverManifestItem>,
+  legacyCoverId?: string,
+) => {
+  const images = [...items].filter(isImage);
+  return (
+    images.find((item) => item.properties?.includes('cover-image'))?.id ??
+    images.find((item) => item.id === legacyCoverId)?.id ??
+    images.find((item) =>
+      /(^|[._/-])cover([._/-]|$)|front[-_]?cover|titlepage/i.test(
+        item.id + '/' + item.href,
+      ),
+    )?.id
+  );
+};
+
 interface EpubItemref {
   idref: string;
   linear: string | null;
@@ -59,6 +85,7 @@ export class Epub extends BaseFile {
   items = new Map<string, EpubItem>();
   itemrefs: EpubItemref[] = [];
   navItems: EpubNavItem[] = [];
+  private legacyCoverId: string | undefined;
 
   private resolve(root: string, rpath: string) {
     const rootUrl = new URL(root, 'file://book');
@@ -96,6 +123,10 @@ export class Epub extends BaseFile {
     if (!spine) throw new Error('Package does not have spine');
 
     this.packageDoc = doc;
+    this.legacyCoverId =
+      Array.from(metadata.getElementsByTagName('meta'))
+        .find((meta) => meta.getAttribute('name')?.toLowerCase() === 'cover')
+        ?.getAttribute('content') ?? undefined;
     this.parseManifest(manifest);
     this.parseSpine(spine);
   }
@@ -260,6 +291,46 @@ export class Epub extends BaseFile {
     await epub.parseFile(file);
     StandardNovel.fromEpub(epub);
     return epub;
+  }
+
+  static async extractCoverFromFile(file: File) {
+    const { BlobReader, BlobWriter, TextWriter, ZipReader } = await import(
+      '@zip.js/zip.js'
+    );
+    const reader = new ZipReader(new BlobReader(file));
+    try {
+      const entries = new Map(
+        (await reader.getEntries()).map((entry) => [entry.filename, entry]),
+      );
+      const readDoc = async (path: string) => {
+        const entry = entries.get(path);
+        if (!entry) throw new Error(`Entry not found: ${path}`);
+        const text = await entry.getData!(new TextWriter());
+        return new DOMParser().parseFromString(text, 'application/xhtml+xml');
+      };
+      const epub = new Epub(file.name, file);
+      epub.parseContainer(await readDoc(CONTAINER_PATH));
+      epub.parsePackage(await readDoc(epub.packagePath));
+      const cover = epub.getCoverItem();
+      if (cover === undefined) return;
+      const entry = entries.get(epub.resolve(epub.packagePath, cover.href));
+      if (!entry) return;
+      const data = await entry.getData!(new BlobWriter());
+      return new Blob([data], { type: cover.mediaType });
+    } finally {
+      await reader.close();
+    }
+  }
+
+  private getCoverItem() {
+    const coverId = resolveEpubCoverId(this.items.values(), this.legacyCoverId);
+    const item = coverId === undefined ? undefined : this.items.get(coverId);
+    return item && MIME.IMAGE.includes(item.mediaType) ? item : undefined;
+  }
+
+  getCover() {
+    const cover = this.getCoverItem();
+    return cover && 'blob' in cover ? cover.blob : undefined;
   }
 
   async clone() {

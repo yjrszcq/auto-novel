@@ -84,6 +84,7 @@ export interface ReaderAnnotation {
 export interface ReaderCover {
   bookId: string;
   blob: Blob;
+  source?: 'custom' | 'embedded';
   updatedAt: number;
 }
 

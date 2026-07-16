@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { Epub } from '@/util/file';
 import { useLocalVolumeStore } from '@/stores';
 
 const props = defineProps<{
@@ -18,6 +19,13 @@ const clearCoverUrl = () => {
   if (coverUrl.value !== undefined) {
     URL.revokeObjectURL(coverUrl.value);
     coverUrl.value = undefined;
+  }
+};
+
+const setCoverUrl = (blob: Blob | undefined) => {
+  clearCoverUrl();
+  if (blob !== undefined) {
+    coverUrl.value = URL.createObjectURL(blob);
   }
 };
 
@@ -43,14 +51,45 @@ const observeCover = () => {
 
 const loadCover = async () => {
   const bookId = props.bookId;
-  const repository = await repositoryPromise;
-  const cover = await repository.getReaderCover(bookId);
-  if (bookId !== props.bookId) {
-    return;
-  }
-  clearCoverUrl();
-  if (cover !== undefined) {
-    coverUrl.value = URL.createObjectURL(cover.blob);
+  try {
+    const repository = await repositoryPromise;
+    let cover = await repository.getReaderCover(bookId);
+    if (bookId !== props.bookId) {
+      return;
+    }
+    if (cover === undefined) {
+      setCoverUrl(undefined);
+      if (!bookId.toLowerCase().endsWith('.epub')) {
+        return;
+      }
+      const sourceFile = await repository.getFile(bookId);
+      const blob =
+        sourceFile === undefined
+          ? undefined
+          : await Epub.extractCoverFromFile(sourceFile.file);
+      if (bookId !== props.bookId || blob === undefined) {
+        return;
+      }
+      const latestCover = await repository.getReaderCover(bookId);
+      if (latestCover !== undefined) {
+        cover = latestCover;
+      } else {
+        cover = {
+          bookId,
+          blob,
+          source: 'embedded',
+          updatedAt: Date.now(),
+        };
+        await repository.putReaderCover(cover);
+      }
+    }
+    if (bookId === props.bookId) {
+      setCoverUrl(cover.blob);
+    }
+  } catch {
+    if (bookId === props.bookId) {
+      setCoverUrl(undefined);
+    }
   }
 };
 

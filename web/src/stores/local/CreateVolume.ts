@@ -18,6 +18,7 @@ export const createVolume = async (
   const chapters: { chapterId: string; paragraphs: string[] }[] = [];
 
   const myFile = await parseFile(file);
+  const embeddedCover = myFile.type === 'epub' ? myFile.getCover() : undefined;
 
   if (myFile.type === 'txt') {
     const lines = myFile.text.split('\n');
@@ -57,4 +58,12 @@ export const createVolume = async (
     favoredId,
   });
   await dao.createFile(id, file);
+  if (embeddedCover !== undefined) {
+    await dao.putReaderCover({
+      bookId: id,
+      blob: embeddedCover,
+      source: 'embedded',
+      updatedAt: Date.now(),
+    });
+  }
 };

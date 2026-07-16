@@ -243,14 +243,19 @@ const updateCover = async (event: Event) => {
   await repository.putReaderCover({
     bookId: bookId.value,
     blob: file,
+    source: 'custom',
     updatedAt: Date.now(),
   });
   coverVersion.value += 1;
   message.success('封面已保存到当前浏览器');
 };
-
 const removeCover = async () => {
   const repository = await repositoryPromise;
+  const cover = await repository.getReaderCover(bookId.value);
+  if (cover?.source === 'embedded') {
+    message.info('当前使用 EPUB 内嵌封面');
+    return;
+  }
   await repository.deleteReaderCover(bookId.value);
   coverVersion.value += 1;
   message.success('已移除自定义封面');
