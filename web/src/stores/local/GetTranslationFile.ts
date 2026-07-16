@@ -1,6 +1,7 @@
 import { parseFile } from '@/util/file';
 
-import { EpubParserV1 } from './EpubParser';
+import { EpubParserV1, injectEpubParagraphTranslations } from './EpubParser';
+import { collectEpubSourceTranslations } from './EpubTranslationExport';
 import type { LocalVolumeDao } from './LocalVolumeDao';
 
 export const getTranslationFile = async (
@@ -36,7 +37,7 @@ export const getTranslationFile = async (
 
     for (const id of translations) {
       const zhLine = chapter[id]?.paragraphs;
-      if (zhLine !== undefined) zhLinesList.push(zhLine);
+      if (zhLine !== undefined) zhLinesList.push([...zhLine]);
     }
 
     if (translationsMode === 'priority' && zhLinesList.length > 1) {
@@ -78,11 +79,38 @@ export const getTranslationFile = async (
       .item(0)
       ?.removeAttribute('page-progression-direction');
 
-    for await (const item of myFile.iterDoc()) {
-      if (metadata.toc.some((it) => it.chapterId === item.href)) {
+    const nativeChapters = [];
+    const legacyChapterIds = new Set<string>();
+    for (const tocItem of metadata.toc) {
+      const chapter = await dao.getChapter(id, tocItem.chapterId);
+      if (chapter === undefined) throw Error('章节不存在');
+      if (chapter.sourceRanges?.length) {
+        const { zhLinesList } = await getZhLinesList(tocItem.chapterId);
+        if (zhLinesList.length > 0) {
+          nativeChapters.push({
+            sourceRanges: chapter.sourceRanges,
+            translations: zhLinesList,
+          });
+        }
+      } else {
+        legacyChapterIds.add(tocItem.chapterId);
+      }
+    }
+    const sourceTranslations = collectEpubSourceTranslations(nativeChapters);
+    for (const item of myFile.iterDocInSpine()) {
+      const translations = sourceTranslations.get(
+        myFile.getCanonicalHref(item.href),
+      );
+      if (translations?.some((paragraph) => paragraph.length > 0)) {
+        injectEpubParagraphTranslations(item.doc, mode, translations);
+      }
+    }
+
+    for (const item of myFile.iterDoc()) {
+      if (legacyChapterIds.has(item.href)) {
         const { zhLinesList } = await getZhLinesList(item.href);
         if (zhLinesList.length > 0) {
-          await EpubParserV1.injectTranslation(item.doc, mode, zhLinesList);
+          EpubParserV1.injectTranslation(item.doc, mode, zhLinesList);
         }
       }
     }

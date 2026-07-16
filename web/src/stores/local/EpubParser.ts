@@ -7,6 +7,32 @@ interface EpubParser {
   ) => Document;
 }
 
+export const injectEpubParagraphTranslations = (
+  doc: Document,
+  mode: 'zh' | 'jp-zh' | 'zh-jp',
+  translationsByParagraph: readonly (readonly string[])[],
+) => {
+  getEpubTextParagraphElements(doc).forEach((element, index) => {
+    const translations = translationsByParagraph[index] ?? [];
+    if (translations.length === 0) return;
+    const translatedElements = translations.map((line) => {
+      const paragraph = doc.createElement('p');
+      paragraph.appendChild(doc.createTextNode(line));
+      return paragraph;
+    });
+    if (mode === 'zh') {
+      element.replaceWith(...translatedElements);
+    } else if (mode === 'jp-zh') {
+      element.after(...translatedElements);
+      element.setAttribute('style', 'opacity:0.4;');
+    } else {
+      element.before(...translatedElements);
+      element.setAttribute('style', 'opacity:0.4;');
+    }
+  });
+  return doc;
+};
+
 export const getEpubTextParagraphElements = (doc: Document) => {
   Array.from(doc.getElementsByTagName('rt')).forEach((node) =>
     node.parentNode!.removeChild(node),
@@ -30,36 +56,15 @@ export const EpubParserV1: EpubParser = {
     mode: 'zh' | 'jp-zh' | 'zh-jp',
     zhLinesList: string[][],
   ) => {
-    Array.from(doc.body.getElementsByTagName('p'))
-      .filter((el) => el.innerText.trim().length !== 0)
-      .forEach((el, index) => {
-        if (mode === 'zh') {
-          zhLinesList.forEach((lines) => {
-            const p = document.createElement('p');
-            const t = document.createTextNode(lines[index]);
-            p.appendChild(t);
-            el.parentNode!.insertBefore(p, el);
-          });
-          el.parentNode!.removeChild(el);
-        } else if (mode === 'jp-zh') {
-          zhLinesList.forEach((lines) => {
-            const p = document.createElement('p');
-            const t = document.createTextNode(lines[index]);
-            p.appendChild(t);
-            el.parentNode!.insertBefore(p, el.nextSibling);
-          });
-          el.setAttribute('style', 'opacity:0.4;');
-        } else {
-          zhLinesList.forEach((lines) => {
-            const p = document.createElement('p');
-            const t = document.createTextNode(lines[index]);
-            p.appendChild(t);
-            el.parentNode!.insertBefore(p, el);
-          });
-          el.setAttribute('style', 'opacity:0.4;');
-        }
-      });
-
-    return doc;
+    const paragraphCount = getEpubTextParagraphElements(doc).length;
+    return injectEpubParagraphTranslations(
+      doc,
+      mode,
+      Array.from({ length: paragraphCount }, (_, index) =>
+        zhLinesList.flatMap((lines) =>
+          lines[index] === undefined ? [] : [lines[index]],
+        ),
+      ),
+    );
   },
 };
