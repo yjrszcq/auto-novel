@@ -413,7 +413,10 @@ onMounted(() => void load());
           {{ bookmarkCount }}
         </n-p>
 
-        <section-header title="阅读偏好" />
+        <section-header
+          class="book-details__preferences-header"
+          title="阅读偏好"
+        />
         <n-flex class="book-details__settings" vertical>
           <div class="book-details__setting-row">
             <n-text depth="3">打开方式</n-text>
@@ -441,6 +444,10 @@ onMounted(() => void load());
           hidden
           type="file"
           @change="updateCover"
+        />
+        <section-header
+          class="book-details__translation-header"
+          title="翻译与下载"
         />
         <n-list class="book-details__volume-list">
           <n-list-item>
@@ -642,7 +649,25 @@ onMounted(() => void load());
 }
 
 .book-details__volume-list {
-  margin-top: 12px;
+  margin-top: 0;
+}
+
+.book-details__translation-header :deep(.n-h2) {
+  margin: 0 0 4px;
+}
+
+.book-details__preferences-header :deep(.n-h2) {
+  margin-bottom: 8px;
+}
+
+@media only screen and (min-width: 601px) {
+  .book-details__preferences-header :deep(.n-h2) {
+    margin-bottom: 12px;
+  }
+}
+
+.book-details__translation-header {
+  padding-top: 12px;
 }
 
 .book-details__queue-hint,

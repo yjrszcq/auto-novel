@@ -286,6 +286,10 @@ test('uses a configured default cover for a local book without one', async ({
       primaryActions: bounds('.book-details__primary-actions'),
       readingProgress: bounds('.book-details__reading-progress'),
       returnToShelf: bounds('.book-details__return-to-shelf'),
+      lastPreferenceSelect: bounds(
+        '.book-details__setting-row:last-child .n-select',
+      ),
+      translationHeader: bounds('.book-details__translation-header .n-h2'),
     };
   });
   expect(mobileLayout.copy.left).toBeGreaterThan(mobileLayout.cover.left);
@@ -298,6 +302,10 @@ test('uses a configured default cover for a local book without one', async ({
   expect(mobileLayout.readingProgress.top).toBeGreaterThan(
     mobileLayout.copy.top,
   );
+  expect(
+    mobileLayout.translationHeader.top -
+      mobileLayout.lastPreferenceSelect.bottom,
+  ).toBeCloseTo(32, 0);
   expect(
     Math.abs(mobileLayout.shelfActions.bottom - mobileLayout.cover.bottom),
   ).toBeLessThanOrEqual(1);
