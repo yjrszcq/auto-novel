@@ -260,6 +260,98 @@ test('uses a configured default cover for a local book without one', async ({
   await expect(preferenceSelects).toHaveCount(2);
   await expect(preferenceSelects.nth(0)).toBeVisible();
   await expect(preferenceSelects.nth(1)).toBeVisible();
+  const mobileLayout = await page.evaluate(() => {
+    const bounds = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (element === null) {
+        throw new Error(`缺少移动端布局元素：${selector}`);
+      }
+      const { height, left, top } = element.getBoundingClientRect();
+      return {
+        height: Math.round(height),
+        left: Math.round(left),
+        top: Math.round(top),
+      };
+    };
+    return {
+      cover: bounds('.book-details__hero-content > .book-cover'),
+      copy: bounds('.book-details__hero-copy'),
+      shelfActions: bounds('.book-details__hero-shelf-actions'),
+      primaryActions: bounds('.book-details__primary-actions'),
+      readingProgress: bounds('.book-details__reading-progress'),
+    };
+  });
+  expect(mobileLayout.copy.left).toBeGreaterThan(mobileLayout.cover.left);
+  expect(mobileLayout.shelfActions.left).toBeGreaterThan(
+    mobileLayout.cover.left,
+  );
+  expect(
+    mobileLayout.readingProgress.top + mobileLayout.readingProgress.height / 2,
+  ).toBeCloseTo(
+    mobileLayout.primaryActions.top + mobileLayout.primaryActions.height / 2,
+    0,
+  );
+  await page.goto('/bookshelf');
+  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '前往工作区', exact: true }),
+  ).toHaveCount(0);
+  const bookshelfLayout = await page.evaluate(() => {
+    const bounds = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (element === null) {
+        throw new Error(`缺少移动端书架元素：${selector}`);
+      }
+      const { height, left, right, top } = element.getBoundingClientRect();
+      return {
+        height: Math.round(height),
+        left: Math.round(left),
+        right: Math.round(right),
+        top: Math.round(top),
+      };
+    };
+    return {
+      add: bounds('.bookshelf-page__header-actions'),
+      description: bounds('.bookshelf-page p'),
+      filter: bounds('.bookshelf-toolbar__filter'),
+      header: bounds('.bookshelf-page__header'),
+      search: bounds('.bookshelf-toolbar__search'),
+      sort: bounds('.bookshelf-toolbar__sort'),
+      title: bounds('.bookshelf-page h1'),
+    };
+  });
+  expect(bookshelfLayout.add.left).toBeGreaterThan(bookshelfLayout.title.left);
+  expect(bookshelfLayout.add.top).toBeLessThan(bookshelfLayout.search.top);
+  expect(
+    Math.abs(
+      bookshelfLayout.add.top +
+        bookshelfLayout.add.height / 2 -
+        (bookshelfLayout.title.top + bookshelfLayout.title.height / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
+  expect(bookshelfLayout.description.left).toBe(bookshelfLayout.header.left);
+  expect(bookshelfLayout.description.right).toBe(bookshelfLayout.header.right);
+  expect(bookshelfLayout.search.top).toBeLessThan(bookshelfLayout.filter.top);
+  expect(bookshelfLayout.filter.left).toBe(bookshelfLayout.search.left);
+  expect(bookshelfLayout.sort.left).toBeGreaterThan(
+    bookshelfLayout.filter.left,
+  );
+  const bookshelfCardLayout = await page.evaluate(() => {
+    const grid = document.querySelector<HTMLElement>('.book-grid');
+    const title = document.querySelector<HTMLElement>('.book-card h2');
+    if (grid === null || title === null) {
+      throw new Error('缺少移动端书架卡片');
+    }
+    return {
+      columnCount: getComputedStyle(grid)
+        .gridTemplateColumns.trim()
+        .split(/\s+/).length,
+      titleLineClamp:
+        getComputedStyle(title).getPropertyValue('-webkit-line-clamp'),
+    };
+  });
+  expect(bookshelfCardLayout.columnCount).toBe(3);
+  expect(bookshelfCardLayout.titleLineClamp).toBe('2');
 });
 test('persists the global reading version selected in Settings', async ({
   page,

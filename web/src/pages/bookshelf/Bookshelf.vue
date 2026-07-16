@@ -66,10 +66,6 @@ const reload = async () => {
   }
 };
 
-const openWorkspace = () => {
-  void router.push('/workspace/toolbox');
-};
-
 const addLocalBook = async (bookId: string) => {
   const repository = await useLocalVolumeStore();
   await createBookshelfService(repository).setListed(bookId, true);
@@ -92,14 +88,11 @@ onMounted(reload);
 <template>
   <main class="layout-content bookshelf-page">
     <header class="bookshelf-page__header">
-      <div>
-        <h1>书架</h1>
-        <p>书籍和阅读数据仅保存在当前浏览器。</p>
-      </div>
+      <h1>书架</h1>
       <div class="bookshelf-page__header-actions">
         <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
-        <n-button @click="openWorkspace">前往工作区</n-button>
       </div>
+      <p>书籍和阅读数据仅保存在当前浏览器。</p>
     </header>
 
     <n-skeleton v-if="loading" text :repeat="8" />
@@ -110,16 +103,28 @@ onMounted(reload);
 
     <template v-else>
       <div class="bookshelf-toolbar">
-        <n-input v-model:value="query" clearable placeholder="搜索书名" />
-        <n-select v-model:value="filter" :options="filterOptions" />
-        <n-select v-model:value="sort" :options="sortOptions" />
+        <n-input
+          v-model:value="query"
+          class="bookshelf-toolbar__search"
+          clearable
+          placeholder="搜索书名"
+        />
+        <n-select
+          v-model:value="filter"
+          class="bookshelf-toolbar__filter"
+          :options="filterOptions"
+        />
+        <n-select
+          v-model:value="sort"
+          class="bookshelf-toolbar__sort"
+          :options="sortOptions"
+        />
       </div>
 
       <n-empty v-if="books.length === 0" description="书架中还没有书籍">
         <template #extra>
           <n-space>
             <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
-            <n-button @click="openWorkspace">前往工作区</n-button>
           </n-space>
         </template>
       </n-empty>
@@ -172,13 +177,10 @@ onMounted(reload);
 }
 
 .bookshelf-page__header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.bookshelf-page__header {
+  gap: 8px 16px;
   margin-bottom: 24px;
 }
 
@@ -194,7 +196,7 @@ onMounted(reload);
 }
 
 .bookshelf-page p {
-  margin-top: 8px;
+  grid-column: 1 / -1;
   color: var(--n-text-color-3);
 }
 
@@ -210,7 +212,7 @@ onMounted(reload);
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -233,13 +235,27 @@ onMounted(reload);
 }
 
 @media only screen and (max-width: 600px) {
-  .bookshelf-page__header {
-    align-items: stretch;
-    flex-direction: column;
+  .bookshelf-page__header-actions {
+    margin-left: auto;
   }
 
   .bookshelf-toolbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bookshelf-toolbar__search {
+    grid-row: 1;
+    grid-column: 1 / -1;
+  }
+
+  .bookshelf-toolbar__filter {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .bookshelf-toolbar__sort {
+    grid-row: 2;
+    grid-column: 2;
   }
 }
 </style>

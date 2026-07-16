@@ -657,30 +657,44 @@ onMounted(() => void load());
 
 @media only screen and (max-width: 600px) {
   .book-details__primary-actions {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .book-details__primary-actions > :deep(.n-flex) {
+    flex: 1;
+    min-width: 0;
   }
 
   .book-details__reading-progress {
-    align-self: flex-end;
+    align-self: center;
+    margin-left: auto;
   }
 
   .book-details__hero-content {
-    align-items: stretch;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, min(160px, 40vw)) minmax(0, 1fr);
+    align-items: start;
     gap: 14px;
   }
 
   .book-details__hero-content > :deep(.book-cover) {
-    width: min(160px, 52vw);
+    grid-row: 1 / span 2;
+    width: 100%;
   }
 
   .book-details__hero-copy {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
     padding-top: 0;
   }
 
   .book-details__hero-shelf-actions {
-    align-self: flex-start;
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    flex-wrap: wrap !important;
     margin-left: 0;
   }
 

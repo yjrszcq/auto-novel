@@ -56,7 +56,10 @@ const emit = defineEmits<{
   margin: 0;
   font-size: 15px;
   line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-clamp: 2;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 </style>
