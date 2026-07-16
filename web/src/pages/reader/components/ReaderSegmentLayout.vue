@@ -91,6 +91,13 @@ const observeMoreSegments = () => {
   loadMoreObserver.observe(afterSentinel.value);
 };
 
+defineExpose({
+  hasPreviousSegments: () => hasPreviousSegments.value,
+  hasMoreSegments: () => hasMoreSegments.value,
+  loadPreviousSegments,
+  loadMoreSegments,
+});
+
 watch(
   () => [props.segments, props.initialSegmentId],
   () => {

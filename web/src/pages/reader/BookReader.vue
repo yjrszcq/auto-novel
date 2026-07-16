@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import {
+  ArrowBackOutlined,
   AutoAwesomeOutlined,
   BuildOutlined,
   DarkModeOutlined,
-  InfoOutlined,
   MenuBookOutlined,
   MoreVertOutlined,
   SettingsOutlined,
@@ -39,6 +39,7 @@ import {
 import {
   getReaderPageDelta,
   getReaderPageMetrics,
+  resolveReaderPageTurn,
   resolveReaderFlow,
 } from './core/ReaderFlow';
 import { createReaderAnnotation } from './core/ReaderAnnotations';
@@ -85,6 +86,7 @@ const showAnnotations = ref(false);
 const controlsVisible = ref(true);
 const readerRoot = ref<HTMLElement>();
 const readerViewport = ref<HTMLElement>();
+const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
 const viewportProgressRatio = ref(0);
@@ -107,6 +109,7 @@ const localVolumeManager = useLocalVolumeManager();
 const gptWorkspace = useGptWorkspaceStore();
 const sakuraWorkspace = useSakuraWorkspaceStore();
 let settingsLoaded = false;
+let pendingChapterEdge: 'start' | 'end' | undefined;
 
 const repositoryPromise = useLocalVolumeStore();
 const cachedAdapterPromise = repositoryPromise.then((repository) =>
@@ -130,6 +133,16 @@ const currentChapterSummary = computed(() =>
         (chapter) => chapter.id === result.value!.chapter.chapterId,
       )
     : undefined,
+);
+const hasIncompleteChapter = computed(
+  () =>
+    currentChapterSummary.value !== undefined &&
+    currentChapterSummary.value.translationStatus !== 'complete',
+);
+const currentTranslationStatusLabel = computed(() =>
+  currentChapterSummary.value === undefined
+    ? ''
+    : getTranslationStatusLabel(currentChapterSummary.value.translationStatus),
 );
 
 const queueChapterTranslation = (type: 'gpt' | 'sakura') => {
@@ -219,16 +232,54 @@ const updateViewportMetrics = () => {
     scrollable <= 0 ? 0 : Math.max(0, Math.min(1, window.scrollY / scrollable));
 };
 
-const scrollReaderPage = (delta: number) => {
+const scrollReaderPage = async (delta: number) => {
   const viewport = readerViewport.value;
   if (resolvedFlow.value !== 'paginated' || viewport === undefined) return;
   const metrics = getReaderPageMetrics(viewport);
-  const pageIndex = Math.max(
-    0,
-    Math.min(metrics.pageCount - 1, metrics.pageIndex + delta),
-  );
+  const turn = resolveReaderPageTurn({
+    pageIndex: metrics.pageIndex,
+    pageCount: metrics.pageCount,
+    delta,
+    hasPreviousSegments: readerSegments.value?.hasPreviousSegments() ?? false,
+    hasMoreSegments: readerSegments.value?.hasMoreSegments() ?? false,
+    hasPreviousChapter: previousChapterId.value !== undefined,
+    hasNextChapter: nextChapterId.value !== undefined,
+  });
+  if (turn.kind === 'chapter') {
+    const chapterId =
+      turn.direction === 'previous'
+        ? previousChapterId.value
+        : nextChapterId.value;
+    if (chapterId !== undefined) {
+      navigate(chapterId, turn.direction === 'previous' ? 'end' : 'start');
+    }
+    return;
+  }
+  if (turn.kind === 'segments') {
+    const anchorPage = metrics.pageIndex;
+    if (turn.direction === 'previous') {
+      await readerSegments.value?.loadPreviousSegments();
+    } else {
+      await readerSegments.value?.loadMoreSegments();
+    }
+    await nextTick();
+    const expandedMetrics = getReaderPageMetrics(viewport);
+    const pageIndex = Math.max(
+      0,
+      Math.min(
+        expandedMetrics.pageCount - 1,
+        anchorPage + (turn.direction === 'previous' ? -1 : 1),
+      ),
+    );
+    viewport.scrollTo({
+      left: pageIndex * expandedMetrics.pageWidth,
+      behavior: 'smooth',
+    });
+    return;
+  }
+  if (turn.kind !== 'page') return;
   viewport.scrollTo({
-    left: pageIndex * metrics.pageWidth,
+    left: turn.pageIndex * metrics.pageWidth,
     behavior: 'smooth',
   });
 };
@@ -245,7 +296,7 @@ const handleViewportWheel = (event: WheelEvent) => {
   const now = Date.now();
   if (now - lastWheelPageAt < 240) return;
   lastWheelPageAt = now;
-  scrollReaderPage(event.deltaY < 0 ? -1 : 1);
+  void scrollReaderPage(event.deltaY < 0 ? -1 : 1);
 };
 
 const handleViewportScroll = () => {
@@ -268,11 +319,11 @@ const toggleControlsFromContent = (event: MouseEvent) => {
     !interactiveTarget
   ) {
     if (relativeX < rect.width * 0.25) {
-      scrollReaderPage(-1);
+      void scrollReaderPage(-1);
       return;
     }
     if (relativeX > rect.width * 0.75) {
-      scrollReaderPage(1);
+      void scrollReaderPage(1);
       return;
     }
   }
@@ -307,7 +358,7 @@ const handleReaderKeydown = (event: KeyboardEvent) => {
     target?.closest('input, textarea, select, button, a') === null
   ) {
     event.preventDefault();
-    scrollReaderPage(pageDelta);
+    void scrollReaderPage(pageDelta);
   }
 };
 
@@ -382,7 +433,18 @@ const load = async () => {
       loadAnnotations(loaded.book.id),
     ]);
     await restorePendingBookmark(loaded);
-    if (requestedSegmentId.value !== undefined) {
+    const chapterEdge = pendingChapterEdge;
+    pendingChapterEdge = undefined;
+    if (chapterEdge !== undefined) {
+      const targetSegment =
+        chapterEdge === 'end'
+          ? loaded.chapter.segments.at(-1)
+          : loaded.chapter.segments[0];
+      initialSegmentId.value = targetSegment?.id;
+      await nextTick();
+      await nextTick();
+      scrollToSegment(targetSegment?.id);
+    } else if (requestedSegmentId.value !== undefined) {
       await nextTick();
       scrollToSegment(requestedSegmentId.value);
     }
@@ -801,7 +863,8 @@ const handleVisibilityChange = () => {
   }
 };
 
-const navigate = (chapterId: string) => {
+const navigate = (chapterId: string, edge?: 'start' | 'end') => {
+  pendingChapterEdge = edge;
   void saveProgress();
   void recordReadingTime();
   stopSpeaking();
@@ -960,19 +1023,39 @@ onBeforeUnmount(() => {
     ]"
     :style="readerStyle"
   >
-    <header v-if="controlsVisible" class="book-reader__app-bar">
+    <header
+      v-if="controlsVisible"
+      class="book-reader__app-bar"
+      :class="{
+        'book-reader__app-bar--with-translation': hasIncompleteChapter,
+      }"
+    >
       <button
         class="book-reader__app-bar-action"
         type="button"
-        aria-label="书籍详情"
+        aria-label="返回书籍详情"
         @click="openDetails"
       >
-        <n-icon :component="InfoOutlined" />
+        <n-icon :component="ArrowBackOutlined" />
       </button>
       <div v-if="result?.kind === 'ready'" class="book-reader__app-bar-title">
         <span :title="result.book.title">{{ result.book.title }}</span>
       </div>
       <div v-else class="book-reader__app-bar-title">本地阅读器</div>
+      <div v-if="hasIncompleteChapter" class="book-reader__app-bar-translation">
+        <span>{{ currentTranslationStatusLabel }}</span>
+        <n-button size="tiny" secondary @click="queueChapterTranslation('gpt')">
+          GPT 翻译本章
+        </n-button>
+        <n-button
+          size="tiny"
+          secondary
+          @click="queueChapterTranslation('sakura')"
+        >
+          Sakura 翻译本章
+        </n-button>
+        <n-button size="tiny" secondary @click="load">刷新本章</n-button>
+      </div>
       <button
         class="book-reader__app-bar-action"
         type="button"
@@ -997,10 +1080,11 @@ onBeforeUnmount(() => {
       </n-alert>
       <template v-if="result?.kind === 'ready'">
         <n-alert
-          v-if="currentChapterSummary?.translationStatus !== 'complete'"
+          v-if="hasIncompleteChapter"
+          class="book-reader__translation-notice-mobile"
           type="warning"
         >
-          <n-space align="center">
+          <n-space align="center" justify="center">
             <span>
               {{
                 getTranslationStatusLabel(
@@ -1056,6 +1140,7 @@ onBeforeUnmount(() => {
         @wheel="handleViewportWheel"
       >
         <ReaderSegmentLayout
+          ref="readerSegments"
           :segments="result.chapter.segments"
           :mode="renderedMode"
           :annotations="annotations"
@@ -1389,6 +1474,10 @@ onBeforeUnmount(() => {
   place-items: center;
 }
 
+.book-reader__app-bar-action :deep(.n-icon) {
+  font-size: 24px;
+}
+
 .book-reader__app-bar-action:hover,
 .book-reader__app-bar-action:focus-visible,
 .book-reader__bottom-navigation button:hover,
@@ -1404,6 +1493,29 @@ onBeforeUnmount(() => {
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.book-reader__app-bar--with-translation .book-reader__app-bar-title {
+  max-width: calc(50vw - 410px);
+}
+
+.book-reader__app-bar-translation {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  max-width: calc(100vw - 520px);
+  overflow: hidden;
+  color: #f0a020;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  gap: 8px;
+}
+
+.book-reader__app-bar-translation > span::before {
+  margin-right: 5px;
+  content: '⚠';
 }
 
 .book-reader__chapter-status {
@@ -1427,6 +1539,16 @@ onBeforeUnmount(() => {
   margin: 12px auto 0;
   padding: 0 max(16px, var(--reader-padding));
   gap: 8px;
+}
+
+.book-reader__notices :deep(.n-alert-body),
+.book-reader__notices :deep(.n-alert-content),
+.book-reader__notices :deep(.n-space) {
+  width: 100%;
+}
+
+.book-reader__translation-notice-mobile {
+  display: none;
 }
 
 .book-reader__catalog {
@@ -1643,6 +1765,18 @@ onBeforeUnmount(() => {
 
   .book-reader__app-bar-title {
     font-size: 17px;
+  }
+
+  .book-reader__app-bar--with-translation .book-reader__app-bar-title {
+    max-width: none;
+  }
+
+  .book-reader__app-bar-translation {
+    display: none;
+  }
+
+  .book-reader__translation-notice-mobile {
+    display: flex;
   }
 
   .book-reader__chapter-status {
