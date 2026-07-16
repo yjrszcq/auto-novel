@@ -156,6 +156,7 @@ const downloadGlossaryAsJsonFile = async (ev: MouseEvent) => {
             <n-a
               href="https://github.com/auto-novel/auto-novel"
               target="_blank"
+              rel="noopener noreferrer"
             >
               术语表使用指南
             </n-a>

@@ -96,6 +96,28 @@ export const createLocalVolumeStore = async () => {
     //
     getChapter: dao.getChapter,
     updateTranslation,
+    // Reader
+    getReaderSettings: dao.getReaderSettings,
+    putReaderSettings: dao.putReaderSettings,
+    getReaderBookshelf: dao.getReaderBookshelf,
+    listReaderBookshelves: dao.listReaderBookshelves,
+    putReaderBookshelf: dao.putReaderBookshelf,
+    getReaderBookPreference: dao.getReaderBookPreference,
+    putReaderBookPreference: dao.putReaderBookPreference,
+    getReaderProgress: dao.getReaderProgress,
+    putReaderProgress: dao.putReaderProgress,
+    getReaderReadingStats: dao.getReaderReadingStats,
+    putReaderReadingStats: dao.putReaderReadingStats,
+    putReaderBookmark: dao.putReaderBookmark,
+    deleteReaderBookmark: dao.deleteReaderBookmark,
+    listReaderBookmarks: dao.listReaderBookmarks,
+    putReaderAnnotation: dao.putReaderAnnotation,
+    deleteReaderAnnotation: dao.deleteReaderAnnotation,
+    listReaderAnnotations: dao.listReaderAnnotations,
+    getReaderCover: dao.getReaderCover,
+    putReaderCover: dao.putReaderCover,
+    deleteReaderCover: dao.deleteReaderCover,
+    putReaderChapterCache: dao.putReaderChapterCache,
     //
     getTranslationFile: bind(getTranslationFile),
   };
