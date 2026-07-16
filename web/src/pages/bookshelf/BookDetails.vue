@@ -352,7 +352,9 @@ onMounted(() => void load());
             :book-id="book.id"
             :refresh-key="coverVersion"
             :title="book.title"
+            allow-custom-cover-removal
             select-label="选择本地封面"
+            @remove="removeCover"
             @select="selectCover"
           />
           <n-flex class="book-details__hero-copy" vertical>
@@ -361,14 +363,22 @@ onMounted(() => void load());
             </n-h2>
             <n-flex :size="[4, 4]" vertical>
               <n-flex :wrap="false">
-                <n-tag :bordered="false" size="small">来源</n-tag>
-                <n-text>本地书籍</n-text>
-              </n-flex>
-              <n-flex :wrap="false">
                 <n-tag :bordered="false" size="small">章节</n-tag>
                 <n-text>{{ book.chapterCount }} 章</n-text>
               </n-flex>
             </n-flex>
+          </n-flex>
+          <n-flex
+            class="book-details__hero-shelf-actions"
+            size="small"
+            :wrap="false"
+          >
+            <n-button @click="togglePinned">
+              {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
+            </n-button>
+            <n-button type="warning" @click="toggleListed">
+              {{ entry.state.listed ? '移出书架' : '加入书架' }}
+            </n-button>
           </n-flex>
         </div>
       </section>
@@ -417,7 +427,6 @@ onMounted(() => void load());
           </n-flex>
         </n-flex>
 
-        <section-header title="封面与书架" />
         <input
           ref="coverInput"
           accept="image/*"
@@ -425,17 +434,6 @@ onMounted(() => void load());
           type="file"
           @change="updateCover"
         />
-        <n-flex size="small" wrap>
-          <n-button @click="selectCover">选择本地封面</n-button>
-          <n-button @click="removeCover">移除自定义封面</n-button>
-          <n-button @click="togglePinned">
-            {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
-          </n-button>
-          <n-button type="warning" @click="toggleListed">
-            {{ entry.state.listed ? '移出书架' : '加入书架' }}
-          </n-button>
-        </n-flex>
-
         <n-list class="book-details__volume-list">
           <n-list-item>
             <n-flex align="center" justify="space-between" :wrap="false">
@@ -445,18 +443,20 @@ onMounted(() => void load());
                   总计 {{ chapters.length }} / GPT {{ gptCompleted }} / Sakura
                   {{ sakuraCompleted }}
                 </n-text>
-                <n-flex size="small">
+                <n-flex size="small" wrap>
                   <n-button size="tiny" secondary @click="queueGpt">
                     排队GPT
                   </n-button>
                   <n-button size="tiny" secondary @click="queueSakura">
                     排队Sakura
                   </n-button>
+                  <n-button size="tiny" secondary @click="downloadTranslated">
+                    下载译文
+                  </n-button>
+                  <n-button size="tiny" secondary @click="downloadOriginal">
+                    下载原文
+                  </n-button>
                 </n-flex>
-              </n-flex>
-              <n-flex size="small" :wrap="false">
-                <n-button @click="downloadTranslated">下载译文</n-button>
-                <n-button @click="downloadOriginal">下载原文</n-button>
               </n-flex>
             </n-flex>
           </n-list-item>
@@ -559,8 +559,15 @@ onMounted(() => void load());
 }
 
 .book-details__hero-copy {
+  flex: 1;
   min-width: 0;
   padding-top: 8px;
+}
+
+.book-details__hero-shelf-actions {
+  align-self: flex-end;
+  flex: none;
+  margin-left: auto;
 }
 
 .book-details__title {
@@ -664,6 +671,11 @@ onMounted(() => void load());
 
   .book-details__hero-copy {
     padding-top: 0;
+  }
+
+  .book-details__hero-shelf-actions {
+    align-self: flex-start;
+    margin-left: 0;
   }
 
   .book-details__settings :deep(.n-flex) {

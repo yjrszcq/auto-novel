@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { DeleteOutlineOutlined } from '@vicons/material';
 import { Epub } from '@/util/file';
 import { useLocalVolumeStore } from '@/stores';
 
@@ -7,15 +8,18 @@ const props = defineProps<{
   title: string;
   refreshKey?: number;
   selectLabel?: string;
+  allowCustomCoverRemoval?: boolean;
   visualOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
   select: [];
+  remove: [];
 }>();
 
 const palette = ['#3f6e8d', '#7d5a8e', '#9b5b48', '#45766e', '#8a713d'];
 const coverUrl = ref<string>();
+const isCustomCover = ref(false);
 const coverElement = ref<HTMLElement>();
 const isVisible = ref(false);
 let visibilityObserver: IntersectionObserver | undefined;
@@ -65,6 +69,7 @@ const loadCover = async () => {
     }
     if (cover === undefined) {
       setCoverUrl(undefined);
+      isCustomCover.value = false;
       if (!bookId.toLowerCase().endsWith('.epub')) {
         return;
       }
@@ -91,10 +96,12 @@ const loadCover = async () => {
     }
     if (bookId === props.bookId) {
       setCoverUrl(cover.blob);
+      isCustomCover.value = cover.source === 'custom';
     }
   } catch {
     if (bookId === props.bookId) {
       setCoverUrl(undefined);
+      isCustomCover.value = false;
     }
   }
 };
@@ -120,6 +127,12 @@ const select = () => {
   }
 };
 
+const remove = () => {
+  if (!props.visualOnly && isCustomCover.value) {
+    emit('remove');
+  }
+};
+
 const color = computed(() => {
   const total = Array.from(props.title).reduce(
     (sum, character) => sum + character.codePointAt(0)!,
@@ -134,6 +147,10 @@ const initials = computed(() =>
 const ariaLabel = computed(
   () => props.selectLabel ?? '查看《' + props.title + '》详情',
 );
+const canRemoveCustomCover = computed(
+  () =>
+    !props.visualOnly && props.allowCustomCoverRemoval && isCustomCover.value,
+);
 </script>
 
 <template>
@@ -141,19 +158,30 @@ const ariaLabel = computed(
     ref="coverElement"
     class="book-cover"
     :aria-hidden="props.visualOnly || undefined"
-    :aria-label="props.visualOnly ? undefined : ariaLabel"
-    :role="props.visualOnly ? undefined : 'button'"
-    :tabindex="props.visualOnly ? undefined : 0"
     :style="{ backgroundColor: color }"
-    @click="select"
-    @keydown.enter.prevent="select"
-    @keydown.space.prevent="select"
   >
+    <button
+      v-if="!props.visualOnly"
+      class="book-cover__select"
+      type="button"
+      :aria-label="ariaLabel"
+      @click="select"
+    />
+    <button
+      v-if="canRemoveCustomCover"
+      class="book-cover__remove"
+      type="button"
+      aria-label="移除自定义封面"
+      title="移除自定义封面"
+      @click="remove"
+    >
+      <DeleteOutlineOutlined class="book-cover__remove-icon" />
+    </button>
     <img
       v-if="coverUrl !== undefined"
       class="book-cover__image"
       :src="coverUrl"
-      :alt="props.title + ' 封面'"
+      :alt="`${props.title} 封面`"
       decoding="async"
       loading="lazy"
     />
@@ -176,12 +204,58 @@ const ariaLabel = computed(
   overflow: hidden;
   padding: 14px;
   color: #fff;
+}
+
+.book-cover__select {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 }
 
-.book-cover:focus-visible {
+.book-cover__select:focus-visible,
+.book-cover__remove:focus-visible {
   outline: 2px solid var(--n-primary-color);
   outline-offset: -2px;
+}
+
+.book-cover__remove {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  color: #3a2600;
+  background: var(--n-warning-color);
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+  cursor: pointer;
+  opacity: 0;
+  transform: translate(8px, -8px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.book-cover:hover .book-cover__remove,
+.book-cover:focus-within .book-cover__remove {
+  opacity: 1;
+  transform: none;
+}
+
+.book-cover__remove-icon {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 17px;
+  height: 17px;
 }
 
 .book-cover__image {
@@ -214,5 +288,12 @@ const ariaLabel = computed(
   opacity: 0.9;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+@media (hover: none) {
+  .book-cover__remove {
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>

@@ -24,7 +24,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       });
 
       const transaction = database.transaction(
-        ['metadata', 'chapter'],
+        ['metadata', 'chapter', 'reader-cover'],
         'readwrite',
       );
       transaction.objectStore('metadata').put({
@@ -46,6 +46,12 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
         volumeId: bookId,
         paragraphs: ['第二章'],
         segmentIds: ['chapter-1-segment-0'],
+      });
+      transaction.objectStore('reader-cover').put({
+        bookId,
+        blob: new Blob(['custom cover'], { type: 'image/png' }),
+        source: 'custom',
+        updatedAt: 1,
       });
       await new Promise<void>((resolve, reject) => {
         transaction.oncomplete = () => resolve();
@@ -71,6 +77,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByText('翻译进度', { exact: true })).toHaveCount(0);
   await expect(page.getByText('语言', { exact: true })).toHaveCount(0);
   await expect(page.getByText('目录', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('本地书籍', { exact: true })).toHaveCount(0);
 
   await expect(page.getByText('本地全文检索', { exact: true })).toHaveCount(0);
   await expect(
@@ -87,6 +94,17 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   ).toHaveCount(1);
   await expect(page.getByRole('button', { name: '排队GPT' })).toBeVisible();
   await expect(page.getByRole('button', { name: '排队Sakura' })).toBeVisible();
+  await expect(page.locator('.book-details__hero-shelf-actions')).toBeVisible();
+  await expect(page.getByRole('button', { name: '置顶书籍' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '移出书架' })).toBeVisible();
+  await page.locator('.book-details__hero-content > .book-cover').hover();
+  await expect(
+    page.getByRole('button', { name: '移除自定义封面' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '移除自定义封面' }).click();
+  await expect(
+    page.getByRole('button', { name: '移除自定义封面' }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: '打开目录', exact: true }).click();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /第 2 章/ }).click();
