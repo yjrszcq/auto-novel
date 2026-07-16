@@ -31,19 +31,10 @@ const progressText = (label: string, value: number) =>
         </n-tag>
       </div>
 
-      <n-progress
-        :percentage="percentage(props.book.readingProgress)"
-        :show-indicator="false"
-        status="success"
-      />
-      <span>{{ progressText('阅读', props.book.readingProgress) }}</span>
-
-      <n-progress
-        :percentage="percentage(props.book.translationProgress)"
-        :show-indicator="false"
-        type="info"
-      />
-      <span>{{ progressText('翻译', props.book.translationProgress) }}</span>
+      <div class="book-card__progress" aria-label="阅读与翻译进度">
+        <span>{{ progressText('阅读', props.book.readingProgress) }}</span>
+        <span>{{ progressText('翻译', props.book.translationProgress) }}</span>
+      </div>
 
       <n-button
         block
@@ -107,7 +98,10 @@ const progressText = (label: string, value: number) =>
   white-space: nowrap;
 }
 
-.book-card span {
+.book-card__progress {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
   color: var(--n-text-color-3);
   font-size: 12px;
 }

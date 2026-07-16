@@ -321,14 +321,25 @@ onMounted(() => void load());
 
       <n-card title="阅读与翻译进度" class="book-details__card">
         <div class="book-details__progress">
-          <div>
-            <span>阅读 {{ Math.round(readingProgress) }}%</span>
-            <n-progress :percentage="Math.round(readingProgress)" />
+          <div class="book-details__progress-item">
+            <div class="book-details__progress-label">
+              <span>阅读进度</span>
+              <strong>{{ Math.round(readingProgress) }}%</strong>
+            </div>
+            <n-progress
+              :percentage="Math.round(readingProgress)"
+              :show-indicator="false"
+              status="success"
+            />
           </div>
-          <div>
-            <span>翻译 {{ Math.round(translationProgress) }}%</span>
+          <div class="book-details__progress-item">
+            <div class="book-details__progress-label">
+              <span>翻译进度</span>
+              <strong>{{ Math.round(translationProgress) }}%</strong>
+            </div>
             <n-progress
               :percentage="Math.round(translationProgress)"
+              :show-indicator="false"
               type="info"
             />
           </div>
@@ -482,20 +493,30 @@ onMounted(() => void load());
 .book-details__metadata dd {
   margin: 0;
 }
-
 .book-details__card {
   margin-top: 16px;
+}
+
+.book-details__progress-item {
+  display: grid;
+  gap: 8px;
+}
+
+.book-details__progress-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.book-details__progress-label span {
+  color: var(--n-text-color-3);
 }
 
 .book-details__progress {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
-}
-
-.book-details__progress > div {
-  display: grid;
-  gap: 8px;
 }
 
 @media only screen and (max-width: 600px) {
