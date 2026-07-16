@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { CloseOutlined } from '@vicons/material';
 
-defineProps<{
+const props = defineProps<{
   show: boolean;
   title: string;
   wide?: boolean;
@@ -10,28 +10,68 @@ defineProps<{
 const emit = defineEmits<{
   'update:show': [show: boolean];
 }>();
+
+const panel = ref<HTMLElement>();
+let returnFocus: HTMLElement | null = null;
+
+const getFocusableElements = () => [
+  ...(panel.value?.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  ) ?? []),
+];
+
+const close = () => emit('update:show', false);
+
+const trapFocus = (event: KeyboardEvent) => {
+  const focusable = getFocusableElements();
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (first === undefined || last === undefined) {
+    event.preventDefault();
+    panel.value?.focus();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+};
+
+watch(
+  () => props.show,
+  async (show) => {
+    if (show) {
+      returnFocus = document.activeElement as HTMLElement | null;
+      await nextTick();
+      (getFocusableElements()[0] ?? panel.value)?.focus();
+    } else {
+      await nextTick();
+      returnFocus?.focus();
+      returnFocus = null;
+    }
+  },
+);
+
+onBeforeUnmount(() => returnFocus?.focus());
 </script>
 
 <template>
-  <div
-    v-if="show"
-    class="reader-sheet"
-    @click.self="emit('update:show', false)"
-  >
+  <div v-if="show" class="reader-sheet" @click.self="close">
     <section
+      ref="panel"
       class="reader-sheet__panel"
       :class="{ 'reader-sheet__panel--wide': wide }"
       role="dialog"
       aria-modal="true"
       :aria-label="title"
+      tabindex="-1"
+      @keydown.esc.stop="close"
+      @keydown.tab="trapFocus"
     >
       <header class="reader-sheet__header">
         <h2>{{ title }}</h2>
-        <button
-          type="button"
-          :aria-label="`关闭${title}`"
-          @click="emit('update:show', false)"
-        >
+        <button type="button" :aria-label="`关闭${title}`" @click="close">
           <n-icon :component="CloseOutlined" />
         </button>
       </header>

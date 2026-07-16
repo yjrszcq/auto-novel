@@ -199,11 +199,14 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect(page.getByText(unsafeText, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__readerXss)).toBeUndefined();
-  await page.getByRole('button', { name: '目录' }).click();
+  const readerCatalogButton = page.getByRole('button', { name: '目录' });
+  await readerCatalogButton.click();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
   await expect(page.getByText('第一部', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '目录' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '关闭目录' })).toBeFocused();
   await page.keyboard.press('Escape');
+  await expect(readerCatalogButton).toBeFocused();
 
   const readerTop = page.locator('.book-reader__app-bar');
   await expect(readerTop).toBeVisible();
