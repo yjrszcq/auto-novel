@@ -11,6 +11,7 @@ describe('reader settings', () => {
   it('uses durable local reading defaults', () => {
     expect(normalizeReaderSettings(undefined)).toEqual(defaultReaderSettings);
     expect(defaultReaderSettings.defaultMode).toBe('translated');
+    expect(defaultReaderSettings.flow).toBe('auto');
   });
 
   it('migrates the legacy ask preference to translated', () => {
@@ -30,6 +31,7 @@ describe('reader settings', () => {
         contentWidth: 20,
         horizontalPadding: 100,
         theme: 'sepia',
+        flow: 'paginated',
         updatedAt: 1,
       }),
     ).toMatchObject({
@@ -39,7 +41,11 @@ describe('reader settings', () => {
       contentWidth: 480,
       horizontalPadding: 64,
       theme: 'sepia',
+      flow: 'paginated',
     });
+    expect(normalizeReaderSettings({ flow: 'invalid' as 'auto' }).flow).toBe(
+      'auto',
+    );
   });
 
   it('copies reactive translation priority before IndexedDB persistence', () => {

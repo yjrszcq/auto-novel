@@ -18,7 +18,7 @@ import type {
   ReaderSettingsRecord,
 } from '@/model/Reader';
 import { TranslateTaskDescriptor } from '@/model/Translator';
-import { useThrottleFn } from '@vueuse/core';
+import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
@@ -36,6 +36,11 @@ import {
   getReaderEscapeAction,
   shouldToggleReaderChrome,
 } from './core/ReaderChrome';
+import {
+  getReaderPageDelta,
+  getReaderPageMetrics,
+  resolveReaderFlow,
+} from './core/ReaderFlow';
 import { createReaderAnnotation } from './core/ReaderAnnotations';
 import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
 import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
@@ -79,6 +84,11 @@ const showBookmarks = ref(false);
 const showAnnotations = ref(false);
 const controlsVisible = ref(true);
 const readerRoot = ref<HTMLElement>();
+const readerViewport = ref<HTMLElement>();
+const readerPageCount = ref(1);
+const readerPageIndex = ref(0);
+const viewportProgressRatio = ref(0);
+const isDesktopReader = useMediaQuery('(min-width: 1000px)');
 const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
 let pendingBookmark: ReaderBookmark | undefined;
@@ -193,17 +203,86 @@ const openCatalog = async () => {
     ?.scrollIntoView({ block: 'center', behavior: 'auto' });
 };
 
+const updateViewportMetrics = () => {
+  if (
+    resolvedFlow.value === 'paginated' &&
+    readerViewport.value !== undefined
+  ) {
+    const metrics = getReaderPageMetrics(readerViewport.value);
+    readerPageCount.value = metrics.pageCount;
+    readerPageIndex.value = metrics.pageIndex;
+    viewportProgressRatio.value = metrics.ratio;
+    return;
+  }
+  readerPageCount.value = 1;
+  readerPageIndex.value = 0;
+  const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+  viewportProgressRatio.value =
+    scrollable <= 0 ? 0 : Math.max(0, Math.min(1, window.scrollY / scrollable));
+};
+
+const scrollReaderPage = (delta: number) => {
+  const viewport = readerViewport.value;
+  if (resolvedFlow.value !== 'paginated' || viewport === undefined) return;
+  const metrics = getReaderPageMetrics(viewport);
+  const pageIndex = Math.max(
+    0,
+    Math.min(metrics.pageCount - 1, metrics.pageIndex + delta),
+  );
+  viewport.scrollTo({
+    left: pageIndex * metrics.pageWidth,
+    behavior: 'smooth',
+  });
+};
+
+let lastWheelPageAt = 0;
+const handleViewportWheel = (event: WheelEvent) => {
+  if (
+    resolvedFlow.value !== 'paginated' ||
+    Math.abs(event.deltaY) <= Math.abs(event.deltaX)
+  ) {
+    return;
+  }
+  event.preventDefault();
+  const now = Date.now();
+  if (now - lastWheelPageAt < 240) return;
+  lastWheelPageAt = now;
+  scrollReaderPage(event.deltaY < 0 ? -1 : 1);
+};
+
+const handleViewportScroll = () => {
+  updateViewportMetrics();
+  saveProgressThrottled();
+};
+
 const toggleControlsFromContent = (event: MouseEvent) => {
   const selection = window.getSelection();
   const target = event.target as HTMLElement;
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const relativeX = event.clientX - rect.left;
+  const hasSelection = selection !== null && !selection.isCollapsed;
+  const interactiveTarget =
+    target.closest('button, a, input, textarea, select') !== null;
+  if (
+    resolvedFlow.value === 'paginated' &&
+    !hasOpenReaderPanel() &&
+    !hasSelection &&
+    !interactiveTarget
+  ) {
+    if (relativeX < rect.width * 0.25) {
+      scrollReaderPage(-1);
+      return;
+    }
+    if (relativeX > rect.width * 0.75) {
+      scrollReaderPage(1);
+      return;
+    }
+  }
   if (
     shouldToggleReaderChrome({
       hasOpenPanel: hasOpenReaderPanel(),
-      hasSelection: selection !== null && !selection.isCollapsed,
-      interactiveTarget:
-        target.closest('button, a, input, textarea, select') !== null,
+      hasSelection,
+      interactiveTarget,
       relativeX,
       width: rect.width,
     })
@@ -213,11 +292,24 @@ const toggleControlsFromContent = (event: MouseEvent) => {
 };
 
 const handleReaderKeydown = (event: KeyboardEvent) => {
-  if (event.key !== 'Escape') return;
-  if (getReaderEscapeAction(hasOpenReaderPanel()) === 'close-panel') {
-    closeReaderPanels();
-  } else {
-    controlsVisible.value = false;
+  if (event.key === 'Escape') {
+    if (getReaderEscapeAction(hasOpenReaderPanel()) === 'close-panel') {
+      closeReaderPanels();
+    } else {
+      controlsVisible.value = false;
+    }
+    return;
+  }
+  const target = event.target as HTMLElement | null;
+  const pageDelta = getReaderPageDelta(event.key);
+  if (
+    resolvedFlow.value === 'paginated' &&
+    pageDelta !== 0 &&
+    !hasOpenReaderPanel() &&
+    target?.closest('input, textarea, select, button, a') === null
+  ) {
+    event.preventDefault();
+    scrollReaderPage(pageDelta);
   }
 };
 
@@ -225,6 +317,10 @@ const activeSettings = computed(() => ({
   ...settings.value,
   ...bookStyle.value,
 }));
+
+const resolvedFlow = computed(() =>
+  resolveReaderFlow(settings.value.flow, isDesktopReader.value),
+);
 
 const isDarkReaderTheme = computed(() => activeSettings.value.theme === 'dark');
 
@@ -288,6 +384,8 @@ const load = async () => {
       await nextTick();
       scrollToSegment(requestedSegmentId.value);
     }
+    await nextTick();
+    updateViewportMetrics();
     startReadingTime(loaded.book.id);
   }
 };
@@ -341,8 +439,22 @@ const getSegmentElements = () => [
   ...document.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
 ];
 
-const getActiveSegmentId = () => {
+const getActiveSegmentId = (flow = resolvedFlow.value) => {
   const elements = getSegmentElements();
+  if (flow === 'paginated' && readerViewport.value !== undefined) {
+    const viewportRect = readerViewport.value.getBoundingClientRect();
+    return (
+      elements.find((element) => {
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.right > viewportRect.left + 4 &&
+          rect.left < viewportRect.right - 4 &&
+          rect.bottom > viewportRect.top + 4 &&
+          rect.top < viewportRect.bottom - 4
+        );
+      })?.dataset.readerSegmentId ?? elements[0]?.dataset.readerSegmentId
+    );
+  }
   return (
     [...elements]
       .reverse()
@@ -353,13 +465,21 @@ const getActiveSegmentId = () => {
 
 const scrollToSegment = (segmentId: string | undefined) => {
   if (segmentId === undefined) {
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (resolvedFlow.value === 'paginated') {
+      readerViewport.value?.scrollTo({ left: 0, behavior: 'auto' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
     return;
   }
   const scroll = () =>
     getSegmentElements()
       .find((element) => element.dataset.readerSegmentId === segmentId)
-      ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      ?.scrollIntoView({
+        block: resolvedFlow.value === 'paginated' ? 'nearest' : 'start',
+        inline: resolvedFlow.value === 'paginated' ? 'start' : 'nearest',
+        behavior: 'auto',
+      });
   if (
     getSegmentElements().some(
       (element) => element.dataset.readerSegmentId === segmentId,
@@ -606,7 +726,28 @@ const restoreProgress = async (
     (item) => item.dataset.readerSegmentId === segment?.id,
   );
   if (element !== undefined) {
-    element.scrollIntoView({ block: 'start', behavior: 'auto' });
+    scrollToSegment(segment?.id);
+  } else if (
+    resolvedFlow.value === 'paginated' &&
+    progress?.scrollRatio !== undefined &&
+    readerViewport.value !== undefined
+  ) {
+    readerViewport.value.scrollTo({
+      left:
+        progress.scrollRatio *
+        Math.max(
+          0,
+          readerViewport.value.scrollWidth - readerViewport.value.clientWidth,
+        ),
+      behavior: 'auto',
+    });
+  } else if (progress?.scrollRatio !== undefined) {
+    const scrollable =
+      document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo({
+      top: Math.max(0, scrollable) * progress.scrollRatio,
+      behavior: 'auto',
+    });
   } else if (progress.legacyScrollY !== undefined) {
     window.scrollTo({ top: progress.legacyScrollY, behavior: 'auto' });
   }
@@ -622,8 +763,14 @@ const saveProgress = async () => {
       .reverse()
       .find((element) => element.getBoundingClientRect().top <= 120) ??
     elements[0];
-  const scrollable = document.documentElement.scrollHeight - window.innerHeight;
-  const scrollRatio = scrollable <= 0 ? 0 : window.scrollY / scrollable;
+  const scrollRatio =
+    resolvedFlow.value === 'paginated' && readerViewport.value !== undefined
+      ? getReaderPageMetrics(readerViewport.value).ratio
+      : (() => {
+          const scrollable =
+            document.documentElement.scrollHeight - window.innerHeight;
+          return scrollable <= 0 ? 0 : window.scrollY / scrollable;
+        })();
   const repository = await repositoryPromise;
   await repository.putReaderProgress(
     createReaderProgress({
@@ -635,7 +782,10 @@ const saveProgress = async () => {
   );
 };
 
-const saveProgressThrottled = useThrottleFn(() => void saveProgress(), 400);
+const saveProgressThrottled = useThrottleFn(() => {
+  updateViewportMetrics();
+  void saveProgress();
+}, 400);
 
 const handleVisibilityChange = () => {
   if (document.hidden) {
@@ -697,7 +847,11 @@ const chapterProgressPercent = computed(() => {
   if (result.value?.kind !== 'ready' || result.value.chapters.length === 0) {
     return 0;
   }
-  return ((currentChapterIndex.value + 1) / result.value.chapters.length) * 100;
+  return (
+    ((currentChapterIndex.value + viewportProgressRatio.value) /
+      result.value.chapters.length) *
+    100
+  );
 });
 
 watch(
@@ -736,14 +890,24 @@ watch(
   { deep: true },
 );
 
+watch(resolvedFlow, async (_, previousFlow) => {
+  const segmentId = getActiveSegmentId(previousFlow);
+  await nextTick();
+  await nextTick();
+  scrollToSegment(segmentId);
+  updateViewportMetrics();
+});
+
 onMounted(() => {
   void loadSettings();
   window.addEventListener('scroll', saveProgressThrottled, { passive: true });
+  window.addEventListener('resize', updateViewportMetrics, { passive: true });
   window.addEventListener('keydown', handleReaderKeydown);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', saveProgressThrottled);
+  window.removeEventListener('resize', updateViewportMetrics);
   window.removeEventListener('keydown', handleReaderKeydown);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   void saveProgress();
@@ -841,9 +1005,21 @@ onBeforeUnmount(() => {
 
     <template v-else-if="result?.kind === 'ready'">
       <article
+        ref="readerViewport"
         class="book-reader__content"
-        :class="{ 'book-reader__content--controls-visible': controlsVisible }"
+        :class="[
+          `book-reader__content--${resolvedFlow}`,
+          { 'book-reader__content--controls-visible': controlsVisible },
+        ]"
+        :aria-label="
+          resolvedFlow === 'paginated'
+            ? `正文，第 ${readerPageIndex + 1} / ${readerPageCount} 页`
+            : '正文'
+        "
+        tabindex="0"
         @click="toggleControlsFromContent"
+        @scroll.passive="handleViewportScroll"
+        @wheel="handleViewportWheel"
       >
         <ReaderSegmentLayout
           :segments="result.chapter.segments"
@@ -1085,6 +1261,18 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
+        <div class="book-reader__settings-theme">
+          <n-form-item label="阅读流">
+            <n-select
+              v-model:value="settings.flow"
+              :options="[
+                { label: '自动（电脑分页，手机滚动）', value: 'auto' },
+                { label: '分页', value: 'paginated' },
+                { label: '滚动', value: 'scrolled' },
+              ]"
+            />
+          </n-form-item>
+        </div>
       </n-form>
     </ReaderBottomSheet>
   </main>
@@ -1290,11 +1478,46 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__content {
-  width: min(100%, 1880px);
-  margin: 0 auto;
-  padding: 24px max(28px, var(--reader-padding)) 36px;
+  box-sizing: border-box;
   font-size: var(--reader-font-size);
   line-height: var(--reader-line-height);
+  outline: none;
+}
+
+.book-reader__content--scrolled {
+  width: min(100%, var(--reader-content-width));
+  margin: 0 auto;
+  padding: 24px max(28px, var(--reader-padding)) 36px;
+}
+
+.book-reader__content--paginated {
+  width: 100%;
+  height: calc(100dvh - 32px);
+  margin: 0;
+  padding: 24px max(28px, var(--reader-padding));
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.book-reader__content--paginated.book-reader__content--controls-visible {
+  height: calc(
+    100dvh - var(--reader-app-bar-height) -
+      var(--reader-bottom-navigation-height)
+  );
+}
+
+.book-reader__content--paginated::-webkit-scrollbar {
+  display: none;
+}
+
+.book-reader__content--paginated :deep(.reader-segment-layout) {
+  width: 100%;
+  height: 100%;
+  column-width: calc((100vw - 120px) / 2);
+  column-gap: 64px;
+  column-fill: auto;
 }
 
 .book-reader__content p {
@@ -1361,19 +1584,6 @@ onBeforeUnmount(() => {
   transition: width 180ms ease;
 }
 
-@media only screen and (min-width: 1000px) {
-  .book-reader__content :deep(.reader-segment-layout--original),
-  .book-reader__content :deep(.reader-segment-layout--translated) {
-    column-count: 2;
-    column-gap: clamp(72px, 9vw, 190px);
-    column-rule: 1px solid var(--reader-chrome-border);
-  }
-
-  .book-reader__content :deep(.reader-segment) {
-    break-inside: avoid;
-  }
-}
-
 @media only screen and (max-width: 600px) {
   .book-reader {
     --reader-app-bar-height: 56px;
@@ -1414,6 +1624,23 @@ onBeforeUnmount(() => {
     padding: 18px max(22px, env(safe-area-inset-left)) 36px;
     font-size: var(--reader-font-size);
     line-height: var(--reader-line-height);
+  }
+
+  .book-reader__content--paginated {
+    height: calc(100dvh - 34px);
+    padding-bottom: 18px;
+  }
+
+  .book-reader__content--paginated.book-reader__content--controls-visible {
+    height: calc(
+      100dvh - var(--reader-app-bar-height) -
+        var(--reader-bottom-navigation-height)
+    );
+  }
+
+  .book-reader__content--paginated :deep(.reader-segment-layout) {
+    column-width: calc(100vw - 44px);
+    column-gap: 44px;
   }
 
   .book-reader__bottom-navigation button {

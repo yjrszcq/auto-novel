@@ -5,6 +5,8 @@ export type ReaderMode =
   | 'original-translated'
   | 'original';
 
+export type ReaderFlow = 'auto' | 'paginated' | 'scrolled';
+
 export interface ReaderBookshelfState {
   bookId: string;
   listed: boolean;
@@ -22,6 +24,7 @@ export interface ReaderSettingsRecord {
   contentWidth?: number;
   horizontalPadding?: number;
   theme?: 'light' | 'dark' | 'sepia' | 'system';
+  flow?: ReaderFlow;
   updatedAt: number;
 }
 

@@ -9,6 +9,7 @@ export const defaultReaderSettings: ReaderSettingsRecord = {
   contentWidth: 840,
   horizontalPadding: 24,
   theme: 'system',
+  flow: 'auto',
   updatedAt: 0,
 };
 
@@ -27,6 +28,10 @@ export const normalizeReaderSettings = (
   contentWidth: Math.max(480, Math.min(value?.contentWidth ?? 840, 1200)),
   horizontalPadding: Math.max(12, Math.min(value?.horizontalPadding ?? 24, 64)),
   theme: value?.theme ?? 'system',
+  flow:
+    value?.flow === 'paginated' || value?.flow === 'scrolled'
+      ? value.flow
+      : 'auto',
 });
 
 export const serializeReaderSettings = (

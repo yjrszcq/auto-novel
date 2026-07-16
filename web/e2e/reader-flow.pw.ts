@@ -207,18 +207,30 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
 
   const readerTop = page.locator('.book-reader__app-bar');
   await expect(readerTop).toBeVisible();
-  const readerColumnCount = () =>
-    page
-      .locator('.reader-segment-layout--original')
-      .evaluate((element) => getComputedStyle(element).columnCount);
+  const readerContent = page.locator('.book-reader__content');
   await page.setViewportSize({ width: 1280, height: 800 });
-  await expect.poll(readerColumnCount).toBe('2');
+  await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
+  await expect
+    .poll(() =>
+      readerContent.evaluate(
+        (element) => element.scrollWidth > element.clientWidth,
+      ),
+    )
+    .toBe(true);
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
     'height',
     '52px',
   );
+  const readerBounds = await readerContent.boundingBox();
+  if (readerBounds === null) throw new Error('缺少分页正文视口');
+  await readerContent.click({
+    position: { x: readerBounds.width * 0.9, y: readerBounds.height * 0.5 },
+  });
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect.poll(readerColumnCount).toBe('auto');
+  await expect(readerContent).toHaveClass(/book-reader__content--scrolled/);
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
     'height',
     '76px',
@@ -254,7 +266,6 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     page.getByRole('button', { name: '添加书签', exact: true }),
   ).toBeHidden();
   await expect(page.locator('.n-drawer-mask')).toHaveCount(0);
-  const readerContent = page.locator('.book-reader__content');
   const readerParagraph = readerContent.locator('p').first();
   await readerParagraph.click();
   await expect(readerTop).toHaveCount(0);
