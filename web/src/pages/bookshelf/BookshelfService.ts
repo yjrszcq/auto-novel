@@ -75,6 +75,9 @@ export const createBookshelfService = (
     );
   };
 
+  const listUnlisted = async () =>
+    (await ensureIndex()).filter((entry) => !entry.state.listed);
+
   const setListed = async (bookId: string, listed: boolean) => {
     const volume = await ensureBook(bookId);
     const current = await repository.getReaderBookshelf(bookId);
@@ -110,6 +113,7 @@ export const createBookshelfService = (
   return {
     ensureIndex,
     list,
+    listUnlisted,
     setListed,
     setPinned,
   };

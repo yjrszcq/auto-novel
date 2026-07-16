@@ -12,7 +12,6 @@ import {
   type BookshelfEntry,
 } from './BookshelfService';
 import BookCard from './components/BookCard.vue';
-import LocalVolumeUploadButton from '../workspace/components/LocalVolumeUploadButton.vue';
 
 import { useLocalVolumeStore } from '@/stores';
 
@@ -23,6 +22,8 @@ const error = ref<string>();
 const query = ref('');
 const filter = ref<BookshelfFilter>('all');
 const sort = ref<BookshelfSort>('recent-read');
+const showLocalVolumes = ref(false);
+const unlistedBookIds = ref<string[]>([]);
 
 const filterOptions: { label: string; value: BookshelfFilter }[] = [
   { label: '全部状态', value: 'all' },
@@ -53,7 +54,11 @@ const reload = async () => {
   error.value = undefined;
   try {
     const repository = await useLocalVolumeStore();
-    books.value = await createBookshelfService(repository).list();
+    const service = createBookshelfService(repository);
+    books.value = await service.list();
+    unlistedBookIds.value = (await service.listUnlisted()).map(
+      (entry) => entry.volume.id,
+    );
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '无法加载书架';
   } finally {
@@ -76,7 +81,12 @@ const openWorkspace = () => {
   void router.push('/workspace/toolbox');
 };
 
-const reloadAfterImport = () => void reload();
+const addLocalBook = async (bookId: string) => {
+  const repository = await useLocalVolumeStore();
+  await createBookshelfService(repository).setListed(bookId, true);
+  showLocalVolumes.value = false;
+  await reload();
+};
 
 const openDetails = (book: BookshelfDisplayBook) => {
   void router.push('/books/' + encodeURIComponent(book.volume.id) + '/details');
@@ -113,7 +123,7 @@ onMounted(reload);
         <p>书籍和阅读数据仅保存在当前浏览器。</p>
       </div>
       <div class="bookshelf-page__header-actions">
-        <LocalVolumeUploadButton @done="reloadAfterImport" />
+        <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
         <n-button @click="openWorkspace">前往工作区</n-button>
       </div>
     </header>
@@ -134,7 +144,7 @@ onMounted(reload);
       <n-empty v-if="books.length === 0" description="书架中还没有书籍">
         <template #extra>
           <n-space>
-            <LocalVolumeUploadButton @done="reloadAfterImport" />
+            <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
             <n-button @click="openWorkspace">前往工作区</n-button>
           </n-space>
         </template>
@@ -161,6 +171,27 @@ onMounted(reload);
           @remove="removeBook"
         />
       </section>
+      <local-volume-list
+        v-model:show="showLocalVolumes"
+        :filter="(volume) => unlistedBookIds.includes(volume.id)"
+        :show-management="false"
+      >
+        <template #volume="volume">
+          <n-flex align="center" justify="space-between" :wrap="false">
+            <n-flex vertical :size="2">
+              <n-text>{{ volume.id }}</n-text>
+              <n-text depth="3">共 {{ volume.toc.length }} 章</n-text>
+            </n-flex>
+            <n-button
+              size="small"
+              type="primary"
+              @click="addLocalBook(volume.id)"
+            >
+              加入书架
+            </n-button>
+          </n-flex>
+        </template>
+      </local-volume-list>
     </template>
   </main>
 </template>

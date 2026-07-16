@@ -651,23 +651,61 @@ onBeforeUnmount(() => {
     :class="`book-reader--${activeSettings.theme}`"
     :style="readerStyle"
   >
-    <header class="book-reader__header">
-      <div class="book-reader__header-actions">
-        <n-button text size="small" @click="backToBookshelf">书架</n-button>
-        <n-button text size="small" @click="showCatalog = true">目录</n-button>
-      </div>
-      <div v-if="result?.kind === 'ready'" class="book-reader__header-title">
-        <strong :title="result.book.title">{{ result.book.title }}</strong>
-        <span :title="result.chapter.title">{{ result.chapter.title }}</span>
-      </div>
-      <div class="book-reader__header-actions">
-        <n-button text size="small" @click="showModePrompt = true">
-          {{ modeLabel(renderedMode) }}
-        </n-button>
-        <n-button text size="small" @click="showSettings = true">设置</n-button>
-        <n-button text size="small" @click="showTools = true">更多</n-button>
-      </div>
-    </header>
+    <section class="book-reader__top">
+      <header class="book-reader__header">
+        <div class="book-reader__header-actions">
+          <n-button text size="small" @click="backToBookshelf">书架</n-button>
+          <n-button text size="small" @click="showCatalog = true">
+            目录
+          </n-button>
+        </div>
+        <div v-if="result?.kind === 'ready'" class="book-reader__header-title">
+          <strong :title="result.book.title">{{ result.book.title }}</strong>
+          <span :title="result.chapter.title">{{ result.chapter.title }}</span>
+        </div>
+        <div class="book-reader__header-actions">
+          <n-button text size="small" @click="showModePrompt = true">
+            {{ modeLabel(renderedMode) }}
+          </n-button>
+          <n-button text size="small" @click="showSettings = true">
+            设置
+          </n-button>
+          <n-button text size="small" @click="showTools = true">更多</n-button>
+        </div>
+      </header>
+      <template v-if="result?.kind === 'ready'">
+        <n-alert
+          v-if="currentChapterSummary?.translationStatus !== 'complete'"
+          type="warning"
+          style="margin-bottom: 16px"
+        >
+          <n-space align="center">
+            <span>
+              {{
+                getTranslationStatusLabel(
+                  currentChapterSummary.translationStatus,
+                )
+              }}
+            </span>
+            <n-button size="small" @click="queueChapterTranslation('gpt')">
+              GPT 翻译本章
+            </n-button>
+            <n-button size="small" @click="queueChapterTranslation('sakura')">
+              Sakura 翻译本章
+            </n-button>
+            <n-button size="small" @click="load">刷新本章</n-button>
+          </n-space>
+        </n-alert>
+
+        <n-alert
+          v-if="readingMode !== renderedMode"
+          type="info"
+          style="margin-bottom: 16px"
+        >
+          本章尚无可用译文，已显示原文。
+        </n-alert>
+      </template>
+    </section>
 
     <n-spin v-if="loading" size="large" class="book-reader__loading" />
 
@@ -683,34 +721,6 @@ onBeforeUnmount(() => {
     </n-result>
 
     <template v-else-if="result?.kind === 'ready'">
-      <n-alert
-        v-if="currentChapterSummary?.translationStatus !== 'complete'"
-        type="warning"
-        style="margin-bottom: 16px"
-      >
-        <n-space align="center">
-          <span>
-            {{
-              getTranslationStatusLabel(currentChapterSummary.translationStatus)
-            }}
-          </span>
-          <n-button size="small" @click="queueChapterTranslation('gpt')">
-            GPT 翻译本章
-          </n-button>
-          <n-button size="small" @click="queueChapterTranslation('sakura')">
-            Sakura 翻译本章
-          </n-button>
-          <n-button size="small" @click="load">刷新本章</n-button>
-        </n-space>
-      </n-alert>
-
-      <n-alert
-        v-if="readingMode !== renderedMode"
-        type="info"
-        style="margin-bottom: 16px"
-      >
-        本章尚无可用译文，已显示原文。
-      </n-alert>
       <article class="book-reader__content">
         <ReaderSegmentLayout
           :segments="result.chapter.segments"
@@ -949,18 +959,21 @@ onBeforeUnmount(() => {
   --reader-background: #f4ecd8;
 }
 
-.book-reader__header {
+.book-reader__top {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
   margin-bottom: 20px;
   padding: 8px 0;
   background: var(--reader-background, var(--n-body-color));
   border-bottom: 1px solid var(--n-border-color);
+}
+
+.book-reader__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .book-reader__header-actions {
@@ -1008,7 +1021,7 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__content p {
-  scroll-margin-top: 72px;
+  scroll-margin-top: 224px;
   white-space: pre-wrap;
 }
 

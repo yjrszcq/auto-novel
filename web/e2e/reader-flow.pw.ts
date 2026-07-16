@@ -30,7 +30,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       transaction.objectStore('metadata').put({
         id: bookId,
         createAt: 1,
-        toc: [{ chapterId: '0' }],
+        toc: [{ chapterId: '0' }, { chapterId: '1' }],
         glossaryId: 'glossary',
         glossary: {},
         favoredId: 'default',
@@ -38,8 +38,14 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       transaction.objectStore('chapter').put({
         id: `${bookId}/0`,
         volumeId: bookId,
-        paragraphs: [unsafeText, '安全文本'],
+        paragraphs: [unsafeText, '安全文本', '长段落'.repeat(4000)],
         segmentIds: ['segment-0', 'segment-1'],
+      });
+      transaction.objectStore('chapter').put({
+        id: `${bookId}/1`,
+        volumeId: bookId,
+        paragraphs: ['第二章'],
+        segmentIds: ['chapter-1-segment-0'],
       });
       await new Promise<void>((resolve, reject) => {
         transaction.oncomplete = () => resolve();
@@ -56,11 +62,24 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   ).toBeVisible();
   await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
-  await expect(page.getByText('0 / 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('0 / 2', { exact: true })).toBeVisible();
   await expect(page.locator('.book-details__progress .n-progress')).toHaveCount(
     2,
   );
+
   await page.goto('/bookshelf');
+  await page.getByRole('button', { name: '移出书架' }).click();
+  await expect(
+    page.getByText('书架中还没有书籍', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '从本地书架添加' }).first().click();
+  await expect(page.getByText('本地小说', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '下载' })).not.toBeVisible();
+  await page.getByRole('button', { name: '加入书架' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'reader-flow' }),
+  ).toBeVisible();
+
   const startReadingButton = page.getByRole('button', { name: '开始阅读' });
   await startReadingButton.focus();
   await expect(startReadingButton).toBeFocused();
@@ -69,8 +88,30 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByText(unsafeText, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__readerXss)).toBeUndefined();
   await page.getByRole('button', { name: '目录' }).click();
-  await expect(page.getByText('共 1 章', { exact: true })).toBeVisible();
+  await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
+
+  const readerTop = page.locator('.book-reader__top');
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  await expect
+    .poll(() =>
+      readerTop.evaluate((element) =>
+        Math.round(element.getBoundingClientRect().top),
+      ),
+    )
+    .toBeLessThanOrEqual(1);
+  await page.getByRole('button', { name: '下一章' }).click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+  await expect
+    .poll(() =>
+      readerTop.evaluate((element) =>
+        Math.round(element.getBoundingClientRect().top),
+      ),
+    )
+    .toBeLessThanOrEqual(1);
+
   await page.getByRole('button', { name: '更多' }).click();
   await page.getByRole('button', { name: '添加书签' }).click();
   await expect(page.getByRole('button', { name: '书签 (1)' })).toBeVisible();

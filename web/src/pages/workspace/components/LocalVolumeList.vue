@@ -11,6 +11,7 @@ import { Setting, useSettingStore } from '@/stores';
 const props = defineProps<{
   options?: { [key: string]: (volumes: LocalVolumeMetadata[]) => void };
   filter?: (volume: LocalVolumeMetadata) => boolean;
+  showManagement?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -91,13 +92,18 @@ const sortedVolumes = computed(() => {
 <template>
   <c-drawer-right title="本地小说">
     <template #action>
-      <local-volume-upload-button @done="emit('volumeAdd', $event)" />
+      <local-volume-upload-button
+        v-if="props.showManagement !== false"
+        @done="emit('volumeAdd', $event)"
+      />
       <c-button
+        v-if="props.showManagement !== false"
         label="下载"
         :icon="FileDownloadOutlined"
         @click="downloadVolumes"
       />
       <n-dropdown
+        v-if="props.showManagement !== false"
         trigger="click"
         :options="options"
         :keyboard="false"

@@ -88,11 +88,17 @@ describe('bookshelf state service', () => {
       addedAt: 10,
     });
     expect(volumes.find((volume) => volume.id === 'book-a.epub')).toBeDefined();
+    await expect(service.listUnlisted()).resolves.toMatchObject([
+      {
+        volume: { id: 'book-a.epub' },
+        state: { listed: false },
+      },
+    ]);
 
     await service.setListed('book-a.epub', true);
     expect(records.get('book-a.epub')).toMatchObject({
       listed: true,
-      addedAt: 102,
+      addedAt: 103,
     });
   });
 });
