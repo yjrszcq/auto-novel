@@ -155,5 +155,6 @@ export interface ReaderContentAdapter {
   getBook(bookId: string): Promise<ReaderBook>;
   getChapters(bookId: string): Promise<ReaderChapterSummary[]>;
   getChapter(input: GetReaderChapterInput): Promise<ReaderChapterContent>;
+  preloadChapter?(input: GetReaderChapterInput): void;
   getCapabilities(bookId: string): Promise<BookReadingCapabilities>;
 }

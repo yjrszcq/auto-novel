@@ -21,6 +21,7 @@ import type { ReaderPageLoadResult } from './core/ReaderPageState';
 import { createReaderPageController } from './core/ReaderPageState';
 import { resolveRenderedReaderMode } from './core/BilingualLayout';
 import { createReaderAnnotation } from './core/ReaderAnnotations';
+import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
 import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
 import { createBrowserSpeechController } from './core/ReaderSpeech';
 import { addReadingTime } from './core/ReaderStats';
@@ -51,6 +52,7 @@ const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const result = shallowRef<ReaderPageLoadResult>();
+const initialSegmentId = ref<string>();
 const showSettings = ref(false);
 const showModePrompt = ref(false);
 const showBookmarks = ref(false);
@@ -83,7 +85,11 @@ let settingsLoaded = false;
 
 const repositoryPromise = useLocalVolumeStore();
 const controllerPromise = repositoryPromise.then((repository) =>
-  createReaderPageController(createLocalVolumeReaderAdapter(repository)),
+  createReaderPageController(
+    createCachedReaderContentAdapter(
+      createLocalVolumeReaderAdapter(repository),
+    ),
+  ),
 );
 
 const bookId = computed(() => route.params.bookId as string);
@@ -170,6 +176,7 @@ const loadSettings = async () => {
 
 const load = async () => {
   await recordReadingTime();
+  initialSegmentId.value = undefined;
   loading.value = true;
   const controller = await controllerPromise;
   const loaded = await controller.load(bookId.value, requestedChapterId.value);
@@ -266,9 +273,20 @@ const scrollToSegment = (segmentId: string | undefined) => {
     window.scrollTo({ top: 0, behavior: 'auto' });
     return;
   }
-  getSegmentElements()
-    .find((element) => element.dataset.readerSegmentId === segmentId)
-    ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+  const scroll = () =>
+    getSegmentElements()
+      .find((element) => element.dataset.readerSegmentId === segmentId)
+      ?.scrollIntoView({ block: 'start', behavior: 'auto' });
+  if (
+    getSegmentElements().some(
+      (element) => element.dataset.readerSegmentId === segmentId,
+    )
+  ) {
+    scroll();
+    return;
+  }
+  initialSegmentId.value = segmentId;
+  void nextTick().then(scroll);
 };
 
 const startReadingTime = (targetBookId: string) => {
@@ -498,8 +516,9 @@ const restoreProgress = async (
   if (progress?.chapterId !== loaded.chapter.chapterId) {
     return;
   }
-  await nextTick();
   const segment = resolveProgressSegment(loaded.chapter.segments, progress);
+  initialSegmentId.value = segment?.id;
+  await nextTick();
   const element = getSegmentElements().find(
     (item) => item.dataset.readerSegmentId === segment?.id,
   );
@@ -713,6 +732,7 @@ onBeforeUnmount(() => {
           :segments="result.chapter.segments"
           :mode="renderedMode"
           :annotations="annotations"
+          :initial-segment-id="initialSegmentId"
         />
       </article>
 

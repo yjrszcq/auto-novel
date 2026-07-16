@@ -3,13 +3,91 @@ import type { ReaderAnnotation, ReaderSegment } from '@/model/Reader';
 
 import type { RenderedReaderMode } from '../core/BilingualLayout';
 import { hasTranslation } from '../core/BilingualLayout';
+import {
+  expandSegmentRange,
+  getInitialSegmentRange,
+} from '../core/ReaderSegmentWindow';
 import ReaderSegmentText from './ReaderSegmentText.vue';
 
 const props = defineProps<{
   segments: ReaderSegment[];
   mode: RenderedReaderMode;
   annotations: ReaderAnnotation[];
+  initialSegmentId?: string;
 }>();
+
+const getInitialRange = () =>
+  getInitialSegmentRange(
+    props.segments.length,
+    props.initialSegmentId === undefined
+      ? -1
+      : props.segments.findIndex(
+          (segment) => segment.id === props.initialSegmentId,
+        ),
+  );
+
+const segmentRange = ref(getInitialRange());
+const renderedSegments = computed(() =>
+  props.segments.slice(segmentRange.value.start, segmentRange.value.end),
+);
+const hasPreviousSegments = computed(() => segmentRange.value.start > 0);
+const hasMoreSegments = computed(
+  () => segmentRange.value.end < props.segments.length,
+);
+const afterSentinel = ref<HTMLElement>();
+let loadMoreObserver: IntersectionObserver | undefined;
+
+const loadPreviousSegments = () => {
+  segmentRange.value = expandSegmentRange(
+    segmentRange.value,
+    props.segments.length,
+    'before',
+  );
+};
+
+const loadMoreSegments = () => {
+  segmentRange.value = expandSegmentRange(
+    segmentRange.value,
+    props.segments.length,
+    'after',
+  );
+};
+
+const observeMoreSegments = () => {
+  loadMoreObserver?.disconnect();
+  loadMoreObserver = undefined;
+  if (
+    !hasMoreSegments.value ||
+    afterSentinel.value === undefined ||
+    typeof IntersectionObserver === 'undefined'
+  ) {
+    return;
+  }
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        loadMoreObserver?.disconnect();
+        loadMoreSegments();
+      }
+    },
+    { rootMargin: '640px' },
+  );
+  loadMoreObserver.observe(afterSentinel.value);
+};
+
+watch(
+  () => [props.segments, props.initialSegmentId],
+  () => {
+    segmentRange.value = getInitialRange();
+    void nextTick().then(observeMoreSegments);
+  },
+  { immediate: true },
+);
+watch(
+  () => segmentRange.value.end,
+  () => void nextTick().then(observeMoreSegments),
+);
+onBeforeUnmount(() => loadMoreObserver?.disconnect());
 </script>
 
 <template>
@@ -17,8 +95,14 @@ const props = defineProps<{
     class="reader-segment-layout"
     :class="`reader-segment-layout--${props.mode}`"
   >
+    <div v-if="hasPreviousSegments" class="reader-segment-layout__control">
+      <n-button size="small" @click="loadPreviousSegments">
+        加载前面的段落
+      </n-button>
+    </div>
+
     <div
-      v-for="segment in props.segments"
+      v-for="segment in renderedSegments"
       :key="segment.id"
       class="reader-segment"
       :data-reader-segment-id="segment.id"
@@ -102,10 +186,26 @@ const props = defineProps<{
         </p>
       </template>
     </div>
+
+    <div
+      v-if="hasMoreSegments"
+      ref="afterSentinel"
+      class="reader-segment-layout__control"
+    >
+      <n-button size="small" @click="loadMoreSegments">
+        继续加载更多段落
+      </n-button>
+    </div>
   </section>
 </template>
 
 <style scoped>
+.reader-segment-layout__control {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
 .reader-segment {
   scroll-margin-top: 16px;
   margin: 0 0 1em;

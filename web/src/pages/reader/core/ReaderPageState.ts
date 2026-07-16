@@ -55,6 +55,14 @@ export const createReaderPageController = (adapter: ReaderContentAdapter) => {
       if (currentRequest !== requestId) {
         return { kind: 'stale' };
       }
+      [
+        chapters[chapterSummary.index - 1],
+        chapters[chapterSummary.index + 1],
+      ].forEach((neighbor) => {
+        if (neighbor !== undefined) {
+          adapter.preloadChapter?.({ bookId, chapterId: neighbor.id });
+        }
+      });
       return { kind: 'ready', book, chapters, chapter };
     } catch (reason) {
       if (currentRequest !== requestId) {

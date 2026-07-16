@@ -13,6 +13,7 @@ import {
   type BookshelfEntry,
 } from './BookshelfService';
 import BookCard from './components/BookCard.vue';
+import LocalVolumeUploadButton from '../workspace/components/LocalVolumeUploadButton.vue';
 
 import { useLocalVolumeStore } from '@/stores';
 
@@ -69,13 +70,15 @@ const openBook = (book: BookshelfDisplayBook) => {
     return;
   }
   void router.push(
-    `/workspace/reader/${encodeURIComponent(book.volume.id)}/${encodeURIComponent(chapterId)}`,
+    `/books/${encodeURIComponent(book.volume.id)}/read/${encodeURIComponent(chapterId)}`,
   );
 };
 
 const openWorkspace = () => {
   void router.push('/workspace/toolbox');
 };
+
+const reloadAfterImport = () => void reload();
 
 const openDetails = (book: BookshelfDisplayBook) => {
   void router.push('/books/' + encodeURIComponent(book.volume.id) + '/details');
@@ -111,7 +114,10 @@ onMounted(reload);
         <h1>书架</h1>
         <p>书籍和阅读数据仅保存在当前浏览器。</p>
       </div>
-      <n-button @click="openWorkspace">前往工作区</n-button>
+      <div class="bookshelf-page__header-actions">
+        <LocalVolumeUploadButton @done="reloadAfterImport" />
+        <n-button @click="openWorkspace">前往工作区</n-button>
+      </div>
     </header>
 
     <n-skeleton v-if="loading" text :repeat="8" />
@@ -145,9 +151,10 @@ onMounted(reload);
 
       <n-empty v-if="books.length === 0" description="书架中还没有书籍">
         <template #extra>
-          <n-button type="primary" @click="openWorkspace">
-            前往工作区导入
-          </n-button>
+          <n-space>
+            <LocalVolumeUploadButton @done="reloadAfterImport" />
+            <n-button @click="openWorkspace">前往工作区</n-button>
+          </n-space>
         </template>
       </n-empty>
 
@@ -191,6 +198,12 @@ onMounted(reload);
 
 .bookshelf-page__header {
   margin-bottom: 24px;
+}
+
+.bookshelf-page__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .bookshelf-page h1,

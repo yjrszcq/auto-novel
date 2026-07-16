@@ -9,6 +9,9 @@ const props = defineProps<{
 
 const palette = ['#3f6e8d', '#7d5a8e', '#9b5b48', '#45766e', '#8a713d'];
 const coverUrl = ref<string>();
+const coverElement = ref<HTMLElement>();
+const isVisible = ref(false);
+let visibilityObserver: IntersectionObserver | undefined;
 const repositoryPromise = useLocalVolumeStore();
 
 const clearCoverUrl = () => {
@@ -16,6 +19,26 @@ const clearCoverUrl = () => {
     URL.revokeObjectURL(coverUrl.value);
     coverUrl.value = undefined;
   }
+};
+
+const observeCover = () => {
+  if (
+    coverElement.value === undefined ||
+    typeof IntersectionObserver === 'undefined'
+  ) {
+    isVisible.value = true;
+    return;
+  }
+  visibilityObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        isVisible.value = true;
+        visibilityObserver?.disconnect();
+      }
+    },
+    { rootMargin: '400px' },
+  );
+  visibilityObserver.observe(coverElement.value);
 };
 
 const loadCover = async () => {
@@ -32,11 +55,19 @@ const loadCover = async () => {
 };
 
 watch(
-  () => [props.bookId, props.refreshKey],
-  () => void loadCover(),
+  () => [props.bookId, props.refreshKey, isVisible.value],
+  () => {
+    if (isVisible.value) {
+      void loadCover();
+    }
+  },
   { immediate: true },
 );
-onBeforeUnmount(clearCoverUrl);
+onMounted(observeCover);
+onBeforeUnmount(() => {
+  visibilityObserver?.disconnect();
+  clearCoverUrl();
+});
 
 const color = computed(() => {
   const total = Array.from(props.title).reduce(
@@ -52,12 +83,18 @@ const initials = computed(() =>
 </script>
 
 <template>
-  <div class="book-cover" :style="{ backgroundColor: color }">
+  <div
+    ref="coverElement"
+    class="book-cover"
+    :style="{ backgroundColor: color }"
+  >
     <img
       v-if="coverUrl !== undefined"
       class="book-cover__image"
       :src="coverUrl"
       :alt="props.title + ' 封面'"
+      decoding="async"
+      loading="lazy"
     />
     <template v-else>
       <span class="book-cover__eyebrow">LOCAL BOOK</span>
