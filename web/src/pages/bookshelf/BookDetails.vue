@@ -78,11 +78,6 @@ const bookThemeOptions = [
   { label: '护眼', value: 'sepia' },
   { label: '跟随系统', value: 'system' },
 ];
-const languageLabel = computed(() =>
-  book.value?.targetLanguage === undefined
-    ? book.value?.sourceLanguage ?? '本地文本'
-    : book.value.sourceLanguage + ' → ' + book.value.targetLanguage,
-);
 const translationStatusLabels = {
   none: '未翻译',
   partial: '部分译文',
@@ -359,10 +354,6 @@ onMounted(() => void load());
               <n-flex :wrap="false">
                 <n-tag :bordered="false" size="small">来源</n-tag>
                 <n-text>本地书籍</n-text>
-              </n-flex>
-              <n-flex :wrap="false">
-                <n-tag :bordered="false" size="small">语言</n-tag>
-                <n-text>{{ languageLabel }}</n-text>
               </n-flex>
               <n-flex :wrap="false">
                 <n-tag :bordered="false" size="small">章节</n-tag>

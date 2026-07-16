@@ -69,6 +69,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     '阅读进度 0%',
   );
   await expect(page.getByText('翻译进度', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('语言', { exact: true })).toHaveCount(0);
 
   await expect(page.getByText('本地全文检索', { exact: true })).toHaveCount(0);
   await expect(
