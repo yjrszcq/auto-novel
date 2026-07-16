@@ -54,6 +54,13 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(
     page.getByRole('heading', { name: 'reader-flow' }),
   ).toBeVisible();
+  await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
+  await expect(page.getByText('0 / 1', { exact: true })).toBeVisible();
+  await expect(page.locator('.book-details__progress .n-progress')).toHaveCount(
+    2,
+  );
+  await page.goto('/bookshelf');
   const startReadingButton = page.getByRole('button', { name: '开始阅读' });
   await startReadingButton.focus();
   await expect(startReadingButton).toBeFocused();
@@ -81,9 +88,8 @@ test('persists the global reading version selected in Settings', async ({
 
   const selector = page.locator('#reader-default-mode');
   await expect(selector).toHaveAttribute('aria-busy', 'false');
-  await selector.click();
-  await page.getByText('日中对照', { exact: true }).click();
-  await expect(selector).toContainText('日中对照');
+  await selector.getByText('日中', { exact: true }).click();
+  await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
 
   await expect
     .poll(() =>
@@ -110,5 +116,5 @@ test('persists the global reading version selected in Settings', async ({
     .toBe('original-translated');
 
   await page.reload();
-  await expect(page.locator('#reader-default-mode')).toContainText('日中对照');
+  await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
 });

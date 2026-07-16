@@ -22,7 +22,11 @@ const progressText = (label: string, value: number) =>
 
 <template>
   <article class="book-card">
-    <BookCover :book-id="props.book.volume.id" :title="props.book.title" />
+    <BookCover
+      :book-id="props.book.volume.id"
+      :title="props.book.title"
+      @select="emit('details', props.book)"
+    />
     <div class="book-card__body">
       <div class="book-card__heading">
         <h2 :title="props.book.title">{{ props.book.title }}</h2>

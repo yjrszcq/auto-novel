@@ -334,7 +334,7 @@ onMounted(() => void load());
           <div class="book-details__progress-item">
             <div class="book-details__progress-label">
               <span>翻译进度</span>
-              <strong>{{ Math.round(translationProgress) }}%</strong>
+              <strong>{{ completedChapters }} / {{ chapters.length }}</strong>
             </div>
             <n-progress
               :percentage="Math.round(translationProgress)"
@@ -343,7 +343,6 @@ onMounted(() => void load());
             />
           </div>
         </div>
-        <p>已完整翻译 {{ completedChapters }} / {{ chapters.length }} 章。</p>
       </n-card>
 
       <n-card title="本书阅读偏好" class="book-details__card">
@@ -514,8 +513,7 @@ onMounted(() => void load());
 
 .book-details__progress {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 18px;
 }
 
 @media only screen and (max-width: 600px) {
@@ -529,8 +527,7 @@ onMounted(() => void load());
     width: min(180px, 60vw);
   }
 
-  .book-details__metadata dl,
-  .book-details__progress {
+  .book-details__metadata dl {
     grid-template-columns: 1fr;
   }
 }

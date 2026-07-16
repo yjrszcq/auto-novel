@@ -3,7 +3,6 @@ import { useRouter } from 'vue-router';
 
 import {
   filterAndSortBookshelf,
-  getContinueReadingBook,
   type BookshelfDisplayBook,
   type BookshelfFilter,
   type BookshelfSort,
@@ -48,7 +47,6 @@ const visibleBooks = computed(() =>
     sort: sort.value,
   }),
 );
-const continueBook = computed(() => getContinueReadingBook(books.value));
 
 const reload = async () => {
   loading.value = true;
@@ -127,22 +125,6 @@ onMounted(reload);
     </n-alert>
 
     <template v-else>
-      <n-card v-if="continueBook !== undefined" class="continue-card">
-        <template #header>继续阅读</template>
-        <div class="continue-card__content">
-          <div>
-            <strong>{{ continueBook.title }}</strong>
-            <p>
-              阅读 {{ Math.round(continueBook.readingProgress) }}% · 翻译
-              {{ Math.round(continueBook.translationProgress) }}%
-            </p>
-          </div>
-          <n-button type="primary" @click="openBook(continueBook)">
-            继续阅读
-          </n-button>
-        </div>
-      </n-card>
-
       <div class="bookshelf-toolbar">
         <n-input v-model:value="query" clearable placeholder="搜索书名" />
         <n-select v-model:value="filter" :options="filterOptions" />
@@ -188,8 +170,7 @@ onMounted(reload);
   padding-top: 28px;
 }
 
-.bookshelf-page__header,
-.continue-card__content {
+.bookshelf-page__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -207,19 +188,13 @@ onMounted(reload);
 }
 
 .bookshelf-page h1,
-.bookshelf-page p,
-.continue-card p {
+.bookshelf-page p {
   margin: 0;
 }
 
-.bookshelf-page p,
-.continue-card p {
+.bookshelf-page p {
   margin-top: 8px;
   color: var(--n-text-color-3);
-}
-
-.continue-card {
-  margin-bottom: 16px;
 }
 
 .bookshelf-toolbar {
@@ -257,8 +232,7 @@ onMounted(reload);
 }
 
 @media only screen and (max-width: 600px) {
-  .bookshelf-page__header,
-  .continue-card__content {
+  .bookshelf-page__header {
     align-items: stretch;
     flex-direction: column;
   }

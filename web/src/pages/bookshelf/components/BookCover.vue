@@ -8,6 +8,10 @@ const props = defineProps<{
   refreshKey?: number;
 }>();
 
+const emit = defineEmits<{
+  select: [];
+}>();
+
 const palette = ['#3f6e8d', '#7d5a8e', '#9b5b48', '#45766e', '#8a713d'];
 const coverUrl = ref<string>();
 const coverElement = ref<HTMLElement>();
@@ -125,7 +129,13 @@ const initials = computed(() =>
   <div
     ref="coverElement"
     class="book-cover"
+    role="button"
+    tabindex="0"
+    :aria-label="`查看《${props.title}》详情`"
     :style="{ backgroundColor: color }"
+    @click="emit('select')"
+    @keydown.enter.prevent="emit('select')"
+    @keydown.space.prevent="emit('select')"
   >
     <img
       v-if="coverUrl !== undefined"
@@ -154,6 +164,12 @@ const initials = computed(() =>
   overflow: hidden;
   padding: 14px;
   color: #fff;
+  cursor: pointer;
+}
+
+.book-cover:focus-visible {
+  outline: 2px solid var(--n-primary-color);
+  outline-offset: -2px;
 }
 
 .book-cover__image {

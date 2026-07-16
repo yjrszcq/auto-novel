@@ -18,9 +18,13 @@ const readerSettingsLoading = ref(true);
 const readerSettingsSaving = ref(false);
 const readerRepositoryPromise = useLocalVolumeStore();
 
-const readerModeOptions = (Object.keys(readerModeLabels) as ReaderMode[]).map(
-  (value) => ({ label: readerModeLabels[value], value }),
-);
+const readerModeOptions: { label: string; value: ReaderMode }[] = [
+  { label: '询问', value: 'ask' },
+  { label: '中文', value: 'translated' },
+  { label: '中日', value: 'translated-original' },
+  { label: '日中', value: 'original-translated' },
+  { label: '原文', value: 'original' },
+];
 const playSound = (source: string) => {
   return new Audio(source).play();
 };
@@ -43,7 +47,11 @@ const isReaderMode = (value: string | number): value is ReaderMode =>
   typeof value === 'string' && value in readerModeLabels;
 
 const updateDefaultReaderMode = async (value: string | number) => {
-  if (!isReaderMode(value) || readerSettingsSaving.value) {
+  if (
+    !isReaderMode(value) ||
+    readerSettingsLoading.value ||
+    readerSettingsSaving.value
+  ) {
     return;
   }
   const previous = readerSettings.value;
@@ -87,25 +95,6 @@ onMounted(() => {
       </n-list-item>
 
       <n-list-item>
-        <n-flex vertical :size="8">
-          <b>阅读</b>
-          <label for="reader-default-mode">默认阅读版本</label>
-          <n-select
-            id="reader-default-mode"
-            :aria-busy="readerSettingsLoading"
-            :value="readerSettings.defaultMode"
-            :options="readerModeOptions"
-            :loading="readerSettingsLoading"
-            :disabled="readerSettingsLoading || readerSettingsSaving"
-            @update:value="updateDefaultReaderMode"
-          />
-          <n-text depth="3">
-            中文和双语模式有可用译文时按所选方式打开；没有译文时始终显示原文（日文）。
-          </n-text>
-        </n-flex>
-      </n-list-item>
-
-      <n-list-item>
         <n-flex vertical>
           <b>快捷键说明</b>
           <n-ul>
@@ -142,6 +131,24 @@ onMounted(() => {
           <n-checkbox v-model:checked="setting.autoTopJobWhenAddTask">
             工作区添加时自动置顶
           </n-checkbox>
+        </n-flex>
+      </n-list-item>
+
+      <n-list-item>
+        <n-flex vertical :size="8">
+          <b>阅读</b>
+          <c-action-wrapper title="默认阅读版本">
+            <c-radio-group
+              id="reader-default-mode"
+              :aria-busy="readerSettingsLoading"
+              :value="readerSettings.defaultMode"
+              :options="readerModeOptions"
+              @update:value="updateDefaultReaderMode"
+            />
+          </c-action-wrapper>
+          <n-text depth="3">
+            中文和双语模式有可用译文时按所选方式打开；没有译文时始终显示原文（日文）。
+          </n-text>
         </n-flex>
       </n-list-item>
 
