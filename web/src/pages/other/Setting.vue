@@ -140,6 +140,7 @@ onMounted(() => {
           <c-action-wrapper title="默认阅读版本">
             <c-radio-group
               id="reader-default-mode"
+              size="small"
               :aria-busy="readerSettingsLoading"
               :value="readerSettings.defaultMode"
               :options="readerModeOptions"
