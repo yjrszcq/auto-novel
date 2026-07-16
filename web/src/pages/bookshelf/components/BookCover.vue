@@ -7,6 +7,7 @@ const props = defineProps<{
   title: string;
   refreshKey?: number;
   selectLabel?: string;
+  visualOnly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -113,6 +114,12 @@ onBeforeUnmount(() => {
   clearCoverUrl();
 });
 
+const select = () => {
+  if (!props.visualOnly) {
+    emit('select');
+  }
+};
+
 const color = computed(() => {
   const total = Array.from(props.title).reduce(
     (sum, character) => sum + character.codePointAt(0)!,
@@ -133,13 +140,14 @@ const ariaLabel = computed(
   <div
     ref="coverElement"
     class="book-cover"
-    role="button"
-    tabindex="0"
-    :aria-label="ariaLabel"
+    :aria-hidden="props.visualOnly || undefined"
+    :aria-label="props.visualOnly ? undefined : ariaLabel"
+    :role="props.visualOnly ? undefined : 'button'"
+    :tabindex="props.visualOnly ? undefined : 0"
     :style="{ backgroundColor: color }"
-    @click="emit('select')"
-    @keydown.enter.prevent="emit('select')"
-    @keydown.space.prevent="emit('select')"
+    @click="select"
+    @keydown.enter.prevent="select"
+    @keydown.space.prevent="select"
   >
     <img
       v-if="coverUrl !== undefined"

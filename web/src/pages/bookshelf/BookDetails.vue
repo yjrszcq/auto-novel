@@ -69,6 +69,13 @@ const completedChapters = computed(
     chapters.value.filter((chapter) => chapter.translationStatus === 'complete')
       .length,
 );
+const translatorCompleted = (type: LocalTranslator) =>
+  entry.value?.volume.toc.filter(
+    (chapter) => chapter[type] === entry.value?.volume.glossaryId,
+  ).length ?? 0;
+const gptCompleted = computed(() => translatorCompleted('gpt'));
+const sakuraCompleted = computed(() => translatorCompleted('sakura'));
+
 const modeLabel = (mode: 'global' | SelectableReaderMode) =>
   mode === 'global' ? '跟随全局设置' : readerModeLabels[mode];
 const readingModeOptions = [
@@ -239,6 +246,14 @@ const downloadTranslated = async () => {
   }
 };
 
+const downloadBook = async () => {
+  if (completedChapters.value > 0) {
+    await downloadTranslated();
+    return;
+  }
+  await downloadOriginal();
+};
+
 const queueBook = (type: LocalTranslator) => {
   const results = localVolumeManager.queueJobToWorkspace(bookId.value, {
     level: 'all',
@@ -327,16 +342,6 @@ onMounted(() => void load());
 
 <template>
   <main class="book-details">
-    <header class="layout-content book-details__header">
-      <div>
-        <p class="book-details__eyebrow">LOCAL BOOK</p>
-        <p class="book-details__privacy">
-          书籍、封面与阅读数据仅保存在当前浏览器。
-        </p>
-      </div>
-      <n-button @click="returnToShelf">返回书架</n-button>
-    </header>
-
     <div v-if="loading" class="layout-content book-details__status">
       <n-spin size="large" />
     </div>
@@ -349,6 +354,14 @@ onMounted(() => void load());
 
     <template v-else-if="book !== undefined && entry !== undefined">
       <section class="book-details__hero">
+        <div class="book-details__backdrop" aria-hidden="true">
+          <BookCover
+            :book-id="book.id"
+            :refresh-key="coverVersion"
+            :title="book.title"
+            visual-only
+          />
+        </div>
         <div class="layout-content book-details__hero-content">
           <BookCover
             :book-id="book.id"
@@ -357,127 +370,147 @@ onMounted(() => void load());
             select-label="选择本地封面"
             @select="selectCover"
           />
-          <div class="book-details__hero-copy">
-            <h1>{{ book.title }}</h1>
-            <n-space class="book-details__facts" size="small" wrap>
-              <n-tag :bordered="false" size="small">本地书籍</n-tag>
-              <n-tag :bordered="false" size="small">
-                {{ book.chapterCount }} 章
-              </n-tag>
-              <n-tag :bordered="false" size="small">{{ languageLabel }}</n-tag>
-            </n-space>
-            <dl class="book-details__metadata">
-              <div>
-                <dt>导入时间</dt>
-                <dd>{{ formatDate(book.createdAt) }}</dd>
-              </div>
-              <div>
-                <dt>上次阅读</dt>
-                <dd>{{ formatDate(progress?.updatedAt) }}</dd>
-              </div>
-              <div>
-                <dt>累计阅读</dt>
-                <dd>
-                  {{ formatReadingDuration(readingStats?.totalReadingMs ?? 0) }}
-                </dd>
-              </div>
-              <div>
-                <dt>书签</dt>
-                <dd>{{ bookmarkCount }}</dd>
-              </div>
-            </dl>
-            <n-space class="book-details__actions" size="small" wrap>
-              <n-button type="primary" @click="startReading">
-                {{ progress === undefined ? '开始阅读' : '继续阅读' }}
-              </n-button>
-              <n-button @click="showCatalog = true">打开目录</n-button>
-              <n-button @click="downloadOriginal">下载原文</n-button>
-              <n-button @click="downloadTranslated">下载译文</n-button>
-              <n-button @click="queueGpt">排队 GPT</n-button>
-              <n-button @click="queueSakura">排队 Sakura</n-button>
-            </n-space>
-            <p class="book-details__queue-hint">
-              按住 Ctrl 点击排队，可将任务自动置顶。
-            </p>
-          </div>
+          <n-flex class="book-details__hero-copy" vertical>
+            <n-h2 class="book-details__title" prefix="bar">
+              <b>{{ book.title }}</b>
+            </n-h2>
+            <n-flex :size="[4, 4]" vertical>
+              <n-flex :wrap="false">
+                <n-tag :bordered="false" size="small">来源</n-tag>
+                <n-text>本地书籍</n-text>
+              </n-flex>
+              <n-flex :wrap="false">
+                <n-tag :bordered="false" size="small">语言</n-tag>
+                <n-text>{{ languageLabel }}</n-text>
+              </n-flex>
+              <n-flex :wrap="false">
+                <n-tag :bordered="false" size="small">章节</n-tag>
+                <n-text>{{ book.chapterCount }} 章</n-text>
+              </n-flex>
+            </n-flex>
+          </n-flex>
         </div>
       </section>
 
-      <div class="layout-content book-details__body">
-        <n-card class="book-details__section book-details__progress-card">
-          <template #header>
-            <h2>阅读与翻译进度</h2>
-          </template>
-          <div class="book-details__progress">
-            <div class="book-details__progress-item">
-              <div class="book-details__progress-label">
-                <span>阅读进度</span>
-                <strong>{{ Math.round(readingProgress) }}%</strong>
-              </div>
-              <n-progress
-                :percentage="Math.round(readingProgress)"
-                :show-indicator="false"
-                status="success"
-              />
+      <div class="layout-content book-details__content">
+        <n-flex class="book-details__primary-actions" size="small">
+          <n-button type="primary" @click="startReading">
+            {{ progress === undefined ? '开始阅读' : '继续阅读' }}
+          </n-button>
+          <n-button @click="showCatalog = true">打开目录</n-button>
+          <n-button @click="returnToShelf">返回书架</n-button>
+        </n-flex>
+
+        <n-p>本地文件：{{ book.id }}</n-p>
+        <n-p>
+          导入于 {{ formatDate(book.createdAt) }} · 上次阅读
+          {{ formatDate(progress?.updatedAt) }} · 累计阅读
+          {{ formatReadingDuration(readingStats?.totalReadingMs ?? 0) }} · 书签
+          {{ bookmarkCount }}
+        </n-p>
+
+        <div class="book-details__progress">
+          <div class="book-details__progress-item">
+            <div class="book-details__progress-label">
+              <span>阅读进度</span>
+              <strong>{{ Math.round(readingProgress) }}%</strong>
             </div>
-            <div class="book-details__progress-item">
-              <div class="book-details__progress-label">
-                <span>翻译进度</span>
-                <strong>{{ completedChapters }} / {{ chapters.length }}</strong>
-              </div>
-              <n-progress
-                :percentage="Math.round(translationProgress)"
-                :show-indicator="false"
-                type="info"
-              />
-            </div>
+            <n-progress
+              :percentage="Math.round(readingProgress)"
+              :show-indicator="false"
+              status="success"
+            />
           </div>
-        </n-card>
+          <div class="book-details__progress-item">
+            <div class="book-details__progress-label">
+              <span>翻译进度</span>
+              <strong>{{ completedChapters }} / {{ chapters.length }}</strong>
+            </div>
+            <n-progress
+              :percentage="Math.round(translationProgress)"
+              :show-indicator="false"
+              type="info"
+            />
+          </div>
+        </div>
 
-        <n-card class="book-details__section">
-          <template #header>
-            <h2>阅读偏好</h2>
-          </template>
-          <n-form label-placement="top">
-            <n-form-item label="打开方式">
-              <n-select
-                :options="readingModeOptions"
-                :value="preferredMode"
-                @update:value="savePreference"
-              />
-            </n-form-item>
-            <n-form-item label="本书主题覆盖">
-              <n-select
-                :options="bookThemeOptions"
-                :value="bookTheme"
-                @update:value="saveBookTheme"
-              />
-            </n-form-item>
-          </n-form>
-        </n-card>
+        <section-header title="阅读偏好" />
+        <n-flex class="book-details__settings" vertical>
+          <n-flex align="center" :wrap="false">
+            <n-text depth="3">打开方式</n-text>
+            <n-select
+              :options="readingModeOptions"
+              :value="preferredMode"
+              class="book-details__select"
+              @update:value="savePreference"
+            />
+          </n-flex>
+          <n-flex align="center" :wrap="false">
+            <n-text depth="3">本书主题</n-text>
+            <n-select
+              :options="bookThemeOptions"
+              :value="bookTheme"
+              class="book-details__select"
+              @update:value="saveBookTheme"
+            />
+          </n-flex>
+        </n-flex>
 
-        <n-card class="book-details__section">
-          <template #header>
-            <h2>封面与书架</h2>
-          </template>
-          <input
-            ref="coverInput"
-            accept="image/*"
-            hidden
-            type="file"
-            @change="updateCover"
-          />
-          <n-space size="small" wrap>
-            <n-button @click="selectCover">选择本地封面</n-button>
-            <n-button @click="removeCover">移除自定义封面</n-button>
-            <n-button @click="togglePinned">
-              {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
-            </n-button>
-            <n-button type="warning" @click="toggleListed">
-              {{ entry.state.listed ? '移出书架' : '加入书架' }}
-            </n-button>
-          </n-space>
-        </n-card>
+        <section-header title="封面与书架" />
+        <input
+          ref="coverInput"
+          accept="image/*"
+          hidden
+          type="file"
+          @change="updateCover"
+        />
+        <n-flex size="small" wrap>
+          <n-button @click="selectCover">选择本地封面</n-button>
+          <n-button @click="removeCover">移除自定义封面</n-button>
+          <n-button @click="togglePinned">
+            {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
+          </n-button>
+          <n-button type="warning" @click="toggleListed">
+            {{ entry.state.listed ? '移出书架' : '加入书架' }}
+          </n-button>
+        </n-flex>
+
+        <section-header title="目录">
+          <n-button size="small" @click="showCatalog = true">打开目录</n-button>
+        </section-header>
+        <n-list class="book-details__volume-list">
+          <n-list-item>
+            <n-flex align="center" justify="space-between" :wrap="false">
+              <n-flex :size="4" vertical>
+                <n-text>{{ book.id }}</n-text>
+                <n-text depth="3">
+                  总计 {{ chapters.length }} / GPT {{ gptCompleted }} / Sakura
+                  {{ sakuraCompleted }}
+                </n-text>
+                <n-flex size="small">
+                  <n-button size="tiny" secondary @click="queueGpt">
+                    排队GPT
+                  </n-button>
+                  <n-button size="tiny" secondary @click="queueSakura">
+                    排队Sakura
+                  </n-button>
+                </n-flex>
+              </n-flex>
+              <n-button @click="downloadBook">下载</n-button>
+            </n-flex>
+          </n-list-item>
+        </n-list>
+        <n-flex class="book-details__download-actions" size="small">
+          <n-button size="small" tertiary @click="downloadTranslated">
+            下载译文
+          </n-button>
+          <n-button size="small" tertiary @click="downloadOriginal">
+            下载原文
+          </n-button>
+        </n-flex>
+        <p class="book-details__queue-hint">
+          按住 Ctrl 点击排队，可将任务自动置顶。
+        </p>
       </div>
 
       <n-drawer
@@ -520,36 +553,6 @@ onMounted(() => void load());
   padding-bottom: 48px;
 }
 
-.book-details__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-top: 20px;
-  padding-bottom: 16px;
-}
-
-.book-details__eyebrow,
-.book-details__privacy,
-.book-details__queue-hint,
-.book-details__catalog-summary {
-  margin: 0;
-}
-
-.book-details__eyebrow {
-  color: var(--n-primary-color);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
-
-.book-details__privacy,
-.book-details__queue-hint,
-.book-details__catalog-summary {
-  color: var(--n-text-color-3);
-  font-size: 13px;
-}
-
 .book-details__status {
   display: grid;
   min-height: 220px;
@@ -559,112 +562,82 @@ onMounted(() => void load());
 .book-details__hero {
   position: relative;
   overflow: hidden;
-  border-top: 1px solid var(--n-border-color);
-  border-bottom: 1px solid var(--n-border-color);
-  background: radial-gradient(
-      circle at 72% 18%,
-      rgb(91 103 145 / 22%),
-      transparent 44%
-    ),
-    var(--n-card-color);
+  min-height: 236px;
 }
 
-.book-details__hero::before {
+.book-details__backdrop {
   position: absolute;
-  inset: -80px;
-  z-index: 0;
-  background: var(--n-primary-color);
+  inset: -24px;
+  overflow: hidden;
+  filter: blur(12px);
+  opacity: 0.72;
+  transform: scale(1.08);
+}
+
+.book-details__backdrop::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgb(16 16 20 / 46%),
+    var(--n-body-color)
+  );
   content: '';
-  filter: blur(96px);
-  opacity: 0.08;
+}
+
+.book-details__backdrop :deep(.book-cover) {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  padding: 0;
 }
 
 .book-details__hero-content {
   position: relative;
-  z-index: 1;
   display: flex;
-  gap: 28px;
-  padding-top: 28px;
-  padding-bottom: 28px;
+  gap: 20px;
+  padding-top: 20px;
+  padding-bottom: 21px;
 }
 
-.book-details__hero-content :deep(.book-cover) {
-  width: min(180px, 34vw);
+.book-details__hero-content > :deep(.book-cover) {
+  width: 160px;
   flex: none;
-  border-radius: 4px;
-  box-shadow: 0 16px 34px rgb(0 0 0 / 24%);
+  border-radius: 2px;
+  box-shadow: 0 14px 28px rgb(0 0 0 / 24%);
 }
 
 .book-details__hero-copy {
   min-width: 0;
+  padding-top: 8px;
 }
 
-.book-details__hero-copy h1,
-.book-details__section h2 {
-  margin: 0;
+.book-details__title {
+  margin: 0 0 14px;
+  font-size: clamp(18px, 2vw, 22px);
 }
 
-.book-details__hero-copy h1 {
-  font-size: clamp(22px, 3vw, 32px);
-  line-height: 1.28;
+.book-details__content {
+  padding-top: 16px;
 }
 
-.book-details__facts {
-  margin-top: 12px;
+.book-details__primary-actions {
+  margin-bottom: 16px;
 }
 
-.book-details__metadata {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 28px;
-  margin: 20px 0;
-}
-
-.book-details__metadata div {
-  display: grid;
-  gap: 3px;
-}
-
-.book-details__metadata dt {
-  color: var(--n-text-color-3);
-  font-size: 12px;
-}
-
-.book-details__metadata dd {
-  margin: 0;
-}
-
-.book-details__actions {
-  align-items: center;
-}
-
-.book-details__queue-hint {
-  margin-top: 10px;
-}
-
-.book-details__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
-  gap: 16px;
-  padding-top: 24px;
-}
-
-.book-details__section {
-  min-width: 0;
-}
-
-.book-details__progress-card {
-  grid-row: span 2;
+.book-details__content :deep(.n-p) {
+  margin: 12px 0;
 }
 
 .book-details__progress {
   display: grid;
-  gap: 24px;
+  gap: 14px;
+  margin: 20px 0 8px;
 }
 
 .book-details__progress-item {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .book-details__progress-label {
@@ -674,8 +647,38 @@ onMounted(() => void load());
   gap: 12px;
 }
 
-.book-details__progress-label span {
-  color: var(--n-text-color-2);
+.book-details__progress-label span,
+.book-details__queue-hint,
+.book-details__catalog-summary {
+  color: var(--n-text-color-3);
+}
+
+.book-details__settings {
+  gap: 10px;
+  margin: 4px 0 20px;
+}
+
+.book-details__settings :deep(.n-text) {
+  width: 84px;
+  flex: none;
+}
+
+.book-details__select {
+  width: min(300px, 100%);
+}
+
+.book-details__volume-list {
+  margin-top: 12px;
+}
+
+.book-details__download-actions {
+  margin-top: 8px;
+}
+
+.book-details__queue-hint,
+.book-details__catalog-summary {
+  margin: 12px 0 0;
+  font-size: 13px;
 }
 
 .book-details__catalog-summary {
@@ -702,28 +705,30 @@ onMounted(() => void load());
   white-space: nowrap;
 }
 
-@media only screen and (max-width: 700px) {
-  .book-details__header,
+@media only screen and (max-width: 600px) {
   .book-details__hero-content {
     align-items: stretch;
     flex-direction: column;
+    gap: 14px;
   }
 
-  .book-details__hero-content {
-    gap: 18px;
+  .book-details__hero-content > :deep(.book-cover) {
+    width: min(160px, 52vw);
   }
 
-  .book-details__hero-content :deep(.book-cover) {
-    width: min(180px, 58vw);
+  .book-details__hero-copy {
+    padding-top: 0;
   }
 
-  .book-details__metadata,
-  .book-details__body {
-    grid-template-columns: 1fr;
+  .book-details__settings :deep(.n-flex) {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 4px;
   }
 
-  .book-details__progress-card {
-    grid-row: auto;
+  .book-details__settings :deep(.n-text),
+  .book-details__select {
+    width: 100%;
   }
 }
 </style>

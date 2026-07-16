@@ -70,9 +70,9 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByText('本地全文检索', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '下载原文' })).toBeVisible();
   await expect(page.getByRole('button', { name: '下载译文' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '排队 GPT' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '排队 Sakura' })).toBeVisible();
-  await page.getByRole('button', { name: '打开目录' }).click();
+  await expect(page.getByRole('button', { name: '排队GPT' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '排队Sakura' })).toBeVisible();
+  await page.getByRole('button', { name: '打开目录' }).first().click();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /第 2 章/ }).click();
   await expect
