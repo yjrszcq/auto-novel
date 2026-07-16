@@ -359,6 +359,23 @@ test('persists the global reading version selected in Settings', async ({
   await page.goto('/setting');
   await expect(page.getByText('阅读偏好', { exact: true })).toBeVisible();
 
+  const workspaceSetting = page
+    .locator('.n-list-item')
+    .filter({ has: page.getByText('工作区', { exact: true }) });
+  await expect(workspaceSetting).toHaveCount(1);
+  await expect(
+    workspaceSetting.getByText('工作区添加时自动置顶', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    workspaceSetting.getByText('任务全部完成时语音提醒', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    workspaceSetting.getByRole('button', { name: '点击播放', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('工作区语音提醒', { exact: true })).toHaveCount(
+    0,
+  );
+
   const selector = page.locator('#reader-default-mode');
   await expect(selector).toHaveAttribute('aria-busy', 'false');
   await expect(selector.getByRole('radio', { name: '询问' })).toHaveCount(0);
