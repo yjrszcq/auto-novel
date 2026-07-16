@@ -90,7 +90,8 @@ const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
 const viewportProgressRatio = ref(0);
-const isDesktopReader = useMediaQuery('(min-width: 1000px)');
+const isDesktopReader = useMediaQuery('(min-width: 768px)');
+const usesDoublePageSpread = useMediaQuery('(min-width: 916px)');
 const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)');
 const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
@@ -980,6 +981,14 @@ watch(resolvedFlow, async (_, previousFlow) => {
   updateViewportMetrics();
 });
 
+watch(usesDoublePageSpread, async () => {
+  if (resolvedFlow.value !== 'paginated') return;
+  const segmentId = getActiveSegmentId();
+  await nextTick();
+  scrollToSegment(segmentId);
+  updateViewportMetrics();
+});
+
 watch(
   () => [
     activeSettings.value.fontSize,
@@ -1127,7 +1136,10 @@ onBeforeUnmount(() => {
         class="book-reader__content"
         :class="[
           `book-reader__content--${resolvedFlow}`,
-          { 'book-reader__content--controls-visible': controlsVisible },
+          {
+            'book-reader__content--controls-visible': controlsVisible,
+            'book-reader__content--double-spread': usesDoublePageSpread,
+          },
         ]"
         :aria-label="
           resolvedFlow === 'paginated'
@@ -1674,9 +1686,13 @@ onBeforeUnmount(() => {
 .book-reader__content--paginated :deep(.reader-segment-layout) {
   width: 100%;
   height: 100%;
-  column-width: calc((100vw - 120px) / 2);
+  column-width: calc(100vw - 56px);
   column-gap: 64px;
   column-fill: auto;
+}
+
+.book-reader__content--double-spread :deep(.reader-segment-layout) {
+  column-width: calc((100vw - 120px) / 2);
 }
 
 .book-reader__content p {

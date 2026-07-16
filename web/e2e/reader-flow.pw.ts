@@ -211,8 +211,16 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   const readerTop = page.locator('.book-reader__app-bar');
   await expect(readerTop).toBeVisible();
   const readerContent = page.locator('.book-reader__content');
+  await page.setViewportSize({ width: 900, height: 800 });
+  await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
+  await expect(readerContent).not.toHaveClass(
+    /book-reader__content--double-spread/,
+  );
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
+  await expect(readerContent).toHaveClass(
+    /book-reader__content--double-spread/,
+  );
   await expect
     .poll(() =>
       readerContent.evaluate(
