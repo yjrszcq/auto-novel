@@ -8,7 +8,7 @@ import {
 } from '../src/pages/reader/core/ReaderSettings';
 
 describe('reader settings', () => {
-  it('uses durable local defaults for original reading', () => {
+  it('uses durable local reading defaults', () => {
     expect(normalizeReaderSettings(undefined)).toEqual(defaultReaderSettings);
     expect(defaultReaderSettings.defaultMode).toBe('translated');
   });
