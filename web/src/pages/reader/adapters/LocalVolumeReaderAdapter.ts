@@ -7,6 +7,7 @@ import type {
   ReaderChapterContent,
   ReaderChapterSummary,
   ReaderContentAdapter,
+  ReaderNavigationEntry,
 } from '@/model/Reader';
 import type { TranslatorId } from '@/model/Translator';
 import type { useLocalVolumeStore } from '@/stores';
@@ -97,6 +98,34 @@ export const createLocalVolumeReaderAdapter = (
     async getChapters(bookId) {
       const volume = await getVolume(bookId);
       return getChapterSummaries(bookId, volume);
+    },
+
+    async getNavigation(bookId) {
+      const volume = await getVolume(bookId);
+      if (volume.navigation?.length) {
+        return volume.navigation.map(
+          ({ id, title, level, chapterId, parentId }) => ({
+            id,
+            title,
+            level,
+            chapterId,
+            parentId,
+          }),
+        ) satisfies ReaderNavigationEntry[];
+      }
+      return volume.toc.map(({ chapterId, title, level }, index) => ({
+        id: chapterId,
+        title: getChapterTitle(bookId, chapterId, title),
+        level: level ?? 0,
+        chapterId,
+        parentId:
+          level !== undefined && level > 0
+            ? volume.toc
+                .slice(0, index)
+                .reverse()
+                .find((entry) => (entry.level ?? 0) < level)?.chapterId
+            : undefined,
+      }));
     },
 
     async getChapter({ bookId, chapterId }) {

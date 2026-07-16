@@ -3,6 +3,7 @@ import type {
   ReaderChapterContent,
   ReaderChapterSummary,
   ReaderContentAdapter,
+  ReaderNavigationEntry,
 } from '@/model/Reader';
 
 export type ReaderPageLoadResult =
@@ -10,6 +11,7 @@ export type ReaderPageLoadResult =
       kind: 'ready';
       book: ReaderBook;
       chapters: ReaderChapterSummary[];
+      navigation: ReaderNavigationEntry[];
       chapter: ReaderChapterContent;
     }
   | { kind: 'error'; message: string }
@@ -27,9 +29,10 @@ export const createReaderPageController = (adapter: ReaderContentAdapter) => {
   ): Promise<ReaderPageLoadResult> => {
     const currentRequest = ++requestId;
     try {
-      const [book, chapters] = await Promise.all([
+      const [book, chapters, nativeNavigation] = await Promise.all([
         adapter.getBook(bookId),
         adapter.getChapters(bookId),
+        adapter.getNavigation?.(bookId) ?? Promise.resolve(undefined),
       ]);
       if (currentRequest !== requestId) {
         return { kind: 'stale' };
@@ -63,7 +66,15 @@ export const createReaderPageController = (adapter: ReaderContentAdapter) => {
           adapter.preloadChapter?.({ bookId, chapterId: neighbor.id });
         }
       });
-      return { kind: 'ready', book, chapters, chapter };
+      const navigation =
+        nativeNavigation ??
+        chapters.map(({ id, title }) => ({
+          id,
+          title,
+          level: 0,
+          chapterId: id,
+        }));
+      return { kind: 'ready', book, chapters, navigation, chapter };
     } catch (reason) {
       if (currentRequest !== requestId) {
         return { kind: 'stale' };

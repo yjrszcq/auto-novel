@@ -31,6 +31,23 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
         id: bookId,
         createAt: 1,
         toc: [{ chapterId: '0' }, { chapterId: '1' }],
+        navigation: [
+          { id: 'part', title: '第一部', level: 0 },
+          {
+            id: 'chapter-0',
+            title: '安全开端',
+            level: 1,
+            parentId: 'part',
+            chapterId: '0',
+          },
+          {
+            id: 'chapter-1',
+            title: '第二章',
+            level: 1,
+            parentId: 'part',
+            chapterId: '1',
+          },
+        ],
         glossaryId: 'glossary',
         glossary: {},
         favoredId: 'default',
@@ -39,7 +56,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
         id: `${bookId}/0`,
         volumeId: bookId,
         paragraphs: [unsafeText, '安全文本', '长段落'.repeat(4000)],
-        segmentIds: ['segment-0', 'segment-1'],
+        segmentIds: ['segment-0', 'segment-1', 'segment-2'],
       });
       transaction.objectStore('chapter').put({
         id: `${bookId}/1`,
@@ -184,6 +201,8 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   expect(await page.evaluate(() => window.__readerXss)).toBeUndefined();
   await page.getByRole('button', { name: '目录' }).click();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
+  await expect(page.getByText('第一部', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '目录' })).toBeVisible();
   await page.keyboard.press('Escape');
 
   const readerTop = page.locator('.book-reader__app-bar');

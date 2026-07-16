@@ -122,6 +122,14 @@ export interface ReaderChapterSummary {
   translationSources: string[];
 }
 
+export interface ReaderNavigationEntry {
+  id: string;
+  title: string;
+  level: number;
+  chapterId?: string;
+  parentId?: string;
+}
+
 export interface ReaderSegment {
   id: string;
   index: number;
@@ -155,6 +163,7 @@ export interface GetReaderChapterInput {
 export interface ReaderContentAdapter {
   getBook(bookId: string): Promise<ReaderBook>;
   getChapters(bookId: string): Promise<ReaderChapterSummary[]>;
+  getNavigation?(bookId: string): Promise<ReaderNavigationEntry[]>;
   getChapter(input: GetReaderChapterInput): Promise<ReaderChapterContent>;
   preloadChapter?(input: GetReaderChapterInput): void;
   getCapabilities(bookId: string): Promise<BookReadingCapabilities>;

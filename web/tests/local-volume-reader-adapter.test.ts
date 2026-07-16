@@ -17,6 +17,23 @@ const volume: LocalVolumeMetadata = {
     { chapterId: 'first', title: '第一章：开端' },
     { chapterId: 'second', title: '第二章：结尾' },
   ],
+  navigation: [
+    { id: 'part', title: '第一部', level: 0 },
+    {
+      id: 'native-first',
+      title: '第一章：开端',
+      level: 1,
+      parentId: 'part',
+      chapterId: 'first',
+    },
+    {
+      id: 'native-second',
+      title: '第二章：结尾',
+      level: 1,
+      parentId: 'part',
+      chapterId: 'second',
+    },
+  ],
   glossaryId: 'glossary',
   glossary: {},
   favoredId: 'default',
@@ -80,6 +97,9 @@ describe('LocalVolumeReaderAdapter', () => {
         translationStatus: 'none',
       },
     ]);
+    await expect(adapter.getNavigation?.(volume.id)).resolves.toEqual(
+      volume.navigation,
+    );
     await expect(
       adapter.getChapter({ bookId: volume.id, chapterId: 'first' }),
     ).resolves.toEqual({

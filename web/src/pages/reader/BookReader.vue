@@ -13,6 +13,7 @@ import type {
   ReaderAnnotation,
   ReaderBookmark,
   ReaderBookStyleOverride,
+  ReaderChapterSummary,
   ReaderMode,
   ReaderSettingsRecord,
 } from '@/model/Reader';
@@ -20,6 +21,7 @@ import { TranslateTaskDescriptor } from '@/model/Translator';
 import { useThrottleFn } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
+import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
 import ReaderModeDialog from './components/ReaderModeDialog.vue';
 import ReaderSegmentLayout from './components/ReaderSegmentLayout.vue';
 import { createLocalVolumeReaderAdapter } from './adapters/LocalVolumeReaderAdapter';
@@ -76,6 +78,7 @@ const showTools = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
 const controlsVisible = ref(true);
+const readerRoot = ref<HTMLElement>();
 const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
 let pendingBookmark: ReaderBookmark | undefined;
@@ -180,6 +183,14 @@ const closeReaderPanels = () => {
   showBookmarks.value = false;
   showAnnotations.value = false;
   showModePrompt.value = false;
+};
+
+const openCatalog = async () => {
+  showCatalog.value = true;
+  await nextTick();
+  readerRoot.value
+    ?.querySelector<HTMLElement>('.book-reader__catalog-item--active')
+    ?.scrollIntoView({ block: 'center', behavior: 'auto' });
 };
 
 const toggleControlsFromContent = (event: MouseEvent) => {
@@ -648,6 +659,22 @@ const openDetails = () =>
   void router.push('/books/' + encodeURIComponent(bookId.value) + '/details');
 const backToWorkspace = () => void router.push('/workspace/toolbox');
 
+const chapterSummaryById = computed(() => {
+  const chapters = new Map<string, ReaderChapterSummary>();
+  if (result.value?.kind === 'ready') {
+    result.value.chapters.forEach((chapter) =>
+      chapters.set(chapter.id, chapter),
+    );
+  }
+  return chapters;
+});
+
+const navigateFromCatalog = (chapterId: string | undefined) => {
+  if (chapterId === undefined) return;
+  showCatalog.value = false;
+  navigate(chapterId);
+};
+
 const currentChapterIndex = computed(() => {
   if (result.value?.kind !== 'ready') {
     return -1;
@@ -727,6 +754,7 @@ onBeforeUnmount(() => {
 
 <template>
   <main
+    ref="readerRoot"
     class="book-reader"
     :class="[
       `book-reader--${activeSettings.theme}`,
@@ -831,7 +859,7 @@ onBeforeUnmount(() => {
       class="book-reader__bottom-navigation"
       aria-label="阅读器导航"
     >
-      <button type="button" @click="showCatalog = true">
+      <button type="button" @click="openCatalog">
         <n-icon :component="MenuBookOutlined" />
         <span>目录</span>
       </button>
@@ -863,139 +891,142 @@ onBeforeUnmount(() => {
       <span :style="{ width: chapterProgressPercent + '%' }" />
     </div>
 
-    <n-drawer v-model:show="showCatalog" :width="360" placement="left">
-      <n-drawer-content title="目录">
-        <template v-if="result?.kind === 'ready'">
-          <n-text depth="3">共 {{ result.chapters.length }} 章</n-text>
-          <n-list hoverable clickable class="book-reader__catalog">
-            <n-list-item
-              v-for="chapter in result.chapters"
-              :key="chapter.id"
-              :class="{
-                'book-reader__catalog-item--active':
-                  chapter.id === result.chapter.chapterId,
-              }"
-              @click="
-                showCatalog = false;
-                navigate(chapter.id);
+    <ReaderBottomSheet v-model:show="showCatalog" title="目录" wide>
+      <template v-if="result?.kind === 'ready'">
+        <div class="book-reader__catalog-summary">
+          <span>{{ result.book.title }}</span>
+          <span>共 {{ result.chapters.length }} 章</span>
+        </div>
+        <div class="book-reader__catalog" role="list">
+          <button
+            v-for="entry in result.navigation"
+            :key="entry.id"
+            type="button"
+            class="book-reader__catalog-item"
+            :class="{
+              'book-reader__catalog-item--active':
+                entry.chapterId === result.chapter.chapterId,
+              'book-reader__catalog-item--structural':
+                entry.chapterId === undefined,
+            }"
+            :style="{ '--catalog-indent': `${10 + entry.level * 22}px` }"
+            :disabled="entry.chapterId === undefined"
+            @click="navigateFromCatalog(entry.chapterId)"
+          >
+            <span class="book-reader__catalog-title">{{ entry.title }}</span>
+            <n-tag
+              v-if="entry.chapterId !== undefined"
+              size="small"
+              :type="
+                chapterSummaryById.get(entry.chapterId)?.translationStatus ===
+                'complete'
+                  ? 'success'
+                  : 'default'
               "
             >
-              <n-thing
-                :title="chapter.title"
-                :description="`第 ${chapter.index + 1} 章`"
-              />
-              <template #suffix>
-                <n-tag
-                  size="small"
-                  :type="
-                    chapter.translationStatus === 'complete'
-                      ? 'success'
-                      : 'default'
-                  "
-                >
-                  {{ getTranslationStatusLabel(chapter.translationStatus) }}
-                </n-tag>
-              </template>
-            </n-list-item>
-          </n-list>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
+              {{
+                getTranslationStatusLabel(
+                  chapterSummaryById.get(entry.chapterId)?.translationStatus ??
+                    'none',
+                )
+              }}
+            </n-tag>
+          </button>
+        </div>
+      </template>
+    </ReaderBottomSheet>
 
-    <n-drawer v-model:show="showTools" :width="320" placement="right">
-      <n-drawer-content title="阅读工具">
-        <n-space vertical>
-          <n-button block @click="toggleBookmark">添加书签</n-button>
-          <n-button block @click="addAnnotation">高亮选中</n-button>
-          <n-button
-            block
-            @click="
-              showTools = false;
-              showAnnotations = true;
-            "
-          >
-            批注 ({{ annotations.length }})
-          </n-button>
-          <n-button
-            block
-            @click="
-              showTools = false;
-              showBookmarks = true;
-            "
-          >
-            书签 ({{ bookmarks.length }})
-          </n-button>
-          <n-button block @click="openDetails">书籍详情</n-button>
-          <n-button block @click="speakCurrentSegment">朗读当前段</n-button>
-          <n-button block @click="stopSpeaking">停止朗读</n-button>
-          <n-button block @click="openSelectedInInteractive">
-            查词 / AI
-          </n-button>
-          <n-button block @click="backToWorkspace">工作区</n-button>
-          <n-divider />
-          <n-button
-            block
-            :disabled="previousChapterId === undefined"
-            @click="previousChapterId && navigate(previousChapterId)"
-          >
-            上一章
-          </n-button>
-          <n-button
-            block
-            :disabled="nextChapterId === undefined"
-            @click="nextChapterId && navigate(nextChapterId)"
-          >
-            下一章
-          </n-button>
-        </n-space>
-      </n-drawer-content>
-    </n-drawer>
+    <ReaderBottomSheet v-model:show="showTools" title="阅读工具" wide>
+      <div class="book-reader__tool-grid">
+        <n-button @click="toggleBookmark">添加书签</n-button>
+        <n-button @click="addAnnotation">高亮选中</n-button>
+        <n-button
+          @click="
+            showTools = false;
+            showAnnotations = true;
+          "
+        >
+          批注 ({{ annotations.length }})
+        </n-button>
+        <n-button
+          @click="
+            showTools = false;
+            showBookmarks = true;
+          "
+        >
+          书签 ({{ bookmarks.length }})
+        </n-button>
+        <n-button
+          @click="
+            showTools = false;
+            showModePrompt = true;
+          "
+        >
+          阅读版本
+        </n-button>
+        <n-button @click="speakCurrentSegment">朗读当前段</n-button>
+        <n-button @click="stopSpeaking">停止朗读</n-button>
+        <n-button @click="openSelectedInInteractive">查词 / AI</n-button>
+        <n-button @click="queueChapterTranslation('gpt')">
+          GPT 翻译本章
+        </n-button>
+        <n-button @click="queueChapterTranslation('sakura')">
+          Sakura 翻译本章
+        </n-button>
+        <n-button @click="openDetails">书籍详情</n-button>
+        <n-button @click="backToWorkspace">工作区</n-button>
+        <n-button
+          :disabled="previousChapterId === undefined"
+          @click="previousChapterId && navigate(previousChapterId)"
+        >
+          上一章
+        </n-button>
+        <n-button
+          :disabled="nextChapterId === undefined"
+          @click="nextChapterId && navigate(nextChapterId)"
+        >
+          下一章
+        </n-button>
+      </div>
+    </ReaderBottomSheet>
 
-    <n-drawer v-model:show="showAnnotations" :width="320" placement="right">
-      <n-drawer-content title="批注">
-        <n-empty v-if="annotations.length === 0" description="本书还没有批注" />
-        <n-list v-else>
-          <n-list-item v-for="annotation in annotations" :key="annotation.id">
-            <n-thing
-              :title="annotation.quote"
-              :description="annotation.note ?? annotation.style"
-            />
-            <template #suffix>
-              <n-button text type="error" @click="deleteAnnotation(annotation)">
-                删除
-              </n-button>
-            </template>
-          </n-list-item>
-        </n-list>
-      </n-drawer-content>
-    </n-drawer>
+    <ReaderBottomSheet v-model:show="showAnnotations" title="批注">
+      <n-empty v-if="annotations.length === 0" description="本书还没有批注" />
+      <n-list v-else>
+        <n-list-item v-for="annotation in annotations" :key="annotation.id">
+          <n-thing
+            :title="annotation.quote"
+            :description="annotation.note ?? annotation.style"
+          />
+          <template #suffix>
+            <n-button text type="error" @click="deleteAnnotation(annotation)">
+              删除
+            </n-button>
+          </template>
+        </n-list-item>
+      </n-list>
+    </ReaderBottomSheet>
 
-    <n-drawer v-model:show="showBookmarks" :width="320" placement="right">
-      <n-drawer-content title="书签">
-        <n-empty v-if="bookmarks.length === 0" description="本书还没有书签" />
-        <n-list v-else hoverable clickable>
-          <n-list-item
-            v-for="bookmark in bookmarks"
-            :key="bookmark.id"
-            @click="openBookmark(bookmark)"
-          >
-            <n-thing
-              :title="bookmark.label ?? '章节书签'"
-              :description="'章节：' + bookmark.chapterId"
-            />
-            <template #suffix>
-              <n-button
-                text
-                type="error"
-                @click.stop="deleteBookmark(bookmark)"
-              >
-                删除
-              </n-button>
-            </template>
-          </n-list-item>
-        </n-list>
-      </n-drawer-content>
-    </n-drawer>
+    <ReaderBottomSheet v-model:show="showBookmarks" title="书签">
+      <n-empty v-if="bookmarks.length === 0" description="本书还没有书签" />
+      <n-list v-else hoverable clickable>
+        <n-list-item
+          v-for="bookmark in bookmarks"
+          :key="bookmark.id"
+          @click="openBookmark(bookmark)"
+        >
+          <n-thing
+            :title="bookmark.label ?? '章节书签'"
+            :description="'章节：' + bookmark.chapterId"
+          />
+          <template #suffix>
+            <n-button text type="error" @click.stop="deleteBookmark(bookmark)">
+              删除
+            </n-button>
+          </template>
+        </n-list-item>
+      </n-list>
+    </ReaderBottomSheet>
 
     <ReaderModeDialog
       v-model:show="showModePrompt"
@@ -1004,12 +1035,14 @@ onBeforeUnmount(() => {
       @select="chooseMode"
     />
 
-    <n-drawer v-model:show="showSettings" :width="320" placement="right">
-      <n-drawer-content title="阅读设置">
-        <n-form label-placement="top">
+    <ReaderBottomSheet v-model:show="showSettings" title="阅读设置" wide>
+      <n-form label-placement="top" class="book-reader__settings-grid">
+        <div>
           <n-form-item label="字体大小">
             <n-slider v-model:value="settings.fontSize" :max="32" :min="12" />
           </n-form-item>
+        </div>
+        <div>
           <n-form-item label="行高">
             <n-slider
               v-model:value="settings.lineHeight"
@@ -1018,6 +1051,8 @@ onBeforeUnmount(() => {
               :step="0.1"
             />
           </n-form-item>
+        </div>
+        <div>
           <n-form-item label="正文宽度">
             <n-slider
               v-model:value="settings.contentWidth"
@@ -1026,6 +1061,8 @@ onBeforeUnmount(() => {
               :step="20"
             />
           </n-form-item>
+        </div>
+        <div>
           <n-form-item label="页面边距">
             <n-slider
               v-model:value="settings.horizontalPadding"
@@ -1034,6 +1071,8 @@ onBeforeUnmount(() => {
               :step="2"
             />
           </n-form-item>
+        </div>
+        <div class="book-reader__settings-theme">
           <n-form-item label="主题">
             <n-select
               v-model:value="settings.theme"
@@ -1045,9 +1084,9 @@ onBeforeUnmount(() => {
               ]"
             />
           </n-form-item>
-        </n-form>
-      </n-drawer-content>
-    </n-drawer>
+        </div>
+      </n-form>
+    </ReaderBottomSheet>
   </main>
 </template>
 
@@ -1166,11 +1205,82 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__catalog {
-  margin-top: 12px;
+  display: grid;
+  margin-top: 8px;
+  border-top: 1px solid var(--reader-chrome-border);
 }
 
 .book-reader__catalog-item--active {
-  background: var(--n-hover-color);
+  color: #5bd6b0 !important;
+  background: rgb(91 214 176 / 11%) !important;
+}
+
+.book-reader__catalog-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--reader-muted-color);
+  font-size: 13px;
+  gap: 16px;
+}
+
+.book-reader__catalog-summary span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.book-reader__catalog-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px 8px 8px var(--catalog-indent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--reader-chrome-border);
+  gap: 12px;
+}
+
+.book-reader__catalog-item:hover,
+.book-reader__catalog-item:focus-visible {
+  background: rgb(127 127 127 / 12%);
+  outline: none;
+}
+
+.book-reader__catalog-item--structural {
+  min-height: 38px;
+  color: var(--reader-muted-color);
+  font-weight: 700;
+  cursor: default;
+  opacity: 1;
+}
+
+.book-reader__catalog-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.book-reader__tool-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.book-reader__settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+}
+
+.book-reader__settings-theme {
+  grid-column: 1 / -1;
 }
 
 .book-reader__loading {
@@ -1319,6 +1429,20 @@ onBeforeUnmount(() => {
   .book-reader__bottom-navigation span {
     font-size: 14px;
     line-height: 18px;
+  }
+
+  .book-reader__catalog-item {
+    min-height: 54px;
+  }
+
+  .book-reader__tool-grid,
+  .book-reader__settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .book-reader__settings-theme {
+    grid-column: 1 / -1;
   }
 }
 
