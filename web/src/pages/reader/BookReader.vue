@@ -707,6 +707,13 @@ const scrollToSegment = (segmentId: string | undefined) => {
 const scrollToChapterEdge = async (edge: 'start' | 'end') => {
   await nextTick();
   await nextTick();
+  if (resolvedFlow.value === 'scrolled') {
+    window.scrollTo({
+      top: edge === 'start' ? 0 : document.documentElement.scrollHeight,
+      behavior: 'auto',
+    });
+    return;
+  }
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   if (resolvedFlow.value === 'paginated') {
     const viewport = readerViewport.value;
@@ -716,10 +723,6 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
     paginatedAnchorSegmentId = getActiveSegmentId('paginated');
     return;
   }
-  window.scrollTo({
-    top: edge === 'start' ? 0 : document.documentElement.scrollHeight,
-    behavior: 'auto',
-  });
 };
 
 const handleSegmentContentChange = async (anchorId?: string) => {
@@ -1877,6 +1880,7 @@ onBeforeUnmount(() => {
   width: min(100%, var(--reader-content-width));
   margin: 0 auto;
   padding: 24px max(28px, var(--reader-padding)) 36px;
+  overflow-anchor: none;
 }
 
 .book-reader__content--paginated {
