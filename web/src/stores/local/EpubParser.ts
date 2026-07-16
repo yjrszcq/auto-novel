@@ -7,17 +7,23 @@ interface EpubParser {
   ) => Document;
 }
 
+export const getEpubTextParagraphElements = (doc: Document) => {
+  Array.from(doc.getElementsByTagName('rt')).forEach((node) =>
+    node.parentNode!.removeChild(node),
+  );
+  Array.from(doc.getElementsByTagName('rp')).forEach((node) =>
+    node.parentNode!.removeChild(node),
+  );
+  return Array.from(doc.body.getElementsByTagName('p')).filter(
+    (element) => element.innerText.trim().length !== 0,
+  );
+};
+
 export const EpubParserV1: EpubParser = {
   extractText: (doc: Document) => {
-    Array.from(doc.getElementsByTagName('rt')).forEach((node) =>
-      node.parentNode!.removeChild(node),
+    return getEpubTextParagraphElements(doc).map(
+      (element) => element.innerText,
     );
-    Array.from(doc.getElementsByTagName('rp')).forEach((node) =>
-      node.parentNode!.removeChild(node),
-    );
-    return Array.from(doc.body.getElementsByTagName('p'))
-      .map((el) => el.innerText)
-      .filter((it) => it.trim().length !== 0);
   },
   injectTranslation: (
     doc: Document,
