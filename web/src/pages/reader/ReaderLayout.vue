@@ -1,5 +1,13 @@
 <template>
-  <n-layout style="width: 100%; min-height: 100vh">
+  <div class="reader-layout">
     <router-view name="reader" />
-  </n-layout>
+  </div>
 </template>
+
+<style scoped>
+.reader-layout {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+</style>

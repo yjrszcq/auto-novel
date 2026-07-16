@@ -186,7 +186,8 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
 
-  const readerTop = page.locator('.book-reader__top');
+  const readerTop = page.locator('.book-reader__app-bar');
+  await expect(readerTop).toBeVisible();
   await page.evaluate(() =>
     window.scrollTo(0, document.documentElement.scrollHeight),
   );
@@ -197,7 +198,8 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       ),
     )
     .toBeLessThanOrEqual(1);
-  await page.getByRole('button', { name: '下一章' }).click();
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: '下一章', exact: true }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
   await expect
     .poll(() =>
@@ -207,9 +209,23 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     )
     .toBeLessThanOrEqual(1);
 
-  await page.getByRole('button', { name: '更多' }).click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '工具', exact: true }).click();
   await page.getByRole('button', { name: '添加书签' }).click();
   await expect(page.getByRole('button', { name: '书签 (1)' })).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('button', { name: '添加书签', exact: true }),
+  ).toBeHidden();
+  await expect(page.locator('.n-drawer-mask')).toHaveCount(0);
+  const readerContent = page.locator('.book-reader__content');
+  const readerParagraph = readerContent.locator('p').first();
+  await readerParagraph.click();
+  await expect(readerTop).toHaveCount(0);
+  await expect(page.locator('.book-reader__progress-track')).toBeVisible();
+  await readerParagraph.click();
+  await expect(readerTop).toBeVisible();
 
   await page.goto('/workspace/reader/reader-flow.txt/0');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);

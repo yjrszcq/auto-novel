@@ -1,4 +1,14 @@
 <script lang="ts" setup>
+import {
+  AutoAwesomeOutlined,
+  BuildOutlined,
+  DarkModeOutlined,
+  InfoOutlined,
+  MenuBookOutlined,
+  MoreVertOutlined,
+  SettingsOutlined,
+  WbSunnyOutlined,
+} from '@vicons/material';
 import type {
   ReaderAnnotation,
   ReaderBookmark,
@@ -20,6 +30,10 @@ import {
 import type { ReaderPageLoadResult } from './core/ReaderPageState';
 import { createReaderPageController } from './core/ReaderPageState';
 import { resolveRenderedReaderMode } from './core/BilingualLayout';
+import {
+  getReaderEscapeAction,
+  shouldToggleReaderChrome,
+} from './core/ReaderChrome';
 import { createReaderAnnotation } from './core/ReaderAnnotations';
 import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
 import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
@@ -31,11 +45,7 @@ import {
   getBookmarkTarget,
   sortReaderBookmarks,
 } from './core/ReaderBookmarks';
-import {
-  getAvailableReaderModes,
-  readerModeLabels,
-  resolveReaderMode,
-} from './core/ReaderMode';
+import { getAvailableReaderModes, resolveReaderMode } from './core/ReaderMode';
 import {
   getChapterTranslationParams,
   getTranslationStatusLabel,
@@ -65,13 +75,13 @@ const showCatalog = ref(false);
 const showTools = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
+const controlsVisible = ref(true);
 const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
 let pendingBookmark: ReaderBookmark | undefined;
 const rememberModeChoice = ref(false);
 const readingMode = ref<ReaderMode>('original');
 const availableModes = ref<ReaderMode[]>(['original']);
-const modeLabel = (mode: ReaderMode) => readerModeLabels[mode];
 let readingStartedAt: number | undefined;
 let readingBookId: string | undefined;
 let readingStatsWrite = Promise.resolve();
@@ -155,10 +165,61 @@ const renderedMode = computed(() =>
     : 'original',
 );
 
+const hasOpenReaderPanel = () =>
+  showCatalog.value ||
+  showSettings.value ||
+  showTools.value ||
+  showBookmarks.value ||
+  showAnnotations.value ||
+  showModePrompt.value;
+
+const closeReaderPanels = () => {
+  showCatalog.value = false;
+  showSettings.value = false;
+  showTools.value = false;
+  showBookmarks.value = false;
+  showAnnotations.value = false;
+  showModePrompt.value = false;
+};
+
+const toggleControlsFromContent = (event: MouseEvent) => {
+  const selection = window.getSelection();
+  const target = event.target as HTMLElement;
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const relativeX = event.clientX - rect.left;
+  if (
+    shouldToggleReaderChrome({
+      hasOpenPanel: hasOpenReaderPanel(),
+      hasSelection: selection !== null && !selection.isCollapsed,
+      interactiveTarget:
+        target.closest('button, a, input, textarea, select') !== null,
+      relativeX,
+      width: rect.width,
+    })
+  ) {
+    controlsVisible.value = !controlsVisible.value;
+  }
+};
+
+const handleReaderKeydown = (event: KeyboardEvent) => {
+  if (event.key !== 'Escape') return;
+  if (getReaderEscapeAction(hasOpenReaderPanel()) === 'close-panel') {
+    closeReaderPanels();
+  } else {
+    controlsVisible.value = false;
+  }
+};
+
 const activeSettings = computed(() => ({
   ...settings.value,
   ...bookStyle.value,
 }));
+
+const isDarkReaderTheme = computed(() => activeSettings.value.theme === 'dark');
+
+const toggleQuickTheme = () => {
+  settings.value.theme = isDarkReaderTheme.value ? 'light' : 'dark';
+};
 
 const readerStyle = computed(() => ({
   '--reader-font-size': `${activeSettings.value.fontSize}px`,
@@ -605,6 +666,12 @@ const nextChapterId = computed(() =>
     ? result.value.chapters[currentChapterIndex.value + 1]?.id
     : undefined,
 );
+const chapterProgressPercent = computed(() => {
+  if (result.value?.kind !== 'ready' || result.value.chapters.length === 0) {
+    return 0;
+  }
+  return ((currentChapterIndex.value + 1) / result.value.chapters.length) * 100;
+});
 
 watch(
   () => [bookId.value, requestedChapterId.value],
@@ -645,10 +712,12 @@ watch(
 onMounted(() => {
   void loadSettings();
   window.addEventListener('scroll', saveProgressThrottled, { passive: true });
+  window.addEventListener('keydown', handleReaderKeydown);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', saveProgressThrottled);
+  window.removeEventListener('keydown', handleReaderKeydown);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   void saveProgress();
   void recordReadingTime();
@@ -659,43 +728,51 @@ onBeforeUnmount(() => {
 <template>
   <main
     class="book-reader"
-    :class="`book-reader--${activeSettings.theme}`"
+    :class="[
+      `book-reader--${activeSettings.theme}`,
+      { 'book-reader--controls-visible': controlsVisible },
+    ]"
     :style="readerStyle"
   >
-    <section class="book-reader__top">
-      <n-alert
-        v-if="migrationWarning !== undefined"
-        type="warning"
-        style="margin-bottom: 16px"
+    <header v-if="controlsVisible" class="book-reader__app-bar">
+      <button
+        class="book-reader__app-bar-action"
+        type="button"
+        aria-label="书籍详情"
+        @click="openDetails"
       >
+        <n-icon :component="InfoOutlined" />
+      </button>
+      <div v-if="result?.kind === 'ready'" class="book-reader__app-bar-title">
+        <span :title="result.book.title">{{ result.book.title }}</span>
+      </div>
+      <div v-else class="book-reader__app-bar-title">本地阅读器</div>
+      <button
+        class="book-reader__app-bar-action"
+        type="button"
+        aria-label="更多阅读工具"
+        @click="showTools = true"
+      >
+        <n-icon :component="MoreVertOutlined" />
+      </button>
+    </header>
+
+    <div
+      v-else-if="result?.kind === 'ready'"
+      class="book-reader__chapter-status"
+      :title="result.chapter.title"
+    >
+      {{ result.chapter.title }}
+    </div>
+
+    <section v-if="controlsVisible" class="book-reader__notices">
+      <n-alert v-if="migrationWarning !== undefined" type="warning">
         {{ migrationWarning }}；现有书籍仍可继续阅读。
       </n-alert>
-      <header class="book-reader__header">
-        <div class="book-reader__header-actions">
-          <n-button text size="small" @click="backToBookshelf">书架</n-button>
-          <n-button text size="small" @click="showCatalog = true">
-            目录
-          </n-button>
-        </div>
-        <div v-if="result?.kind === 'ready'" class="book-reader__header-title">
-          <strong :title="result.book.title">{{ result.book.title }}</strong>
-          <span :title="result.chapter.title">{{ result.chapter.title }}</span>
-        </div>
-        <div class="book-reader__header-actions">
-          <n-button text size="small" @click="showModePrompt = true">
-            {{ modeLabel(renderedMode) }}
-          </n-button>
-          <n-button text size="small" @click="showSettings = true">
-            设置
-          </n-button>
-          <n-button text size="small" @click="showTools = true">更多</n-button>
-        </div>
-      </header>
       <template v-if="result?.kind === 'ready'">
         <n-alert
           v-if="currentChapterSummary?.translationStatus !== 'complete'"
           type="warning"
-          style="margin-bottom: 16px"
         >
           <n-space align="center">
             <span>
@@ -715,11 +792,7 @@ onBeforeUnmount(() => {
           </n-space>
         </n-alert>
 
-        <n-alert
-          v-if="readingMode !== renderedMode"
-          type="info"
-          style="margin-bottom: 16px"
-        >
+        <n-alert v-if="readingMode !== renderedMode" type="info">
           本章尚无可用译文，已显示原文。
         </n-alert>
       </template>
@@ -739,7 +812,11 @@ onBeforeUnmount(() => {
     </n-result>
 
     <template v-else-if="result?.kind === 'ready'">
-      <article class="book-reader__content">
+      <article
+        class="book-reader__content"
+        :class="{ 'book-reader__content--controls-visible': controlsVisible }"
+        @click="toggleControlsFromContent"
+      >
         <ReaderSegmentLayout
           :segments="result.chapter.segments"
           :mode="renderedMode"
@@ -747,22 +824,44 @@ onBeforeUnmount(() => {
           :initial-segment-id="initialSegmentId"
         />
       </article>
-
-      <footer class="book-reader__navigation">
-        <n-button
-          :disabled="previousChapterId === undefined"
-          @click="previousChapterId && navigate(previousChapterId)"
-        >
-          上一章
-        </n-button>
-        <n-button
-          :disabled="nextChapterId === undefined"
-          @click="nextChapterId && navigate(nextChapterId)"
-        >
-          下一章
-        </n-button>
-      </footer>
     </template>
+
+    <nav
+      v-if="controlsVisible"
+      class="book-reader__bottom-navigation"
+      aria-label="阅读器导航"
+    >
+      <button type="button" @click="showCatalog = true">
+        <n-icon :component="MenuBookOutlined" />
+        <span>目录</span>
+      </button>
+      <button type="button" @click="toggleQuickTheme">
+        <n-icon
+          :component="isDarkReaderTheme ? WbSunnyOutlined : DarkModeOutlined"
+        />
+        <span>{{ isDarkReaderTheme ? '白天' : '夜晚' }}</span>
+      </button>
+      <button type="button" @click="showSettings = true">
+        <n-icon :component="SettingsOutlined" />
+        <span>设置</span>
+      </button>
+      <button type="button" @click="showTools = true">
+        <n-icon :component="BuildOutlined" />
+        <span>工具</span>
+      </button>
+      <button type="button" @click="openSelectedInInteractive">
+        <n-icon :component="AutoAwesomeOutlined" />
+        <span>AI</span>
+      </button>
+    </nav>
+
+    <div
+      v-else-if="result?.kind === 'ready'"
+      class="book-reader__progress-track"
+      aria-hidden="true"
+    >
+      <span :style="{ width: chapterProgressPercent + '%' }" />
+    </div>
 
     <n-drawer v-model:show="showCatalog" :width="360" placement="left">
       <n-drawer-content title="目录">
@@ -954,69 +1053,116 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .book-reader {
-  max-width: var(--reader-content-width);
+  --reader-app-bar-height: 40px;
+  --reader-bottom-navigation-height: 52px;
+  width: 100%;
   min-height: 100vh;
-  margin: 0 auto;
-  padding: 16px var(--reader-padding) 28px;
+  min-height: 100dvh;
+  padding-top: 24px;
+  padding-bottom: 8px;
+  overflow-x: hidden;
   color: var(--reader-text-color, var(--n-text-color));
   background: var(--reader-background, transparent);
 }
 
-.book-reader--light {
-  --reader-text-color: #1f1f1f;
-  --reader-background: #fff;
+.book-reader--controls-visible {
+  padding-top: var(--reader-app-bar-height);
+  padding-bottom: var(--reader-bottom-navigation-height);
+}
+
+.book-reader--light,
+.book-reader--system {
+  --reader-text-color: #353535;
+  --reader-muted-color: #777;
+  --reader-background: #fafafa;
+  --reader-chrome-background: #f1f1f1;
+  --reader-chrome-border: rgb(0 0 0 / 12%);
 }
 
 .book-reader--dark {
-  --reader-text-color: #e6e6e6;
-  --reader-background: #202020;
+  --reader-text-color: #c9c9c9;
+  --reader-muted-color: #929292;
+  --reader-background: #191919;
+  --reader-chrome-background: #242424;
+  --reader-chrome-border: rgb(255 255 255 / 8%);
 }
 
 .book-reader--sepia {
   --reader-text-color: #4a3925;
+  --reader-muted-color: #806f58;
   --reader-background: #f4ecd8;
+  --reader-chrome-background: #e8ddc3;
+  --reader-chrome-border: rgb(74 57 37 / 14%);
 }
 
-.book-reader__top {
-  position: sticky;
+.book-reader__app-bar {
+  position: fixed;
   top: 0;
-  z-index: 10;
-  margin-bottom: 20px;
-  padding: 8px 0;
-  background: var(--reader-background, var(--n-body-color));
-  border-bottom: 1px solid var(--n-border-color);
-}
-
-.book-reader__header {
+  right: 0;
+  left: 0;
+  z-index: 100;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: var(--reader-app-bar-height) minmax(0, 1fr) var(
+      --reader-app-bar-height
+    );
   align-items: center;
-  gap: 8px;
+  height: var(--reader-app-bar-height);
+  background: var(--reader-chrome-background, var(--reader-background));
+  border-bottom: 1px solid var(--reader-chrome-border);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
 }
 
-.book-reader__header-actions {
-  display: flex;
-  gap: 2px;
-  white-space: nowrap;
+.book-reader__app-bar-action {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  place-items: center;
 }
 
-.book-reader__header-title {
-  display: flex;
+.book-reader__app-bar-action:hover,
+.book-reader__app-bar-action:focus-visible,
+.book-reader__bottom-navigation button:hover,
+.book-reader__bottom-navigation button:focus-visible {
+  background: rgb(127 127 127 / 14%);
+  outline: none;
+}
+
+.book-reader__app-bar-title {
   min-width: 0;
-  flex-direction: column;
-  text-align: center;
-}
-
-.book-reader__header-title strong,
-.book-reader__header-title span {
+  padding: 0 8px;
   overflow: hidden;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.book-reader__header-title span {
-  color: var(--n-text-color-3);
+.book-reader__chapter-status {
+  position: fixed;
+  top: 3px;
+  left: 8px;
+  z-index: 20;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  color: var(--reader-muted-color);
   font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.book-reader__notices {
+  display: grid;
+  max-width: 1080px;
+  margin: 12px auto 0;
+  padding: 0 max(16px, var(--reader-padding));
+  gap: 8px;
 }
 
 .book-reader__catalog {
@@ -1029,43 +1175,160 @@ onBeforeUnmount(() => {
 
 .book-reader__loading {
   display: grid;
-  min-height: 50vh;
+  min-height: calc(100dvh - 100px);
   place-items: center;
 }
 
 .book-reader__content {
+  width: min(100%, 1880px);
+  margin: 0 auto;
+  padding: 24px max(28px, var(--reader-padding)) 36px;
   font-size: var(--reader-font-size);
   line-height: var(--reader-line-height);
 }
 
 .book-reader__content p {
-  scroll-margin-top: 224px;
+  scroll-margin-top: calc(var(--reader-app-bar-height) + 12px);
   white-space: pre-wrap;
 }
 
-.book-reader__navigation {
+.book-reader__bottom-navigation {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 36px;
+  justify-content: center;
+  height: var(--reader-bottom-navigation-height);
+  color: inherit;
+  background: var(--reader-chrome-background, var(--reader-background));
+  border-top: 1px solid var(--reader-chrome-border);
+  box-shadow: 0 -2px 8px rgb(0 0 0 / 14%);
+}
+
+.book-reader__bottom-navigation button {
+  display: flex;
+  width: min(15vw, 132px);
+  min-width: 76px;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  gap: 1px;
+}
+
+.book-reader__bottom-navigation :deep(.n-icon) {
+  font-size: 21px;
+}
+
+.book-reader__bottom-navigation span {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.book-reader__progress-track {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  height: 3px;
+  overflow: hidden;
+  background: rgb(127 127 127 / 20%);
+}
+
+.book-reader__progress-track span {
+  display: block;
+  height: 100%;
+  background: #5bd6b0;
+  transition: width 180ms ease;
+}
+
+@media only screen and (min-width: 1000px) {
+  .book-reader__content :deep(.reader-segment-layout--original),
+  .book-reader__content :deep(.reader-segment-layout--translated) {
+    column-count: 2;
+    column-gap: clamp(72px, 9vw, 190px);
+    column-rule: 1px solid var(--reader-chrome-border);
+  }
+
+  .book-reader__content :deep(.reader-segment) {
+    break-inside: avoid;
+  }
 }
 
 @media only screen and (max-width: 600px) {
   .book-reader {
-    padding-top: 8px;
-    padding-bottom: 16px;
+    --reader-app-bar-height: 56px;
+    --reader-bottom-navigation-height: 76px;
+    padding-top: 26px;
   }
 
-  .book-reader__header {
-    gap: 4px;
+  .book-reader--controls-visible {
+    padding-top: var(--reader-app-bar-height);
+    padding-bottom: var(--reader-bottom-navigation-height);
   }
 
-  .book-reader__header-actions :deep(.n-button) {
-    padding: 0 4px;
+  .book-reader__app-bar {
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
   }
 
-  .book-reader__header-title {
-    text-align: left;
+  .book-reader__app-bar-action :deep(.n-icon) {
+    font-size: 28px;
+  }
+
+  .book-reader__app-bar-title {
+    font-size: 17px;
+  }
+
+  .book-reader__chapter-status {
+    top: 6px;
+    left: 14px;
+    max-width: calc(100vw - 28px);
+    font-size: 12px;
+  }
+
+  .book-reader__notices {
+    margin-top: 8px;
+    padding: 0 14px;
+  }
+
+  .book-reader__content {
+    padding: 18px max(22px, env(safe-area-inset-left)) 36px;
+    font-size: var(--reader-font-size);
+    line-height: var(--reader-line-height);
+  }
+
+  .book-reader__bottom-navigation button {
+    width: 20%;
+    min-width: 0;
+    padding-bottom: max(5px, env(safe-area-inset-bottom));
+  }
+
+  .book-reader__bottom-navigation :deep(.n-icon) {
+    font-size: 28px;
+  }
+
+  .book-reader__bottom-navigation span {
+    font-size: 14px;
+    line-height: 18px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .book-reader--system {
+    --reader-text-color: #c9c9c9;
+    --reader-muted-color: #929292;
+    --reader-background: #191919;
+    --reader-chrome-background: #242424;
+    --reader-chrome-border: rgb(255 255 255 / 8%);
   }
 }
 </style>
