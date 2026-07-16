@@ -1196,10 +1196,7 @@ onBeforeUnmount(() => {
   <main
     ref="readerRoot"
     class="book-reader"
-    :class="[
-      `book-reader--${activeSettings.theme}`,
-      { 'book-reader--controls-visible': controlsVisible },
-    ]"
+    :class="`book-reader--${activeSettings.theme}`"
     :style="readerStyle"
   >
     <header
@@ -1323,7 +1320,6 @@ onBeforeUnmount(() => {
         :class="[
           `book-reader__content--${resolvedFlow}`,
           {
-            'book-reader__content--controls-visible': controlsVisible,
             'book-reader__content--double-spread':
               resolvedFlow === 'paginated' && usesDoublePageSpread,
           },
@@ -1615,11 +1611,6 @@ onBeforeUnmount(() => {
   background: var(--reader-background, transparent);
 }
 
-.book-reader--controls-visible {
-  padding-top: var(--reader-app-bar-height);
-  padding-bottom: var(--reader-bottom-navigation-height);
-}
-
 .book-reader--light,
 .book-reader--system {
   --reader-text-color: #353535;
@@ -1740,9 +1731,14 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__notices {
+  position: fixed;
+  top: calc(var(--reader-app-bar-height) + 8px);
+  right: 0;
+  left: 0;
+  z-index: 90;
   display: grid;
   max-width: 1080px;
-  margin: 12px auto 0;
+  margin: 0 auto;
   padding: 0 max(16px, var(--reader-padding));
   gap: 8px;
 }
@@ -1900,13 +1896,6 @@ onBeforeUnmount(() => {
   scrollbar-width: none;
 }
 
-.book-reader__content--paginated.book-reader__content--controls-visible {
-  height: calc(
-    100dvh - var(--reader-app-bar-height) -
-      var(--reader-bottom-navigation-height)
-  );
-}
-
 .book-reader__content--paginated::-webkit-scrollbar {
   display: none;
 }
@@ -2007,11 +1996,6 @@ onBeforeUnmount(() => {
     padding-top: 26px;
   }
 
-  .book-reader--controls-visible {
-    padding-top: var(--reader-app-bar-height);
-    padding-bottom: var(--reader-bottom-navigation-height);
-  }
-
   .book-reader__app-bar {
     grid-template-columns: 56px minmax(0, 1fr) 48px 56px;
   }
@@ -2055,7 +2039,7 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__notices {
-    margin-top: 8px;
+    top: calc(var(--reader-app-bar-height) + 8px);
     padding: 0 14px;
   }
 
@@ -2069,13 +2053,6 @@ onBeforeUnmount(() => {
     --reader-page-padding: max(22px, env(safe-area-inset-left));
     height: calc(100dvh - 34px);
     padding: 0;
-  }
-
-  .book-reader__content--paginated.book-reader__content--controls-visible {
-    height: calc(
-      100dvh - var(--reader-app-bar-height) -
-        var(--reader-bottom-navigation-height)
-    );
   }
 
   .book-reader__content--paginated :deep(.reader-segment-layout) {

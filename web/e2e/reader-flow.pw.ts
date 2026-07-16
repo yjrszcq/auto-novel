@@ -268,6 +268,46 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     'height',
     '52px',
   );
+  const visibleControlsGeometry = await readerContent.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: Math.round(rect.top),
+      height: Math.round(rect.height),
+      clientHeight: element.clientHeight,
+      scrollWidth: element.scrollWidth,
+      scrollLeft: element.scrollLeft,
+    };
+  });
+  const overlayToggleBounds = await readerContent.boundingBox();
+  if (overlayToggleBounds === null) throw new Error('缺少菜单覆盖测试视口');
+  await readerContent.click({
+    position: {
+      x: overlayToggleBounds.width * 0.5,
+      y: overlayToggleBounds.height * 0.5,
+    },
+  });
+  await expect(readerTop).toHaveCount(0);
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          top: Math.round(rect.top),
+          height: Math.round(rect.height),
+          clientHeight: element.clientHeight,
+          scrollWidth: element.scrollWidth,
+          scrollLeft: element.scrollLeft,
+        };
+      }),
+    )
+    .toEqual(visibleControlsGeometry);
+  await readerContent.click({
+    position: {
+      x: overlayToggleBounds.width * 0.5,
+      y: overlayToggleBounds.height * 0.5,
+    },
+  });
+  await expect(readerTop).toBeVisible();
   const readerBounds = await readerContent.boundingBox();
   if (readerBounds === null) throw new Error('缺少分页正文视口');
   await readerContent.click({
