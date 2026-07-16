@@ -83,3 +83,22 @@ export const resolveReaderPageTurn = ({
     ? { kind: 'chapter', direction: 'next' }
     : { kind: 'none' };
 };
+
+export const resolveReaderBoundaryGesture = ({
+  startY,
+  endY,
+  startedAtStart,
+  startedAtEnd,
+  minimumDistance = 56,
+}: {
+  startY: number;
+  endY: number;
+  startedAtStart: boolean;
+  startedAtEnd: boolean;
+  minimumDistance?: number;
+}): 'previous' | 'next' | undefined => {
+  const distance = endY - startY;
+  if (startedAtEnd && distance <= -minimumDistance) return 'next';
+  if (startedAtStart && distance >= minimumDistance) return 'previous';
+  return undefined;
+};

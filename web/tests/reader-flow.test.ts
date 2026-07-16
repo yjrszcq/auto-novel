@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getReaderPageDelta,
   getReaderPageMetrics,
+  resolveReaderBoundaryGesture,
   resolveReaderPageTurn,
   resolveReaderFlow,
 } from '../src/pages/reader/core/ReaderFlow';
@@ -80,5 +81,40 @@ describe('reader flow', () => {
         hasNextChapter: true,
       }),
     ).toEqual({ kind: 'page', pageIndex: 2 });
+  });
+
+  it('turns chapters only after a deliberate swipe at a scroll boundary', () => {
+    expect(
+      resolveReaderBoundaryGesture({
+        startY: 500,
+        endY: 420,
+        startedAtStart: false,
+        startedAtEnd: true,
+      }),
+    ).toBe('next');
+    expect(
+      resolveReaderBoundaryGesture({
+        startY: 200,
+        endY: 280,
+        startedAtStart: true,
+        startedAtEnd: false,
+      }),
+    ).toBe('previous');
+    expect(
+      resolveReaderBoundaryGesture({
+        startY: 500,
+        endY: 420,
+        startedAtStart: false,
+        startedAtEnd: false,
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveReaderBoundaryGesture({
+        startY: 500,
+        endY: 470,
+        startedAtStart: false,
+        startedAtEnd: true,
+      }),
+    ).toBeUndefined();
   });
 });

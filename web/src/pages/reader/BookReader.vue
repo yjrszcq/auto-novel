@@ -40,6 +40,7 @@ import {
 import {
   getReaderPageDelta,
   getReaderPageMetrics,
+  resolveReaderBoundaryGesture,
   resolveReaderPageTurn,
   resolveReaderFlow,
 } from './core/ReaderFlow';
@@ -288,6 +289,48 @@ const scrollReaderPage = async (delta: number) => {
 };
 
 let lastWheelPageAt = 0;
+let boundaryTouch:
+  | { startY: number; startedAtStart: boolean; startedAtEnd: boolean }
+  | undefined;
+
+const handleBoundaryTouchStart = (event: TouchEvent) => {
+  if (
+    isDesktopReader.value ||
+    resolvedFlow.value !== 'scrolled' ||
+    event.touches.length !== 1 ||
+    hasOpenReaderPanel()
+  ) {
+    boundaryTouch = undefined;
+    return;
+  }
+  const scrollable = Math.max(
+    0,
+    document.documentElement.scrollHeight - window.innerHeight,
+  );
+  boundaryTouch = {
+    startY: event.touches[0].clientY,
+    startedAtStart: window.scrollY <= 2,
+    startedAtEnd: window.scrollY >= scrollable - 2,
+  };
+};
+
+const handleBoundaryTouchEnd = (event: TouchEvent) => {
+  const touch = boundaryTouch;
+  boundaryTouch = undefined;
+  if (touch === undefined || event.changedTouches.length === 0) return;
+  const selection = window.getSelection();
+  if (selection !== null && !selection.isCollapsed) return;
+  const direction = resolveReaderBoundaryGesture({
+    ...touch,
+    endY: event.changedTouches[0].clientY,
+  });
+  if (direction === 'previous' && previousChapterId.value !== undefined) {
+    navigate(previousChapterId.value, 'end');
+  } else if (direction === 'next' && nextChapterId.value !== undefined) {
+    navigate(nextChapterId.value, 'start');
+  }
+};
+
 const handleViewportWheel = (event: WheelEvent) => {
   if (
     resolvedFlow.value !== 'paginated' ||
@@ -1161,6 +1204,8 @@ onBeforeUnmount(() => {
         tabindex="0"
         @click="toggleControlsFromContent"
         @scroll.passive="handleViewportScroll"
+        @touchend.passive="handleBoundaryTouchEnd"
+        @touchstart.passive="handleBoundaryTouchStart"
         @wheel="handleViewportWheel"
       >
         <ReaderSegmentLayout

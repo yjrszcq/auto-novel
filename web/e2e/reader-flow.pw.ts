@@ -289,8 +289,12 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       ),
     )
     .toBeLessThanOrEqual(1);
-  await page.getByRole('button', { name: '工具', exact: true }).click();
-  await page.getByRole('button', { name: '下一章', exact: true }).click();
+  await readerContent.dispatchEvent('touchstart', {
+    touches: [{ identifier: 0, clientX: 180, clientY: 500 }],
+  });
+  await readerContent.dispatchEvent('touchend', {
+    changedTouches: [{ identifier: 0, clientX: 180, clientY: 420 }],
+  });
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
   await expect
     .poll(() =>
