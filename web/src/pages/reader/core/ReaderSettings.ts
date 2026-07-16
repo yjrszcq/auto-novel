@@ -24,3 +24,10 @@ export const normalizeReaderSettings = (
   horizontalPadding: Math.max(12, Math.min(value?.horizontalPadding ?? 24, 64)),
   theme: value?.theme ?? 'system',
 });
+
+export const serializeReaderSettings = (
+  value: ReaderSettingsRecord,
+): ReaderSettingsRecord => ({
+  ...value,
+  translationPriority: [...value.translationPriority],
+});

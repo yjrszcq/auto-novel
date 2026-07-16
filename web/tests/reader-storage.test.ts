@@ -154,6 +154,18 @@ describe('reader storage migration', () => {
     expect(await reopened.listReaderBookmarks('book')).toEqual([]);
     expect(await reopened.getReaderCover('book')).toBeUndefined();
     expect(await reopened.listReaderAnnotations('book')).toEqual([]);
+    await reopened.putReaderSettings({
+      id: 'default',
+      defaultMode: 'original-translated',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      updatedAt: 1,
+    });
     reopened.close();
+
+    const settingsReloaded = await createLocalVolumeDao(databaseName);
+    expect(await settingsReloaded.getReaderSettings()).toMatchObject({
+      defaultMode: 'original-translated',
+    });
+    settingsReloaded.close();
   });
 });

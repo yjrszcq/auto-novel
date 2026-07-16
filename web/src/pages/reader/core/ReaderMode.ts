@@ -14,6 +14,14 @@ export const readerModes: SelectableReaderMode[] = [
   'original',
 ];
 
+export const readerModeLabels: Record<ReaderMode, string> = {
+  ask: '每次询问',
+  translated: '中文',
+  'translated-original': '中日对照',
+  'original-translated': '日中对照',
+  original: '原文（日文）',
+};
+
 export const getAvailableReaderModes = (
   capabilities: BookReadingCapabilities,
 ): ReaderMode[] =>

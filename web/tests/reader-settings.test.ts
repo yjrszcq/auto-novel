@@ -1,8 +1,10 @@
+import { reactive } from 'vue';
 import { describe, expect, it } from 'vitest';
 
 import {
   defaultReaderSettings,
   normalizeReaderSettings,
+  serializeReaderSettings,
 } from '../src/pages/reader/core/ReaderSettings';
 
 describe('reader settings', () => {
@@ -30,6 +32,21 @@ describe('reader settings', () => {
       contentWidth: 480,
       horizontalPadding: 64,
       theme: 'sepia',
+    });
+  });
+
+  it('copies reactive translation priority before IndexedDB persistence', () => {
+    const settings = reactive({
+      ...defaultReaderSettings,
+      translationPriority: [...defaultReaderSettings.translationPriority],
+    });
+    const serialized = serializeReaderSettings(settings);
+
+    expect(serialized.translationPriority).not.toBe(
+      settings.translationPriority,
+    );
+    expect(structuredClone(serialized)).toMatchObject({
+      translationPriority: defaultReaderSettings.translationPriority,
     });
   });
 });

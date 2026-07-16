@@ -39,6 +39,7 @@ import {
 import {
   defaultReaderSettings,
   normalizeReaderSettings,
+  serializeReaderSettings,
 } from './core/ReaderSettings';
 
 import {
@@ -624,7 +625,9 @@ watch(
       return;
     }
     const repository = await repositoryPromise;
-    await repository.putReaderSettings({ ...value, updatedAt: Date.now() });
+    await repository.putReaderSettings(
+      serializeReaderSettings({ ...value, updatedAt: Date.now() }),
+    );
   },
   { deep: true },
 );

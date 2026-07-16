@@ -68,3 +68,43 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect(page.getByText('安全文本', { exact: true })).toBeVisible();
 });
+
+test('persists the global reading version selected in Settings', async ({
+  page,
+}) => {
+  await page.goto('/setting');
+  await expect(page.getByText('默认阅读版本', { exact: true })).toBeVisible();
+
+  const selector = page.locator('#reader-default-mode');
+  await expect(selector).toHaveAttribute('aria-busy', 'false');
+  await selector.click();
+  await page.getByText('日中对照', { exact: true }).click();
+  await expect(selector).toContainText('日中对照');
+
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 4);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction('reader-settings', 'readonly');
+        const request = transaction
+          .objectStore('reader-settings')
+          .get('default');
+        const setting = await new Promise<{ defaultMode?: string } | undefined>(
+          (resolve, reject) => {
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          },
+        );
+        database.close();
+        return setting?.defaultMode;
+      }),
+    )
+    .toBe('original-translated');
+
+  await page.reload();
+  await expect(page.locator('#reader-default-mode')).toContainText('日中对照');
+});

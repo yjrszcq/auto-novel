@@ -7,6 +7,7 @@ import type {
 import {
   getAvailableReaderModes,
   resolveReaderMode,
+  readerModeLabels,
 } from '../src/pages/reader/core/ReaderMode';
 
 const settings: ReaderSettingsRecord = {
@@ -67,5 +68,13 @@ describe('reader open mode', () => {
       'original-translated',
       'original',
     ]);
+  });
+  it('uses Japanese-to-Chinese labels', () => {
+    expect(readerModeLabels).toMatchObject({
+      translated: '中文',
+      'translated-original': '中日对照',
+      'original-translated': '日中对照',
+      original: '原文（日文）',
+    });
   });
 });
