@@ -60,6 +60,8 @@ const result = shallowRef<ReaderPageLoadResult>();
 const initialSegmentId = ref<string>();
 const showSettings = ref(false);
 const showModePrompt = ref(false);
+const showCatalog = ref(false);
+const showTools = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
 const annotations = ref<ReaderAnnotation[]>([]);
@@ -650,22 +652,21 @@ onBeforeUnmount(() => {
     :style="readerStyle"
   >
     <header class="book-reader__header">
-      <n-button text @click="backToBookshelf">返回书架</n-button>
-      <n-button text @click="toggleBookmark">添加书签</n-button>
-      <n-button text @click="addAnnotation">高亮选中</n-button>
-      <n-button text @click="showAnnotations = true">
-        批注 ({{ annotations.length }})
-      </n-button>
-      <n-button text @click="showBookmarks = true">
-        书签 ({{ bookmarks.length }})
-      </n-button>
-      <n-button text @click="openDetails">书籍详情</n-button>
-      <n-button text @click="showSettings = true">阅读设置</n-button>
-      <n-button text @click="showModePrompt = true">切换模式</n-button>
-      <n-button text @click="speakCurrentSegment">朗读当前段</n-button>
-      <n-button text @click="stopSpeaking">停止朗读</n-button>
-      <n-button text @click="openSelectedInInteractive">查词 / AI</n-button>
-      <n-button text @click="backToWorkspace">工作区</n-button>
+      <div class="book-reader__header-actions">
+        <n-button text size="small" @click="backToBookshelf">书架</n-button>
+        <n-button text size="small" @click="showCatalog = true">目录</n-button>
+      </div>
+      <div v-if="result?.kind === 'ready'" class="book-reader__header-title">
+        <strong :title="result.book.title">{{ result.book.title }}</strong>
+        <span :title="result.chapter.title">{{ result.chapter.title }}</span>
+      </div>
+      <div class="book-reader__header-actions">
+        <n-button text size="small" @click="showModePrompt = true">
+          {{ modeLabel(renderedMode) }}
+        </n-button>
+        <n-button text size="small" @click="showSettings = true">设置</n-button>
+        <n-button text size="small" @click="showTools = true">更多</n-button>
+      </div>
     </header>
 
     <n-spin v-if="loading" size="large" class="book-reader__loading" />
@@ -682,23 +683,6 @@ onBeforeUnmount(() => {
     </n-result>
 
     <template v-else-if="result?.kind === 'ready'">
-      <header class="book-reader__title">
-        <div>
-          <h1>{{ result.book.title }}</h1>
-          <p>{{ result.chapter.title }}</p>
-        </div>
-        <n-select
-          :value="result.chapter.chapterId"
-          :options="
-            result.chapters.map((chapter) => ({
-              label: chapter.title,
-              value: chapter.id,
-            }))
-          "
-          @update:value="navigate"
-        />
-      </header>
-
       <n-alert
         v-if="currentChapterSummary?.translationStatus !== 'complete'"
         type="warning"
@@ -751,6 +735,94 @@ onBeforeUnmount(() => {
         </n-button>
       </footer>
     </template>
+
+    <n-drawer v-model:show="showCatalog" :width="360" placement="left">
+      <n-drawer-content title="目录">
+        <template v-if="result?.kind === 'ready'">
+          <n-text depth="3">共 {{ result.chapters.length }} 章</n-text>
+          <n-list hoverable clickable class="book-reader__catalog">
+            <n-list-item
+              v-for="chapter in result.chapters"
+              :key="chapter.id"
+              :class="{
+                'book-reader__catalog-item--active':
+                  chapter.id === result.chapter.chapterId,
+              }"
+              @click="
+                showCatalog = false;
+                navigate(chapter.id);
+              "
+            >
+              <n-thing
+                :title="chapter.title"
+                :description="`第 ${chapter.index + 1} 章`"
+              />
+              <template #suffix>
+                <n-tag
+                  size="small"
+                  :type="
+                    chapter.translationStatus === 'complete'
+                      ? 'success'
+                      : 'default'
+                  "
+                >
+                  {{ getTranslationStatusLabel(chapter.translationStatus) }}
+                </n-tag>
+              </template>
+            </n-list-item>
+          </n-list>
+        </template>
+      </n-drawer-content>
+    </n-drawer>
+
+    <n-drawer v-model:show="showTools" :width="320" placement="right">
+      <n-drawer-content title="阅读工具">
+        <n-space vertical>
+          <n-button block @click="toggleBookmark">添加书签</n-button>
+          <n-button block @click="addAnnotation">高亮选中</n-button>
+          <n-button
+            block
+            @click="
+              showTools = false;
+              showAnnotations = true;
+            "
+          >
+            批注 ({{ annotations.length }})
+          </n-button>
+          <n-button
+            block
+            @click="
+              showTools = false;
+              showBookmarks = true;
+            "
+          >
+            书签 ({{ bookmarks.length }})
+          </n-button>
+          <n-button block @click="openDetails">书籍详情</n-button>
+          <n-button block @click="speakCurrentSegment">朗读当前段</n-button>
+          <n-button block @click="stopSpeaking">停止朗读</n-button>
+          <n-button block @click="openSelectedInInteractive">
+            查词 / AI
+          </n-button>
+          <n-button block @click="backToWorkspace">工作区</n-button>
+          <n-divider />
+          <n-button
+            block
+            :disabled="previousChapterId === undefined"
+            @click="previousChapterId && navigate(previousChapterId)"
+          >
+            上一章
+          </n-button>
+          <n-button
+            block
+            :disabled="nextChapterId === undefined"
+            @click="nextChapterId && navigate(nextChapterId)"
+          >
+            下一章
+          </n-button>
+        </n-space>
+      </n-drawer-content>
+    </n-drawer>
 
     <n-drawer v-model:show="showAnnotations" :width="320" placement="right">
       <n-drawer-content title="批注">
@@ -857,7 +929,7 @@ onBeforeUnmount(() => {
   max-width: var(--reader-content-width);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 24px var(--reader-padding);
+  padding: 16px var(--reader-padding) 28px;
   color: var(--reader-text-color, var(--n-text-color));
   background: var(--reader-background, transparent);
 }
@@ -878,14 +950,50 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__header {
-  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 8px 0;
+  background: var(--reader-background, var(--n-body-color));
+  border-bottom: 1px solid var(--n-border-color);
 }
 
-.book-reader__header,
-.book-reader__navigation {
+.book-reader__header-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.book-reader__header-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  text-align: center;
+}
+
+.book-reader__header-title strong,
+.book-reader__header-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.book-reader__header-title span {
+  color: var(--n-text-color-3);
+  font-size: 12px;
+}
+
+.book-reader__catalog {
+  margin-top: 12px;
+}
+
+.book-reader__catalog-item--active {
+  background: var(--n-hover-color);
 }
 
 .book-reader__loading {
@@ -894,51 +1002,39 @@ onBeforeUnmount(() => {
   place-items: center;
 }
 
-.book-reader__title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 28px 0;
-}
-
-.book-reader__title h1,
-.book-reader__title p {
-  margin: 0;
-}
-
-.book-reader__title p {
-  margin-top: 6px;
-  color: var(--n-text-color-3);
-}
-
-.book-reader__title :deep(.n-base-selection) {
-  min-width: 220px;
-}
-
 .book-reader__content {
   font-size: var(--reader-font-size);
   line-height: var(--reader-line-height);
 }
 
 .book-reader__content p {
-  scroll-margin-top: 16px;
+  scroll-margin-top: 72px;
   white-space: pre-wrap;
 }
 
 .book-reader__navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 36px;
 }
 
 @media only screen and (max-width: 600px) {
   .book-reader {
-    padding-top: 16px;
+    padding-top: 8px;
     padding-bottom: 16px;
   }
 
-  .book-reader__title {
-    align-items: stretch;
-    flex-direction: column;
+  .book-reader__header {
+    gap: 4px;
+  }
+
+  .book-reader__header-actions :deep(.n-button) {
+    padding: 0 4px;
+  }
+
+  .book-reader__header-title {
+    text-align: left;
   }
 }
 </style>
