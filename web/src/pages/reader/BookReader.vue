@@ -56,6 +56,7 @@ import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
+const migrationWarning = ref<string>();
 const result = shallowRef<ReaderPageLoadResult>();
 const initialSegmentId = ref<string>();
 const showSettings = ref(false);
@@ -178,8 +179,18 @@ const load = async () => {
   await recordReadingTime();
   initialSegmentId.value = undefined;
   loading.value = true;
+  migrationWarning.value = undefined;
+  const repository = await repositoryPromise;
+  const migration = await repository.ensureNativeEpubMigration(bookId.value);
+  if (migration.status === 'failed') {
+    migrationWarning.value = migration.message;
+  }
+  const chapterId =
+    migration.status === 'migrated' && requestedChapterId.value !== undefined
+      ? migration.chapterMap[requestedChapterId.value]
+      : requestedChapterId.value;
   const controller = await controllerPromise;
-  const loaded = await controller.load(bookId.value, requestedChapterId.value);
+  const loaded = await controller.load(bookId.value, chapterId);
   if (loaded.kind !== 'stale') {
     result.value = loaded;
   }
@@ -652,6 +663,13 @@ onBeforeUnmount(() => {
     :style="readerStyle"
   >
     <section class="book-reader__top">
+      <n-alert
+        v-if="migrationWarning !== undefined"
+        type="warning"
+        style="margin-bottom: 16px"
+      >
+        {{ migrationWarning }}；现有书籍仍可继续阅读。
+      </n-alert>
       <header class="book-reader__header">
         <div class="book-reader__header-actions">
           <n-button text size="small" @click="backToBookshelf">书架</n-button>

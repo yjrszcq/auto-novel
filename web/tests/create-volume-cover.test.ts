@@ -38,6 +38,13 @@ describe('local EPUB import cover', () => {
           chapterId: 'chapter.xhtml',
         },
       ],
+      sources: [
+        {
+          href: 'chapter.xhtml',
+          title: '第一章',
+          paragraphs: ['第一段'],
+        },
+      ],
     });
 
     const dao = {

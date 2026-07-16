@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   LocalVolumeChapter,
   LocalVolumeMetadata,
+  LocalVolumeNavigationEntry,
+  LocalVolumeTocEntry,
 } from '@/model/LocalVolume';
 import type {
   ReaderAnnotation,
@@ -19,6 +21,16 @@ import type {
 } from '@/model/Reader';
 
 type Mutator<T> = (value: T) => T;
+
+export interface NativeEpubMigrationCommit {
+  bookId: string;
+  expectedChapters: LocalVolumeChapter[];
+  chapters: LocalVolumeChapter[];
+  toc: LocalVolumeTocEntry[];
+  navigation: LocalVolumeNavigationEntry[];
+  chapterMap: Record<string, string>;
+  segmentChapterMap: Record<string, string>;
+}
 
 interface VolumesDBSchema extends DBSchema {
   metadata: {
@@ -186,6 +198,113 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     }
     await tx.done;
   };
+  const listChapterByVolumeId = (id: string) =>
+    db.getAllFromIndex('chapter', 'byVolumeId', id);
+
+  const migrateNativeEpub = async (input: NativeEpubMigrationCommit) => {
+    const tx = db.transaction(
+      [
+        'metadata',
+        'chapter',
+        'reader-progress',
+        'reader-bookmark',
+        'reader-annotation',
+        'reader-chapter-cache',
+      ],
+      'readwrite',
+    );
+    const metadataStore = tx.objectStore('metadata');
+    const chapterStore = tx.objectStore('chapter');
+    const progressStore = tx.objectStore('reader-progress');
+    const bookmarkStore = tx.objectStore('reader-bookmark');
+    const annotationStore = tx.objectStore('reader-annotation');
+    const cacheStore = tx.objectStore('reader-chapter-cache');
+    const metadata = await metadataStore.get(input.bookId);
+    if (metadata === undefined) throw new Error('小说不存在');
+    if (metadata.contentVersion === 2) {
+      await tx.done;
+      return false;
+    }
+
+    const currentChapters = await chapterStore
+      .index('byVolumeId')
+      .getAll(input.bookId);
+    const stableChapterJson = (chapters: LocalVolumeChapter[]) =>
+      JSON.stringify(
+        [...chapters]
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map((chapter) => ({ ...chapter })),
+      );
+    if (
+      stableChapterJson(currentChapters) !==
+      stableChapterJson(input.expectedChapters)
+    ) {
+      throw new Error('迁移期间章节数据发生变化');
+    }
+
+    const remapChapter = (chapterId: string, segmentId?: string) => {
+      if (segmentId !== undefined) {
+        const mapped = input.segmentChapterMap[segmentId];
+        if (mapped === undefined) throw new Error('无法定位旧阅读段落');
+        return mapped;
+      }
+      const mapped = input.chapterMap[chapterId];
+      if (mapped === undefined) throw new Error('无法精确定位旧章节');
+      return mapped;
+    };
+
+    const progress = await progressStore.get(input.bookId);
+    const bookmarks = (await bookmarkStore.getAll()).filter(
+      (bookmark) => bookmark.bookId === input.bookId,
+    );
+    const annotations = (await annotationStore.getAll()).filter(
+      (annotation) => annotation.bookId === input.bookId,
+    );
+    const caches = (await cacheStore.getAll()).filter(
+      (cache) => cache.bookId === input.bookId,
+    );
+    const migratedProgress =
+      progress === undefined
+        ? undefined
+        : {
+            ...progress,
+            chapterId: remapChapter(progress.chapterId, progress.segmentId),
+          };
+    const migratedBookmarks = bookmarks.map((bookmark) => ({
+      ...bookmark,
+      chapterId: remapChapter(bookmark.chapterId, bookmark.segmentId),
+    }));
+    const migratedAnnotations = annotations.map((annotation) => ({
+      ...annotation,
+      chapterId: remapChapter(annotation.chapterId, annotation.segmentId),
+    }));
+
+    await Promise.all(
+      currentChapters.map((chapter) => chapterStore.delete(chapter.id)),
+    );
+    await Promise.all(
+      input.chapters.map((chapter) => chapterStore.put(chapter)),
+    );
+    await metadataStore.put({
+      ...metadata,
+      toc: input.toc,
+      navigation: input.navigation,
+      sourceFormat: 'epub',
+      contentVersion: 2,
+    });
+    if (migratedProgress !== undefined) {
+      await progressStore.put(migratedProgress);
+    }
+    await Promise.all(
+      migratedBookmarks.map((bookmark) => bookmarkStore.put(bookmark)),
+    );
+    await Promise.all(
+      migratedAnnotations.map((annotation) => annotationStore.put(annotation)),
+    );
+    await Promise.all(caches.map((cache) => cacheStore.delete(cache.key)));
+    await tx.done;
+    return true;
+  };
 
   // Reader
   const getReaderSettings = () => db.get('reader-settings', 'default');
@@ -229,6 +348,10 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   const putReaderCover = (value: ReaderCover) => db.put('reader-cover', value);
   const putReaderChapterCache = (value: ReaderChapterCache) =>
     db.put('reader-chapter-cache', value);
+  const listReaderChapterCaches = async (bookId: string) =>
+    (await db.getAll('reader-chapter-cache')).filter(
+      (cache) => cache.bookId === bookId,
+    );
   const deleteReaderDataByVolumeId = async (bookId: string) => {
     const [bookmarks, annotations, caches] = await Promise.all([
       db.getAll('reader-bookmark'),
@@ -268,6 +391,8 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     createChapter,
     updateChapter,
     deleteChapterByVolumeId,
+    listChapterByVolumeId,
+    migrateNativeEpub,
     //
     getReaderSettings,
     putReaderSettings,
@@ -292,6 +417,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     putReaderCover,
     deleteReaderCover,
     putReaderChapterCache,
+    listReaderChapterCaches,
   };
 };
 

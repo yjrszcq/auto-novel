@@ -35,6 +35,7 @@ export interface EpubNavigationPlanItem {
 export interface EpubImportPlan {
   chapters: EpubChapterPlanItem[];
   navigation: EpubNavigationPlanItem[];
+  sources: EpubChapterPlanSource[];
 }
 
 type EpubNavigationTarget = {
@@ -262,6 +263,7 @@ export const createEpubImportPlan = (epub: Epub): EpubImportPlan => {
   return {
     chapters,
     navigation: buildEpubNavigationPlan(epub.navItems, chapters),
+    sources,
   };
 };
 

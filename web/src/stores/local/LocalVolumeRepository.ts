@@ -9,6 +9,7 @@ import type {
 import type { TranslatorId } from '@/model/Translator';
 
 import { createVolume } from './CreateVolume';
+import { ensureNativeEpubMigration } from './EpubMigration';
 import { getTranslationFile } from './GetTranslationFile';
 import type { LocalVolumeDao } from './LocalVolumeDao';
 import { createLocalVolumeDao } from './LocalVolumeDao';
@@ -89,6 +90,7 @@ export const createLocalVolumeStore = async () => {
     listVolume: dao.listMetadata,
     getVolume: dao.getMetadata,
     createVolume: bind(createVolume),
+    ensureNativeEpubMigration: bind(ensureNativeEpubMigration),
     deleteVolume,
     updateGlossary,
     updateReadAt,

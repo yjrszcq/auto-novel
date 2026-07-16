@@ -34,6 +34,7 @@ const message = useMessage();
 const vars = useThemeVars();
 const loading = ref(true);
 const error = ref<string>();
+const migrationWarning = ref<string>();
 const book = shallowRef<ReaderBook>();
 const bookTheme = ref<'global' | NonNullable<ReaderBookStyleOverride['theme']>>(
   'global',
@@ -92,8 +93,13 @@ const formatDate = (value: number | undefined) =>
 const load = async () => {
   loading.value = true;
   error.value = undefined;
+  migrationWarning.value = undefined;
   try {
     const repository = await repositoryPromise;
+    const migration = await repository.ensureNativeEpubMigration(bookId.value);
+    if (migration.status === 'failed') {
+      migrationWarning.value = migration.message;
+    }
     const service = createBookshelfService(repository);
     const adapter = createLocalVolumeReaderAdapter(repository);
     const [
@@ -390,6 +396,13 @@ onMounted(() => void load());
       </section>
 
       <div class="layout-content book-details__content">
+        <n-alert
+          v-if="migrationWarning !== undefined"
+          type="warning"
+          style="margin-bottom: 20px"
+        >
+          {{ migrationWarning }}；现有书籍仍可继续阅读。
+        </n-alert>
         <div class="book-details__primary-actions">
           <n-flex size="small" wrap>
             <n-button type="primary" @click="startReading">
