@@ -13,7 +13,10 @@ const volume: LocalVolumeMetadata = {
   id: 'sample.epub',
   createAt: 10,
   readAt: 20,
-  toc: [{ chapterId: 'first' }, { chapterId: 'second' }],
+  toc: [
+    { chapterId: 'first', title: '第一章：开端' },
+    { chapterId: 'second', title: '第二章：结尾' },
+  ],
   glossaryId: 'glossary',
   glossary: {},
   favoredId: 'default',
@@ -83,7 +86,7 @@ describe('LocalVolumeReaderAdapter', () => {
       bookId: volume.id,
       chapterId: 'first',
       chapterIndex: 0,
-      title: 'sample - first',
+      title: '第一章：开端',
       translationSource: 'gpt',
       segments: [
         {

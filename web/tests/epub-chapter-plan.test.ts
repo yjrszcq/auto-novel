@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildEpubChapterPlan } from '../src/stores/local/EpubChapterPlan';
+import {
+  buildEpubChapterPlan,
+  buildEpubNavigationPlan,
+} from '../src/stores/local/EpubChapterPlan';
 
 describe('native EPUB chapter plan', () => {
   it('splits one XHTML document at native navigation anchors', () => {
@@ -104,17 +107,57 @@ describe('native EPUB chapter plan', () => {
   });
 
   it('falls back to spine order when native targets are unusable', () => {
-    expect(
-      buildEpubChapterPlan(
-        [{ text: '目录页', href: 'OEBPS/nav.xhtml', children: [] }],
-        [
-          { href: 'OEBPS/Text/one.xhtml', title: '第一章', paragraphs: ['一'] },
-          { href: 'OEBPS/Text/two.xhtml', paragraphs: ['二'] },
-        ],
-      ),
-    ).toMatchObject([
+    const navigation = [
+      { text: '目录页', href: 'OEBPS/nav.xhtml', children: [] },
+    ];
+    const chapters = buildEpubChapterPlan(navigation, [
+      { href: 'OEBPS/Text/one.xhtml', title: '第一章', paragraphs: ['一'] },
+      { href: 'OEBPS/Text/two.xhtml', paragraphs: ['二'] },
+    ]);
+    expect(chapters).toMatchObject([
       { chapterId: 'OEBPS/Text/one.xhtml', title: '第一章' },
       { chapterId: 'OEBPS/Text/two.xhtml', title: '第 2 章' },
+    ]);
+    expect(buildEpubNavigationPlan(navigation, chapters)).toMatchObject([
+      { chapterId: 'OEBPS/Text/one.xhtml', title: '第一章' },
+      { chapterId: 'OEBPS/Text/two.xhtml', title: '第 2 章' },
+    ]);
+  });
+
+  it('keeps structural native navigation entries alongside readable chapters', () => {
+    const navigation = [
+      {
+        text: '第一卷',
+        children: [
+          {
+            text: '第一章',
+            href: 'Text/one.xhtml',
+            children: [],
+          },
+        ],
+      },
+    ];
+    const chapters = buildEpubChapterPlan(navigation, [
+      { href: 'Text/one.xhtml', paragraphs: ['正文'] },
+    ]);
+
+    expect(buildEpubNavigationPlan(navigation, chapters)).toEqual([
+      {
+        id: 'nav-0',
+        title: '第一卷',
+        level: 0,
+        href: undefined,
+        chapterId: undefined,
+        parentId: undefined,
+      },
+      {
+        id: 'nav-1',
+        title: '第一章',
+        level: 1,
+        href: 'Text/one.xhtml',
+        chapterId: 'Text/one.xhtml',
+        parentId: 'nav-0',
+      },
     ]);
   });
 });

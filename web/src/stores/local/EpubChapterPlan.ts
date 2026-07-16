@@ -23,6 +23,20 @@ export interface EpubChapterPlanSource {
   anchors?: Record<string, number>;
 }
 
+export interface EpubNavigationPlanItem {
+  id: string;
+  title: string;
+  level: number;
+  href?: string;
+  chapterId?: string;
+  parentId?: string;
+}
+
+export interface EpubImportPlan {
+  chapters: EpubChapterPlanItem[];
+  navigation: EpubNavigationPlanItem[];
+}
+
 type EpubNavigationTarget = {
   href: string;
   text: string;
@@ -156,6 +170,47 @@ export const buildEpubChapterPlan = (
   return chapters.length > 0 ? chapters : createFallbackPlan(sources);
 };
 
+export const buildEpubNavigationPlan = (
+  navigation: readonly EpubNavigationItem[],
+  chapters: readonly EpubChapterPlanItem[],
+): EpubNavigationPlanItem[] => {
+  const knownChapterIds = new Set(chapters.map((chapter) => chapter.chapterId));
+  const result: EpubNavigationPlanItem[] = [];
+  let nextId = 0;
+  const visit = (
+    nodes: readonly EpubNavigationItem[],
+    level: number,
+    parentId?: string,
+  ) => {
+    for (const node of nodes) {
+      const id = `nav-${nextId}`;
+      nextId += 1;
+      result.push({
+        id,
+        title: node.text.trim() || '未命名章节',
+        level,
+        href: node.href,
+        chapterId:
+          node.href !== undefined && knownChapterIds.has(node.href)
+            ? node.href
+            : undefined,
+        parentId,
+      });
+      visit(node.children, level + 1, id);
+    }
+  };
+  visit(navigation, 0);
+  return result.some((item) => item.chapterId !== undefined)
+    ? result
+    : chapters.map((chapter, index) => ({
+        id: `nav-${index}`,
+        title: chapter.title,
+        level: 0,
+        href: chapter.chapterId,
+        chapterId: chapter.chapterId,
+      }));
+};
+
 const createAnchors = (
   doc: Document,
   paragraphs: readonly HTMLParagraphElement[],
@@ -186,8 +241,8 @@ const createAnchors = (
   return anchors;
 };
 
-export const createEpubChapterPlan = (epub: Epub) => {
-  const sources: EpubChapterPlanSource[] = epub.iterDocInSpine().map((item) => {
+const createEpubChapterPlanSources = (epub: Epub) => {
+  return epub.iterDocInSpine().map((item) => {
     const paragraphElements = getEpubTextParagraphElements(item.doc);
     return {
       href: epub.getCanonicalHref(item.href),
@@ -197,7 +252,19 @@ export const createEpubChapterPlan = (epub: Epub) => {
         undefined,
       paragraphs: paragraphElements.map((paragraph) => paragraph.innerText),
       anchors: createAnchors(item.doc, paragraphElements),
-    };
+    } satisfies EpubChapterPlanSource;
   });
-  return buildEpubChapterPlan(epub.navItems, sources);
+};
+
+export const createEpubImportPlan = (epub: Epub): EpubImportPlan => {
+  const sources = createEpubChapterPlanSources(epub);
+  const chapters = buildEpubChapterPlan(epub.navItems, sources);
+  return {
+    chapters,
+    navigation: buildEpubNavigationPlan(epub.navItems, chapters),
+  };
+};
+
+export const createEpubChapterPlan = (epub: Epub) => {
+  return createEpubImportPlan(epub).chapters;
 };

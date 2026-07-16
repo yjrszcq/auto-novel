@@ -20,8 +20,11 @@ import {
 
 const formatTitle = (id: string) => id.replace(/\.[^.]+$/, '');
 
-const getChapterTitle = (bookId: string, chapterId: string) =>
-  `${formatTitle(bookId)} - ${chapterId}`;
+const getChapterTitle = (
+  bookId: string,
+  chapterId: string,
+  title: string | undefined,
+) => title?.trim() || `${formatTitle(bookId)} - ${chapterId}`;
 
 const getChapterSources = (chapter: LocalVolumeChapter) =>
   (['sakura', 'gpt', 'youdao', 'baidu'] as const).filter((translatorId) =>
@@ -60,7 +63,7 @@ export const createLocalVolumeReaderAdapter = (
     volume: LocalVolumeMetadata,
   ): Promise<ReaderChapterSummary[]> => {
     return Promise.all(
-      volume.toc.map(async ({ chapterId }, index) => {
+      volume.toc.map(async ({ chapterId, title }, index) => {
         const chapter = await repository.getChapter(bookId, chapterId);
         if (chapter === undefined) {
           throw new Error('章节不存在');
@@ -74,7 +77,7 @@ export const createLocalVolumeReaderAdapter = (
           id: chapterId,
           bookId,
           index,
-          title: getChapterTitle(bookId, chapterId),
+          title: getChapterTitle(bookId, chapterId, title),
           hasOriginal: chapter.paragraphs.length > 0,
           translationStatus: status,
           translatedSegmentCount,
@@ -113,7 +116,11 @@ export const createLocalVolumeReaderAdapter = (
         bookId,
         chapterId,
         chapterIndex,
-        title: getChapterTitle(bookId, chapterId),
+        title: getChapterTitle(
+          bookId,
+          chapterId,
+          volume.toc[chapterIndex].title,
+        ),
         translationSource: translation?.translatorId,
         segments: chapter.paragraphs.map((original, index) => ({
           id: chapter.segmentIds[index],

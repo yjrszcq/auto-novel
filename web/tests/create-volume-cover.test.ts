@@ -2,15 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createVolume } from '../src/stores/local/CreateVolume';
 import type { LocalVolumeDao } from '../src/stores/local/LocalVolumeDao';
-import { EpubParserV1 } from '../src/stores/local/EpubParser';
+import { createEpubImportPlan } from '../src/stores/local/EpubChapterPlan';
 import { parseFile } from '../src/util/file';
 
 vi.mock('../src/util/file', () => ({
   parseFile: vi.fn(),
   Srt: { cleanFormat: (text: string) => text },
 }));
-vi.mock('../src/stores/local/EpubParser', () => ({
-  EpubParserV1: { extractText: vi.fn() },
+vi.mock('../src/stores/local/EpubChapterPlan', () => ({
+  createEpubImportPlan: vi.fn(),
 }));
 
 describe('local EPUB import cover', () => {
@@ -19,11 +19,26 @@ describe('local EPUB import cover', () => {
     vi.mocked(parseFile).mockResolvedValue({
       type: 'epub',
       getCover: () => cover,
-      iterDoc: async function* () {
-        yield { href: 'chapter.xhtml', doc: {} };
-      },
     } as never);
-    vi.mocked(EpubParserV1.extractText).mockReturnValue(['第一段']);
+    vi.mocked(createEpubImportPlan).mockReturnValue({
+      chapters: [
+        {
+          chapterId: 'chapter.xhtml',
+          title: '第一章',
+          paragraphs: ['第一段'],
+          sourceRanges: [{ href: 'chapter.xhtml', start: 0, end: 1 }],
+        },
+      ],
+      navigation: [
+        {
+          id: 'nav-0',
+          title: '第一章',
+          level: 0,
+          href: 'chapter.xhtml',
+          chapterId: 'chapter.xhtml',
+        },
+      ],
+    });
 
     const dao = {
       getMetadata: vi.fn().mockResolvedValue(undefined),
@@ -45,5 +60,24 @@ describe('local EPUB import cover', () => {
       source: 'embedded',
       updatedAt: expect.any(Number),
     });
+    expect(dao.createChapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'book.epub/chapter.xhtml',
+        sourceRanges: [{ href: 'chapter.xhtml', start: 0, end: 1 }],
+      }),
+    );
+    expect(dao.createMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceFormat: 'epub',
+        contentVersion: 2,
+        toc: [{ chapterId: 'chapter.xhtml', title: '第一章' }],
+        navigation: [
+          expect.objectContaining({
+            chapterId: 'chapter.xhtml',
+            title: '第一章',
+          }),
+        ],
+      }),
+    );
   });
 });

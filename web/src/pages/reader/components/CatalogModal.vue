@@ -17,7 +17,7 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
-const tocResult = shallowRef<Result<string[]>>();
+const tocResult = shallowRef<Result<{ chapterId: string; title: string }[]>>();
 
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
@@ -40,7 +40,10 @@ watch(
       if (!volume) {
         throw new Error('小说不存在');
       }
-      return volume.toc.map((it) => it.chapterId ?? '');
+      return volume.toc.map((it) => ({
+        chapterId: it.chapterId,
+        title: it.title?.trim() || it.chapterId,
+      }));
     });
   },
 );
@@ -86,12 +89,12 @@ const navigateToChapter = (chapterId: string) => {
       <n-list v-if="tocItems">
         <n-list-item
           v-for="chapter in tocItems"
-          :key="chapter"
+          :key="chapter.chapterId"
           class="chapter-item"
-          :class="{ active: chapter === chapterId }"
-          @click="navigateToChapter(chapter)"
+          :class="{ active: chapter.chapterId === chapterId }"
+          @click="navigateToChapter(chapter.chapterId)"
         >
-          <n-text>{{ chapter }}</n-text>
+          <n-text>{{ chapter.title }}</n-text>
         </n-list-item>
       </n-list>
     </c-result>

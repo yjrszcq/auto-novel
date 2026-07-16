@@ -86,7 +86,8 @@ const getChapter = async (
   const currIndex = volume.toc.findIndex((it) => it.chapterId == chapterId);
   return <ReaderChapter>{
     chapterId,
-    titleJp: `${volumeId} - ${chapterId}`,
+    titleJp:
+      volume.toc[currIndex]?.title?.trim() || `${volumeId} - ${chapterId}`,
     titleZh: undefined,
     prevId: volume.toc[currIndex - 1]?.chapterId,
     nextId: volume.toc[currIndex + 1]?.chapterId,
