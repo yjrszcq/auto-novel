@@ -256,7 +256,6 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     )
     .toBeLessThanOrEqual(1);
 
-  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await page.getByRole('button', { name: '添加书签' }).click();
   await expect(page.getByRole('button', { name: '书签 (1)' })).toBeVisible();
