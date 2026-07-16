@@ -264,6 +264,17 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     .toBeGreaterThan(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(readerContent).toHaveClass(/book-reader__content--scrolled/);
+  const translationToggle = page.getByRole('button', {
+    name: '展开未翻译操作',
+  });
+  await expect(translationToggle).toBeVisible();
+  await expect(page.getByRole('button', { name: 'GPT 翻译本章' })).toBeHidden();
+  await translationToggle.click();
+  await expect(
+    page.getByRole('button', { name: 'GPT 翻译本章' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '收起未翻译操作' }).click();
+  await expect(page.getByRole('button', { name: 'GPT 翻译本章' })).toBeHidden();
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
     'height',
     '76px',

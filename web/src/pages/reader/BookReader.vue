@@ -7,6 +7,7 @@ import {
   MenuBookOutlined,
   MoreVertOutlined,
   SettingsOutlined,
+  WarningAmberOutlined,
   WbSunnyOutlined,
 } from '@vicons/material';
 import type {
@@ -83,6 +84,7 @@ const showCatalog = ref(false);
 const showTools = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
+const showMobileTranslationNotice = ref(false);
 const controlsVisible = ref(true);
 const readerRoot = ref<HTMLElement>();
 const readerViewport = ref<HTMLElement>();
@@ -399,6 +401,7 @@ const loadSettings = async () => {
 
 const load = async () => {
   await recordReadingTime();
+  showMobileTranslationNotice.value = false;
   initialSegmentId.value = undefined;
   loading.value = true;
   migrationWarning.value = undefined;
@@ -1066,6 +1069,18 @@ onBeforeUnmount(() => {
         <n-button size="tiny" secondary @click="load">刷新本章</n-button>
       </div>
       <button
+        v-if="hasIncompleteChapter"
+        class="book-reader__app-bar-action book-reader__translation-toggle"
+        type="button"
+        :aria-label="
+          showMobileTranslationNotice ? '收起未翻译操作' : '展开未翻译操作'
+        "
+        :aria-expanded="showMobileTranslationNotice"
+        @click="showMobileTranslationNotice = !showMobileTranslationNotice"
+      >
+        <n-icon :component="WarningAmberOutlined" />
+      </button>
+      <button
         class="book-reader__app-bar-action"
         type="button"
         aria-label="更多阅读工具"
@@ -1089,26 +1104,23 @@ onBeforeUnmount(() => {
       </n-alert>
       <template v-if="result?.kind === 'ready'">
         <n-alert
-          v-if="hasIncompleteChapter"
+          v-if="hasIncompleteChapter && showMobileTranslationNotice"
           class="book-reader__translation-notice-mobile"
           type="warning"
+          :show-icon="false"
         >
-          <n-space align="center" justify="center">
-            <span>
-              {{
-                getTranslationStatusLabel(
-                  currentChapterSummary.translationStatus,
-                )
-              }}
-            </span>
-            <n-button size="small" @click="queueChapterTranslation('gpt')">
-              GPT 翻译本章
-            </n-button>
-            <n-button size="small" @click="queueChapterTranslation('sakura')">
-              Sakura 翻译本章
-            </n-button>
-            <n-button size="small" @click="load">刷新本章</n-button>
-          </n-space>
+          <div class="book-reader__translation-panel">
+            <strong>{{ currentTranslationStatusLabel }}</strong>
+            <div class="book-reader__translation-panel-actions">
+              <n-button size="small" @click="queueChapterTranslation('gpt')">
+                GPT 翻译本章
+              </n-button>
+              <n-button size="small" @click="queueChapterTranslation('sakura')">
+                Sakura 翻译本章
+              </n-button>
+              <n-button size="small" @click="load">刷新本章</n-button>
+            </div>
+          </div>
         </n-alert>
 
         <n-alert v-if="readingMode !== renderedMode" type="info">
@@ -1530,6 +1542,11 @@ onBeforeUnmount(() => {
   content: '⚠';
 }
 
+.book-reader__translation-toggle {
+  display: none;
+  color: #f0a020;
+}
+
 .book-reader__chapter-status {
   position: fixed;
   top: 3px;
@@ -1561,6 +1578,27 @@ onBeforeUnmount(() => {
 
 .book-reader__translation-notice-mobile {
   display: none;
+}
+
+.book-reader__translation-panel {
+  display: grid;
+  width: 100%;
+  text-align: center;
+  gap: 12px;
+}
+
+.book-reader__translation-panel strong {
+  font-size: 16px;
+}
+
+.book-reader__translation-panel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.book-reader__translation-panel-actions > :last-child {
+  grid-column: 1 / -1;
 }
 
 .book-reader__catalog {
@@ -1772,7 +1810,7 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__app-bar {
-    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    grid-template-columns: 56px minmax(0, 1fr) 48px 56px;
   }
 
   .book-reader__app-bar-action :deep(.n-icon) {
@@ -1789,6 +1827,10 @@ onBeforeUnmount(() => {
 
   .book-reader__app-bar-translation {
     display: none;
+  }
+
+  .book-reader__translation-toggle {
+    display: grid;
   }
 
   .book-reader__translation-notice-mobile {
