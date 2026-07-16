@@ -242,6 +242,28 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       ),
     )
     .toBe(true);
+  await page.setViewportSize({ width: 1920, height: 800 });
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const viewport = element.getBoundingClientRect();
+        const visibleRects = [...element.querySelectorAll('p')]
+          .flatMap((paragraph) => [...paragraph.getClientRects()])
+          .filter(
+            (rect) => rect.right > viewport.left && rect.left < viewport.right,
+          );
+        return visibleRects.every((rect) => {
+          const pageLeft =
+            rect.left < viewport.left + viewport.width / 2
+              ? viewport.left
+              : viewport.left + viewport.width / 2;
+          const pageRight = pageLeft + viewport.width / 2;
+          return rect.left - pageLeft >= 49 && pageRight - rect.right >= 49;
+        });
+      }),
+    )
+    .toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
     'height',
     '52px',

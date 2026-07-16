@@ -1883,7 +1883,11 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__content--paginated {
-  --reader-page-padding: max(28px, var(--reader-padding));
+  --reader-page-padding: max(
+    28px,
+    var(--reader-padding),
+    calc((100vw - 860px) / 2)
+  );
   width: 100%;
   height: calc(100dvh - 32px);
   margin: 0;
@@ -1920,6 +1924,14 @@ onBeforeUnmount(() => {
 .book-reader__content--paginated.book-reader__content--double-spread
   :deep(.reader-segment-layout) {
   column-count: 2;
+}
+
+.book-reader__content--paginated.book-reader__content--double-spread {
+  --reader-page-padding: max(
+    28px,
+    var(--reader-padding),
+    calc((50vw - 860px) / 2)
+  );
 }
 
 .book-reader__content p {
