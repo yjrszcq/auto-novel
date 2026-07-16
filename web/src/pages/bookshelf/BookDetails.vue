@@ -539,7 +539,6 @@ onMounted(() => void load());
 .book-details__hero {
   position: relative;
   overflow: hidden;
-  min-height: 236px;
 }
 
 .book-details__backdrop {
@@ -572,7 +571,7 @@ onMounted(() => void load());
   display: flex;
   gap: 20px;
   padding-top: 20px;
-  padding-bottom: 21px;
+  padding-bottom: 12px;
 }
 
 .book-details__hero-content > :deep(.book-cover) {
@@ -607,7 +606,7 @@ onMounted(() => void load());
 }
 
 .book-details__content {
-  padding-top: 16px;
+  padding-top: 12px;
 }
 
 .book-details__primary-actions {

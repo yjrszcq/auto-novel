@@ -339,6 +339,9 @@ test('uses a configured default cover for a local book without one', async ({
     mobileLayout.copy.top,
   );
   expect(
+    mobileLayout.primaryActions.top - mobileLayout.cover.bottom,
+  ).toBeCloseTo(24, 0);
+  expect(
     mobileLayout.translationHeader.top -
       mobileLayout.lastPreferenceSelect.bottom,
   ).toBeCloseTo(32, 0);
@@ -363,8 +366,12 @@ test('uses a configured default cover for a local book without one', async ({
       if (element === null) {
         throw new Error(`缺少桌面端详情元素：${selector}`);
       }
-      const { bottom, right } = element.getBoundingClientRect();
-      return { bottom: Math.round(bottom), right: Math.round(right) };
+      const { bottom, right, top } = element.getBoundingClientRect();
+      return {
+        bottom: Math.round(bottom),
+        right: Math.round(right),
+        top: Math.round(top),
+      };
     };
     return {
       cover: bounds('.book-details__hero-content > .book-cover'),
@@ -376,6 +383,9 @@ test('uses a configured default cover for a local book without one', async ({
   expect(
     Math.abs(desktopLayout.shelfActions.bottom - desktopLayout.cover.bottom),
   ).toBeLessThanOrEqual(1);
+  expect(
+    desktopLayout.primaryActions.top - desktopLayout.cover.bottom,
+  ).toBeCloseTo(24, 0);
   expect(
     Math.abs(
       desktopLayout.returnToShelf.right - desktopLayout.primaryActions.right,
