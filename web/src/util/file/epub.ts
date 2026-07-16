@@ -70,11 +70,56 @@ interface EpubItemref {
   properties: string[] | null;
 }
 
-interface EpubNavItem {
+export interface EpubNavigationItem {
   text: string;
   href?: string;
-  children: EpubNavItem[];
+  children: EpubNavigationItem[];
 }
+
+export interface EpubSpineNavigationSource {
+  href: string;
+  title?: string;
+}
+
+export interface EpubNavigationSourceItem {
+  text: string;
+  href?: string | null;
+  children: EpubNavigationSourceItem[];
+}
+
+export const normalizeEpubNavigationHref = (
+  sourcePath: string,
+  href: string | null | undefined,
+) => {
+  if (href === undefined || href === null || href.trim().length === 0) {
+    return undefined;
+  }
+  const sourceUrl = new URL(sourcePath, 'file://book/');
+  const targetUrl = new URL(href, sourceUrl);
+  if (targetUrl.protocol !== 'file:' || targetUrl.hostname !== 'book') {
+    return undefined;
+  }
+  return targetUrl.pathname.substring(1) + targetUrl.hash;
+};
+
+export const createSpineFallbackNavigation = (
+  sources: readonly EpubSpineNavigationSource[],
+): EpubNavigationItem[] =>
+  sources.map((source, index) => ({
+    text: source.title?.trim() || `第 ${index + 1} 章`,
+    href: source.href,
+    children: [],
+  }));
+
+export const normalizeEpubNavigationItems = (
+  sourcePath: string,
+  items: readonly EpubNavigationSourceItem[],
+): EpubNavigationItem[] =>
+  items.map((item) => ({
+    text: item.text.trim(),
+    href: normalizeEpubNavigationHref(sourcePath, item.href),
+    children: normalizeEpubNavigationItems(sourcePath, item.children),
+  }));
 
 export class Epub extends BaseFile {
   type = 'epub' as const;
@@ -84,13 +129,17 @@ export class Epub extends BaseFile {
   packageDoc!: Document;
   items = new Map<string, EpubItem>();
   itemrefs: EpubItemref[] = [];
-  navItems: EpubNavItem[] = [];
+  navItems: EpubNavigationItem[] = [];
   private legacyCoverId: string | undefined;
 
   private resolve(root: string, rpath: string) {
-    const rootUrl = new URL(root, 'file://book');
+    const rootUrl = new URL(root, 'file://book/');
     const newURL = new URL(rpath, rootUrl);
     return newURL.pathname.substring(1);
+  }
+
+  getCanonicalHref(href: string) {
+    return this.resolve(this.packagePath, href);
   }
 
   private updateHref(oldHref: string, newHref: string) {
@@ -185,16 +234,19 @@ export class Epub extends BaseFile {
   }
 
   private parseNavigationDocument(doc: Document) {
-    const parseTocList = (olEl: Element): EpubNavItem[] => {
-      const items: EpubNavItem[] = [];
+    if (this.navigationPath === undefined) {
+      throw new Error('Navigation document path is missing');
+    }
+    const parseTocList = (olEl: Element): EpubNavigationSourceItem[] => {
+      const items: EpubNavigationSourceItem[] = [];
 
       olEl.querySelectorAll(':scope > li').forEach((liEl) => {
         const linkEl = liEl.querySelector(':scope > a, :scope > span');
         if (!linkEl) throw new Error('Nav toc item does not have link');
 
-        const item: EpubNavItem = {
+        const item: EpubNavigationSourceItem = {
           text: linkEl.textContent?.trim() || '',
-          href: linkEl.getAttribute('href')?.split('#')[0] || '',
+          href: linkEl.getAttribute('href'),
           children: [],
         };
         const childOlEl = liEl.querySelector(':scope > ol');
@@ -205,30 +257,61 @@ export class Epub extends BaseFile {
     };
     const navEls = Array.from(doc.getElementsByTagName('nav'));
     const tocNavEl =
-      navEls.find((navEl) => navEl.getAttribute('epub:type') === 'toc') ??
-      navEls.find((navEl) => navEl.id === 'toc'); // 为了兼容不标准的epub
+      navEls.find(
+        (navEl) =>
+          navEl.getAttribute('epub:type') === 'toc' ||
+          navEl.getAttribute('type') === 'toc',
+      ) ?? navEls.find((navEl) => navEl.id === 'toc'); // 为了兼容不标准的epub
     const tocOlEl = tocNavEl?.querySelector(':scope > ol');
     if (!tocOlEl) throw new Error('Nav toc not exist');
-    this.navItems = parseTocList(tocOlEl);
+    this.navItems = normalizeEpubNavigationItems(
+      this.navigationPath,
+      parseTocList(tocOlEl),
+    );
   }
 
   private parseNcx(doc: Document) {
-    Array.from(doc.getElementsByTagName('navPoint')).forEach((navPointEl) => {
-      const navLabel = navPointEl.querySelector('navLabel');
-      if (!navLabel) throw new Error('Nav point does not have label');
-      const content = navPointEl.querySelector('content');
-      if (!content) throw new Error('Nav point does not have content');
+    if (this.ncxPath === undefined) {
+      throw new Error('NCX path is missing');
+    }
+    const parseNavPoints = (parent: Element): EpubNavigationSourceItem[] =>
+      Array.from(parent.children)
+        .filter((element) => element.localName === 'navPoint')
+        .map((navPointEl) => {
+          const navLabel = Array.from(navPointEl.children).find(
+            (element) => element.localName === 'navLabel',
+          );
+          if (!navLabel) throw new Error('Nav point does not have label');
+          const content = Array.from(navPointEl.children).find(
+            (element) => element.localName === 'content',
+          );
+          if (!content) throw new Error('Nav point does not have content');
+          return {
+            text: navLabel.textContent?.trim() || '',
+            href: content.getAttribute('src'),
+            children: parseNavPoints(navPointEl),
+          };
+        });
 
-      const text = navLabel.textContent?.trim() || '';
-      const href = content.getAttribute('src')?.split('#')[0] || '';
+    const navMap = doc.getElementsByTagName('navMap').item(0);
+    if (!navMap) throw new Error('NCX navMap does not exist');
+    this.navItems = normalizeEpubNavigationItems(
+      this.ncxPath,
+      parseNavPoints(navMap),
+    );
+    if (this.navItems.length === 0) throw new Error('NCX navMap is empty');
+  }
 
-      const item: EpubNavItem = {
-        text,
-        href,
-        children: [],
-      };
-      this.navItems.push(item);
-    });
+  private createSpineFallbackNavigation() {
+    this.navItems = createSpineFallbackNavigation(
+      this.iterDocInSpine().map((item) => ({
+        href: this.getCanonicalHref(item.href),
+        title:
+          item.doc.title.trim() ||
+          item.doc.querySelector('h1, h2, h3, h4, h5, h6')?.textContent ||
+          undefined,
+      })),
+    );
   }
 
   private async parseFile(file: File) {
@@ -266,10 +349,22 @@ export class Epub extends BaseFile {
     this.parseContainer(await readDoc(CONTAINER_PATH));
     this.parsePackage(await readDoc(this.packagePath));
 
+    let navigationParsed = false;
     if (this.navigationPath) {
-      this.parseNavigationDocument(await readDoc(this.navigationPath));
-    } else if (this.ncxPath) {
-      this.parseNcx(await readDoc(this.ncxPath));
+      try {
+        this.parseNavigationDocument(await readDoc(this.navigationPath));
+        navigationParsed = this.navItems.length > 0;
+      } catch {
+        this.navItems = [];
+      }
+    }
+    if (!navigationParsed && this.ncxPath) {
+      try {
+        this.parseNcx(await readDoc(this.ncxPath));
+        navigationParsed = this.navItems.length > 0;
+      } catch {
+        this.navItems = [];
+      }
     }
 
     for (const item of this.items.values()) {
@@ -283,6 +378,9 @@ export class Epub extends BaseFile {
       } else {
         (item as EpubItemBlob).blob = await readBlob(path, item.mediaType);
       }
+    }
+    if (!navigationParsed) {
+      this.createSpineFallbackNavigation();
     }
   }
 

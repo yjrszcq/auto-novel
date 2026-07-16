@@ -125,7 +125,10 @@ export namespace StandardNovel {
 
     let index = -1;
     for (const item of epub.iterDocInSpine()) {
-      if (index + 1 < chapters.length && item.href == chapters[index + 1].id) {
+      if (
+        index + 1 < chapters.length &&
+        epub.getCanonicalHref(item.href) === chapters[index + 1].id
+      ) {
         index += 1;
       }
       if (index >= 0) {
