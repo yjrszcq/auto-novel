@@ -253,6 +253,13 @@ test('uses a configured default cover for a local book without one', async ({
     )
     .toBeGreaterThan(0);
   await expect(page.locator('.book-cover__initials')).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '查看《default-cover》详情' }).click();
+  await expect(page.getByText('阅读偏好', { exact: true })).toBeVisible();
+  const preferenceSelects = page.locator('.book-details__select');
+  await expect(preferenceSelects).toHaveCount(2);
+  await expect(preferenceSelects.nth(0)).toBeVisible();
+  await expect(preferenceSelects.nth(1)).toBeVisible();
 });
 test('persists the global reading version selected in Settings', async ({
   page,

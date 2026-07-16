@@ -407,7 +407,7 @@ onMounted(() => void load());
 
         <section-header title="阅读偏好" />
         <n-flex class="book-details__settings" vertical>
-          <n-flex align="center" :wrap="false">
+          <div class="book-details__setting-row">
             <n-text depth="3">打开方式</n-text>
             <n-select
               :options="readingModeOptions"
@@ -415,8 +415,8 @@ onMounted(() => void load());
               class="book-details__select"
               @update:value="savePreference"
             />
-          </n-flex>
-          <n-flex align="center" :wrap="false">
+          </div>
+          <div class="book-details__setting-row">
             <n-text depth="3">本书主题</n-text>
             <n-select
               :options="bookThemeOptions"
@@ -424,7 +424,7 @@ onMounted(() => void load());
               class="book-details__select"
               @update:value="saveBookTheme"
             />
-          </n-flex>
+          </div>
         </n-flex>
 
         <input
@@ -605,6 +605,12 @@ onMounted(() => void load());
   gap: 10px;
   margin: 4px 0 20px;
 }
+.book-details__setting-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+}
 
 .book-details__settings :deep(.n-text) {
   width: 84px;
@@ -678,7 +684,7 @@ onMounted(() => void load());
     margin-left: 0;
   }
 
-  .book-details__settings :deep(.n-flex) {
+  .book-details__setting-row {
     align-items: stretch;
     flex-direction: column;
     gap: 4px;
