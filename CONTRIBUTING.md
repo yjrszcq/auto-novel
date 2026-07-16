@@ -32,7 +32,7 @@ pnpm run test:e2e   # 运行本地 IndexedDB 阅读器浏览器流程
 
 首次运行浏览器流程前，请在 `web/` 目录执行一次
 `corepack pnpm exec playwright install chromium`；测试会自行启动 Vite 预览服务。
-Docker 变更可使用 `docker build -t auto-novel:local -f web/Dockerfile .` 验证。
+Docker 变更可在仓库根目录使用 `docker build -t auto-novel:local web` 验证。
 
 ## 阅读器与隐私边界
 
