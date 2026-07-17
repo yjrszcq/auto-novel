@@ -1404,6 +1404,110 @@ test('uses a configured default cover for a local book without one', async ({
   expect(bookshelfCardLayout.columnCount).toBe(3);
   expect(bookshelfCardLayout.titleLineClamp).toBe('2');
 });
+test('restores the complete source book presentation', async ({ page }) => {
+  const restoredBookId = 'restore-metadata.epub';
+  await page.goto('/bookshelf');
+  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'reader-cover'],
+      'readwrite',
+    );
+    transaction.objectStore('metadata').put({
+      id: bookId,
+      createAt: 1,
+      toc: [],
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceFormat: 'epub',
+      sourceBookMetadata: {
+        title: '原始标题',
+        authors: ['原始作者'],
+        description: '原始简介',
+        languages: ['ja'],
+      },
+      bookMetadata: {
+        title: '修改标题',
+        authors: ['修改作者'],
+        description: '修改简介',
+        languages: ['zh-CN'],
+      },
+    });
+    transaction.objectStore('reader-cover').put({
+      bookId,
+      blob: new Blob(['custom-cover'], { type: 'image/png' }),
+      source: 'custom',
+      updatedAt: 1,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, restoredBookId);
+
+  await page.goto(`/books/${restoredBookId}/edit`);
+  const form = page.locator('.metadata-edit__form');
+  await expect(form.locator('input').first()).toHaveValue('修改标题');
+  await expect(form.locator('textarea')).toHaveValue('修改简介');
+  await expect(
+    page.getByRole('button', { name: '移除', exact: true }),
+  ).toBeVisible();
+
+  await page
+    .getByRole('button', { name: '还原原始元信息', exact: true })
+    .click();
+  await expect(form.locator('input').first()).toHaveValue('原始标题');
+  await expect(form.locator('textarea')).toHaveValue('原始简介');
+  await expect(
+    page.getByRole('button', { name: '上传', exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page).toHaveURL(/\/books\/restore-metadata\.epub\/details$/);
+  await expect
+    .poll(() =>
+      page.evaluate(async (bookId) => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 5);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction(
+          ['metadata', 'reader-cover'],
+          'readonly',
+        );
+        const metadataRequest = transaction.objectStore('metadata').get(bookId);
+        const coverRequest = transaction
+          .objectStore('reader-cover')
+          .get(bookId);
+        const result = await new Promise<{
+          metadata: { bookMetadata?: { title?: string } } | undefined;
+          hasCover: boolean;
+        }>((resolve, reject) => {
+          transaction.oncomplete = () =>
+            resolve({
+              metadata: metadataRequest.result,
+              hasCover: coverRequest.result !== undefined,
+            });
+          transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+        return {
+          title: result.metadata?.bookMetadata?.title,
+          hasCover: result.hasCover,
+        };
+      }, restoredBookId),
+    )
+    .toEqual({ title: '原始标题', hasCover: false });
+});
+
 test('persists the global reading version selected in Settings', async ({
   page,
 }) => {

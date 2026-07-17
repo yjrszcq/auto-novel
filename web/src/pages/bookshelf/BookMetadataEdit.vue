@@ -135,9 +135,7 @@ const returnToDetails = () =>
 const restore = () => {
   if (volume.value === undefined) return;
   assignForm(restoreSourceMetadata(form, volume.value));
-  if (storedCustomCover !== undefined)
-    useUploadedCover(storedCustomCover, false);
-  else useSourceCover(false);
+  useSourceCover(storedCustomCover !== undefined);
   message.info('已恢复原文件元信息，提交后生效');
 };
 
