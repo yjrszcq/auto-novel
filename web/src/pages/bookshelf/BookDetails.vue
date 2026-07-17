@@ -7,11 +7,12 @@ import type {
   ReaderReadingStats,
 } from '@/model/Reader';
 import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
-import { EditOutlined, InfoOutlined } from '@vicons/material';
+import { InfoOutlined } from '@vicons/material';
 import { useKeyModifier } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
 import BookCover from './components/BookCover.vue';
+import { sanitizeBookDescription } from './BookDescription';
 import { getReadingProgress } from './BookshelfPresentation';
 import {
   createBookshelfService,
@@ -64,6 +65,9 @@ const readingProgress = computed(() =>
     : getReadingProgress({ ...entry.value, progress: progress.value }),
 );
 const description = computed(() => book.value?.description?.trim() ?? '');
+const descriptionHtml = computed(() =>
+  sanitizeBookDescription(description.value),
+);
 const formatMetadataList = (values: string[] | undefined) =>
   values?.length ? values.join('\n') : '—';
 const languageLabels: Record<string, string> = {
@@ -409,13 +413,19 @@ onMounted(() => void load());
                 <n-button
                   aria-label="编辑书籍信息"
                   class="book-details__edit-button"
-                  circle
                   quaternary
                   size="small"
                   @click="editBook"
                 >
                   <template #icon>
-                    <n-icon :component="EditOutlined" />
+                    <n-icon>
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path
+                          d="M3 21q-.825 0-1.412-.587T1 19V5q0-.825.588-1.412T3 3h8v2H3v14h14v-8h2v8q0 .825-.587 1.413T17 21H3Zm4-4v-4.25l9.175-9.175q.3-.3.675-.45t.75-.15q.4 0 .775.15t.675.45l1.375 1.4q.3.3.438.675T21 6.4q0 .375-.137.738t-.438.662L11.25 17H7Zm2-2h1.4l5.8-5.8-1.4-1.4L9 13.6V15Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </n-icon>
                   </template>
                 </n-button>
               </n-h2>
@@ -480,13 +490,15 @@ onMounted(() => void load());
           </n-button>
         </div>
 
+        <!-- The description is sanitized with an attribute-free allowlist. -->
+        <!-- eslint-disable vue/no-v-html -->
         <section
           v-if="description.length > 0"
           class="book-details__description"
           aria-label="书籍简介"
-        >
-          {{ description }}
-        </section>
+          v-html="descriptionHtml"
+        />
+        <!-- eslint-enable vue/no-v-html -->
 
         <section-header
           class="book-details__preferences-header"
@@ -666,8 +678,16 @@ onMounted(() => void load());
 }
 
 .book-details__edit-button {
+  width: 30px;
+  height: 30px;
   margin-left: 8px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
   vertical-align: 0.08em;
+}
+
+.book-details__edit-button :deep(.n-icon) {
+  font-size: 20px;
 }
 
 .book-details__hero {
@@ -765,6 +785,22 @@ onMounted(() => void load());
   line-height: 1.75;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.book-details__description :deep(:first-child) {
+  margin-top: 0;
+}
+
+.book-details__description :deep(:last-child) {
+  margin-bottom: 0;
+}
+
+.book-details__description :deep(p) {
+  margin: 0 0 0.75em;
+}
+
+.book-details__description :deep(li + li) {
+  margin-top: 0.25em;
 }
 
 .book-details__reading-progress {

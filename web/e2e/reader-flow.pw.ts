@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 const bookId = 'reader-flow.txt';
 const unsafeText = '<img src=x onerror="window.__readerXss=true">';
+const descriptionHtml =
+  '<div><p><strong style="color:red" onclick="window.__descriptionXss=true">安全简介</strong></p><p>第二段</p><img src=x onerror="window.__descriptionXss=true"><svg><script>window.__descriptionXss=true</script></svg></div>';
 
 test('opens a local bookshelf book safely and keeps the legacy reader link', async ({
   page,
@@ -16,7 +18,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
 
   await page.evaluate(
-    async ({ bookId, unsafeText }) => {
+    async ({ bookId, descriptionHtml, unsafeText }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
         const request = indexedDB.open('volumes', 4);
         request.onerror = () => reject(request.error);
@@ -51,6 +53,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
         glossaryId: 'glossary',
         glossary: {},
         favoredId: 'default',
+        bookMetadata: { description: descriptionHtml, languages: ['ja'] },
       });
       transaction.objectStore('chapter').put({
         id: `${bookId}/0`,
@@ -76,7 +79,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       });
       database.close();
     },
-    { bookId, unsafeText },
+    { bookId, descriptionHtml, unsafeText },
   );
 
   await page.reload();
@@ -102,6 +105,12 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.locator('.book-details__hero-summary')).toContainText(
     '书籍信息',
   );
+  const bookDescription = page.locator('.book-details__description');
+  await expect(bookDescription.locator('p')).toHaveText(['安全简介', '第二段']);
+  await expect(bookDescription.locator('strong')).toHaveText('安全简介');
+  await expect(bookDescription.locator('img, script, svg')).toHaveCount(0);
+  await expect(bookDescription.locator('[onclick], [style]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__descriptionXss)).toBeUndefined();
   await expect(page.locator('.book-details__content .n-p')).toHaveCount(0);
   await expect(page.locator('.book-details__info-dialog')).toHaveCount(0);
   await page.getByRole('button', { name: '书籍信息', exact: true }).click();
