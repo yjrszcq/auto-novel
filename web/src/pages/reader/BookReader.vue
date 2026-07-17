@@ -1626,6 +1626,9 @@ onBeforeUnmount(() => {
   --reader-background: #fafafa;
   --reader-chrome-background: #f1f1f1;
   --reader-chrome-border: rgb(0 0 0 / 12%);
+  --reader-warning-background: #fff0c2;
+  --reader-warning-border: #d69a18;
+  --reader-warning-text: #5b4300;
 }
 
 .book-reader--dark {
@@ -1634,6 +1637,9 @@ onBeforeUnmount(() => {
   --reader-background: #191919;
   --reader-chrome-background: #242424;
   --reader-chrome-border: rgb(255 255 255 / 8%);
+  --reader-warning-background: #302b27;
+  --reader-warning-border: #b77a2b;
+  --reader-warning-text: #f2e8dc;
 }
 
 .book-reader--sepia {
@@ -1642,6 +1648,9 @@ onBeforeUnmount(() => {
   --reader-background: #f4ecd8;
   --reader-chrome-background: #e8ddc3;
   --reader-chrome-border: rgb(74 57 37 / 14%);
+  --reader-warning-background: #f4d998;
+  --reader-warning-border: #b57b20;
+  --reader-warning-text: #543b0b;
 }
 
 .book-reader__app-bar {
@@ -1764,16 +1773,16 @@ onBeforeUnmount(() => {
 .book-reader__translation-popover {
   width: min(100%, 720px);
   margin: 0 auto;
-  color: #f2e8dc;
-  background: #302b27;
-  border-color: #b77a2b;
+  color: var(--reader-warning-text);
+  background: var(--reader-warning-background);
+  border-color: var(--reader-warning-border);
   box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
 }
 
 .book-reader__translation-panel {
   display: grid;
   width: 100%;
-  color: #f2e8dc;
+  color: var(--reader-warning-text);
   text-align: center;
   gap: 12px;
 }
@@ -1793,7 +1802,7 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__translation-panel-actions :deep(.n-button__content) {
-  color: #f2e8dc;
+  color: var(--reader-warning-text);
 }
 
 .book-reader__catalog {
@@ -2125,6 +2134,9 @@ onBeforeUnmount(() => {
     --reader-background: #191919;
     --reader-chrome-background: #242424;
     --reader-chrome-border: rgb(255 255 255 / 8%);
+    --reader-warning-background: #302b27;
+    --reader-warning-border: #b77a2b;
+    --reader-warning-text: #f2e8dc;
   }
 }
 </style>
