@@ -45,6 +45,13 @@ export interface EpubCoverManifestItem {
   properties?: string[] | null;
 }
 
+export interface EpubBookMetadata {
+  title?: string;
+  authors: string[];
+  description?: string;
+  languages: string[];
+}
+
 const isImage = (item: EpubCoverManifestItem) =>
   MIME.IMAGE.includes(item.mediaType);
 
@@ -429,6 +436,24 @@ export class Epub extends BaseFile {
   getCover() {
     const cover = this.getCoverItem();
     return cover && 'blob' in cover ? cover.blob : undefined;
+  }
+
+  getBookMetadata(): EpubBookMetadata {
+    const metadata = getEl(this.packageDoc, 'metadata');
+    if (!metadata) {
+      return { authors: [], languages: [] };
+    }
+    const values = (localName: string) =>
+      Array.from(metadata.children)
+        .filter((element) => element.localName === localName)
+        .map((element) => element.textContent?.trim() ?? '')
+        .filter(Boolean);
+    return {
+      title: values('title')[0],
+      authors: values('creator'),
+      description: values('description')[0],
+      languages: values('language'),
+    };
   }
 
   async clone() {

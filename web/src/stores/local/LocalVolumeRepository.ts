@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 
+import { parseFile } from '@/util/file';
+
 import type { Glossary } from '@/model/Glossary';
 import type {
   ChapterTranslation,
@@ -43,6 +45,48 @@ export const createLocalVolumeStore = async () => {
       value.favoredId = favoredId;
       return value;
     });
+
+  const getVolume = async (id: string) => {
+    const volume = await dao.getMetadata(id);
+    if (volume === undefined || volume.bookMetadata !== undefined) {
+      return volume;
+    }
+    const fallback = {
+      title: id.replace(/\.[^.]+$/, ''),
+      authors: [],
+      languages: ['ja'],
+    };
+    let bookMetadata = fallback;
+    if (volume.sourceFormat === 'epub' || id.toLowerCase().endsWith('.epub')) {
+      const stored = await dao.getFile(id);
+      if (stored !== undefined) {
+        try {
+          const parsed = await parseFile(stored.file, ['epub']);
+          if (parsed?.type === 'epub') {
+            bookMetadata = {
+              ...fallback,
+              ...parsed.getBookMetadata(),
+            };
+          }
+        } catch {
+          // Keep old books readable when their original EPUB cannot be parsed.
+        }
+      }
+    }
+    return dao.updateMetadata(id, (current) => ({
+      ...current,
+      bookMetadata,
+    }));
+  };
+
+  const updateBookMetadata = (
+    id: string,
+    bookMetadata: NonNullable<LocalVolumeMetadata['bookMetadata']>,
+  ) =>
+    dao.updateMetadata(id, (value) => ({
+      ...value,
+      bookMetadata,
+    }));
 
   const updateTranslation = async (
     id: string,
@@ -88,7 +132,8 @@ export const createLocalVolumeStore = async () => {
     getFile: dao.getFile,
     //
     listVolume: dao.listMetadata,
-    getVolume: dao.getMetadata,
+    getVolume,
+    updateBookMetadata,
     createVolume: bind(createVolume),
     ensureNativeEpubMigration: bind(ensureNativeEpubMigration),
     deleteVolume,

@@ -11,6 +11,13 @@ import {
 
 const volume: LocalVolumeMetadata = {
   id: 'sample.epub',
+  bookMetadata: {
+    title: '编辑后的书名',
+    authors: ['作者一', '作者二'],
+    description: '简介',
+    coverUrl: 'https://example.com/cover.jpg',
+    languages: ['en', 'ja'],
+  },
   createAt: 10,
   readAt: 20,
   toc: [
@@ -81,9 +88,12 @@ describe('LocalVolumeReaderAdapter', () => {
 
     await expect(adapter.getBook(volume.id)).resolves.toMatchObject({
       id: volume.id,
-      title: 'sample',
-      sourceLanguage: 'ja',
+      title: '编辑后的书名',
+      author: '作者一、作者二',
+      sourceLanguage: 'en',
       targetLanguage: 'zh-CN',
+      coverUrl: 'https://example.com/cover.jpg',
+      languages: ['en', 'ja'],
       chapterCount: 2,
     });
     await expect(adapter.getChapters(volume.id)).resolves.toMatchObject([

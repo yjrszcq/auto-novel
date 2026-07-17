@@ -1,12 +1,33 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  Epub,
   createSpineFallbackNavigation,
   normalizeEpubNavigationHref,
   normalizeEpubNavigationItems,
 } from '../src/util/file/epub';
 
 describe('EPUB navigation normalization', () => {
+  it('reads package metadata while preserving multiple creators and languages', () => {
+    const epub = new Epub('metadata.epub');
+    const children = [
+      { localName: 'title', textContent: '  书名  ' },
+      { localName: 'creator', textContent: '作者一' },
+      { localName: 'creator', textContent: '作者二' },
+      { localName: 'description', textContent: '第一行\n第二行' },
+      { localName: 'language', textContent: 'ja' },
+      { localName: 'language', textContent: 'zh-CN' },
+    ];
+    epub.packageDoc = {
+      getElementsByTagName: () => ({ item: () => ({ children }) }),
+    } as unknown as Document;
+    expect(epub.getBookMetadata()).toEqual({
+      title: '书名',
+      authors: ['作者一', '作者二'],
+      description: '第一行\n第二行',
+      languages: ['ja', 'zh-CN'],
+    });
+  });
   it('resolves EPUB3 navigation links relative to the navigation document', () => {
     expect(
       normalizeEpubNavigationHref(

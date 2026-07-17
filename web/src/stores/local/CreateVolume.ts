@@ -4,6 +4,7 @@ import { parseFile, Srt } from '@/util/file';
 
 import type {
   LocalVolumeChapterSourceRange,
+  LocalBookMetadata,
   LocalVolumeNavigationEntry,
   LocalVolumeTocEntry,
 } from '@/model/LocalVolume';
@@ -35,6 +36,14 @@ export const createVolume = async (
 
   const myFile = await parseFile(file);
   const embeddedCover = myFile.type === 'epub' ? myFile.getCover() : undefined;
+  const bookMetadata: LocalBookMetadata =
+    myFile.type === 'epub'
+      ? myFile.getBookMetadata()
+      : {
+          title: file.name.replace(/\.[^.]+$/, ''),
+          authors: [],
+          languages: ['ja'],
+        };
 
   if (myFile.type === 'txt') {
     const lines = myFile.text.split('\n');
@@ -82,6 +91,7 @@ export const createVolume = async (
     glossaryId: uuidv4(),
     glossary: {},
     favoredId,
+    bookMetadata,
   });
   await dao.createFile(id, file);
   if (embeddedCover !== undefined) {

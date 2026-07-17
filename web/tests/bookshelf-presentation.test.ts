@@ -101,4 +101,16 @@ describe('bookshelf presentation', () => {
     ).toEqual(['alpha.epub']);
     expect(getContinueReadingBook(books)?.volume.id).toBe('zeta.epub');
   });
+
+  it('uses saved display metadata before the filename', () => {
+    const book = entry('filename.epub');
+    book.volume.bookMetadata = { title: '自定义书名' };
+    expect(
+      filterAndSortBookshelf([book], {
+        query: '自定义',
+        filter: 'all',
+        sort: 'title',
+      })[0].title,
+    ).toBe('自定义书名');
+  });
 });

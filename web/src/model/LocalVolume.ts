@@ -32,6 +32,14 @@ export interface LocalVolumeNavigationEntry {
   parentId?: string;
 }
 
+export interface LocalBookMetadata {
+  title?: string;
+  authors?: string[];
+  description?: string;
+  coverUrl?: string;
+  languages?: string[];
+}
+
 export interface LocalVolumeMetadata {
   id: string;
   readAt?: number;
@@ -43,7 +51,18 @@ export interface LocalVolumeMetadata {
   glossaryId: string;
   glossary: Glossary;
   favoredId: string;
+  bookMetadata?: LocalBookMetadata;
 }
+
+export const getLocalVolumeTitle = (volume: LocalVolumeMetadata) =>
+  volume.bookMetadata?.title?.trim() || volume.id.replace(/\.[^.]+$/, '');
+
+export const getLocalVolumeLanguages = (volume: LocalVolumeMetadata) => {
+  const languages = volume.bookMetadata?.languages
+    ?.map((language) => language.trim())
+    .filter(Boolean);
+  return languages?.length ? languages : ['ja'];
+};
 
 export interface LocalVolumeChapter {
   id: string;

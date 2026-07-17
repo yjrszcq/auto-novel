@@ -1,4 +1,7 @@
-import type { LocalVolumeMetadata } from '@/model/LocalVolume';
+import {
+  getLocalVolumeTitle,
+  type LocalVolumeMetadata,
+} from '@/model/LocalVolume';
 
 import type { BookshelfEntry } from './BookshelfService';
 
@@ -26,7 +29,7 @@ export interface BookshelfDisplayBook extends BookshelfEntry {
 const translationKeys = ['gpt', 'sakura', 'youdao', 'baidu'] as const;
 
 export const getBookTitle = (volume: LocalVolumeMetadata) =>
-  volume.id.replace(/\.[^.]+$/, '');
+  getLocalVolumeTitle(volume);
 
 const clamp = (value: number) => Math.max(0, Math.min(value, 100));
 

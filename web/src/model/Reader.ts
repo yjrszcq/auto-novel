@@ -105,7 +105,10 @@ export interface ReaderBook {
   id: string;
   title: string;
   author?: string;
+  authors?: string[];
+  description?: string;
   coverUrl?: string;
+  languages?: string[];
   sourceLanguage: string;
   targetLanguage?: string;
   chapterCount: number;
