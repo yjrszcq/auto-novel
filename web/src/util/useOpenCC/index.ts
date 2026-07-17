@@ -14,18 +14,22 @@ export async function useOpenCC(locale: Locale) {
   if (locale === 'zh-cn') {
     return defaultConverter;
   } else if (locale === 'zh-tw') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const opencc: any = await import('opencc-js');
-    const ccLocale = opencc.Locale;
+    const [opencc, fromCn, toTw, fromTw, toCn] = await Promise.all([
+      import('opencc-js/core'),
+      import('opencc-js/from/cn'),
+      import('opencc-js/to/tw'),
+      import('opencc-js/from/tw'),
+      import('opencc-js/to/cn'),
+    ]);
     const customDict = [
       ['託', '托'],
       ['孃', '娘'],
     ];
     return {
-      toView: opencc.ConverterFactory(ccLocale.from.cn, ccLocale.to.tw, [
+      toView: opencc.ConverterFactory(fromCn.default, toTw.default, [
         customDict,
       ]),
-      toData: opencc.ConverterFactory(ccLocale.from.tw, ccLocale.to.cn),
+      toData: opencc.ConverterFactory(fromTw.default, toCn.default),
     };
   }
   return locale satisfies never;
