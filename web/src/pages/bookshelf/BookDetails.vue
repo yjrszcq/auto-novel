@@ -370,7 +370,14 @@ onMounted(() => void load());
               <n-h2 class="book-details__title" prefix="bar">
                 <b>{{ book.title }}</b>
               </n-h2>
-              <div class="book-details__hero-summary">
+              <div
+                class="book-details__hero-summary"
+                :style="{
+                  '--book-details-summary-color': vars.textColor3,
+                  '--book-details-info-highlight-color':
+                    vars.bodyColor == '#fff' ? vars.textColor1 : '#fff',
+                }"
+              >
                 <n-text class="book-details__reading-progress" depth="3">
                   阅读进度 {{ Math.round(readingProgress) }}%
                 </n-text>
@@ -657,7 +664,7 @@ onMounted(() => void load());
 .book-details__hero-summary {
   display: grid;
   justify-items: start;
-  gap: 8px;
+  gap: 4px;
 }
 
 .book-details__content {
@@ -674,6 +681,7 @@ onMounted(() => void load());
 
 .book-details__reading-progress {
   flex: none;
+  color: var(--book-details-summary-color);
   white-space: nowrap;
 }
 
@@ -683,7 +691,7 @@ onMounted(() => void load());
   padding: 0;
   border: 0;
   gap: 4px;
-  color: var(--n-text-color-3);
+  color: var(--book-details-summary-color);
   background: transparent;
   cursor: pointer;
   font: inherit;
@@ -691,7 +699,7 @@ onMounted(() => void load());
 }
 
 .book-details__info-button:is(:hover, :focus-visible, :active) {
-  color: #fff;
+  color: var(--book-details-info-highlight-color);
 }
 
 .book-details__info-dialog {
