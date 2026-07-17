@@ -2,18 +2,10 @@
 .idea/
 
 goal/
-
-.checkpoint-karpathy/roadmap.md
-.checkpoint-karpathy/progress.md
 .checkpoint-karpathy/private/
-
-# Script
-script/dist/
-script/node_modules/
-
-# Web extension
-web-extension/src/_metadata/
+temp/
 
 # Deploy
 .env
 !web/.env
+

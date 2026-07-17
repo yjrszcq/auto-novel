@@ -1,5 +1,6 @@
 dist/
 node_modules/
+test-results/
 src/auto-imports.d.ts
 src/components.d.ts
 vite.config.ts.timestamp*
