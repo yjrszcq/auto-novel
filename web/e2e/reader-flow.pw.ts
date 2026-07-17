@@ -1461,3 +1461,49 @@ test('persists the global reading version selected in Settings', async ({
   await page.reload();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
 });
+
+test('loads only the current GPT workspace schema', async ({ page }) => {
+  await page.goto('/workspace/gpt');
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'workspace-gpt',
+      JSON.stringify({
+        workers: [
+          {
+            id: 'legacy-worker',
+            endpoint: 'https://chat.openai.com/backend-api',
+            type: 'web',
+          },
+        ],
+        jobs: [],
+        uncompletedJobs: [],
+      }),
+    );
+    localStorage.setItem(
+      'auto-novel:workspace:gpt',
+      JSON.stringify({
+        workers: [
+          {
+            id: 'current-worker',
+            endpoint: 'https://api.example.com',
+            model: 'current-model',
+            key: 'current-key',
+            concurrency: 2,
+          },
+        ],
+        jobs: [],
+        jobRecords: [],
+      }),
+    );
+  });
+
+  await page.reload();
+
+  await expect(page.getByRole('heading', { name: 'GPT工作区' })).toBeVisible();
+  await expect(
+    page.locator('.n-list-item').filter({ hasText: 'current-worker' }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.n-list-item').filter({ hasText: 'legacy-worker' }),
+  ).toHaveCount(0);
+});
