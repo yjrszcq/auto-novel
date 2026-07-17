@@ -18,6 +18,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const message = useMessage();
+const isMobile = useMediaQuery('(max-width: 700px)');
 const loading = ref(true);
 const saving = ref(false);
 const error = ref<string>();
@@ -130,6 +131,7 @@ onMounted(() => void load());
     <template v-else-if="volume">
       <header class="metadata-edit__header">
         <n-button
+          class="metadata-edit__back"
           circle
           quaternary
           aria-label="返回书籍详情"
@@ -137,7 +139,7 @@ onMounted(() => void load());
         >
           <template #icon><n-icon :component="ArrowBackOutlined" /></template>
         </n-button>
-        <div>
+        <div class="metadata-edit__heading">
           <n-h1>编辑书籍信息</n-h1>
           <n-text depth="3">
             修改仅保存在当前浏览器，原始文件不会被覆盖。
@@ -156,8 +158,8 @@ onMounted(() => void load());
           </aside>
           <n-form
             class="metadata-edit__form"
-            label-placement="left"
-            label-width="96"
+            :label-placement="isMobile ? 'top' : 'left'"
+            :label-width="isMobile ? 'auto' : 96"
           >
             <n-form-item label="书名">
               <n-input
@@ -257,14 +259,32 @@ onMounted(() => void load());
 }
 
 .metadata-edit__header {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
   margin-bottom: 24px;
 }
 
+.metadata-edit__back {
+  width: 40px;
+  height: 40px;
+}
+
+.metadata-edit__back :deep(.n-button__icon) {
+  font-size: 30px;
+}
+
+.metadata-edit__heading {
+  min-width: 0;
+}
+
 .metadata-edit__header :deep(.n-h1) {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
   margin: 0 0 4px;
+  line-height: 1.15;
 }
 
 .metadata-edit__layout {
@@ -285,7 +305,7 @@ onMounted(() => void load());
 
 @media (max-width: 700px) {
   .metadata-edit {
-    padding: 24px 18px 48px;
+    padding: 24px 12px 48px;
   }
 
   .metadata-edit__layout {
@@ -296,10 +316,6 @@ onMounted(() => void load());
   .metadata-edit__cover {
     width: min(180px, 48vw);
     margin-inline: auto;
-  }
-
-  .metadata-edit__form :deep(.n-form-item) {
-    grid-template-columns: 1fr;
   }
 
   .metadata-edit__form :deep(.n-form-item-label) {
