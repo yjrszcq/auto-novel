@@ -48,7 +48,7 @@ export const createLocalVolumeStore = async () => {
 
   const getVolume = async (id: string) => {
     const volume = await dao.getMetadata(id);
-    if (volume === undefined || volume.bookMetadata !== undefined) {
+    if (volume === undefined || volume.sourceBookMetadata !== undefined) {
       return volume;
     }
     const fallback = {
@@ -56,14 +56,14 @@ export const createLocalVolumeStore = async () => {
       authors: [],
       languages: ['ja'],
     };
-    let bookMetadata = fallback;
+    let sourceBookMetadata = volume.bookMetadata ?? fallback;
     if (volume.sourceFormat === 'epub' || id.toLowerCase().endsWith('.epub')) {
       const stored = await dao.getFile(id);
       if (stored !== undefined) {
         try {
           const parsed = await parseFile(stored.file, ['epub']);
           if (parsed?.type === 'epub') {
-            bookMetadata = {
+            sourceBookMetadata = {
               ...fallback,
               ...parsed.getBookMetadata(),
             };
@@ -73,10 +73,14 @@ export const createLocalVolumeStore = async () => {
         }
       }
     }
-    return dao.updateMetadata(id, (current) => ({
-      ...current,
-      bookMetadata,
-    }));
+    return dao.updateMetadata(id, (current) => {
+      const { bookMetadata: legacySourceMetadata, ...rest } = current;
+      return {
+        ...rest,
+        sourceBookMetadata:
+          sourceBookMetadata ?? legacySourceMetadata ?? fallback,
+      };
+    });
   };
 
   const updateBookMetadata = (

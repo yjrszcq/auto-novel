@@ -51,15 +51,43 @@ export interface LocalVolumeMetadata {
   glossaryId: string;
   glossary: Glossary;
   favoredId: string;
+  sourceBookMetadata?: LocalBookMetadata;
   bookMetadata?: LocalBookMetadata;
 }
 
+const hasOwn = <Key extends keyof LocalBookMetadata>(
+  metadata: LocalBookMetadata,
+  key: Key,
+) => Object.prototype.hasOwnProperty.call(metadata, key);
+
+export const getLocalBookMetadata = (
+  volume: LocalVolumeMetadata,
+): LocalBookMetadata => {
+  const source = volume.sourceBookMetadata ?? {};
+  const override = volume.bookMetadata;
+  if (override === undefined) return { ...source };
+  return {
+    title: hasOwn(override, 'title') ? override.title : source.title,
+    authors: hasOwn(override, 'authors') ? override.authors : source.authors,
+    description: hasOwn(override, 'description')
+      ? override.description
+      : source.description,
+    coverUrl: hasOwn(override, 'coverUrl')
+      ? override.coverUrl
+      : source.coverUrl,
+    languages: hasOwn(override, 'languages')
+      ? override.languages
+      : source.languages,
+  };
+};
+
 export const getLocalVolumeTitle = (volume: LocalVolumeMetadata) =>
-  volume.bookMetadata?.title?.trim() || volume.id.replace(/\.[^.]+$/, '');
+  getLocalBookMetadata(volume).title?.trim() ||
+  volume.id.replace(/\.[^.]+$/, '');
 
 export const getLocalVolumeLanguages = (volume: LocalVolumeMetadata) => {
-  const languages = volume.bookMetadata?.languages
-    ?.map((language) => language.trim())
+  const languages = getLocalBookMetadata(volume)
+    .languages?.map((language) => language.trim())
     .filter(Boolean);
   return languages?.length ? languages : ['ja'];
 };

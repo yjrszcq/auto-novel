@@ -36,7 +36,7 @@ export const createVolume = async (
 
   const myFile = await parseFile(file);
   const embeddedCover = myFile.type === 'epub' ? myFile.getCover() : undefined;
-  const bookMetadata: LocalBookMetadata =
+  const sourceBookMetadata: LocalBookMetadata =
     myFile.type === 'epub'
       ? myFile.getBookMetadata()
       : {
@@ -91,7 +91,7 @@ export const createVolume = async (
     glossaryId: uuidv4(),
     glossary: {},
     favoredId,
-    bookMetadata,
+    sourceBookMetadata,
   });
   await dao.createFile(id, file);
   if (embeddedCover !== undefined) {

@@ -19,6 +19,11 @@ describe('local EPUB import cover', () => {
     vi.mocked(parseFile).mockResolvedValue({
       type: 'epub',
       getCover: () => cover,
+      getBookMetadata: () => ({
+        title: '测试书籍',
+        authors: ['测试作者'],
+        languages: ['ja'],
+      }),
     } as never);
     vi.mocked(createEpubImportPlan).mockReturnValue({
       chapters: [
@@ -84,6 +89,11 @@ describe('local EPUB import cover', () => {
             title: '第一章',
           }),
         ],
+        sourceBookMetadata: {
+          title: '测试书籍',
+          authors: ['测试作者'],
+          languages: ['ja'],
+        },
       }),
     );
   });

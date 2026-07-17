@@ -3,6 +3,7 @@ import type {
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import {
+  getLocalBookMetadata,
   getLocalVolumeLanguages,
   getLocalVolumeTitle,
 } from '@/model/LocalVolume';
@@ -36,20 +37,24 @@ const getChapterSources = (chapter: LocalVolumeChapter) =>
     chapter[translatorId]?.paragraphs.some(Boolean),
   );
 
-const getBook = (volume: LocalVolumeMetadata): ReaderBook => ({
-  id: volume.id,
-  title: getLocalVolumeTitle(volume),
-  author: volume.bookMetadata?.authors?.join('、'),
-  authors: volume.bookMetadata?.authors,
-  description: volume.bookMetadata?.description,
-  coverUrl: volume.bookMetadata?.coverUrl,
-  languages: getLocalVolumeLanguages(volume),
-  sourceLanguage: getLocalVolumeLanguages(volume)[0],
-  targetLanguage: 'zh-CN',
-  chapterCount: volume.toc.length,
-  createdAt: volume.createAt,
-  updatedAt: volume.readAt ?? volume.createAt,
-});
+const getBook = (volume: LocalVolumeMetadata): ReaderBook => {
+  const metadata = getLocalBookMetadata(volume);
+  const languages = getLocalVolumeLanguages(volume);
+  return {
+    id: volume.id,
+    title: getLocalVolumeTitle(volume),
+    author: metadata.authors?.join('、'),
+    authors: metadata.authors,
+    description: metadata.description,
+    coverUrl: metadata.coverUrl,
+    languages,
+    sourceLanguage: languages[0],
+    targetLanguage: 'zh-CN',
+    chapterCount: volume.toc.length,
+    createdAt: volume.createAt,
+    updatedAt: volume.readAt ?? volume.createAt,
+  };
+};
 
 export type LocalVolumeReaderRepository = Pick<
   Awaited<ReturnType<typeof useLocalVolumeStore>>,
