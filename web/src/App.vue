@@ -1,58 +1,27 @@
 <script lang="ts" setup>
 import { darkTheme, dateZhCN, useOsTheme, zhCN } from 'naive-ui';
 
-import {
-  useReaderSettingStore,
-  useRuntimeConfigStore,
-  useSettingStore,
-} from '@/stores';
+import { useRuntimeConfigStore, useSettingStore } from '@/stores';
 import { RegexUtil } from '@/util';
 
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
 
-const readerSettingStore = useReaderSettingStore();
-const { readerSetting } = storeToRefs(readerSettingStore);
-
 const runtimeConfigStore = useRuntimeConfigStore();
 void runtimeConfigStore.loadRuntimeConfig();
 
 // 主题
-const route = useRoute();
 const osThemeRef = useOsTheme();
 
-const isDarkColor = (color: string) => {
-  const r = parseInt(color.substring(1, 3), 16);
-  const g = parseInt(color.substring(3, 5), 16);
-  const b = parseInt(color.substring(5, 7), 16);
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness < 120;
-};
-
-const buildTheme = (
-  theme: 'light' | 'dark' | 'system' | 'custom',
-  bodyColor?: string,
-): {
-  isDark: boolean;
-  bodyColor?: string;
-} => {
+const isDarkTheme = computed(() => {
+  const theme = setting.value.theme;
   switch (theme) {
     case 'light':
-      return { isDark: false };
+      return false;
     case 'dark':
-      return { isDark: true };
+      return true;
     case 'system':
-      return { isDark: osThemeRef.value === 'dark' };
-    case 'custom':
-      return { isDark: isDarkColor(bodyColor!), bodyColor };
-  }
-};
-const theme = computed(() => {
-  if (route.meta.isReader) {
-    const theme = readerSetting.value.theme;
-    return buildTheme(theme.mode, theme.bodyColor);
-  } else {
-    return buildTheme(setting.value.theme, undefined);
+      return osThemeRef.value === 'dark';
   }
 });
 
@@ -71,18 +40,13 @@ if (RegexUtil.isSafari(navigator.userAgent)) {
 
 <template>
   <n-config-provider
-    :theme="theme.isDark ? darkTheme : null"
+    :theme="isDarkTheme ? darkTheme : null"
     :locale="zhCN"
     :date-locale="dateZhCN"
     inline-theme-disabled
     :theme-overrides="{
       Drawer: { bodyPadding: '0px' },
       List: { color: '#0000' },
-      common: {
-        ...(theme.bodyColor === undefined
-          ? undefined
-          : { bodyColor: theme.bodyColor }),
-      },
     }"
   >
     <n-global-style />
