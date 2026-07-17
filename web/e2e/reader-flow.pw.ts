@@ -108,6 +108,8 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   const bookInfoDialog = page.locator('.book-details__info-dialog');
   await expect(bookInfoDialog).toBeVisible();
   await expect(bookInfoDialog.locator('dt')).toHaveText([
+    '作者',
+    '语言',
     '章节',
     '本地文件',
     '导入时间',
@@ -116,6 +118,8 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     '书签',
   ]);
   await expect(bookInfoDialog.locator('dd')).toHaveText([
+    '—',
+    '日语（ja）',
     '2 章',
     'reader-flow.txt',
     '1970/1/1 08:00:00',
