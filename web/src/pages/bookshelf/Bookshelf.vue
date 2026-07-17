@@ -14,6 +14,7 @@ import {
 import BookCard from './components/BookCard.vue';
 
 import { useLocalVolumeStore } from '@/stores';
+import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const router = useRouter();
 const books = ref<BookshelfEntry[]>([]);
@@ -24,6 +25,7 @@ const filter = ref<BookshelfFilter>('all');
 const sort = ref<BookshelfSort>('recent-read');
 const showLocalVolumes = ref(false);
 const unlistedBookIds = ref<string[]>([]);
+const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
 
 const filterOptions: { label: string; value: BookshelfFilter }[] = [
   { label: '全部状态', value: 'all' },
@@ -92,7 +94,10 @@ onMounted(reload);
       <div class="bookshelf-page__header-actions">
         <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
       </div>
-      <p>书籍和阅读数据仅保存在当前浏览器。</p>
+      <bulletin v-if="infoPanelHtml" class="bookshelf-page__notice">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-html="infoPanelHtml" />
+      </bulletin>
     </header>
 
     <n-skeleton v-if="loading" text :repeat="8" />
@@ -190,14 +195,12 @@ onMounted(reload);
   gap: 8px;
 }
 
-.bookshelf-page h1,
-.bookshelf-page p {
+.bookshelf-page h1 {
   margin: 0;
 }
 
-.bookshelf-page p {
+.bookshelf-page__notice {
   grid-column: 1 / -1;
-  color: var(--n-text-color-3);
 }
 
 .bookshelf-toolbar {

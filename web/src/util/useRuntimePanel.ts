@@ -5,7 +5,8 @@ export const useRuntimePanel = (filename: string) => {
 
   const load = async () => {
     try {
-      const response = await fetch(`/panel-content/${filename}`, {
+      const prefix = import.meta.env.DEV ? '/config' : '/panel-content';
+      const response = await fetch(`${prefix}/${filename}`, {
         cache: 'no-store',
       });
       if (!response.ok) {

@@ -617,39 +617,39 @@ onMounted(() => void load());
           @close="showBookInfo = false"
         >
           <dl class="book-details__info-list">
-            <div>
+            <div class="book-details__info-item">
               <dt>作者</dt>
               <dd>{{ formatMetadataList(book.authors) }}</dd>
             </div>
-            <div>
+            <div class="book-details__info-item">
               <dt>语言</dt>
               <dd>{{ formattedLanguages }}</dd>
             </div>
-            <div>
+            <div class="book-details__info-item">
               <dt>章节</dt>
               <dd>{{ book.chapterCount }} 章</dd>
             </div>
-            <div>
-              <dt>本地文件</dt>
-              <dd>{{ book.id }}</dd>
+            <div class="book-details__info-item">
+              <dt>书签</dt>
+              <dd>{{ bookmarkCount }}</dd>
             </div>
-            <div>
+            <div class="book-details__info-item">
               <dt>导入时间</dt>
               <dd>{{ formatDate(book.createdAt) }}</dd>
             </div>
-            <div>
+            <div class="book-details__info-item">
               <dt>上次阅读</dt>
               <dd>{{ formatDate(progress?.updatedAt) }}</dd>
             </div>
-            <div>
+            <div class="book-details__info-item">
               <dt>累计阅读</dt>
               <dd>
                 {{ formatReadingDuration(readingStats?.totalReadingMs ?? 0) }}
               </dd>
             </div>
-            <div>
-              <dt>书签</dt>
-              <dd>{{ bookmarkCount }}</dd>
+            <div class="book-details__info-item book-details__info-item--wide">
+              <dt>本地文件</dt>
+              <dd>{{ book.id }}</dd>
             </div>
           </dl>
         </n-card>
@@ -673,17 +673,24 @@ onMounted(() => void load());
   align-self: stretch;
 }
 
+.book-details__title {
+  align-items: center;
+}
+
 .book-details__title b {
+  flex: 0 1 auto;
   min-width: 0;
 }
 
 .book-details__edit-button {
   width: 30px;
   height: 30px;
+  align-self: center;
+  flex: none;
   margin-left: 8px;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  vertical-align: 0.08em;
+  border: 0;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .book-details__edit-button :deep(.n-icon) {
@@ -784,7 +791,7 @@ onMounted(() => void load());
   color: var(--n-text-color-2);
   line-height: 1.75;
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .book-details__description :deep(:first-child) {
@@ -796,7 +803,7 @@ onMounted(() => void load());
 }
 
 .book-details__description :deep(p) {
-  margin: 0 0 0.75em;
+  margin: 0;
 }
 
 .book-details__description :deep(li + li) {
@@ -827,22 +834,33 @@ onMounted(() => void load());
 }
 
 .book-details__info-dialog {
-  width: min(92vw, 520px);
+  width: min(92vw, 680px);
 }
 
 .book-details__info-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
-  gap: 14px;
+  gap: 10px;
 }
 
-.book-details__info-list > div {
+.book-details__info-item {
   display: grid;
-  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  gap: 5px;
+  background: var(--n-color-embedded);
+}
+
+.book-details__info-item--wide {
+  grid-column: 1 / -1;
 }
 
 .book-details__info-list dt {
   color: var(--n-text-color-3);
+  font-size: 13px;
 }
 
 .book-details__info-list dd {
@@ -954,6 +972,14 @@ onMounted(() => void load());
 }
 
 @media only screen and (max-width: 600px) {
+  .book-details__info-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .book-details__info-item--wide {
+    grid-column: auto;
+  }
+
   .book-details__primary-actions {
     align-items: center;
     flex-direction: row;

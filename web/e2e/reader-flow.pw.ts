@@ -120,28 +120,25 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     '作者',
     '语言',
     '章节',
-    '本地文件',
+    '书签',
     '导入时间',
     '上次阅读',
     '累计阅读',
-    '书签',
+    '本地文件',
   ]);
   await expect(bookInfoDialog.locator('dd')).toHaveText([
     '—',
     '日语（ja）',
     '2 章',
-    'reader-flow.txt',
+    '0',
     '1970/1/1 08:00:00',
     '—',
     '0 分钟',
-    '0',
+    'reader-flow.txt',
   ]);
-  const bookInfoRowTops = await bookInfoDialog
-    .locator('.book-details__info-list > div')
-    .evaluateAll((rows) =>
-      rows.map((row) => Math.round(row.getBoundingClientRect().top)),
-    );
-  expect(new Set(bookInfoRowTops).size).toBe(bookInfoRowTops.length);
+  await expect(
+    bookInfoDialog.locator('.book-details__info-item--wide'),
+  ).toContainText('reader-flow.txt');
   await bookInfoDialog.locator('.n-base-close').click();
   await expect(bookInfoDialog).toHaveCount(0);
   await expect(page.getByText('翻译进度', { exact: true })).toHaveCount(0);
@@ -1231,6 +1228,9 @@ test('uses a configured default cover for a local book without one', async ({
   await expect(
     page.getByRole('button', { name: '前往工作区', exact: true }),
   ).toHaveCount(0);
+  await expect(page.locator('.bookshelf-page__notice')).toContainText(
+    '书籍和阅读数据仅保存在当前浏览器。',
+  );
   const bookshelfLayout = await page.evaluate(() => {
     const bounds = (selector: string) => {
       const element = document.querySelector<HTMLElement>(selector);
@@ -1247,7 +1247,7 @@ test('uses a configured default cover for a local book without one', async ({
     };
     return {
       add: bounds('.bookshelf-page__header-actions'),
-      description: bounds('.bookshelf-page p'),
+      notice: bounds('.bookshelf-page__notice'),
       filter: bounds('.bookshelf-toolbar__filter'),
       header: bounds('.bookshelf-page__header'),
       search: bounds('.bookshelf-toolbar__search'),
@@ -1264,8 +1264,8 @@ test('uses a configured default cover for a local book without one', async ({
         (bookshelfLayout.title.top + bookshelfLayout.title.height / 2),
     ),
   ).toBeLessThanOrEqual(1);
-  expect(bookshelfLayout.description.left).toBe(bookshelfLayout.header.left);
-  expect(bookshelfLayout.description.right).toBe(bookshelfLayout.header.right);
+  expect(bookshelfLayout.notice.left).toBe(bookshelfLayout.header.left);
+  expect(bookshelfLayout.notice.right).toBe(bookshelfLayout.header.right);
   expect(bookshelfLayout.search.top).toBeLessThan(bookshelfLayout.filter.top);
   expect(bookshelfLayout.filter.left).toBe(bookshelfLayout.search.left);
   expect(bookshelfLayout.sort.left).toBeGreaterThan(

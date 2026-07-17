@@ -77,5 +77,17 @@ export const sanitizeBookDescription = (description: string) => {
   const template = document.createElement('template');
   template.innerHTML = description;
   sanitizeChildren(template.content);
+
+  if (template.content.querySelector('*') === null) {
+    const lines = (template.content.textContent ?? '').split(/\r?\n/);
+    template.content.replaceChildren();
+    lines.forEach((line, index) => {
+      if (index > 0) {
+        template.content.append(document.createElement('br'));
+      }
+      template.content.append(document.createTextNode(line));
+    });
+  }
+
   return template.innerHTML;
 };
