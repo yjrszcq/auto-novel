@@ -913,12 +913,11 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect
     .poll(() =>
-      readerContent.evaluate(
-        (element) =>
-          Math.abs(
-            element.scrollLeft - (element.scrollWidth - element.clientWidth),
-          ) <= 1,
-      ),
+      readerContent.evaluate((element) => {
+        const pageLabel = element.getAttribute('aria-label');
+        const match = pageLabel?.match(/第 (\d+) \/ (\d+) 页/);
+        return match !== null && match !== undefined && match[1] === match[2];
+      }),
     )
     .toBe(true);
   const mobilePreviousChapterEnd = await readerContent.evaluate(
