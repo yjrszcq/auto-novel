@@ -320,6 +320,22 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect
     .poll(() => readerContent.evaluate((element) => element.scrollLeft))
     .toBeGreaterThan(0);
+  const desktopPreviousChapterEnd = await readerContent.evaluate(
+    (element) => element.scrollLeft,
+  );
+  await readerContent.click({
+    position: { x: readerBounds.width * 0.1, y: readerBounds.height * 0.5 },
+  });
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBeLessThan(desktopPreviousChapterEnd);
+  await readerContent.click({
+    position: { x: readerBounds.width * 0.9, y: readerBounds.height * 0.5 },
+  });
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBe(desktopPreviousChapterEnd);
   await expect
     .poll(() =>
       readerContent.evaluate((element) => {
@@ -549,6 +565,28 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       ),
     )
     .toBe(true);
+  const mobilePreviousChapterEnd = await readerContent.evaluate(
+    (element) => element.scrollLeft,
+  );
+  await readerContent.click({
+    position: {
+      x: mobileReaderBounds.width * 0.1,
+      y: mobileReaderBounds.height * 0.5,
+    },
+  });
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBeLessThan(mobilePreviousChapterEnd);
+  await readerContent.click({
+    position: {
+      x: mobileReaderBounds.width * 0.9,
+      y: mobileReaderBounds.height * 0.5,
+    },
+  });
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBe(mobilePreviousChapterEnd);
   await expect
     .poll(() =>
       readerContent.evaluate((element) => {

@@ -93,7 +93,6 @@ const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
-const readerPageVisualOffset = ref(0);
 const viewportProgressRatio = ref(0);
 let paginatedAnchorSegmentId: string | undefined;
 let viewportResizeFrame: number | undefined;
@@ -246,10 +245,21 @@ const updateViewportMetrics = () => {
 };
 
 const positionReaderPage = (viewport: HTMLElement, pageIndex: number) => {
-  readerPageVisualOffset.value = 0;
+  viewport.style.setProperty('--reader-page-tail-space', '0px');
   const targetLeft = Math.max(0, pageIndex) * viewport.clientWidth;
   viewport.scrollTo({ left: targetLeft, behavior: 'auto' });
-  readerPageVisualOffset.value = Math.max(0, targetLeft - viewport.scrollLeft);
+  const missingTailSpace = Math.max(0, targetLeft - viewport.scrollLeft);
+  if (missingTailSpace <= 0) return;
+  viewport.style.setProperty(
+    '--reader-page-tail-start',
+    `${viewport.scrollWidth}px`,
+  );
+  viewport.style.setProperty(
+    '--reader-page-tail-space',
+    `${missingTailSpace}px`,
+  );
+  void viewport.scrollWidth;
+  viewport.scrollTo({ left: targetLeft, behavior: 'auto' });
 };
 
 const scrollReaderPage = async (delta: number) => {
@@ -1342,9 +1352,6 @@ onBeforeUnmount(() => {
           :initial-segment-id="initialSegmentId"
           :flow="resolvedFlow"
           :scroll-root="readerViewport"
-          :style="{
-            transform: `translate3d(${-readerPageVisualOffset}px, 0, 0)`,
-          }"
           @content-change="handleSegmentContentChange"
         />
       </article>
@@ -1896,9 +1903,19 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior: contain;
-  contain: paint;
+  position: relative;
   scroll-behavior: auto;
   scrollbar-width: none;
+}
+
+.book-reader__content--paginated::after {
+  position: absolute;
+  top: 0;
+  left: var(--reader-page-tail-start, 100%);
+  width: var(--reader-page-tail-space, 0);
+  height: 1px;
+  pointer-events: none;
+  content: '';
 }
 
 .book-reader__content--paginated::-webkit-scrollbar {
