@@ -101,12 +101,8 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       await Promise.all(
         ids.map(async (id: string) => {
           try {
-            const file = await repo.getFile(id);
-            if (file !== undefined) {
-              await writer.add(id, new BlobReader(file.file));
-            } else {
-              throw new Error('文件应当存在');
-            }
+            const file = await repo.getOriginalDownloadFile({ id });
+            await writer.add(file.filename, new BlobReader(file.blob));
           } catch (error) {
             failed += 1;
             console.error(`生成文件错误：${error}\n标题:${id}`);

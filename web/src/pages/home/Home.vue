@@ -282,9 +282,7 @@ const getTranslatedFile = async (
 
 const getRawFile = async (volumeId: string) => {
   const repo = await ensureLocalRepo();
-  const file = await repo.getFile(volumeId);
-  if (!file) return undefined;
-  return { filename: volumeId, blob: file.file };
+  return repo.getOriginalDownloadFile({ id: volumeId });
 };
 
 const downloadTranslatedVolume = async (

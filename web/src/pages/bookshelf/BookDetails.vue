@@ -203,12 +203,10 @@ const openChapter = (chapterId: string) => {
 const downloadOriginal = async () => {
   try {
     const repository = await repositoryPromise;
-    const file = await repository.getFile(bookId.value);
-    if (file === undefined) {
-      message.error('原始文件不存在');
-      return;
-    }
-    downloadFile(bookId.value, file.file);
+    const file = await repository.getOriginalDownloadFile({
+      id: bookId.value,
+    });
+    downloadFile(file.filename, file.blob);
     message.success('已开始下载原文');
   } catch (reason) {
     message.error('下载失败：' + String(reason));

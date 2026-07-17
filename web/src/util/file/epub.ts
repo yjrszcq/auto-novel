@@ -3,6 +3,7 @@ import { StandardNovel } from './standard';
 
 const MIMETYPE_PATH = 'mimetype';
 const MIMETYPE_TEMPLATE = 'application/epub+zip';
+const DUBLIN_CORE_NAMESPACE = 'http://purl.org/dc/elements/1.1/';
 
 const CONTAINER_PATH = 'META-INF/container.xml';
 const CONTAINER_TEMPLATE = `<?xml version="1.0" encoding="utf-8"?>
@@ -25,6 +26,15 @@ const MIME = {
   ],
   CSS: ['text/css'],
 };
+
+const imageExtension = (mime: string) =>
+  ({
+    'image/gif': 'gif',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/svg+xml': 'svg',
+    'image/webp': 'webp',
+  })[mime];
 
 type EpubItemBase = {
   id: string;
@@ -454,6 +464,76 @@ export class Epub extends BaseFile {
       description: values('description')[0],
       languages: values('language'),
     };
+  }
+
+  updateBookMetadata(metadataValue: EpubBookMetadata) {
+    const metadata = getEl(this.packageDoc, 'metadata');
+    if (!metadata) throw new Error('Package does not have metadata');
+    const replace = (localName: string, values: readonly string[]) => {
+      Array.from(metadata.children)
+        .filter((element) => element.localName === localName)
+        .forEach((element) => element.remove());
+      values
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .forEach((value) => {
+          const element = this.packageDoc.createElementNS(
+            DUBLIN_CORE_NAMESPACE,
+            `dc:${localName}`,
+          );
+          element.textContent = value;
+          metadata.appendChild(element);
+        });
+    };
+    replace('title', metadataValue.title ? [metadataValue.title] : []);
+    replace('creator', metadataValue.authors);
+    replace(
+      'description',
+      metadataValue.description ? [metadataValue.description] : [],
+    );
+    replace('language', metadataValue.languages);
+  }
+
+  setCover(blob: Blob) {
+    const extension = imageExtension(blob.type);
+    if (!extension) throw new Error('不支持的封面图片格式');
+    let cover = this.getCoverItem();
+    if (cover && 'blob' in cover) {
+      cover.mediaType = blob.type;
+      cover.blob = blob;
+      cover.properties = [
+        ...new Set([...(cover.properties ?? []), 'cover-image']),
+      ];
+    } else {
+      let index = 0;
+      let id = 'cover-image';
+      while (this.items.has(id)) id = `cover-image-${++index}`;
+      cover = {
+        id,
+        href: `images/${id}.${extension}`,
+        mediaType: blob.type,
+        overlay: null,
+        properties: ['cover-image'],
+        fallback: null,
+        blob,
+      };
+      this.items.set(id, cover);
+    }
+    this.legacyCoverId = cover.id;
+    const metadata = getEl(this.packageDoc, 'metadata');
+    if (!metadata) throw new Error('Package does not have metadata');
+    let legacyMeta = Array.from(metadata.getElementsByTagName('meta')).find(
+      (element) => element.getAttribute('name')?.toLowerCase() === 'cover',
+    );
+    if (!legacyMeta) {
+      legacyMeta = this.packageDoc.createElementNS(
+        this.packageDoc.documentElement.namespaceURI,
+        'meta',
+      );
+      legacyMeta.setAttribute('name', 'cover');
+      metadata.appendChild(legacyMeta);
+    }
+    legacyMeta.setAttribute('content', cover.id);
   }
 
   async clone() {

@@ -11,6 +11,7 @@ import type {
 import type { TranslatorId } from '@/model/Translator';
 
 import { createVolume } from './CreateVolume';
+import { embedEpubDownloadMetadata } from './EpubDownloadMetadata';
 import { ensureNativeEpubMigration } from './EpubMigration';
 import { getTranslationFile } from './GetTranslationFile';
 import type { LocalVolumeDao } from './LocalVolumeDao';
@@ -92,6 +93,25 @@ export const createLocalVolumeStore = async () => {
       bookMetadata,
     }));
 
+  const getOriginalDownloadFile = async ({
+    id,
+    embedMetadata = false,
+  }: {
+    id: string;
+    embedMetadata?: boolean;
+  }) => {
+    const stored = await dao.getFile(id);
+    if (stored === undefined) throw new Error('原始文件不存在');
+    if (!embedMetadata) return { filename: id, blob: stored.file };
+
+    const volume = await getVolume(id);
+    if (volume === undefined) throw new Error('小说不存在');
+    const parsed = await parseFile(stored.file);
+    if (parsed.type !== 'epub') return { filename: id, blob: stored.file };
+    await embedEpubDownloadMetadata(dao, parsed, volume);
+    return { filename: id, blob: await parsed.toBlob() };
+  };
+
   const updateTranslation = async (
     id: string,
     chapterId: string,
@@ -138,6 +158,7 @@ export const createLocalVolumeStore = async () => {
     listVolume: dao.listMetadata,
     getVolume,
     updateBookMetadata,
+    getOriginalDownloadFile,
     createVolume: bind(createVolume),
     ensureNativeEpubMigration: bind(ensureNativeEpubMigration),
     deleteVolume,

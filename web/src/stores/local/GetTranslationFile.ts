@@ -2,6 +2,7 @@ import { parseFile } from '@/util/file';
 
 import { EpubParserV1, injectEpubParagraphTranslations } from './EpubParser';
 import { collectEpubSourceTranslations } from './EpubTranslationExport';
+import { embedEpubDownloadMetadata } from './EpubDownloadMetadata';
 import type { LocalVolumeDao } from './LocalVolumeDao';
 
 export const getTranslationFile = async (
@@ -11,11 +12,13 @@ export const getTranslationFile = async (
     mode,
     translationsMode,
     translations,
+    embedMetadata = false,
   }: {
     id: string;
     mode: 'zh' | 'zh-jp' | 'jp-zh';
     translationsMode: 'parallel' | 'priority';
     translations: ('sakura' | 'baidu' | 'youdao' | 'gpt')[];
+    embedMetadata?: boolean;
   },
 ) => {
   const filename = [
@@ -117,6 +120,9 @@ export const getTranslationFile = async (
 
     // 清除css格式
     myFile.cleanStyle();
+    if (embedMetadata) {
+      await embedEpubDownloadMetadata(dao, myFile, metadata);
+    }
   } else if (myFile.type === 'srt') {
     const { zhLinesList } = await getZhLinesList('0');
     const newSubtitles: typeof myFile.subtitles = [];
