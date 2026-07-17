@@ -1,4 +1,4 @@
-import { MD5 } from 'crypto-es/lib/md5';
+import { MD5 } from 'crypto-es';
 import { customAlphabet } from 'nanoid';
 
 import { TranslationCacheRepo } from '@/repos';

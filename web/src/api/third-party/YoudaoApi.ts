@@ -1,6 +1,4 @@
-import { AES } from 'crypto-es/lib/aes';
-import { Utf8 } from 'crypto-es/lib/core';
-import { MD5 } from 'crypto-es/lib/md5';
+import { AES, MD5, Utf8 } from 'crypto-es';
 import type { Options } from 'ky';
 import ky from 'ky';
 
