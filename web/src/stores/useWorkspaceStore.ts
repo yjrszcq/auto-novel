@@ -148,18 +148,10 @@ const createGptWorkspaceStore = () =>
     // 2024-3-8
     workspace.value.workers.forEach((it: GptWorker) => {
       if (it.endpoint.length === 0) {
-        if (it.type === 'web') {
-          it.endpoint = 'https://chat.openai.com/backend-api';
-        } else {
-          it.endpoint = 'https://api.openai.com';
-        }
+        it.endpoint = 'https://api.openai.com';
       }
-      if (it.type === 'web') {
-        it.model = 'text-davinci-002-render-sha';
-      } else {
-        if (it.model === undefined || it.model === 'gpt-3.5') {
-          it.model = 'gpt-3.5-turbo';
-        }
+      if (it.model === undefined || it.model === 'gpt-3.5') {
+        it.model = 'gpt-3.5-turbo';
       }
     });
   });
