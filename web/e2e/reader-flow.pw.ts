@@ -115,6 +115,24 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     );
   });
   expect(infoActionAlignment).toBeLessThanOrEqual(1);
+  const infoActionStyles = await page.evaluate(() => {
+    const info = document.querySelector<HTMLElement>(
+      '.book-details__info-button',
+    );
+    const edit = document.querySelector<HTMLElement>(
+      '.book-details__edit-button',
+    );
+    if (info === null || edit === null) {
+      throw new Error('缺少书籍信息或编辑按钮');
+    }
+    return {
+      editBackground: getComputedStyle(edit).backgroundColor,
+      editColor: getComputedStyle(edit).color,
+      infoColor: getComputedStyle(info).color,
+    };
+  });
+  expect(infoActionStyles.editColor).toBe(infoActionStyles.infoColor);
+  expect(infoActionStyles.editBackground).toBe('rgba(0, 0, 0, 0)');
   await expect(
     page.locator('.book-details__title .book-details__edit-button'),
   ).toHaveCount(0);

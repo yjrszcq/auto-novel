@@ -429,24 +429,21 @@ onMounted(() => void load());
                   >
                     书籍信息
                   </button>
-                  <n-button
+                  <button
                     aria-label="编辑书籍信息"
                     class="book-details__edit-button"
-                    quaternary
-                    size="tiny"
+                    type="button"
                     @click="editBook"
                   >
-                    <template #icon>
-                      <n-icon>
-                        <svg aria-hidden="true" viewBox="0 0 24 24">
-                          <path
-                            d="M3 21q-.825 0-1.412-.587T1 19V5q0-.825.588-1.412T3 3h8v2H3v14h14v-8h2v8q0 .825-.587 1.413T17 21H3Zm4-4v-4.25l9.175-9.175q.3-.3.675-.45t.75-.15q.4 0 .775.15t.675.45l1.375 1.4q.3.3.438.675T21 6.4q0 .375-.137.738t-.438.662L11.25 17H7Zm2-2h1.4l5.8-5.8-1.4-1.4L9 13.6V15Z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </n-icon>
-                    </template>
-                  </n-button>
+                    <n-icon>
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path
+                          d="M3 21q-.825 0-1.412-.587T1 19V5q0-.825.588-1.412T3 3h8v2H3v14h14v-8h2v8q0 .825-.587 1.413T17 21H3Zm4-4v-4.25l9.175-9.175q.3-.3.675-.45t.75-.15q.4 0 .775.15t.675.45l1.375 1.4q.3.3.438.675T21 6.4q0 .375-.137.738t-.438.662L11.25 17H7Zm2-2h1.4l5.8-5.8-1.4-1.4L9 13.6V15Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </n-icon>
+                  </button>
                 </div>
               </div>
             </n-flex>
@@ -685,8 +682,15 @@ onMounted(() => void load());
 .book-details__edit-button {
   width: 26px;
   height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
+  padding: 0;
   border: 0;
+  color: var(--book-details-summary-color);
+  background: transparent;
+  cursor: pointer;
   line-height: 1;
 }
 
@@ -831,7 +835,8 @@ onMounted(() => void load());
   white-space: nowrap;
 }
 
-.book-details__info-button:is(:hover, :focus-visible, :active) {
+.book-details__info-button:is(:hover, :focus-visible, :active),
+.book-details__edit-button:is(:hover, :focus-visible, :active) {
   color: var(--book-details-info-highlight-color);
 }
 
