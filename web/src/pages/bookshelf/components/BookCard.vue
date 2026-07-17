@@ -1,8 +1,11 @@
 <script lang="ts" setup>
 import { CheckOutlined, PushPinOutlined } from '@vicons/material';
+import { useOsTheme } from 'naive-ui';
 
 import type { BookshelfDisplayBook } from '../BookshelfPresentation';
 import BookCover from './BookCover.vue';
+
+import { useSettingStore } from '@/stores';
 
 const props = defineProps<{
   book: BookshelfDisplayBook;
@@ -15,6 +18,14 @@ const emit = defineEmits<{
   toggleSelection: [book: BookshelfDisplayBook];
 }>();
 const vars = useThemeVars();
+const settingStore = useSettingStore();
+const { setting } = storeToRefs(settingStore);
+const osTheme = useOsTheme();
+const isDarkTheme = computed(() =>
+  setting.value.theme === 'system'
+    ? osTheme.value === 'dark'
+    : setting.value.theme === 'dark',
+);
 
 const selectBook = () => {
   if (props.selectable) emit('toggleSelection', props.book);
@@ -27,7 +38,7 @@ const selectBook = () => {
     class="book-card"
     :class="{
       'book-card--selectable': props.selectable,
-      'book-card--selected': props.selected,
+      'book-card--dark': isDarkTheme,
     }"
     :style="{ '--book-card-primary-color': vars.primaryColor }"
   >
@@ -75,11 +86,6 @@ const selectBook = () => {
   cursor: pointer;
 }
 
-.book-card--selected {
-  outline: 3px solid var(--book-card-primary-color);
-  outline-offset: -3px;
-}
-
 .book-card__pinned {
   position: absolute;
   z-index: 2;
@@ -91,6 +97,10 @@ const selectBook = () => {
   background: var(--book-card-primary-color);
   clip-path: polygon(0 0, 100% 0, 100% 100%);
   pointer-events: none;
+}
+
+.book-card--dark .book-card__pinned {
+  color: #000;
 }
 
 .book-card__pinned :deep(.n-icon) {

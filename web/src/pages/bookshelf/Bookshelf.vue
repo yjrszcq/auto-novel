@@ -162,7 +162,7 @@ onMounted(reload);
           :type="selectionMode ? 'primary' : 'default'"
           @click="toggleSelectionMode"
         >
-          {{ selectionMode ? '取消多选' : '多选' }}
+          {{ selectionMode ? '取消选择' : '选择' }}
         </n-button>
         <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
       </div>
