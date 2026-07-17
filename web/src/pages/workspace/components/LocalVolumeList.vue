@@ -131,7 +131,7 @@ const sortedVolumes = computed(() => {
             :options="Setting.localVolumeOrderOptions"
           />
         </c-action-wrapper>
-        <slot name="extra" />
+        <slot name="extra" :volumes="sortedVolumes ?? []" />
       </n-flex>
 
       <n-divider style="margin: 16px 0 8px" />
