@@ -1,6 +1,5 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import { parseFile, Srt } from '@/util/file';
+import { createUuid } from '@/util/uuid';
 
 import type {
   LocalVolumeChapterSourceRange,
@@ -72,7 +71,7 @@ export const createVolume = async (
       id: `${id}/${chapterId}`,
       volumeId: id,
       paragraphs,
-      segmentIds: paragraphs.map(() => uuidv4()),
+      segmentIds: paragraphs.map(() => createUuid()),
       sourceRanges,
     });
   }
@@ -87,7 +86,7 @@ export const createVolume = async (
     })),
     navigation,
     sourceFormat: myFile.type,
-    glossaryId: uuidv4(),
+    glossaryId: createUuid(),
     glossary: {},
     favoredId,
     sourceBookMetadata,

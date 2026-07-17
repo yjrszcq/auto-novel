@@ -1,6 +1,5 @@
-import { v4 as uuidv4 } from 'uuid';
-
 import type { ReaderAnnotation } from '@/model/Reader';
+import { createUuid } from '@/util/uuid';
 
 export interface CreateReaderAnnotationInput
   extends Omit<ReaderAnnotation, 'id' | 'createdAt' | 'updatedAt'> {
@@ -9,7 +8,7 @@ export interface CreateReaderAnnotationInput
 }
 
 export const createReaderAnnotation = ({
-  id = uuidv4(),
+  id = createUuid(),
   now = Date.now(),
   ...input
 }: CreateReaderAnnotationInput): ReaderAnnotation => ({

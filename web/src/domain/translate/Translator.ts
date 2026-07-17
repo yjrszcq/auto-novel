@@ -1,5 +1,3 @@
-import { isEqual } from 'lodash-es';
-
 import type { Glossary } from '@/model/Glossary';
 import type { TranslatorId } from '@/model/Translator';
 
@@ -11,6 +9,14 @@ import type { Logger, SegmentCache, SegmentTranslator } from './Common';
 import { createSegIndexedDbCache } from './Common';
 import { RegexUtil } from '@/util';
 import { runWithConcurrency } from './Concurrency';
+
+const glossariesEqual = (left: Glossary, right: Glossary) => {
+  const leftEntries = Object.entries(left);
+  return (
+    leftEntries.length === Object.keys(right).length &&
+    leftEntries.every(([key, value]) => right[key] === value)
+  );
+};
 
 export type SegmentProgressInfo = {
   chapter?: { index?: number; total?: number; id?: string };
@@ -170,7 +176,7 @@ export class Translator {
     const segGlossary = filterGlossary(glossary, seg);
     if (!force && oldSegZh !== undefined) {
       const segOldGlossary = filterGlossary(oldGlossary, seg);
-      if (isEqual(segGlossary, segOldGlossary)) {
+      if (glossariesEqual(segGlossary, segOldGlossary)) {
         log('术语表无变化，无需翻译');
         return oldSegZh;
       }

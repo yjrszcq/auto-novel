@@ -1,5 +1,3 @@
-import { get } from 'lodash-es';
-
 export const downloadFile = (filename: string, blob: Blob) => {
   const el = document.createElement('a');
   el.href = URL.createObjectURL(blob);
@@ -10,7 +8,7 @@ export const downloadFile = (filename: string, blob: Blob) => {
 
 export const querySearch = <T>(
   data: T[],
-  field: string,
+  field: keyof T,
   options: {
     query: string;
     enableRegexMode: boolean;
@@ -33,7 +31,7 @@ export const querySearch = <T>(
     }
   };
   const filter = buildSearchFilter();
-  return data.filter((it) => filter(get(it, field)));
+  return data.filter((item) => filter(String(item[field] ?? '')));
 };
 
 export const safeJson = <T extends object>(text: string) => {
