@@ -205,6 +205,12 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByText('第一部', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '目录' })).toBeVisible();
   await expect(page.getByRole('button', { name: '关闭目录' })).toBeFocused();
+  await expect(
+    page
+      .getByRole('dialog', { name: '目录' })
+      .getByText('未翻译', { exact: true })
+      .first(),
+  ).toHaveCSS('color', 'rgb(51, 54, 57)');
   await page.keyboard.press('Escape');
   await expect(readerCatalogButton).toBeFocused();
 
@@ -224,6 +230,11 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     )
     .toBe('1');
   await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(
+    readerTop
+      .getByRole('button', { name: 'GPT 翻译本章' })
+      .locator('.n-button__content'),
+  ).toHaveCSS('color', 'rgb(51, 54, 57)');
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
   await expect(readerContent).toHaveClass(
     /book-reader__content--double-spread/,
@@ -497,6 +508,11 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     .toBeLessThanOrEqual(1);
 
   await page.getByRole('button', { name: '工具', exact: true }).click();
+  await expect(
+    page
+      .getByRole('button', { name: '添加书签' })
+      .locator('.n-button__content'),
+  ).toHaveCSS('color', 'rgb(51, 54, 57)');
   await page.getByRole('button', { name: '添加书签' }).click();
   await expect(page.getByRole('button', { name: '书签 (1)' })).toBeVisible();
 
@@ -532,6 +548,9 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/books/reader-flow.txt/read/0');
   await page.getByRole('button', { name: '设置', exact: true }).click();
+  await expect(
+    page.locator('.book-reader__settings-grid .n-form-item-label').first(),
+  ).toHaveCSS('color', 'rgb(31, 34, 37)');
   const flowSetting = page
     .locator('.book-reader__settings-theme')
     .filter({ hasText: '阅读流' });

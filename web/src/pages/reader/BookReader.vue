@@ -20,6 +20,7 @@ import type {
 } from '@/model/Reader';
 import { TranslateJob, TranslateTaskDescriptor } from '@/model/Translator';
 import { useMediaQuery, useThrottleFn } from '@vueuse/core';
+import { darkTheme, lightTheme } from 'naive-ui';
 import { useRouter } from 'vue-router';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
@@ -88,7 +89,6 @@ const showBookmarks = ref(false);
 const showAnnotations = ref(false);
 const showMobileTranslationNotice = ref(false);
 const controlsVisible = ref(true);
-const readerRoot = ref<HTMLElement>();
 const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
@@ -219,8 +219,8 @@ const openCatalog = async () => {
   showMobileTranslationNotice.value = false;
   showCatalog.value = true;
   await nextTick();
-  readerRoot.value
-    ?.querySelector<HTMLElement>('.book-reader__catalog-item--active')
+  document
+    .querySelector<HTMLElement>('.book-reader__catalog-item--active')
     ?.scrollIntoView({ block: 'center', behavior: 'auto' });
 };
 
@@ -489,6 +489,10 @@ const isDarkReaderTheme = computed(
   () =>
     activeSettings.value.theme === 'dark' ||
     (activeSettings.value.theme === 'system' && systemPrefersDark.value),
+);
+
+const readerNaiveTheme = computed(() =>
+  isDarkReaderTheme.value ? darkTheme : lightTheme,
 );
 
 const toggleQuickTheme = () => {
@@ -1201,11 +1205,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main
-    ref="readerRoot"
+  <n-config-provider
+    tag="main"
     class="book-reader"
     :class="`book-reader--${activeSettings.theme}`"
     :style="readerStyle"
+    :theme="readerNaiveTheme"
+    :theme-overrides="null"
   >
     <header
       v-if="controlsVisible"
@@ -1602,7 +1608,7 @@ onBeforeUnmount(() => {
         </div>
       </n-form>
     </ReaderBottomSheet>
-  </main>
+  </n-config-provider>
 </template>
 
 <style scoped>
