@@ -1,5 +1,5 @@
 import type { TranslatorId } from '@/model/Translator';
-import { defaultConverter, useLocalStorage, useOpenCC } from '@/util';
+import { useLocalStorage } from '@/util';
 import { LSKey } from './key';
 
 export interface Setting {
@@ -35,9 +35,6 @@ export interface Setting {
   homeDownloadPriority: 'gpt' | 'sakura';
   embedMetadataInOriginalDownload: boolean;
   embedMetadataInTranslatedDownload: boolean;
-  //
-  locale: 'zh-cn' | 'zh-tw';
-  searchLocaleAware: boolean;
 }
 
 export namespace Setting {
@@ -74,9 +71,6 @@ export namespace Setting {
     homeDownloadPriority: 'gpt',
     embedMetadataInOriginalDownload: false,
     embedMetadataInTranslatedDownload: false,
-    //
-    locale: 'zh-cn',
-    searchLocaleAware: false,
   };
 
   export const migrate = (setting: Setting) => {
@@ -142,15 +136,5 @@ export const useSettingStore = defineStore(LSKey.Setting, () => {
   const setting = useLocalStorage<Setting>(LSKey.Setting, Setting.defaultValue);
   Setting.migrate(setting.value);
 
-  const cc = ref(defaultConverter);
-
-  watch(
-    () => setting.value.locale,
-    async (locale) => {
-      cc.value = await useOpenCC(locale);
-    },
-    { immediate: true },
-  );
-
-  return { setting, cc };
+  return { setting };
 });

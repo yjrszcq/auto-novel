@@ -211,5 +211,4 @@ export const lazy = <T>(factory: () => T) => {
   return get;
 };
 
-export * from './useOpenCC';
 export * from './useStorage';

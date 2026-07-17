@@ -20,16 +20,8 @@ export default defineConfig(({ command, mode }) => {
         treeshake: true,
         output: {
           manualChunks(id) {
-            if (id.includes('web/src')) {
-              return 'chunk';
-            } else if (id.includes('@zip.js')) {
+            if (id.includes('@zip.js')) {
               return 'dep-zip';
-            } else if (id.includes('opencc')) {
-              return 'dep-opencc';
-            } else if (id.includes('naive')) {
-              return 'dep-naive';
-            } else if (id.includes('node_module')) {
-              return 'dep';
             }
           },
         },

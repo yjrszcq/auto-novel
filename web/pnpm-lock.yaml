@@ -28,9 +28,6 @@ importers:
       '@types/markdown-it':
         specifier: ^14.1.2
         version: 14.1.2
-      '@types/opencc-js':
-        specifier: ^1.0.3
-        version: 1.0.3
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
@@ -79,9 +76,6 @@ importers:
       nanoid:
         specifier: ^5.1.5
         version: 5.1.5
-      opencc-js:
-        specifier: ^1.0.5
-        version: 1.0.5
       pinia:
         specifier: ^3.0.3
         version: 3.0.3(typescript@5.9.2)(vue@3.5.22(typescript@5.9.2))
@@ -1231,12 +1225,6 @@ packages:
     resolution:
       {
         integrity: sha512-yCAeZl7a0DxgNVteXFHt9+uyFbqXGy/ShC4BlcHkoE0AfGXYv/BUiplV72DjMYXHDBXFjhvr6DD1NiRVfB4j8g==,
-      }
-
-  '@types/opencc-js@1.0.3':
-    resolution:
-      {
-        integrity: sha512-TENp7YkI2hNlc4dplhivSHj0hU4DORCK56VY7rniaSfA5f87uD3uv+kPIRuH9h64TGv976iVFi4gEHZZtS2y8Q==,
       }
 
   '@types/sortablejs@1.15.8':
@@ -3186,12 +3174,6 @@ packages:
       }
     engines: { node: '>=18' }
 
-  opencc-js@1.0.5:
-    resolution:
-      {
-        integrity: sha512-LD+1SoNnZdlRwtYTjnQdFrSVCAaYpuDqL5CkmOaHOkKoKh7mFxUicLTRVNLU5C+Jmi1vXQ3QL4jWdgSaa4sKjg==,
-      }
-
   optionator@0.9.4:
     resolution:
       {
@@ -4668,8 +4650,6 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/opencc-js@1.0.3': {}
-
   '@types/sortablejs@1.15.8': {}
 
   '@types/uuid@10.0.0': {}
@@ -5870,8 +5850,6 @@ snapshots:
       define-lazy-prop: 3.0.0
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
-
-  opencc-js@1.0.5: {}
 
   optionator@0.9.4:
     dependencies:
