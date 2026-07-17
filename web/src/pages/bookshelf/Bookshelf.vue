@@ -25,6 +25,10 @@ const filter = ref<BookshelfFilter>('all');
 const sort = ref<BookshelfSort>('recent-read');
 const showLocalVolumes = ref(false);
 const unlistedBookIds = ref<string[]>([]);
+const selectionMode = ref(false);
+const selectedBookIds = ref(new Set<string>());
+const batchUpdating = ref(false);
+const message = useMessage();
 const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
 
 const filterOptions: { label: string; value: BookshelfFilter }[] = [
@@ -79,6 +83,68 @@ const openDetails = (book: BookshelfDisplayBook) => {
   void router.push('/books/' + encodeURIComponent(book.volume.id) + '/details');
 };
 
+const toggleSelectionMode = () => {
+  selectionMode.value = !selectionMode.value;
+  selectedBookIds.value = new Set();
+};
+
+const toggleBookSelection = (book: BookshelfDisplayBook) => {
+  if (!selectionMode.value) {
+    openDetails(book);
+    return;
+  }
+  const selected = new Set(selectedBookIds.value);
+  if (selected.has(book.volume.id)) selected.delete(book.volume.id);
+  else selected.add(book.volume.id);
+  selectedBookIds.value = selected;
+};
+
+const selectAllVisible = () => {
+  selectedBookIds.value = new Set(
+    visibleBooks.value.map((book) => book.volume.id),
+  );
+};
+
+const invertVisibleSelection = () => {
+  const selected = new Set(selectedBookIds.value);
+  visibleBooks.value.forEach((book) => {
+    if (selected.has(book.volume.id)) selected.delete(book.volume.id);
+    else selected.add(book.volume.id);
+  });
+  selectedBookIds.value = selected;
+};
+
+const updateSelectedBooks = async (action: 'pin' | 'remove') => {
+  const ids = [...selectedBookIds.value];
+  if (ids.length === 0) return;
+  batchUpdating.value = true;
+  try {
+    const repository = await useLocalVolumeStore();
+    const service = createBookshelfService(repository);
+    await Promise.all(
+      ids.map((id) =>
+        action === 'pin'
+          ? service.setPinned(id, true)
+          : service.setListed(id, false),
+      ),
+    );
+    message.success(
+      action === 'pin'
+        ? `已置顶 ${ids.length} 本书`
+        : `已将 ${ids.length} 本书移出书架`,
+    );
+    selectionMode.value = false;
+    selectedBookIds.value = new Set();
+    await reload();
+  } catch (reason) {
+    message.error(
+      `${action === 'pin' ? '置顶' : '移出书架'}失败：${String(reason)}`,
+    );
+  } finally {
+    batchUpdating.value = false;
+  }
+};
+
 const resetFilters = () => {
   query.value = '';
   filter.value = 'all';
@@ -92,6 +158,12 @@ onMounted(reload);
     <header class="bookshelf-page__header">
       <h1>书架</h1>
       <div class="bookshelf-page__header-actions">
+        <n-button
+          :type="selectionMode ? 'primary' : 'default'"
+          @click="toggleSelectionMode"
+        >
+          {{ selectionMode ? '取消多选' : '多选' }}
+        </n-button>
         <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
       </div>
       <bulletin v-if="infoPanelHtml" class="bookshelf-page__notice">
@@ -107,6 +179,36 @@ onMounted(reload);
     </n-alert>
 
     <template v-else>
+      <div v-if="selectionMode" class="bookshelf-selection-toolbar">
+        <n-text>已选择 {{ selectedBookIds.size }} 本</n-text>
+        <n-button size="small" @click="selectAllVisible">全选</n-button>
+        <n-button size="small" @click="invertVisibleSelection">反选</n-button>
+        <n-button
+          size="small"
+          :disabled="selectedBookIds.size === 0"
+          :loading="batchUpdating"
+          @click="updateSelectedBooks('pin')"
+        >
+          置顶
+        </n-button>
+        <n-popconfirm
+          :disabled="selectedBookIds.size === 0"
+          @positive-click="updateSelectedBooks('remove')"
+        >
+          <template #trigger>
+            <n-button
+              size="small"
+              type="warning"
+              :disabled="selectedBookIds.size === 0"
+              :loading="batchUpdating"
+            >
+              移出书架
+            </n-button>
+          </template>
+          确定将所选书籍移出书架吗？
+        </n-popconfirm>
+      </div>
+
       <div class="bookshelf-toolbar">
         <n-input
           v-model:value="query"
@@ -148,7 +250,10 @@ onMounted(reload);
           v-for="book in visibleBooks"
           :key="book.volume.id"
           :book="book"
-          @details="openDetails"
+          :selectable="selectionMode"
+          :selected="selectedBookIds.has(book.volume.id)"
+          @details="toggleBookSelection"
+          @toggle-selection="toggleBookSelection"
         />
       </section>
       <local-volume-list
@@ -213,6 +318,22 @@ onMounted(reload);
   margin-bottom: 18px;
 }
 
+.bookshelf-selection-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--n-border-color);
+  border-radius: var(--n-border-radius);
+  background: var(--n-card-color);
+}
+
+.bookshelf-selection-toolbar > :first-child {
+  margin-right: auto;
+}
+
 .book-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -238,8 +359,16 @@ onMounted(reload);
 }
 
 @media only screen and (max-width: 600px) {
+  .bookshelf-page__header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
   .bookshelf-page__header-actions {
     margin-left: auto;
+  }
+
+  .bookshelf-page__header-actions :deep(.n-button) {
+    padding-inline: 10px;
   }
 
   .bookshelf-toolbar {
