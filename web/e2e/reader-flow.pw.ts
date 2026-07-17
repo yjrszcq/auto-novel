@@ -14,7 +14,7 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
   await expect(page.locator('.n-skeleton')).toHaveCount(0);
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 4);
+      const request = indexedDB.open('volumes', 5);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -27,7 +27,6 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
       createAt: 1,
       toc: [{ chapterId: '0', title: '主题测试' }],
       sourceFormat: 'txt',
-      contentVersion: 1,
       glossaryId: 'glossary',
       glossary: {},
       favoredId: 'default',
@@ -102,7 +101,7 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
   );
 });
 
-test('opens a local bookshelf book safely and keeps the legacy reader link', async ({
+test('opens a local bookshelf book safely through the current reader route', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -117,7 +116,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await page.evaluate(
     async ({ bookId, descriptionHtml, unsafeText }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 4);
+        const request = indexedDB.open('volumes', 5);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -150,6 +149,12 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
         glossaryId: 'glossary',
         glossary: {},
         favoredId: 'default',
+        sourceFormat: 'txt',
+        sourceBookMetadata: {
+          title: 'reader-flow',
+          authors: [],
+          languages: ['ja'],
+        },
         bookMetadata: { description: descriptionHtml, languages: ['ja'] },
       });
       transaction.objectStore('chapter').put({
@@ -998,14 +1003,13 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   }
   expect(firstSegmentBounds.x).toBeGreaterThanOrEqual(currentReaderBounds.x);
 
-  await page.goto('/workspace/reader/reader-flow.txt/0');
-  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await page.goto('/books/reader-flow.txt/read/0');
   await expect(page.getByText('安全文本', { exact: true })).toBeVisible();
 
   await page.evaluate(
     async ({ bookId }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 4);
+        const request = indexedDB.open('volumes', 5);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -1070,7 +1074,7 @@ test('continues paging backward after loading an earlier long-chapter window', a
   await page.evaluate(
     async ({ bookId }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 4);
+        const request = indexedDB.open('volumes', 5);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -1085,6 +1089,11 @@ test('continues paging backward after loading an earlier long-chapter window', a
         glossaryId: 'glossary',
         glossary: {},
         favoredId: 'default',
+        sourceFormat: 'txt',
+        sourceBookMetadata: {
+          title: 'windowed-reader',
+          languages: ['zh'],
+        },
       });
       const paragraphs = Array.from(
         { length: 1_001 },
@@ -1154,7 +1163,7 @@ test('uses a configured default cover for a local book without one', async ({
 
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 4);
+      const request = indexedDB.open('volumes', 5);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1169,6 +1178,11 @@ test('uses a configured default cover for a local book without one', async ({
       glossaryId: 'glossary',
       glossary: {},
       favoredId: 'default',
+      sourceFormat: 'txt',
+      sourceBookMetadata: {
+        title: 'default-cover',
+        languages: ['zh'],
+      },
     });
     transaction.objectStore('chapter').put({
       id: 'default-cover.txt/0',
@@ -1424,7 +1438,7 @@ test('persists the global reading version selected in Settings', async ({
     .poll(() =>
       page.evaluate(async () => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 4);
+          const request = indexedDB.open('volumes', 5);
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
