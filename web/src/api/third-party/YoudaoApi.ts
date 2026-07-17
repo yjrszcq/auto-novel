@@ -15,7 +15,7 @@ const getClient = lazy(async () => {
   const domain = '.youdao.com';
   const keys = ['OUTFOX_SEARCH_USER_ID'];
 
-  const cookies = await ensureCookie(addon, url, domain, keys);
+  await ensureCookie(addon, url, domain, keys);
 
   return ky.create({
     fetch: addon.fetch.bind(window.Addon),
@@ -77,7 +77,7 @@ async function rlog() {
 
 async function refreshKey() {
   const client = await getClient();
-  const resp: any = await client
+  const response = await client
     .get('https://dict.youdao.com/webtranslate/key', {
       searchParams: {
         keyid: 'webfanyi-key-getter',
@@ -86,8 +86,8 @@ async function refreshKey() {
       credentials: 'include',
       retry: 0,
     })
-    .json();
-  key = resp['data']['secretKey'];
+    .json<{ data: { secretKey: string } }>();
+  key = response.data.secretKey;
 }
 
 async function webtranslate(query: string, from: string, options?: Options) {

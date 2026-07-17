@@ -188,6 +188,7 @@ const queueVolumeToWorkspace = (
     level: 'all',
     type,
     shouldTop: false,
+    forceMetadata: false,
     startIndex: 0,
     endIndex: 65535,
     taskNumber: 1,

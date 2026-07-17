@@ -1,11 +1,10 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-let Setting: typeof import('../src/stores/useSettingStore').Setting;
-
-beforeAll(async () => {
+vi.hoisted(() => {
   vi.stubGlobal('Audio', class {});
-  Setting = (await import('../src/stores/useSettingStore')).Setting;
 });
+
+import { Setting } from '../src/stores/useSettingStore';
 
 describe('download metadata settings', () => {
   it('keeps both global EPUB metadata embedding switches disabled by default', () => {

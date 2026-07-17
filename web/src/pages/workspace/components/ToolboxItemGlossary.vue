@@ -23,7 +23,7 @@ const countKatakana = (content: string) => {
     katakanaCounter.set(w, (katakanaCounter.get(w) || 0) + 1);
   }
   const sortedKatakanaCounter = new Map(
-    [...katakanaCounter].sort(([_w1, c1], [_w2, c2]) => c2 - c1),
+    [...katakanaCounter].sort(([, count1], [, count2]) => count2 - count1),
   );
   return sortedKatakanaCounter;
 };

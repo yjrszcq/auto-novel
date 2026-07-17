@@ -268,6 +268,7 @@ const queueBook = (type: LocalTranslator) => {
     level: 'all',
     type,
     shouldTop: shouldTopJob.value,
+    forceMetadata: false,
     startIndex: 0,
     endIndex: 65535,
     taskNumber: 1,

@@ -39,7 +39,7 @@ export const querySearch = <T>(
 export const safeJson = <T extends object>(text: string) => {
   try {
     return JSON.parse(text) as T;
-  } catch (err) {
+  } catch {
     return undefined;
   }
 };
@@ -94,7 +94,7 @@ export const releaseKeepAlive = () => {
 
 export namespace RegexUtil {
   const englishChars = /[a-z]|[A-Z]/;
-  export const hasEnglishChars = (str: string) => /[\u4E00-\u9FAF]/.test(str);
+  export const hasEnglishChars = (str: string) => englishChars.test(str);
 
   const hanzi = /[\u4E00-\u9FAF]/;
   export const hasHanzi = (str: string) => hanzi.test(str);
@@ -146,7 +146,7 @@ export namespace RegexUtil {
     try {
       new URL(str);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

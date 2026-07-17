@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && vue-tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint src tests e2e --max-warnings 0",
     "lint:dist": "eslint dist",
     "preview": "vite preview",
     "test": "vitest run",

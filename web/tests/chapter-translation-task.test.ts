@@ -50,6 +50,7 @@ describe('current chapter translation task', () => {
       level: 'normal',
       type: 'gpt',
       shouldTop: false,
+      forceMetadata: true,
       startIndex: 3,
       endIndex: 4,
       taskNumber: 1,
@@ -61,7 +62,7 @@ describe('current chapter translation task', () => {
       TranslateTaskDescriptor.parse(workspace.ref.value.jobs[0].task),
     ).toMatchObject({
       desc: { type: 'local', volumeId: 'book' },
-      params: { startIndex: 3, endIndex: 4 },
+      params: { forceMetadata: true, startIndex: 3, endIndex: 4 },
     });
   });
 });

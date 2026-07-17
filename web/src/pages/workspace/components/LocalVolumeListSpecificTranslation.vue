@@ -56,6 +56,7 @@ const queueAllVolumes = (volumes: LocalVolumeMetadata[]) => {
     level: 'expire',
     type: props.type,
     shouldTop: shouldTopJob.value ?? false,
+    forceMetadata,
   });
   message.info(`${success}本小说已排队，${failed}本失败`);
 };
@@ -69,6 +70,7 @@ const queueVolume = (volumeId: string, total: number = 65536) => {
     level: level,
     type: props.type,
     shouldTop: shouldTopJob.value ?? false,
+    forceMetadata,
     startIndex: startIndex,
     endIndex: endIndex,
     taskNumber: taskNumber,

@@ -37,7 +37,7 @@ const compressImage = async (blob: Blob) => {
   const imageFormatValue = imageFormat.value;
   const qualityValue = quality.value;
 
-  return await new Promise<Blob | undefined>((resolve, _reject) => {
+  return await new Promise<Blob | undefined>((resolve) => {
     canvas.toBlob(
       (newBlob) => {
         resolve(newBlob ?? undefined);

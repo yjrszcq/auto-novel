@@ -171,6 +171,7 @@ const queueChapterTranslation = (type: 'gpt' | 'sakura') => {
     ...getChapterTranslationParams(chapter),
     type,
     shouldTop: true,
+    forceMetadata: false,
     taskNumber: 1,
     total: result.value?.kind === 'ready' ? result.value.chapters.length : 0,
   });
@@ -638,7 +639,6 @@ const load = async () => {
     initialSegmentId.value = undefined;
     loading.value = true;
   }
-  const repository = await repositoryPromise;
   const controller = await controllerPromise;
   const loaded = await controller.load(bookId.value, requestedChapterId.value);
   if (

@@ -129,7 +129,6 @@ export class Translator {
               segmentTotal: size,
               status: 'success',
             });
-
           },
           context?.signal,
         );
@@ -181,8 +180,11 @@ export class Translator {
     let cacheKey: string | undefined;
     if (this.segCache) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const extra: any = { glossary };
+        const extra: {
+          glossary: Glossary;
+          version?: string;
+          model?: SakuraTranslator['model'];
+        } = { glossary };
         if (this.segTranslator instanceof SakuraTranslator) {
           extra.version = this.segTranslator.version;
           extra.model = this.segTranslator.model;
@@ -204,8 +206,7 @@ export class Translator {
       glossary: segGlossary,
       prevSegs,
       signal,
-      logger: (msg, detail) =>
-        this.log(`${logLabel} ${msg}`, detail),
+      logger: (msg, detail) => this.log(`${logLabel} ${msg}`, detail),
     });
     if (segOutput.length !== seg.length) {
       throw new Error('分段翻译结果行数不匹配，请反馈给站长');

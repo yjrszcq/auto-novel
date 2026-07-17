@@ -15,7 +15,7 @@ export class YoudaoTranslator implements SegmentTranslator {
     try {
       await YoudaoApi.rlog();
       await YoudaoApi.refreshKey();
-    } catch (e) {
+    } catch {
       this.log('无法获得Key，使用默认值');
     }
     return this;
@@ -23,10 +23,7 @@ export class YoudaoTranslator implements SegmentTranslator {
 
   segmentor = createLengthSegmentor(3500);
 
-  async translate(
-    seg: string[],
-    context: SegmentContext,
-  ): Promise<string[]> {
+  async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, signal } = context;
     const log = context.logger ?? this.log;
     return createGlossaryWrapper(glossary)(seg, (seg) =>
@@ -65,7 +62,7 @@ export class YoudaoTranslator implements SegmentTranslator {
           it.map((it) => it.tgt.trimEnd()).join(''),
         );
         return result;
-      } catch (e) {
+      } catch {
         log(`错误：${decoded}`);
         throw 'quit';
       }

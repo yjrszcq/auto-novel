@@ -31,7 +31,7 @@ export default defineConfigWithVueTs(
     rules: {
       'no-undef': 'off',
       'no-unused-vars': 'off',
-      'prefer-const': 'warn',
+      'prefer-const': 'error',
 
       'vue/attributes-order': 'off',
       'vue/max-attributes-per-line': 'off',
@@ -39,11 +39,20 @@ export default defineConfigWithVueTs(
       'vue/no-mutating-props': ['error', { shallowOnly: true }],
       'vue/no-v-text-v-html-on-component': 'off',
 
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-namespace': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { args: 'after-used', caughtErrors: 'all' },
+      ],
       '@typescript-eslint/no-empty-object-type': 'off',
       '@typescript-eslint/consistent-type-imports': 'error',
+    },
+  },
+  {
+    files: ['tests/**/*.ts', 'e2e/**/*.ts'],
+    rules: {
+      'compat/compat': 'off',
     },
   },
 );

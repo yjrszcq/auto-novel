@@ -59,7 +59,7 @@ const formRules: FormRules = {
         try {
           const url = new URL(value);
           return url.protocol === 'http:' || url.protocol === 'https:';
-        } catch (_) {
+        } catch {
           return false;
         }
       },
@@ -78,7 +78,7 @@ const formRules: FormRules = {
 };
 
 const submit = async () => {
-  const validated = await new Promise<boolean>(function (resolve, _reject) {
+  const validated = await new Promise<boolean>((resolve) => {
     formRef.value?.validate((errors) => {
       if (errors) resolve(false);
       else resolve(true);

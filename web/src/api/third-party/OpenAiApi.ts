@@ -281,13 +281,8 @@ export class OpenAiError extends Error {
         if (err instanceof Error) return err.message;
         return `${err}`;
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const errJson = safeJson<any>(errText);
-      throw new OpenAiError(
-        e.response.status,
-        errJson?.['error']?.['code'],
-        errText,
-      );
+      const errJson = safeJson<{ error?: { code?: string } }>(errText);
+      throw new OpenAiError(e.response.status, errJson?.error?.code, errText);
     } else {
       throw e;
     }
