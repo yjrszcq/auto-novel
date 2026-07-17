@@ -11,7 +11,30 @@ afterEach(async () => {
   await deleteDB(databaseName);
 });
 
-describe('reader storage migration', () => {
+describe('reader storage', () => {
+  it('creates book indexes for reader-owned records', async () => {
+    const dao = await createLocalVolumeDao(databaseName);
+    dao.close();
+
+    const db = await openDB(databaseName, 5);
+    const tx = db.transaction(
+      ['reader-bookmark', 'reader-annotation', 'reader-chapter-cache'],
+      'readonly',
+    );
+
+    expect(
+      tx.objectStore('reader-bookmark').indexNames.contains('byBookId'),
+    ).toBe(true);
+    expect(
+      tx.objectStore('reader-annotation').indexNames.contains('byBookId'),
+    ).toBe(true);
+    expect(
+      tx.objectStore('reader-chapter-cache').indexNames.contains('byBookId'),
+    ).toBe(true);
+    await tx.done;
+    db.close();
+  });
+
   it('saves presentation metadata and its selected cover atomically', async () => {
     const dao = await createLocalVolumeDao(databaseName);
     await dao.createMetadata({
@@ -64,16 +87,9 @@ describe('reader storage migration', () => {
     dao.close();
   });
 
-  it('adds stable segment IDs and removes reader records with the volume', async () => {
-    const legacy = await openDB(databaseName, 2, {
-      upgrade(db) {
-        db.createObjectStore('metadata', { keyPath: 'id' });
-        db.createObjectStore('file', { keyPath: 'id' });
-        const chapter = db.createObjectStore('chapter', { keyPath: 'id' });
-        chapter.createIndex('byVolumeId', 'volumeId');
-      },
-    });
-    await legacy.put('metadata', {
+  it('persists stable segment IDs and removes reader records with the volume', async () => {
+    const dao = await createLocalVolumeDao(databaseName);
+    await dao.createMetadata({
       id: 'book',
       createAt: 1,
       toc: [{ chapterId: '0' }],
@@ -81,19 +97,16 @@ describe('reader storage migration', () => {
       glossary: {},
       favoredId: 'default',
     });
-    await legacy.put('chapter', {
+    await dao.createChapter({
       id: 'book/0',
       volumeId: 'book',
       paragraphs: ['first', 'second'],
+      segmentIds: ['segment-1', 'segment-2'],
     });
-    legacy.close();
-
-    const dao = await createLocalVolumeDao(databaseName);
     const chapter = await dao.getChapter('book', '0');
 
     expect(chapter?.paragraphs).toEqual(['first', 'second']);
-    expect(chapter?.segmentIds).toHaveLength(2);
-    expect(new Set(chapter?.segmentIds).size).toBe(2);
+    expect(chapter?.segmentIds).toEqual(['segment-1', 'segment-2']);
 
     const initialSegmentIds = chapter!.segmentIds;
     dao.close();

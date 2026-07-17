@@ -1,6 +1,5 @@
 import type { DBSchema } from 'idb';
 import { openDB } from 'idb';
-import { v4 as uuidv4 } from 'uuid';
 
 import type {
   LocalVolumeChapter,
@@ -72,10 +71,12 @@ interface VolumesDBSchema extends DBSchema {
   'reader-bookmark': {
     key: string;
     value: ReaderBookmark;
+    indexes: { byBookId: string };
   };
   'reader-annotation': {
     key: string;
     value: ReaderAnnotation;
+    indexes: { byBookId: string };
   };
   'reader-cover': {
     key: string;
@@ -84,69 +85,40 @@ interface VolumesDBSchema extends DBSchema {
   'reader-chapter-cache': {
     key: string;
     value: ReaderChapterCache;
+    indexes: { byBookId: string };
   };
 }
 
 export const createLocalVolumeDao = async (databaseName = 'volumes') => {
-  const db = await openDB<VolumesDBSchema>(databaseName, 4, {
-    async upgrade(db, oldVersion, _newVersion, _transaction, _event) {
-      if (oldVersion <= 0) {
-        db.createObjectStore('metadata', { keyPath: 'id' });
-        db.createObjectStore('file', { keyPath: 'id' });
-        const store = db.createObjectStore('chapter', { keyPath: 'id' });
-        store.createIndex('byVolumeId', 'volumeId');
+  const db = await openDB<VolumesDBSchema>(databaseName, 5, {
+    upgrade(db) {
+      for (const storeName of db.objectStoreNames) {
+        db.deleteObjectStore(storeName);
       }
-      if (oldVersion < 3) {
-        db.createObjectStore('reader-settings', { keyPath: 'id' });
-        db.createObjectStore('reader-bookshelf', { keyPath: 'bookId' });
-        db.createObjectStore('reader-book-preference', { keyPath: 'bookId' });
-        db.createObjectStore('reader-progress', { keyPath: 'bookId' });
-        db.createObjectStore('reader-bookmark', { keyPath: 'id' });
-        db.createObjectStore('reader-annotation', { keyPath: 'id' });
-        db.createObjectStore('reader-cover', { keyPath: 'bookId' });
-        db.createObjectStore('reader-chapter-cache', { keyPath: 'key' });
-      }
-      if (oldVersion < 4) {
-        db.createObjectStore('reader-reading-stats', { keyPath: 'bookId' });
-      }
+      db.createObjectStore('metadata', { keyPath: 'id' });
+      db.createObjectStore('file', { keyPath: 'id' });
+      const chapterStore = db.createObjectStore('chapter', { keyPath: 'id' });
+      chapterStore.createIndex('byVolumeId', 'volumeId');
+      db.createObjectStore('reader-settings', { keyPath: 'id' });
+      db.createObjectStore('reader-bookshelf', { keyPath: 'bookId' });
+      db.createObjectStore('reader-book-preference', { keyPath: 'bookId' });
+      db.createObjectStore('reader-progress', { keyPath: 'bookId' });
+      const bookmarkStore = db.createObjectStore('reader-bookmark', {
+        keyPath: 'id',
+      });
+      bookmarkStore.createIndex('byBookId', 'bookId');
+      const annotationStore = db.createObjectStore('reader-annotation', {
+        keyPath: 'id',
+      });
+      annotationStore.createIndex('byBookId', 'bookId');
+      db.createObjectStore('reader-cover', { keyPath: 'bookId' });
+      const cacheStore = db.createObjectStore('reader-chapter-cache', {
+        keyPath: 'key',
+      });
+      cacheStore.createIndex('byBookId', 'bookId');
+      db.createObjectStore('reader-reading-stats', { keyPath: 'bookId' });
     },
   });
-
-  // Migrate
-  const tx = db.transaction('metadata', 'readwrite');
-  for await (const cursor of tx.store) {
-    const m = cursor.value;
-    if (m.favoredId === undefined) {
-      m.favoredId = 'default';
-      cursor.update(m);
-    }
-  }
-  await tx.done;
-
-  const chapterTx = db.transaction('chapter', 'readwrite');
-  for await (const cursor of chapterTx.store) {
-    const chapter = cursor.value;
-    const previous = chapter.segmentIds ?? [];
-    const used = new Set<string>();
-    const segmentIds = chapter.paragraphs.map((_, index) => {
-      const id = previous[index];
-      if (id && !used.has(id)) {
-        used.add(id);
-        return id;
-      }
-      const created = uuidv4();
-      used.add(created);
-      return created;
-    });
-    const changed =
-      previous.length !== segmentIds.length ||
-      previous.some((id, index) => id !== segmentIds[index]);
-    if (changed) {
-      chapter.segmentIds = segmentIds;
-      cursor.update(chapter);
-    }
-  }
-  await chapterTx.done;
   //Metadata
   const listMetadata = () => db.getAll('metadata');
   const getMetadata = (id: string) => db.get('metadata', id);
