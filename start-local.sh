@@ -12,10 +12,8 @@ fi
 
 cd "$web_dir"
 
-if [[ ! -d node_modules/.pnpm ]]; then
-  echo "首次启动：正在安装前端依赖..."
-  corepack pnpm install --frozen-lockfile
-fi
+echo "正在同步前端依赖..."
+corepack pnpm install --frozen-lockfile
 
 echo "正在启动本地开发服务器（默认地址：http://127.0.0.1:5173）"
 exec corepack pnpm exec vite --host 127.0.0.1 "$@"
