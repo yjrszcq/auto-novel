@@ -114,7 +114,7 @@ const invertVisibleSelection = () => {
   selectedBookIds.value = selected;
 };
 
-const updateSelectedBooks = async (action: 'pin' | 'remove') => {
+const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'remove') => {
   const ids = [...selectedBookIds.value];
   if (ids.length === 0) return;
   batchUpdating.value = true;
@@ -123,22 +123,24 @@ const updateSelectedBooks = async (action: 'pin' | 'remove') => {
     const service = createBookshelfService(repository);
     await Promise.all(
       ids.map((id) =>
-        action === 'pin'
-          ? service.setPinned(id, true)
-          : service.setListed(id, false),
+        action === 'remove'
+          ? service.setListed(id, false)
+          : service.setPinned(id, action === 'pin'),
       ),
     );
     message.success(
       action === 'pin'
         ? `已置顶 ${ids.length} 本书`
-        : `已将 ${ids.length} 本书移出书架`,
+        : action === 'unpin'
+          ? `已取消置顶 ${ids.length} 本书`
+          : `已将 ${ids.length} 本书移出书架`,
     );
     selectionMode.value = false;
     selectedBookIds.value = new Set();
     await reload();
   } catch (reason) {
     message.error(
-      `${action === 'pin' ? '置顶' : '移出书架'}失败：${String(reason)}`,
+      `${action === 'pin' ? '置顶' : action === 'unpin' ? '取消置顶' : '移出书架'}失败：${String(reason)}`,
     );
   } finally {
     batchUpdating.value = false;
@@ -190,6 +192,14 @@ onMounted(reload);
           @click="updateSelectedBooks('pin')"
         >
           置顶
+        </n-button>
+        <n-button
+          size="small"
+          :disabled="selectedBookIds.size === 0"
+          :loading="batchUpdating"
+          @click="updateSelectedBooks('unpin')"
+        >
+          取消置顶
         </n-button>
         <n-popconfirm
           :disabled="selectedBookIds.size === 0"
