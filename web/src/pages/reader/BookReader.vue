@@ -1632,8 +1632,9 @@ onBeforeUnmount(() => {
   --reader-background: #fafafa;
   --reader-chrome-background: #f1f1f1;
   --reader-chrome-border: rgb(0 0 0 / 12%);
-  --reader-warning-background: #fff0c2;
-  --reader-warning-border: #d69a18;
+  --reader-warning-background: #f7dfa0;
+  --reader-warning-border: #c98d13;
+  --reader-warning-button-border: #775710;
   --reader-warning-text: #5b4300;
 }
 
@@ -1645,6 +1646,7 @@ onBeforeUnmount(() => {
   --reader-chrome-border: rgb(255 255 255 / 8%);
   --reader-warning-background: #302b27;
   --reader-warning-border: #b77a2b;
+  --reader-warning-button-border: #8b7864;
   --reader-warning-text: #f2e8dc;
 }
 
@@ -1656,6 +1658,7 @@ onBeforeUnmount(() => {
   --reader-chrome-border: rgb(74 57 37 / 14%);
   --reader-warning-background: #f4d998;
   --reader-warning-border: #b57b20;
+  --reader-warning-button-border: #6f511c;
   --reader-warning-text: #543b0b;
 }
 
@@ -1809,6 +1812,11 @@ onBeforeUnmount(() => {
 
 .book-reader__translation-panel-actions :deep(.n-button__content) {
   color: var(--reader-warning-text);
+}
+
+.book-reader__translation-panel-actions :deep(.n-button__border),
+.book-reader__translation-panel-actions :deep(.n-button__state-border) {
+  border-color: var(--reader-warning-button-border) !important;
 }
 
 .book-reader__catalog {
@@ -2142,6 +2150,7 @@ onBeforeUnmount(() => {
     --reader-chrome-border: rgb(255 255 255 / 8%);
     --reader-warning-background: #302b27;
     --reader-warning-border: #b77a2b;
+    --reader-warning-button-border: #8b7864;
     --reader-warning-text: #f2e8dc;
   }
 }
