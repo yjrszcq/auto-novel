@@ -1633,8 +1633,8 @@ onBeforeUnmount(() => {
   --reader-chrome-background: #f1f1f1;
   --reader-chrome-border: rgb(0 0 0 / 12%);
   --reader-warning-background: #f7dfa0;
-  --reader-warning-border: #f0a020;
-  --reader-warning-button-border: #c88710;
+  --reader-warning-border: #c88710;
+  --reader-warning-button-border: #f0a020;
   --reader-warning-text: #5b4300;
 }
 

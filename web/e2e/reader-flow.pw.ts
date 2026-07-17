@@ -452,7 +452,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   );
   await expect(translationPopover).toHaveCSS(
     'border-color',
-    'rgb(240, 160, 32)',
+    'rgb(200, 135, 16)',
   );
   await expect(translationPopover).toHaveCSS('border-width', '1px');
   await expect(translationPopover.locator('strong')).toHaveCSS(
@@ -468,7 +468,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     translationPopover
       .getByRole('button', { name: 'GPT 翻译本章' })
       .locator('.n-button__border'),
-  ).toHaveCSS('border-color', 'rgb(200, 135, 16)');
+  ).toHaveCSS('border-color', 'rgb(240, 160, 32)');
   const popoverTop = await translationPopover.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );
