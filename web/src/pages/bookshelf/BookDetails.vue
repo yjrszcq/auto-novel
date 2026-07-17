@@ -380,7 +380,7 @@ onMounted(() => void load());
                     书籍信息
                   </button>
                   <button
-                    aria-label="编辑书籍信息"
+                    aria-label="编辑书籍展示信息"
                     class="book-details__edit-button"
                     type="button"
                     @click="editBook"

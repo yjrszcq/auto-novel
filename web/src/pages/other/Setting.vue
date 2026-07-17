@@ -151,12 +151,12 @@ onMounted(() => {
         <n-flex vertical>
           <b>本地 EPUB 下载</b>
           <n-checkbox v-model:checked="setting.embedMetadataInOriginalDownload">
-            原文下载时嵌入展示元信息
+            原文下载时展示信息嵌入元数据
           </n-checkbox>
           <n-checkbox
             v-model:checked="setting.embedMetadataInTranslatedDownload"
           >
-            译文下载时嵌入展示元信息
+            译文下载时展示信息嵌入元数据
           </n-checkbox>
           <n-text depth="3">
             仅修改下载副本，浏览器中保存的原始 EPUB 不会改变。

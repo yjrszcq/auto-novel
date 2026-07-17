@@ -266,10 +266,7 @@ onBeforeUnmount(clearCoverObjectUrl);
           <template #icon><n-icon :component="ArrowBackOutlined" /></template>
         </n-button>
         <div class="metadata-edit__heading">
-          <n-h1>编辑书籍信息</n-h1>
-          <n-text depth="3">
-            修改仅保存在当前浏览器，原始文件不会被覆盖。
-          </n-text>
+          <n-h1>编辑书籍展示信息</n-h1>
         </div>
       </header>
 
@@ -286,7 +283,7 @@ onBeforeUnmount(clearCoverObjectUrl);
           <n-form
             class="metadata-edit__form"
             :label-placement="isMobile ? 'top' : 'left'"
-            :label-width="isMobile ? 'auto' : 96"
+            :label-width="isMobile ? 'auto' : 72"
           >
             <n-form-item label="书名">
               <n-input
@@ -350,14 +347,14 @@ onBeforeUnmount(clearCoverObjectUrl);
             </n-form-item>
 
             <template v-if="isEpub">
-              <n-divider>下载副本</n-divider>
-              <n-form-item label="原文下载">
+              <n-divider>下载时展示信息嵌入元数据</n-divider>
+              <n-form-item label="原文">
                 <n-select
                   v-model:value="form.originalDownload"
                   :options="downloadPolicyOptions"
                 />
               </n-form-item>
-              <n-form-item label="译文下载">
+              <n-form-item label="译文">
                 <n-select
                   v-model:value="form.translatedDownload"
                   :options="downloadPolicyOptions"
