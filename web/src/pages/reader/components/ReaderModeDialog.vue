@@ -1,11 +1,12 @@
 <script lang="ts" setup>
 import type { ReaderMode } from '@/model/Reader';
-import { readerModeLabels } from '../core/ReaderMode';
+import { getReaderModeLabel } from '../core/ReaderMode';
 
 const props = defineProps<{
   show: boolean;
   modes: ReaderMode[];
   remember: boolean;
+  sourceLanguage?: string;
 }>();
 
 const emit = defineEmits<{
@@ -29,7 +30,7 @@ const emit = defineEmits<{
           block
           @click="emit('select', mode)"
         >
-          {{ readerModeLabels[mode] }}
+          {{ getReaderModeLabel(mode, props.sourceLanguage) }}
         </n-button>
         <n-checkbox
           :checked="props.remember"

@@ -12,6 +12,7 @@ const book = (id: string): ReaderBook => ({
   id,
   title: id,
   sourceLanguage: 'ja',
+  requiresWholeChapterTranslation: true,
   targetLanguage: 'zh-CN',
   chapterCount: 1,
   createdAt: 1,

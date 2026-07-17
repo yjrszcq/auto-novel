@@ -6,6 +6,7 @@ import type {
 } from '../src/model/Reader';
 import {
   getAvailableReaderModes,
+  getReaderModeLabel,
   readerModeLabels,
   readerModes,
   resolveReaderMode,
@@ -89,5 +90,7 @@ describe('reader open mode', () => {
       'original-translated': '日中对照',
       original: '原文（日文）',
     });
+    expect(getReaderModeLabel('original', 'zh-Hans')).toBe('原文（中文）');
+    expect(getReaderModeLabel('original', 'en')).toBe('原文（英文）');
   });
 });

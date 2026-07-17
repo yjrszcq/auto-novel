@@ -4,8 +4,8 @@ import type {
 } from '@/model/LocalVolume';
 import {
   getLocalBookMetadata,
-  getLocalVolumeLanguages,
   getLocalVolumeTitle,
+  requiresWholeChapterTranslation,
 } from '@/model/LocalVolume';
 import type {
   ReaderBook,
@@ -39,7 +39,8 @@ const getChapterSources = (chapter: LocalVolumeChapter) =>
 
 const getBook = (volume: LocalVolumeMetadata): ReaderBook => {
   const metadata = getLocalBookMetadata(volume);
-  const languages = getLocalVolumeLanguages(volume);
+  const languages = metadata.languages;
+  const readingLanguages = languages?.length ? languages : ['ja'];
   return {
     id: volume.id,
     title: getLocalVolumeTitle(volume),
@@ -48,7 +49,9 @@ const getBook = (volume: LocalVolumeMetadata): ReaderBook => {
     description: metadata.description,
     coverUrl: metadata.coverUrl,
     languages,
-    sourceLanguage: languages[0],
+    sourceLanguage: readingLanguages[0],
+    requiresWholeChapterTranslation:
+      requiresWholeChapterTranslation(readingLanguages),
     targetLanguage: 'zh-CN',
     chapterCount: volume.toc.length,
     createdAt: volume.createAt,

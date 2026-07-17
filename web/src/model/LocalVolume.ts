@@ -100,6 +100,24 @@ export const getLocalVolumeLanguages = (volume: LocalVolumeMetadata) => {
   return languages?.length ? languages : ['ja'];
 };
 
+const chineseLanguageCodes = new Set([
+  'zh',
+  'zho',
+  'chi',
+  'cmn',
+  'yue',
+  'wuu',
+  'hak',
+  'nan',
+  'gan',
+]);
+
+export const isChineseLanguageTag = (language: string) =>
+  chineseLanguageCodes.has(language.trim().toLowerCase().split('-')[0]);
+
+export const requiresWholeChapterTranslation = (languages: string[]) =>
+  !languages.some(isChineseLanguageTag);
+
 export const shouldEmbedDownloadMetadata = (
   volume: LocalVolumeMetadata,
   kind: 'original' | 'translated',

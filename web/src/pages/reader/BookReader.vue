@@ -142,8 +142,14 @@ const currentChapterSummary = computed(() =>
       )
     : undefined,
 );
+const requiresWholeChapterTranslation = computed(
+  () =>
+    result.value?.kind !== 'ready' ||
+    result.value.book.requiresWholeChapterTranslation,
+);
 const hasIncompleteChapter = computed(
   () =>
+    requiresWholeChapterTranslation.value &&
     currentChapterSummary.value !== undefined &&
     currentChapterSummary.value.translationStatus !== 'complete',
 );
@@ -154,6 +160,9 @@ const currentTranslationStatusLabel = computed(() =>
 );
 
 const queueChapterTranslation = (type: 'gpt' | 'sakura') => {
+  if (!requiresWholeChapterTranslation.value) {
+    return;
+  }
   const chapter = currentChapterSummary.value;
   if (chapter === undefined) {
     return;
@@ -705,6 +714,13 @@ const resolveMode = async (
     repository.getReaderBookPreference(loaded.book.id),
     adapter.getCapabilities(loaded.book.id),
   ]);
+  if (!loaded.book.requiresWholeChapterTranslation) {
+    availableModes.value = ['original'];
+    readingMode.value = 'original';
+    bookStyle.value = preference?.style;
+    showModePrompt.value = false;
+    return;
+  }
   availableModes.value = getAvailableReaderModes(capabilities);
   readingMode.value = resolveReaderMode({
     temporaryMode,
@@ -1544,7 +1560,9 @@ onBeforeUnmount(() => {
           >
             <span class="book-reader__catalog-title">{{ entry.title }}</span>
             <n-tag
-              v-if="entry.chapterId !== undefined"
+              v-if="
+                entry.chapterId !== undefined && requiresWholeChapterTranslation
+              "
               size="small"
               :type="
                 chapterSummaryById.get(entry.chapterId)?.translationStatus ===
@@ -1586,6 +1604,7 @@ onBeforeUnmount(() => {
           书签 ({{ bookmarks.length }})
         </n-button>
         <n-button
+          v-if="requiresWholeChapterTranslation"
           @click="
             showTools = false;
             showModePrompt = true;
@@ -1596,10 +1615,16 @@ onBeforeUnmount(() => {
         <n-button @click="speakCurrentSegment">朗读当前段</n-button>
         <n-button @click="stopSpeaking">停止朗读</n-button>
         <n-button @click="openSelectedInInteractive">查词 / AI</n-button>
-        <n-button @click="queueChapterTranslation('gpt')">
+        <n-button
+          v-if="requiresWholeChapterTranslation"
+          @click="queueChapterTranslation('gpt')"
+        >
           GPT 翻译本章
         </n-button>
-        <n-button @click="queueChapterTranslation('sakura')">
+        <n-button
+          v-if="requiresWholeChapterTranslation"
+          @click="queueChapterTranslation('sakura')"
+        >
           Sakura 翻译本章
         </n-button>
         <n-button @click="openDetails">书籍详情</n-button>
@@ -1661,6 +1686,9 @@ onBeforeUnmount(() => {
       v-model:show="showModePrompt"
       v-model:remember="rememberModeChoice"
       :modes="availableModes"
+      :source-language="
+        result?.kind === 'ready' ? result.book.sourceLanguage : undefined
+      "
       @select="chooseMode"
     />
 

@@ -22,6 +22,30 @@ export const readerModeLabels: Record<ReaderMode, string> = {
   original: '原文（日文）',
 };
 
+const sourceLanguageLabels: Record<string, string> = {
+  zh: '中文',
+  zho: '中文',
+  chi: '中文',
+  cmn: '中文',
+  yue: '中文',
+  ja: '日文',
+  en: '英文',
+  ko: '韩文',
+};
+
+export const getReaderModeLabel = (
+  mode: ReaderMode,
+  sourceLanguage?: string,
+) => {
+  if (mode !== 'original' || sourceLanguage === undefined) {
+    return readerModeLabels[mode];
+  }
+  const language =
+    sourceLanguageLabels[sourceLanguage.toLowerCase().split('-')[0]] ??
+    sourceLanguage;
+  return `原文（${language}）`;
+};
+
 export const getAvailableReaderModes = (
   capabilities: BookReadingCapabilities,
 ): ReaderMode[] =>

@@ -91,6 +91,7 @@ describe('LocalVolumeReaderAdapter', () => {
       title: '编辑后的书名',
       author: '作者一、作者二',
       sourceLanguage: 'en',
+      requiresWholeChapterTranslation: true,
       targetLanguage: 'zh-CN',
       coverUrl: 'https://example.com/cover.jpg',
       languages: ['en', 'ja'],
@@ -159,6 +160,27 @@ describe('LocalVolumeReaderAdapter', () => {
           original: '原文三',
         },
       ],
+    });
+  });
+
+  it('marks any book containing Chinese as not needing whole-chapter translation', async () => {
+    const chineseVolume: LocalVolumeMetadata = {
+      ...volume,
+      id: 'chinese.epub',
+      bookMetadata: {
+        ...volume.bookMetadata,
+        languages: ['ja', 'zh-Hant'],
+      },
+    };
+    const adapter = createLocalVolumeReaderAdapter({
+      getVolume: async (bookId) =>
+        bookId === chineseVolume.id ? chineseVolume : undefined,
+      getChapter: async (_bookId, chapterId) => chapters[chapterId],
+    });
+
+    await expect(adapter.getBook(chineseVolume.id)).resolves.toMatchObject({
+      languages: ['ja', 'zh-Hant'],
+      requiresWholeChapterTranslation: false,
     });
   });
 });

@@ -110,6 +110,7 @@ export interface ReaderBook {
   coverUrl?: string;
   languages?: string[];
   sourceLanguage: string;
+  requiresWholeChapterTranslation: boolean;
   targetLanguage?: string;
   chapterCount: number;
   createdAt: number;

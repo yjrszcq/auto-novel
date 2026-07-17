@@ -49,6 +49,7 @@ describe('reader performance helpers', () => {
         id: 'book',
         title: 'book',
         sourceLanguage: 'ja',
+        requiresWholeChapterTranslation: true,
         chapterCount: 3,
         createdAt: 0,
         updatedAt: 0,

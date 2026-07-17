@@ -4,6 +4,8 @@ import {
   getLocalBookMetadata,
   getLocalVolumeLanguages,
   getLocalVolumeTitle,
+  isChineseLanguageTag,
+  requiresWholeChapterTranslation,
   shouldEmbedDownloadMetadata,
   type LocalVolumeMetadata,
 } from '../src/model/LocalVolume';
@@ -66,5 +68,14 @@ describe('local book metadata', () => {
     book.sourceFormat = 'txt';
     book.id = 'book.txt';
     expect(shouldEmbedDownloadMetadata(book, 'translated', true)).toBe(false);
+  });
+
+  it('recognizes common Chinese language tags as not needing chapter translation', () => {
+    expect(isChineseLanguageTag('zh-CN')).toBe(true);
+    expect(isChineseLanguageTag('cmn-Hans')).toBe(true);
+    expect(isChineseLanguageTag('yue-Hant-HK')).toBe(true);
+    expect(isChineseLanguageTag('ja')).toBe(false);
+    expect(requiresWholeChapterTranslation(['ja', 'zh-Hant'])).toBe(false);
+    expect(requiresWholeChapterTranslation(['ja', 'en'])).toBe(true);
   });
 });
