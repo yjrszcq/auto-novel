@@ -197,16 +197,16 @@ const savePreference = async (value: string) => {
 const saveBookTheme = async (value: string) => {
   const repository = await repositoryPromise;
   const existing = await repository.getReaderBookPreference(bookId.value);
+  const style = { ...existing?.style };
+  if (value === 'global') {
+    delete style.theme;
+  } else {
+    style.theme = value as NonNullable<ReaderBookStyleOverride['theme']>;
+  }
   await repository.putReaderBookPreference({
     ...existing,
     bookId: bookId.value,
-    style: {
-      ...existing?.style,
-      theme:
-        value === 'global'
-          ? undefined
-          : (value as NonNullable<ReaderBookStyleOverride['theme']>),
-    },
+    style: Object.keys(style).length === 0 ? undefined : style,
     updatedAt: Date.now(),
   });
   bookTheme.value = value as typeof bookTheme.value;

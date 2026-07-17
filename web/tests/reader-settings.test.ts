@@ -2,6 +2,7 @@ import { reactive } from 'vue';
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyReaderStyleOverride,
   defaultReaderSettings,
   normalizeReaderSettings,
   serializeReaderSettings,
@@ -61,5 +62,22 @@ describe('reader settings', () => {
     expect(structuredClone(serialized)).toMatchObject({
       translationPriority: defaultReaderSettings.translationPriority,
     });
+  });
+
+  it('does not let undefined book overrides erase global settings', () => {
+    const settings = normalizeReaderSettings({ theme: 'system' });
+
+    expect(
+      applyReaderStyleOverride(settings, {
+        theme: undefined,
+        fontSize: undefined,
+      }),
+    ).toMatchObject({
+      theme: 'system',
+      fontSize: settings.fontSize,
+    });
+    expect(applyReaderStyleOverride(settings, { theme: 'dark' }).theme).toBe(
+      'dark',
+    );
   });
 });

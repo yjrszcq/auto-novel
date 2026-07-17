@@ -5,6 +5,103 @@ const unsafeText = '<img src=x onerror="window.__readerXss=true">';
 const descriptionHtml =
   '<div><p><strong style="color:red" onclick="window.__descriptionXss=true">安全简介</strong></p><p>第二段</p><img src=x onerror="window.__descriptionXss=true"><svg><script>window.__descriptionXss=true</script></svg></div>';
 
+test('keeps inherited reader themes opaque and responsive to system changes', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await page.goto('/bookshelf');
+  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await expect(page.locator('.n-skeleton')).toHaveCount(0);
+  await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 4);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'chapter', 'reader-settings', 'reader-book-preference'],
+      'readwrite',
+    );
+    transaction.objectStore('metadata').put({
+      id: 'theme-reader.txt',
+      createAt: 1,
+      toc: [{ chapterId: '0', title: '主题测试' }],
+      sourceFormat: 'txt',
+      contentVersion: 1,
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceBookMetadata: { title: '主题测试', languages: ['zh'] },
+    });
+    transaction.objectStore('chapter').put({
+      id: 'theme-reader.txt/0',
+      volumeId: 'theme-reader.txt',
+      paragraphs: ['桌面与手机主题正文'],
+      segmentIds: ['theme-segment-0'],
+    });
+    transaction.objectStore('reader-settings').put({
+      id: 'default',
+      defaultMode: 'original',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      fontSize: 18,
+      lineHeight: 1.9,
+      contentWidth: 840,
+      horizontalPadding: 24,
+      theme: 'system',
+      flow: 'auto',
+      updatedAt: 1,
+    });
+    transaction.objectStore('reader-book-preference').put({
+      bookId: 'theme-reader.txt',
+      style: { theme: undefined },
+      updatedAt: 1,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  });
+
+  await page.goto('/books/theme-reader.txt/read/0');
+  const reader = page.locator('.book-reader');
+  const appBar = page.locator('.book-reader__app-bar');
+  const bottomNavigation = page.locator('.book-reader__bottom-navigation');
+  await expect(reader).toHaveClass(/book-reader--dark/);
+  await expect(appBar).toHaveCSS('background-color', 'rgb(36, 36, 36)');
+  await expect(bottomNavigation).toHaveCSS(
+    'background-color',
+    'rgb(36, 36, 36)',
+  );
+
+  await page.getByRole('button', { name: '白天', exact: true }).click();
+  await expect(reader).toHaveClass(/book-reader--light/);
+  await expect(appBar).toHaveCSS('background-color', 'rgb(241, 241, 241)');
+
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  const themeSetting = page
+    .locator('.book-reader__settings-theme')
+    .filter({ hasText: '主题' });
+  await themeSetting.locator('.n-base-selection').click();
+  await page.locator('.n-base-select-menu').getByText('跟随系统').click();
+  await page.keyboard.press('Escape');
+  await expect(reader).toHaveClass(/book-reader--dark/);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(appBar).toHaveCSS('background-color', 'rgb(36, 36, 36)');
+  await expect(bottomNavigation).toHaveCSS(
+    'background-color',
+    'rgb(36, 36, 36)',
+  );
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await expect(reader).toHaveClass(/book-reader--light/);
+  await expect(appBar).toHaveCSS('background-color', 'rgb(241, 241, 241)');
+  await expect(bottomNavigation).toHaveCSS(
+    'background-color',
+    'rgb(241, 241, 241)',
+  );
+});
+
 test('opens a local bookshelf book safely and keeps the legacy reader link', async ({
   page,
 }) => {

@@ -1,4 +1,7 @@
-import type { ReaderSettingsRecord } from '@/model/Reader';
+import type {
+  ReaderBookStyleOverride,
+  ReaderSettingsRecord,
+} from '@/model/Reader';
 
 export const defaultReaderSettings: ReaderSettingsRecord = {
   id: 'default',
@@ -39,4 +42,16 @@ export const serializeReaderSettings = (
 ): ReaderSettingsRecord => ({
   ...value,
   translationPriority: [...value.translationPriority],
+});
+
+export const applyReaderStyleOverride = (
+  settings: ReaderSettingsRecord,
+  override: ReaderBookStyleOverride | undefined,
+): ReaderSettingsRecord => ({
+  ...settings,
+  fontSize: override?.fontSize ?? settings.fontSize,
+  lineHeight: override?.lineHeight ?? settings.lineHeight,
+  contentWidth: override?.contentWidth ?? settings.contentWidth,
+  horizontalPadding: override?.horizontalPadding ?? settings.horizontalPadding,
+  theme: override?.theme ?? settings.theme,
 });

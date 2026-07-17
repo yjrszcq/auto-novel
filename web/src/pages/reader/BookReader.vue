@@ -64,6 +64,7 @@ import {
   getTranslationStatusLabel,
 } from './core/ReaderTranslationWorkflow';
 import {
+  applyReaderStyleOverride,
   defaultReaderSettings,
   normalizeReaderSettings,
   serializeReaderSettings,
@@ -499,10 +500,9 @@ const handleReaderKeydown = (event: KeyboardEvent) => {
   }
 };
 
-const activeSettings = computed(() => ({
-  ...settings.value,
-  ...bookStyle.value,
-}));
+const activeSettings = computed(() =>
+  applyReaderStyleOverride(settings.value, bookStyle.value),
+);
 
 const resolvedFlow = computed(() =>
   resolveReaderFlow(settings.value.flow, isDesktopReader.value),
@@ -516,6 +516,14 @@ const isDarkReaderTheme = computed(
 
 const readerNaiveTheme = computed(() =>
   isDarkReaderTheme.value ? darkTheme : lightTheme,
+);
+
+const resolvedReaderTheme = computed(() =>
+  activeSettings.value.theme === 'sepia'
+    ? 'sepia'
+    : isDarkReaderTheme.value
+      ? 'dark'
+      : 'light',
 );
 
 const sepiaNaiveThemeOverrides: GlobalThemeOverrides = {
@@ -1344,7 +1352,7 @@ onBeforeUnmount(() => {
   <n-config-provider
     tag="main"
     class="book-reader"
-    :class="`book-reader--${activeSettings.theme}`"
+    :class="`book-reader--${resolvedReaderTheme}`"
     :style="readerStyle"
     :theme="readerNaiveTheme"
     :theme-overrides="readerNaiveThemeOverrides"
@@ -1773,8 +1781,7 @@ onBeforeUnmount(() => {
   background: var(--reader-background, transparent);
 }
 
-.book-reader--light,
-.book-reader--system {
+.book-reader--light {
   --reader-text-color: #353535;
   --reader-muted-color: #777;
   --reader-background: #fafafa;
@@ -2295,20 +2302,6 @@ onBeforeUnmount(() => {
 
   .book-reader__settings-theme {
     grid-column: 1 / -1;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .book-reader--system {
-    --reader-text-color: #c9c9c9;
-    --reader-muted-color: #929292;
-    --reader-background: #191919;
-    --reader-chrome-background: #242424;
-    --reader-chrome-border: rgb(255 255 255 / 8%);
-    --reader-warning-background: #302b27;
-    --reader-warning-border: #9e6a27;
-    --reader-warning-button-border: #8b7864;
-    --reader-warning-text: #f2e8dc;
   }
 }
 </style>
