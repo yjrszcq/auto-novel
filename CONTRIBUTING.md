@@ -26,8 +26,10 @@ pnpm prepare                   # 设置Git钩子
 pnpm dev          # 启动开发服务器
 pnpm test         # 运行 Vitest
 pnpm run build    # 生产构建与类型检查
-pnpm run lint     # 检查 src 目录
-pnpm run test:e2e   # 运行本地 IndexedDB 阅读器浏览器流程
+pnpm run lint     # 检查源码、单元测试与端到端测试，要求零告警
+pnpm run test:e2e # 运行本地 IndexedDB 阅读器浏览器流程
+pnpm audit --prod # 检查生产依赖漏洞
+pnpm outdated     # 检查直接依赖版本
 ```
 
 首次运行浏览器流程前，请在 `web/` 目录执行一次
@@ -38,13 +40,17 @@ Docker 变更可在仓库根目录使用 `docker build -t auto-novel:local web` 
 
 书架和阅读器的正文、译文与阅读状态均以浏览器本地数据为边界。请勿为这些
 数据添加账号、服务端同步或隐式正文上传；面向翻译服务的请求必须保留为用户
-主动操作。段落 ID 是进度、书签和批注的稳定定位键，修改导入器或章节结构时
-必须保留或安全迁移它们。正文和译文必须继续按纯文本渲染。
+主动操作。段落 ID 是进度、书签和批注的稳定定位键，当前数据结构内修改导入器
+或章节结构时必须保持这些 ID 稳定。正文和译文必须继续按纯文本渲染。
+
+项目不维护旧版应用数据兼容层。破坏设置、任务、工作区、书架、阅读器或缓存
+结构时，应切换明确的新存储键、数据库名或数据库版本，并在文档中说明数据
+重置；不要加入旧字段回填、旧路由跳转或启动时迁移代码。EPUB2 NCX、EPUB2
+封面元数据和保守的异常 EPUB 回退属于外部文件格式支持，不属于旧版应用兼容。
 
 EPUB 导入必须优先使用 EPUB3 nav 或 EPUB2 NCX，并保持目录标题、层级、锚点和
 spine 顺序。无目录时只能回退到 spine，不能重新遍历整个 manifest。修改章节
-切分时必须同时验证译文导出和旧书惰性迁移；无法逐段精确映射的旧书必须保持
-原状并给出可重新导入的提示。
+切分时必须同时验证当前格式的导入、阅读、译文导出和稳定段落定位。
 
 本地书籍的原始 EPUB、原始元信息与展示覆盖必须保持分离。元信息和封面只在
 用户启用下载嵌入时写入临时下载副本，不得替换 IndexedDB 保存的原文件；展示
@@ -56,6 +62,13 @@ Reader 预构建 bundle、Vuetify 或远程阅读服务。`auto` 阅读流在电
 横向分页、手机上解析为纵向滚动；两种流都必须验证稳定进度、目录、双语模式、
 书签、批注、朗读和选中文本交接。
 
-运行时默认配置位于 `web/config/`。Docker 镜像会将其复制到 `/app/default-config`，并在启动时为挂载的 `/app/config` 补齐缺失文件。请通过挂载目录修改 `config.json`、`html/info*.html` 和 `images/` 中的本地图片；`config.json` 中的图片路径均相对 `/app/config`。不要将个人配置或密钥提交到仓库。
+运行时默认配置位于 `web/config/`。Docker 镜像会将其复制到
+`/app/default-config`，并在启动时为挂载的 `/app/config` 补齐当前结构中缺失的
+文件。请通过挂载目录修改 `config.json`、`html/info*.html` 和 `images/` 中的
+本地图片；`config.json` 中的图片路径均相对 `/app/config`。根目录旧版
+`info*.html` 不会被读取或迁移。不要将个人配置或密钥提交到仓库。
 
-提交前请至少运行与改动相符的检查；涉及构建、路由、任务模型或运行时配置时，运行 `pnpm test` 与 `pnpm run build`。涉及阅读器交互或响应式布局时还必须运行 `pnpm run test:e2e`。
+提交前请至少运行与改动相符的检查；涉及构建、路由、任务模型或运行时配置时，
+运行 `pnpm lint`、`pnpm test` 与 `pnpm run build`。依赖变更还应运行
+`pnpm audit --prod` 和 `pnpm outdated`；涉及阅读器交互或响应式布局时还必须
+运行 `pnpm run test:e2e`。
