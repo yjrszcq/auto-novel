@@ -173,7 +173,7 @@ const progressFilterFunc = computed(() => {
 
           <router-link
             v-if="!volume.id.endsWith('.epub')"
-            :to="`/workspace/reader/${encodeURIComponent(volume.id)}/0`"
+            :to="`/books/${encodeURIComponent(volume.id)}/read/0`"
             target="_blank"
             rel="noopener noreferrer"
           >

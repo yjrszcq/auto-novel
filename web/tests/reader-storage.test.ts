@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createLocalVolumeDao } from '../src/stores/local/LocalVolumeDao';
 
-const databaseName = 'reader-storage-migration-test';
+const databaseName = 'reader-storage-test';
 
 afterEach(async () => {
   await deleteDB(databaseName);
@@ -145,6 +145,12 @@ describe('reader storage', () => {
       segmentId: initialSegmentIds[0],
       createdAt: 1,
     });
+    await reopened.putReaderBookmark({
+      id: 'other-bookmark',
+      bookId: 'other-book',
+      chapterId: '0',
+      createdAt: 1,
+    });
     expect(await reopened.listReaderBookmarks('book')).toHaveLength(1);
     await reopened.deleteReaderBookmark('bookmark');
     expect(await reopened.listReaderBookmarks('book')).toEqual([]);
@@ -186,6 +192,19 @@ describe('reader storage', () => {
       createdAt: 1,
       updatedAt: 1,
     });
+    await reopened.putReaderAnnotation({
+      id: 'other-annotation',
+      bookId: 'other-book',
+      chapterId: '0',
+      segmentId: 'other-segment',
+      languageSide: 'original',
+      startOffset: 0,
+      endOffset: 1,
+      quote: 'other',
+      style: 'highlight',
+      createdAt: 1,
+      updatedAt: 1,
+    });
     expect(await reopened.listReaderAnnotations('book')).toHaveLength(1);
     await reopened.deleteReaderAnnotation('annotation');
     expect(await reopened.listReaderAnnotations('book')).toEqual([]);
@@ -210,6 +229,13 @@ describe('reader storage', () => {
       contentRevision: 'current',
       cachedAt: 1,
     });
+    await reopened.putReaderChapterCache({
+      key: 'other-book/0/current',
+      bookId: 'other-book',
+      chapterId: '0',
+      contentRevision: 'current',
+      cachedAt: 1,
+    });
 
     await reopened.deleteReaderDataByVolumeId('book');
 
@@ -219,6 +245,11 @@ describe('reader storage', () => {
     expect(await reopened.listReaderBookmarks('book')).toEqual([]);
     expect(await reopened.getReaderCover('book')).toBeUndefined();
     expect(await reopened.listReaderAnnotations('book')).toEqual([]);
+    expect(await reopened.listReaderBookmarks('other-book')).toHaveLength(1);
+    expect(await reopened.listReaderAnnotations('other-book')).toHaveLength(1);
+    expect(await reopened.listReaderChapterCaches('other-book')).toHaveLength(
+      1,
+    );
     await reopened.putReaderSettings({
       id: 'default',
       defaultMode: 'original-translated',

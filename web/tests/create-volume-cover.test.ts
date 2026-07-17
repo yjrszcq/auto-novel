@@ -81,7 +81,6 @@ describe('local EPUB import cover', () => {
     expect(dao.createMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceFormat: 'epub',
-        contentVersion: 2,
         toc: [{ chapterId: 'chapter.xhtml', title: '第一章' }],
         navigation: [
           expect.objectContaining({

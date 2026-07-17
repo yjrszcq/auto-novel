@@ -4,8 +4,6 @@ import { openDB } from 'idb';
 import type {
   LocalVolumeChapter,
   LocalVolumeMetadata,
-  LocalVolumeNavigationEntry,
-  LocalVolumeTocEntry,
 } from '@/model/LocalVolume';
 import type {
   ReaderAnnotation,
@@ -20,16 +18,6 @@ import type {
 } from '@/model/Reader';
 
 type Mutator<T> = (value: T) => T;
-
-export interface NativeEpubMigrationCommit {
-  bookId: string;
-  expectedChapters: LocalVolumeChapter[];
-  chapters: LocalVolumeChapter[];
-  toc: LocalVolumeTocEntry[];
-  navigation: LocalVolumeNavigationEntry[];
-  chapterMap: Record<string, string>;
-  segmentChapterMap: Record<string, string>;
-}
 
 interface VolumesDBSchema extends DBSchema {
   metadata: {
@@ -199,111 +187,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   const listChapterByVolumeId = (id: string) =>
     db.getAllFromIndex('chapter', 'byVolumeId', id);
 
-  const migrateNativeEpub = async (input: NativeEpubMigrationCommit) => {
-    const tx = db.transaction(
-      [
-        'metadata',
-        'chapter',
-        'reader-progress',
-        'reader-bookmark',
-        'reader-annotation',
-        'reader-chapter-cache',
-      ],
-      'readwrite',
-    );
-    const metadataStore = tx.objectStore('metadata');
-    const chapterStore = tx.objectStore('chapter');
-    const progressStore = tx.objectStore('reader-progress');
-    const bookmarkStore = tx.objectStore('reader-bookmark');
-    const annotationStore = tx.objectStore('reader-annotation');
-    const cacheStore = tx.objectStore('reader-chapter-cache');
-    const metadata = await metadataStore.get(input.bookId);
-    if (metadata === undefined) throw new Error('小说不存在');
-    if (metadata.contentVersion === 2) {
-      await tx.done;
-      return false;
-    }
-
-    const currentChapters = await chapterStore
-      .index('byVolumeId')
-      .getAll(input.bookId);
-    const stableChapterJson = (chapters: LocalVolumeChapter[]) =>
-      JSON.stringify(
-        [...chapters]
-          .sort((left, right) => left.id.localeCompare(right.id))
-          .map((chapter) => ({ ...chapter })),
-      );
-    if (
-      stableChapterJson(currentChapters) !==
-      stableChapterJson(input.expectedChapters)
-    ) {
-      throw new Error('迁移期间章节数据发生变化');
-    }
-
-    const remapChapter = (chapterId: string, segmentId?: string) => {
-      if (segmentId !== undefined) {
-        const mapped = input.segmentChapterMap[segmentId];
-        if (mapped === undefined) throw new Error('无法定位旧阅读段落');
-        return mapped;
-      }
-      const mapped = input.chapterMap[chapterId];
-      if (mapped === undefined) throw new Error('无法精确定位旧章节');
-      return mapped;
-    };
-
-    const progress = await progressStore.get(input.bookId);
-    const bookmarks = (await bookmarkStore.getAll()).filter(
-      (bookmark) => bookmark.bookId === input.bookId,
-    );
-    const annotations = (await annotationStore.getAll()).filter(
-      (annotation) => annotation.bookId === input.bookId,
-    );
-    const caches = (await cacheStore.getAll()).filter(
-      (cache) => cache.bookId === input.bookId,
-    );
-    const migratedProgress =
-      progress === undefined
-        ? undefined
-        : {
-            ...progress,
-            chapterId: remapChapter(progress.chapterId, progress.segmentId),
-          };
-    const migratedBookmarks = bookmarks.map((bookmark) => ({
-      ...bookmark,
-      chapterId: remapChapter(bookmark.chapterId, bookmark.segmentId),
-    }));
-    const migratedAnnotations = annotations.map((annotation) => ({
-      ...annotation,
-      chapterId: remapChapter(annotation.chapterId, annotation.segmentId),
-    }));
-
-    await Promise.all(
-      currentChapters.map((chapter) => chapterStore.delete(chapter.id)),
-    );
-    await Promise.all(
-      input.chapters.map((chapter) => chapterStore.put(chapter)),
-    );
-    await metadataStore.put({
-      ...metadata,
-      toc: input.toc,
-      navigation: input.navigation,
-      sourceFormat: 'epub',
-      contentVersion: 2,
-    });
-    if (migratedProgress !== undefined) {
-      await progressStore.put(migratedProgress);
-    }
-    await Promise.all(
-      migratedBookmarks.map((bookmark) => bookmarkStore.put(bookmark)),
-    );
-    await Promise.all(
-      migratedAnnotations.map((annotation) => annotationStore.put(annotation)),
-    );
-    await Promise.all(caches.map((cache) => cacheStore.delete(cache.key)));
-    await tx.done;
-    return true;
-  };
-
   // Reader
   const getReaderSettings = () => db.get('reader-settings', 'default');
   const putReaderSettings = (value: ReaderSettingsRecord) =>
@@ -328,10 +211,8 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   const putReaderBookmark = (value: ReaderBookmark) =>
     db.put('reader-bookmark', value);
   const deleteReaderBookmark = (id: string) => db.delete('reader-bookmark', id);
-  const listReaderBookmarks = async (bookId: string) =>
-    (await db.getAll('reader-bookmark')).filter(
-      (bookmark) => bookmark.bookId === bookId,
-    );
+  const listReaderBookmarks = (bookId: string) =>
+    db.getAllFromIndex('reader-bookmark', 'byBookId', bookId);
   const getReaderCover = (bookId: string) => db.get('reader-cover', bookId);
   const deleteReaderCover = (bookId: string) =>
     db.delete('reader-cover', bookId);
@@ -339,39 +220,62 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     db.put('reader-annotation', value);
   const deleteReaderAnnotation = (id: string) =>
     db.delete('reader-annotation', id);
-  const listReaderAnnotations = async (bookId: string) =>
-    (await db.getAll('reader-annotation')).filter(
-      (annotation) => annotation.bookId === bookId,
-    );
+  const listReaderAnnotations = (bookId: string) =>
+    db.getAllFromIndex('reader-annotation', 'byBookId', bookId);
   const putReaderCover = (value: ReaderCover) => db.put('reader-cover', value);
   const putReaderChapterCache = (value: ReaderChapterCache) =>
     db.put('reader-chapter-cache', value);
-  const listReaderChapterCaches = async (bookId: string) =>
-    (await db.getAll('reader-chapter-cache')).filter(
-      (cache) => cache.bookId === bookId,
-    );
+  const listReaderChapterCaches = (bookId: string) =>
+    db.getAllFromIndex('reader-chapter-cache', 'byBookId', bookId);
   const deleteReaderDataByVolumeId = async (bookId: string) => {
-    const [bookmarks, annotations, caches] = await Promise.all([
-      db.getAll('reader-bookmark'),
-      db.getAll('reader-annotation'),
-      db.getAll('reader-chapter-cache'),
-    ]);
+    const tx = db.transaction(
+      [
+        'reader-bookshelf',
+        'reader-book-preference',
+        'reader-progress',
+        'reader-reading-stats',
+        'reader-cover',
+        'reader-bookmark',
+        'reader-annotation',
+        'reader-chapter-cache',
+      ],
+      'readwrite',
+    );
+    const deleteBookmarks = async () => {
+      for await (const cursor of tx
+        .objectStore('reader-bookmark')
+        .index('byBookId')
+        .iterate(bookId)) {
+        cursor.delete();
+      }
+    };
+    const deleteAnnotations = async () => {
+      for await (const cursor of tx
+        .objectStore('reader-annotation')
+        .index('byBookId')
+        .iterate(bookId)) {
+        cursor.delete();
+      }
+    };
+    const deleteCaches = async () => {
+      for await (const cursor of tx
+        .objectStore('reader-chapter-cache')
+        .index('byBookId')
+        .iterate(bookId)) {
+        cursor.delete();
+      }
+    };
     await Promise.all([
-      db.delete('reader-bookshelf', bookId),
-      db.delete('reader-book-preference', bookId),
-      db.delete('reader-progress', bookId),
-      db.delete('reader-reading-stats', bookId),
-      db.delete('reader-cover', bookId),
-      ...bookmarks
-        .filter((bookmark) => bookmark.bookId === bookId)
-        .map((bookmark) => db.delete('reader-bookmark', bookmark.id)),
-      ...annotations
-        .filter((annotation) => annotation.bookId === bookId)
-        .map((annotation) => db.delete('reader-annotation', annotation.id)),
-      ...caches
-        .filter((cache) => cache.bookId === bookId)
-        .map((cache) => db.delete('reader-chapter-cache', cache.key)),
+      tx.objectStore('reader-bookshelf').delete(bookId),
+      tx.objectStore('reader-book-preference').delete(bookId),
+      tx.objectStore('reader-progress').delete(bookId),
+      tx.objectStore('reader-reading-stats').delete(bookId),
+      tx.objectStore('reader-cover').delete(bookId),
+      deleteBookmarks(),
+      deleteAnnotations(),
+      deleteCaches(),
     ]);
+    await tx.done;
   };
   const close = () => db.close();
   return {
@@ -391,7 +295,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     updateChapter,
     deleteChapterByVolumeId,
     listChapterByVolumeId,
-    migrateNativeEpub,
     //
     getReaderSettings,
     putReaderSettings,

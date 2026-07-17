@@ -53,12 +53,11 @@ export interface LocalVolumeMetadata {
   createAt: number;
   toc: LocalVolumeTocEntry[];
   navigation?: LocalVolumeNavigationEntry[];
-  sourceFormat?: 'txt' | 'epub' | 'srt';
-  contentVersion?: number;
+  sourceFormat: 'txt' | 'epub' | 'srt';
   glossaryId: string;
   glossary: Glossary;
   favoredId: string;
-  sourceBookMetadata?: LocalBookMetadata;
+  sourceBookMetadata: LocalBookMetadata;
   bookMetadata?: LocalBookMetadata;
   downloadMetadataPreference?: LocalDownloadMetadataPreference;
 }
@@ -71,7 +70,7 @@ const hasOwn = <Key extends keyof LocalBookMetadata>(
 export const getLocalBookMetadata = (
   volume: LocalVolumeMetadata,
 ): LocalBookMetadata => {
-  const source = volume.sourceBookMetadata ?? {};
+  const source = volume.sourceBookMetadata;
   const override = volume.bookMetadata;
   if (override === undefined) return { ...source };
   return {
@@ -123,8 +122,7 @@ export const shouldEmbedDownloadMetadata = (
   kind: 'original' | 'translated',
   globalDefault: boolean,
 ) => {
-  const isEpub =
-    volume.sourceFormat === 'epub' || volume.id.toLowerCase().endsWith('.epub');
+  const isEpub = volume.sourceFormat === 'epub';
   if (!isEpub) return false;
   const policy = volume.downloadMetadataPreference?.[kind] ?? 'global';
   if (policy === 'embed') return true;

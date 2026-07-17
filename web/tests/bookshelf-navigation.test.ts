@@ -15,20 +15,12 @@ describe('bookshelf navigation', () => {
     expect(getPaths(applicationRoutes)).toContain('/bookshelf');
   });
 
-  it('redirects legacy reader links to the book reader route', () => {
-    const legacyReaderRoute = applicationRoutes[0].children?.find(
-      (route) => route.path === '/workspace/reader/:novelId/:chapterId',
-    );
-    const redirect = legacyReaderRoute?.redirect;
-
-    expect(redirect).toBeTypeOf('function');
-    expect(
-      (redirect as (to: { params: Record<string, string> }) => string)({
-        params: { novelId: 'book name.epub', chapterId: 'first' },
-      }),
-    ).toBe('/books/book%20name.epub/read/first');
+  it('registers only the current reader route', () => {
     expect(getPaths(applicationRoutes)).toContain(
       '/books/:bookId/read/:chapterId?',
+    );
+    expect(getPaths(applicationRoutes)).not.toContain(
+      '/workspace/reader/:novelId/:chapterId',
     );
   });
 

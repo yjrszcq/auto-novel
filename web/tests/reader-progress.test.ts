@@ -6,7 +6,7 @@ import {
 } from '../src/pages/reader/core/ReaderProgress';
 
 describe('reader progress', () => {
-  it('restores a stable segment before any legacy pixel position', () => {
+  it('restores a stable segment position', () => {
     const segments = [
       { id: 'first', index: 0, original: '一' },
       { id: 'second', index: 1, original: '二' },
@@ -17,7 +17,6 @@ describe('reader progress', () => {
         bookId: 'book',
         chapterId: 'chapter',
         segmentId: 'second',
-        legacyScrollY: 999,
         updatedAt: 1,
       }),
     ).toMatchObject({ id: 'second' });
@@ -25,7 +24,6 @@ describe('reader progress', () => {
       resolveProgressSegment(segments, {
         bookId: 'book',
         chapterId: 'chapter',
-        legacyScrollY: 999,
         updatedAt: 1,
       }),
     ).toBeUndefined();

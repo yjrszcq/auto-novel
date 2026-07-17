@@ -1,6 +1,6 @@
 import { parseFile } from '@/util/file';
 
-import { EpubParserV1, injectEpubParagraphTranslations } from './EpubParser';
+import { injectEpubParagraphTranslations } from './EpubParser';
 import { collectEpubSourceTranslations } from './EpubTranslationExport';
 import { embedEpubDownloadMetadata } from './EpubDownloadMetadata';
 import type { LocalVolumeDao } from './LocalVolumeDao';
@@ -83,7 +83,6 @@ export const getTranslationFile = async (
       ?.removeAttribute('page-progression-direction');
 
     const nativeChapters = [];
-    const legacyChapterIds = new Set<string>();
     for (const tocItem of metadata.toc) {
       const chapter = await dao.getChapter(id, tocItem.chapterId);
       if (chapter === undefined) throw Error('章节不存在');
@@ -95,8 +94,6 @@ export const getTranslationFile = async (
             translations: zhLinesList,
           });
         }
-      } else {
-        legacyChapterIds.add(tocItem.chapterId);
       }
     }
     const sourceTranslations = collectEpubSourceTranslations(nativeChapters);
@@ -106,15 +103,6 @@ export const getTranslationFile = async (
       );
       if (translations?.some((paragraph) => paragraph.length > 0)) {
         injectEpubParagraphTranslations(item.doc, mode, translations);
-      }
-    }
-
-    for (const item of myFile.iterDoc()) {
-      if (legacyChapterIds.has(item.href)) {
-        const { zhLinesList } = await getZhLinesList(item.href);
-        if (zhLinesList.length > 0) {
-          EpubParserV1.injectTranslation(item.doc, mode, zhLinesList);
-        }
       }
     }
 

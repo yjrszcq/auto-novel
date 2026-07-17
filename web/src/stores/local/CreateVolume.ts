@@ -87,7 +87,6 @@ export const createVolume = async (
     })),
     navigation,
     sourceFormat: myFile.type,
-    contentVersion: myFile.type === 'epub' ? 2 : 1,
     glossaryId: uuidv4(),
     glossary: {},
     favoredId,

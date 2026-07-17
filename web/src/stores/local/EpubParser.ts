@@ -1,12 +1,3 @@
-interface EpubParser {
-  extractText: (doc: Document) => string[];
-  injectTranslation: (
-    doc: Document,
-    mode: 'zh' | 'jp-zh' | 'zh-jp',
-    zhLinesList: string[][],
-  ) => Document;
-}
-
 export const injectEpubParagraphTranslations = (
   doc: Document,
   mode: 'zh' | 'jp-zh' | 'zh-jp',
@@ -43,28 +34,4 @@ export const getEpubTextParagraphElements = (doc: Document) => {
   return Array.from(doc.body.getElementsByTagName('p')).filter(
     (element) => element.innerText.trim().length !== 0,
   );
-};
-
-export const EpubParserV1: EpubParser = {
-  extractText: (doc: Document) => {
-    return getEpubTextParagraphElements(doc).map(
-      (element) => element.innerText,
-    );
-  },
-  injectTranslation: (
-    doc: Document,
-    mode: 'zh' | 'jp-zh' | 'zh-jp',
-    zhLinesList: string[][],
-  ) => {
-    const paragraphCount = getEpubTextParagraphElements(doc).length;
-    return injectEpubParagraphTranslations(
-      doc,
-      mode,
-      Array.from({ length: paragraphCount }, (_, index) =>
-        zhLinesList.flatMap((lines) =>
-          lines[index] === undefined ? [] : [lines[index]],
-        ),
-      ),
-    );
-  },
 };

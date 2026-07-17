@@ -49,7 +49,6 @@ export interface ReaderProgress {
   segmentId?: string;
   segmentOffset?: number;
   scrollRatio?: number;
-  legacyScrollY?: number;
   mode?: Exclude<ReaderMode, 'ask'>;
   updatedAt: number;
 }

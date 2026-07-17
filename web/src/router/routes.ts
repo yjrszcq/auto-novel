@@ -7,11 +7,6 @@ export const applicationRoutes: RouteRecordRaw[] = [
     component: () => import('../pages/reader/ReaderLayout.vue'),
     children: [
       {
-        path: '/workspace/reader/:novelId/:chapterId',
-        redirect: (to) =>
-          `/books/${encodeURIComponent(String(to.params.novelId))}/read/${encodeURIComponent(String(to.params.chapterId))}`,
-      },
-      {
         path: '/books/:bookId/read/:chapterId?',
         components: {
           reader: () => import('../pages/reader/BookReader.vue'),

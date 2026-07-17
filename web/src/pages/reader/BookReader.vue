@@ -80,7 +80,6 @@ import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
-const migrationWarning = ref<string>();
 const result = shallowRef<ReaderPageLoadResult>();
 const initialSegmentId = ref<string>();
 const showSettings = ref(false);
@@ -639,18 +638,9 @@ const load = async () => {
     initialSegmentId.value = undefined;
     loading.value = true;
   }
-  migrationWarning.value = undefined;
   const repository = await repositoryPromise;
-  const migration = await repository.ensureNativeEpubMigration(bookId.value);
-  if (migration.status === 'failed') {
-    migrationWarning.value = migration.message;
-  }
-  const chapterId =
-    migration.status === 'migrated' && requestedChapterId.value !== undefined
-      ? migration.chapterMap[requestedChapterId.value]
-      : requestedChapterId.value;
   const controller = await controllerPromise;
-  const loaded = await controller.load(bookId.value, chapterId);
+  const loaded = await controller.load(bookId.value, requestedChapterId.value);
   if (
     loaded.kind === 'ready' &&
     requestedChapterId.value !== loaded.chapter.chapterId
@@ -1142,8 +1132,6 @@ const restoreProgress = async (
       top: Math.max(0, scrollable) * progress.scrollRatio,
       behavior: 'auto',
     });
-  } else if (progress.legacyScrollY !== undefined) {
-    window.scrollTo({ top: progress.legacyScrollY, behavior: 'auto' });
   }
 };
 
@@ -1448,9 +1436,6 @@ onBeforeUnmount(() => {
     </div>
 
     <section v-if="controlsVisible" class="book-reader__notices">
-      <n-alert v-if="migrationWarning !== undefined" type="warning">
-        {{ migrationWarning }}；现有书籍仍可继续阅读。
-      </n-alert>
       <template v-if="result?.kind === 'ready'">
         <n-alert v-if="readingMode !== renderedMode" type="info">
           本章尚无可用译文，已显示原文。

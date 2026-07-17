@@ -35,6 +35,8 @@ const entry = (
     glossaryId: 'glossary',
     glossary: {},
     favoredId: 'default',
+    sourceFormat: 'epub',
+    sourceBookMetadata: { title: id.replace(/\.[^.]+$/, '') },
   },
   state: {
     bookId: id,

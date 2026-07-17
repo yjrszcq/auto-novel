@@ -12,7 +12,6 @@ import type { TranslatorId } from '@/model/Translator';
 
 import { createVolume } from './CreateVolume';
 import { embedEpubDownloadMetadata } from './EpubDownloadMetadata';
-import { ensureNativeEpubMigration } from './EpubMigration';
 import { getTranslationFile } from './GetTranslationFile';
 import type { LocalVolumeDao } from './LocalVolumeDao';
 import { createLocalVolumeDao } from './LocalVolumeDao';
@@ -47,39 +46,7 @@ export const createLocalVolumeStore = async () => {
       return value;
     });
 
-  const getVolume = async (id: string) => {
-    const volume = await dao.getMetadata(id);
-    if (volume === undefined || volume.sourceBookMetadata !== undefined) {
-      return volume;
-    }
-    const fallback = {
-      title: id.replace(/\.[^.]+$/, ''),
-      authors: [],
-      languages: ['ja'],
-    };
-    let sourceBookMetadata = volume.bookMetadata ?? fallback;
-    if (volume.sourceFormat === 'epub' || id.toLowerCase().endsWith('.epub')) {
-      const stored = await dao.getFile(id);
-      if (stored !== undefined) {
-        try {
-          const parsed = await parseFile(stored.file, ['epub']);
-          if (parsed?.type === 'epub') {
-            sourceBookMetadata = parsed.getBookMetadata();
-          }
-        } catch {
-          // Keep old books readable when their original EPUB cannot be parsed.
-        }
-      }
-    }
-    return dao.updateMetadata(id, (current) => {
-      const { bookMetadata: legacySourceMetadata, ...rest } = current;
-      return {
-        ...rest,
-        sourceBookMetadata:
-          sourceBookMetadata ?? legacySourceMetadata ?? fallback,
-      };
-    });
-  };
+  const getVolume = dao.getMetadata;
 
   const updateBookMetadata = (
     id: string,
@@ -178,7 +145,6 @@ export const createLocalVolumeStore = async () => {
     updateBookPresentation,
     getOriginalDownloadFile,
     createVolume: bind(createVolume),
-    ensureNativeEpubMigration: bind(ensureNativeEpubMigration),
     deleteVolume,
     updateGlossary,
     updateReadAt,

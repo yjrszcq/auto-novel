@@ -37,7 +37,7 @@ export const restoreSourceMetadata = (
   form: BookMetadataFormValue,
   volume: LocalVolumeMetadata,
 ): BookMetadataFormValue => ({
-  ...formMetadata(volume.sourceBookMetadata ?? {}),
+  ...formMetadata(volume.sourceBookMetadata),
   originalDownload: form.originalDownload,
   translatedDownload: form.translatedDownload,
 });
