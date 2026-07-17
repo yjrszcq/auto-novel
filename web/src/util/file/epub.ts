@@ -67,12 +67,12 @@ const isImage = (item: EpubCoverManifestItem) =>
 
 export const resolveEpubCoverId = (
   items: Iterable<EpubCoverManifestItem>,
-  legacyCoverId?: string,
+  epub2CoverId?: string,
 ) => {
   const images = [...items].filter(isImage);
   return (
     images.find((item) => item.properties?.includes('cover-image'))?.id ??
-    images.find((item) => item.id === legacyCoverId)?.id ??
+    images.find((item) => item.id === epub2CoverId)?.id ??
     images.find((item) =>
       /(^|[._/-])cover([._/-]|$)|front[-_]?cover|titlepage/i.test(
         item.id + '/' + item.href,
@@ -147,7 +147,7 @@ export class Epub extends BaseFile {
   items = new Map<string, EpubItem>();
   itemrefs: EpubItemref[] = [];
   navItems: EpubNavigationItem[] = [];
-  private legacyCoverId: string | undefined;
+  private epub2CoverId: string | undefined;
 
   private resolve(root: string, rpath: string) {
     const rootUrl = new URL(root, 'file://book/');
@@ -185,7 +185,7 @@ export class Epub extends BaseFile {
     if (!spine) throw new Error('Package does not have spine');
 
     this.packageDoc = doc;
-    this.legacyCoverId =
+    this.epub2CoverId =
       Array.from(metadata.getElementsByTagName('meta'))
         .find((meta) => meta.getAttribute('name')?.toLowerCase() === 'cover')
         ?.getAttribute('content') ?? undefined;
@@ -274,7 +274,7 @@ export class Epub extends BaseFile {
         (navEl) =>
           navEl.getAttribute('epub:type') === 'toc' ||
           navEl.getAttribute('type') === 'toc',
-      ) ?? navEls.find((navEl) => navEl.id === 'toc'); // 为了兼容不标准的epub
+      ) ?? navEls.find((navEl) => navEl.id === 'toc'); // 保守支持缺少 epub:type 的目录
     const tocOlEl = tocNavEl?.querySelector(':scope > ol');
     if (!tocOlEl) throw new Error('Nav toc not exist');
     this.navItems = normalizeEpubNavigationItems(
@@ -328,9 +328,8 @@ export class Epub extends BaseFile {
   }
 
   private async parseFile(file: File) {
-    const { BlobReader, BlobWriter, ZipReader, TextWriter } = await import(
-      '@zip.js/zip.js'
-    );
+    const { BlobReader, BlobWriter, ZipReader, TextWriter } =
+      await import('@zip.js/zip.js');
     const reader = new ZipReader(new BlobReader(file));
     const entries = new Map(
       (await reader.getEntries()).map((obj) => [obj.filename, obj] as const),
@@ -349,7 +348,7 @@ export class Epub extends BaseFile {
 
     const readDoc = async (path: string) =>
       readDocWithType(path, 'application/xhtml+xml');
-    const readDocLegacy = async (path: string) =>
+    const readHtmlDoc = async (path: string) =>
       readDocWithType(path, 'text/html');
 
     const readBlob = async (path: string, type: string) => {
@@ -387,7 +386,7 @@ export class Epub extends BaseFile {
         (item as EpubItemDoc).doc = await readDoc(path);
       } else if (item.mediaType === 'text/html') {
         item.mediaType = 'application/xhtml+xml';
-        (item as EpubItemDoc).doc = await readDocLegacy(path);
+        (item as EpubItemDoc).doc = await readHtmlDoc(path);
       } else {
         (item as EpubItemBlob).blob = await readBlob(path, item.mediaType);
       }
@@ -405,9 +404,8 @@ export class Epub extends BaseFile {
   }
 
   static async extractCoverFromFile(file: File) {
-    const { BlobReader, BlobWriter, TextWriter, ZipReader } = await import(
-      '@zip.js/zip.js'
-    );
+    const { BlobReader, BlobWriter, TextWriter, ZipReader } =
+      await import('@zip.js/zip.js');
     const reader = new ZipReader(new BlobReader(file));
     try {
       const entries = new Map(
@@ -434,7 +432,7 @@ export class Epub extends BaseFile {
   }
 
   private getCoverItem() {
-    const coverId = resolveEpubCoverId(this.items.values(), this.legacyCoverId);
+    const coverId = resolveEpubCoverId(this.items.values(), this.epub2CoverId);
     const item = coverId === undefined ? undefined : this.items.get(coverId);
     return item && MIME.IMAGE.includes(item.mediaType) ? item : undefined;
   }
@@ -515,21 +513,21 @@ export class Epub extends BaseFile {
       };
       this.items.set(id, cover);
     }
-    this.legacyCoverId = cover.id;
+    this.epub2CoverId = cover.id;
     const metadata = getEl(this.packageDoc, 'metadata');
     if (!metadata) throw new Error('Package does not have metadata');
-    let legacyMeta = Array.from(metadata.getElementsByTagName('meta')).find(
+    let epub2CoverMeta = Array.from(metadata.getElementsByTagName('meta')).find(
       (element) => element.getAttribute('name')?.toLowerCase() === 'cover',
     );
-    if (!legacyMeta) {
-      legacyMeta = this.packageDoc.createElementNS(
+    if (!epub2CoverMeta) {
+      epub2CoverMeta = this.packageDoc.createElementNS(
         this.packageDoc.documentElement.namespaceURI,
         'meta',
       );
-      legacyMeta.setAttribute('name', 'cover');
-      metadata.appendChild(legacyMeta);
+      epub2CoverMeta.setAttribute('name', 'cover');
+      metadata.appendChild(epub2CoverMeta);
     }
-    legacyMeta.setAttribute('content', cover.id);
+    epub2CoverMeta.setAttribute('content', cover.id);
   }
 
   async clone() {
@@ -562,9 +560,8 @@ export class Epub extends BaseFile {
   async toBlob() {
     this.updatePackage();
 
-    const { BlobReader, BlobWriter, ZipWriter, TextReader } = await import(
-      '@zip.js/zip.js'
-    );
+    const { BlobReader, BlobWriter, ZipWriter, TextReader } =
+      await import('@zip.js/zip.js');
 
     const zipBlobWriter = new BlobWriter();
     const writer = new ZipWriter(zipBlobWriter);

@@ -24,7 +24,7 @@ describe('EPUB cover resolution', () => {
           image('illustration', 'images/illustration.jpg'),
           image('cover', 'images/front.jpg', ['cover-image']),
         ],
-        'legacy-cover',
+        'epub2-cover',
       ),
     ).toBe('cover');
   });
@@ -34,11 +34,11 @@ describe('EPUB cover resolution', () => {
       resolveEpubCoverId(
         [
           image('cover-art', 'images/cover.jpg'),
-          image('legacy-cover', 'images/front.jpg'),
+          image('epub2-cover', 'images/front.jpg'),
         ],
-        'legacy-cover',
+        'epub2-cover',
       ),
-    ).toBe('legacy-cover');
+    ).toBe('epub2-cover');
   });
 
   it('uses only a conservative image filename fallback', () => {

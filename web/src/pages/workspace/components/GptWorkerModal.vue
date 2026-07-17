@@ -166,7 +166,7 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
       <n-form-item-row path="endpoint" label="链接">
         <n-input
           v-model:value="formValue.endpoint"
-          placeholder="兼容OpenAI的API链接，默认使用deepseek"
+          placeholder="OpenAI 兼容 API 地址，默认使用 DeepSeek"
           :input-props="{ spellcheck: false }"
         />
       </n-form-item-row>
