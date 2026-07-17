@@ -342,7 +342,9 @@ onMounted(() => void load());
         class="book-details__hero"
         :style="{
           '--book-details-cover-shadow':
-            vars.bodyColor == '#fff' ? 'none' : '0 14px 28px rgb(0 0 0 / 24%)',
+            vars.bodyColor == '#fff'
+              ? '0 3px 6px rgb(0 0 0 / 14%)'
+              : '0 14px 28px rgb(0 0 0 / 24%)',
         }"
       >
         <div
