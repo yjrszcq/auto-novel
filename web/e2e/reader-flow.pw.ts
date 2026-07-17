@@ -99,6 +99,38 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.locator('.book-details__reading-progress')).toHaveText(
     '阅读进度 0%',
   );
+  await expect(page.locator('.book-details__hero-summary')).toContainText(
+    '书籍信息',
+  );
+  await expect(page.locator('.book-details__content .n-p')).toHaveCount(0);
+  await expect(page.locator('.book-details__info-dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: '书籍信息', exact: true }).click();
+  const bookInfoDialog = page.locator('.book-details__info-dialog');
+  await expect(bookInfoDialog).toBeVisible();
+  await expect(bookInfoDialog.locator('dt')).toHaveText([
+    '章节',
+    '本地文件',
+    '导入时间',
+    '上次阅读',
+    '累计阅读',
+    '书签',
+  ]);
+  await expect(bookInfoDialog.locator('dd')).toHaveText([
+    '2 章',
+    'reader-flow.txt',
+    '1970/1/1 08:00:00',
+    '—',
+    '0 分钟',
+    '0',
+  ]);
+  const bookInfoRowTops = await bookInfoDialog
+    .locator('.book-details__info-list > div')
+    .evaluateAll((rows) =>
+      rows.map((row) => Math.round(row.getBoundingClientRect().top)),
+    );
+  expect(new Set(bookInfoRowTops).size).toBe(bookInfoRowTops.length);
+  await bookInfoDialog.locator('.n-base-close').click();
+  await expect(bookInfoDialog).toHaveCount(0);
   await expect(page.getByText('翻译进度', { exact: true })).toHaveCount(0);
   await expect(page.getByText('语言', { exact: true })).toHaveCount(0);
   await expect(page.getByText('目录', { exact: true })).toHaveCount(0);

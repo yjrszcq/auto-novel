@@ -40,6 +40,7 @@ const bookTheme = ref<'global' | NonNullable<ReaderBookStyleOverride['theme']>>(
   'global',
 );
 const showCatalog = ref(false);
+const showBookInfo = ref(false);
 const entry = shallowRef<BookshelfEntry>();
 const chapters = ref<ReaderChapterSummary[]>([]);
 const progress = shallowRef<ReaderProgress>();
@@ -368,15 +369,14 @@ onMounted(() => void load());
               <n-h2 class="book-details__title" prefix="bar">
                 <b>{{ book.title }}</b>
               </n-h2>
-              <n-flex :size="[4, 4]" vertical>
-                <n-flex :wrap="false">
-                  <n-tag :bordered="false" size="small">章节</n-tag>
-                  <n-text>{{ book.chapterCount }} 章</n-text>
-                </n-flex>
-              </n-flex>
-              <n-text class="book-details__reading-progress" depth="3">
-                阅读进度 {{ Math.round(readingProgress) }}%
-              </n-text>
+              <div class="book-details__hero-summary">
+                <n-text class="book-details__reading-progress" depth="3">
+                  阅读进度 {{ Math.round(readingProgress) }}%
+                </n-text>
+                <n-button size="small" @click="showBookInfo = true">
+                  书籍信息
+                </n-button>
+              </div>
             </n-flex>
             <n-flex
               class="book-details__hero-shelf-actions"
@@ -417,14 +417,6 @@ onMounted(() => void load());
             返回书架
           </n-button>
         </div>
-
-        <n-p>本地文件：{{ book.id }}</n-p>
-        <n-p>
-          导入于 {{ formatDate(book.createdAt) }} · 上次阅读
-          {{ formatDate(progress?.updatedAt) }} · 累计阅读
-          {{ formatReadingDuration(readingStats?.totalReadingMs ?? 0) }} · 书签
-          {{ bookmarkCount }}
-        </n-p>
 
         <section-header
           class="book-details__preferences-header"
@@ -534,6 +526,44 @@ onMounted(() => void load());
           </n-list>
         </n-drawer-content>
       </n-drawer>
+
+      <n-modal v-model:show="showBookInfo">
+        <n-card
+          class="book-details__info-dialog"
+          closable
+          title="书籍信息"
+          @close="showBookInfo = false"
+        >
+          <dl class="book-details__info-list">
+            <div>
+              <dt>章节</dt>
+              <dd>{{ book.chapterCount }} 章</dd>
+            </div>
+            <div>
+              <dt>本地文件</dt>
+              <dd>{{ book.id }}</dd>
+            </div>
+            <div>
+              <dt>导入时间</dt>
+              <dd>{{ formatDate(book.createdAt) }}</dd>
+            </div>
+            <div>
+              <dt>上次阅读</dt>
+              <dd>{{ formatDate(progress?.updatedAt) }}</dd>
+            </div>
+            <div>
+              <dt>累计阅读</dt>
+              <dd>
+                {{ formatReadingDuration(readingStats?.totalReadingMs ?? 0) }}
+              </dd>
+            </div>
+            <div>
+              <dt>书签</dt>
+              <dd>{{ bookmarkCount }}</dd>
+            </div>
+          </dl>
+        </n-card>
+      </n-modal>
     </template>
   </main>
 </template>
@@ -618,6 +648,12 @@ onMounted(() => void load());
   font-size: clamp(18px, 2vw, 22px);
 }
 
+.book-details__hero-summary {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
 .book-details__content {
   padding-top: 12px;
 }
@@ -633,6 +669,31 @@ onMounted(() => void load());
 .book-details__reading-progress {
   flex: none;
   white-space: nowrap;
+}
+
+.book-details__info-dialog {
+  width: min(92vw, 520px);
+}
+
+.book-details__info-list {
+  display: grid;
+  margin: 0;
+  gap: 14px;
+}
+
+.book-details__info-list > div {
+  display: grid;
+  gap: 4px;
+}
+
+.book-details__info-list dt {
+  color: var(--n-text-color-3);
+}
+
+.book-details__info-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .book-details__return-to-shelf {
