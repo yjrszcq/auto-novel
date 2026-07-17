@@ -155,9 +155,21 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.getByRole('button', { name: '置顶书籍' })).toBeVisible();
   await expect(page.getByRole('button', { name: '移出书架' })).toBeVisible();
   await page.locator('.book-details__hero-content > .book-cover').hover();
-  await expect(
-    page.getByRole('button', { name: '移除自定义封面' }),
-  ).toBeVisible();
+  const removeCoverButton = page.getByRole('button', {
+    name: '移除自定义封面',
+  });
+  await expect(removeCoverButton).toBeVisible();
+  const removeCoverStyle = await removeCoverButton.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      clipPath: style.clipPath,
+      width: element.getBoundingClientRect().width,
+    };
+  });
+  expect(removeCoverStyle.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+  expect(removeCoverStyle.clipPath).toContain('polygon');
+  expect(removeCoverStyle.width).toBe(48);
   await page.getByRole('button', { name: '移除自定义封面' }).click();
   await expect(
     page.getByRole('button', { name: '移除自定义封面' }),

@@ -25,6 +25,7 @@ const isVisible = ref(false);
 let visibilityObserver: IntersectionObserver | undefined;
 const repositoryPromise = useLocalVolumeStore();
 const runtimeConfigStore = useRuntimeConfigStore();
+const vars = useThemeVars();
 const { defaultBookCoverImage, loaded, loading } =
   storeToRefs(runtimeConfigStore);
 
@@ -168,7 +169,12 @@ const shouldShowTextFallback = computed(
     ref="coverElement"
     class="book-cover"
     :aria-hidden="props.visualOnly || undefined"
-    :style="{ backgroundColor: color }"
+    :style="{
+      backgroundColor: color,
+      '--book-cover-remove-background': vars.primaryColor,
+      '--book-cover-remove-color':
+        vars.bodyColor == '#fff' ? '#fff' : '#3a2600',
+    }"
   >
     <button
       v-if="!props.visualOnly"
@@ -243,8 +249,8 @@ const shouldShowTextFallback = computed(
   height: 48px;
   padding: 0;
   border: 0;
-  color: #3a2600;
-  background: var(--n-warning-color);
+  color: var(--book-cover-remove-color);
+  background: var(--book-cover-remove-background);
   clip-path: polygon(100% 0, 0 0, 100% 100%);
   cursor: pointer;
   opacity: 0;
