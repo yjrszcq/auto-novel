@@ -747,6 +747,92 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   );
 });
 
+test('continues paging backward after loading an earlier long-chapter window', async ({
+  page,
+}) => {
+  const windowedBookId = 'windowed-reader.txt';
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/bookshelf');
+  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.evaluate(
+    async ({ bookId }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes', 4);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter'],
+        'readwrite',
+      );
+      transaction.objectStore('metadata').put({
+        id: bookId,
+        createAt: 1,
+        toc: [{ chapterId: '0' }, { chapterId: '1' }],
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+      });
+      const paragraphs = Array.from(
+        { length: 1_001 },
+        (_, index) => `第 ${index} 段 ${'窗口化长章节内容'.repeat(8)}`,
+      );
+      transaction.objectStore('chapter').put({
+        id: `${bookId}/0`,
+        volumeId: bookId,
+        paragraphs,
+        segmentIds: paragraphs.map((_, index) => `windowed-segment-${index}`),
+      });
+      transaction.objectStore('chapter').put({
+        id: `${bookId}/1`,
+        volumeId: bookId,
+        paragraphs: ['下一章'],
+        segmentIds: ['next-chapter-segment'],
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    { bookId: windowedBookId },
+  );
+
+  await page.goto(`/books/${windowedBookId}/read/1`);
+  const readerContent = page.locator('.book-reader__content');
+  await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
+  const bounds = await readerContent.boundingBox();
+  if (bounds === null) throw new Error('缺少长章节分页视口');
+  await readerContent.click({
+    position: { x: bounds.width * 0.1, y: bounds.height * 0.5 },
+  });
+  await expect(page).toHaveURL(/\/windowed-reader\.txt\/read\/0$/);
+  await expect(
+    readerContent.locator('[data-reader-segment-id="windowed-segment-761"]'),
+  ).toBeAttached();
+
+  await readerContent.evaluate((element) =>
+    element.scrollTo({ left: 0, behavior: 'auto' }),
+  );
+  await readerContent.click({
+    position: { x: bounds.width * 0.1, y: bounds.height * 0.5 },
+  });
+  await expect(
+    readerContent.locator('[data-reader-segment-id="windowed-segment-521"]'),
+  ).toBeAttached();
+  const previousWindowPage = await readerContent.evaluate(
+    (element) => element.scrollLeft,
+  );
+  expect(previousWindowPage).toBeGreaterThan(0);
+
+  await readerContent.click({
+    position: { x: bounds.width * 0.1, y: bounds.height * 0.5 },
+  });
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBeLessThan(previousWindowPage);
+});
+
 test('uses a configured default cover for a local book without one', async ({
   page,
 }) => {

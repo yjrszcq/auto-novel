@@ -287,6 +287,10 @@ const scrollReaderPage = async (delta: number) => {
   }
   if (turn.kind === 'segments') {
     const anchorPage = metrics.pageIndex;
+    const anchorSegmentId =
+      turn.direction === 'previous'
+        ? getActiveSegmentId('paginated')
+        : undefined;
     if (turn.direction === 'previous') {
       await readerSegments.value?.loadPreviousSegments();
     } else {
@@ -294,11 +298,14 @@ const scrollReaderPage = async (delta: number) => {
     }
     await nextTick();
     const expandedMetrics = getReaderPageMetrics(viewport);
+    const expandedAnchorPage = getSegmentPageIndex(viewport, anchorSegmentId);
     const pageIndex = Math.max(
       0,
       Math.min(
         expandedMetrics.pageCount - 1,
-        anchorPage + (turn.direction === 'previous' ? -1 : 1),
+        turn.direction === 'previous'
+          ? (expandedAnchorPage ?? anchorPage) - 1
+          : anchorPage + 1,
       ),
     );
     positionReaderPage(viewport, pageIndex);
@@ -669,6 +676,24 @@ const getActiveSegmentId = (flow = resolvedFlow.value) => {
   );
 };
 
+const getSegmentPageIndex = (
+  viewport: HTMLElement,
+  segmentId: string | undefined,
+) => {
+  if (segmentId === undefined) return undefined;
+  const element = getSegmentElements().find(
+    (item) => item.dataset.readerSegmentId === segmentId,
+  );
+  const rect = element?.getClientRects()[0];
+  if (rect === undefined) return undefined;
+  const viewportRect = viewport.getBoundingClientRect();
+  const absoluteLeft = viewport.scrollLeft + rect.left - viewportRect.left;
+  return Math.max(
+    0,
+    Math.floor((absoluteLeft + 1) / Math.max(1, viewport.clientWidth)),
+  );
+};
+
 const scrollToSegment = (segmentId: string | undefined) => {
   if (segmentId === undefined) {
     if (resolvedFlow.value === 'paginated') {
@@ -689,14 +714,9 @@ const scrollToSegment = (segmentId: string | undefined) => {
     if (resolvedFlow.value === 'paginated') {
       paginatedAnchorSegmentId = segmentId;
       const viewport = readerViewport.value;
-      const rect = element.getClientRects()[0];
-      if (viewport === null || rect === undefined) return;
-      const viewportRect = viewport.getBoundingClientRect();
-      const absoluteLeft = viewport.scrollLeft + rect.left - viewportRect.left;
-      const pageIndex = Math.max(
-        0,
-        Math.floor((absoluteLeft + 1) / Math.max(1, viewport.clientWidth)),
-      );
+      if (viewport === null) return;
+      const pageIndex = getSegmentPageIndex(viewport, segmentId);
+      if (pageIndex === undefined) return;
       positionReaderPage(viewport, pageIndex);
       return;
     }
@@ -741,7 +761,9 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
 
 const handleSegmentContentChange = async (anchorId?: string) => {
   await nextTick();
-  if (anchorId !== undefined) scrollToSegment(anchorId);
+  if (anchorId !== undefined && resolvedFlow.value !== 'paginated') {
+    scrollToSegment(anchorId);
+  }
   updateViewportMetrics();
 };
 
