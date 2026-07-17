@@ -2047,6 +2047,10 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__app-bar {
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+  }
+
+  .book-reader__app-bar--with-translation {
     grid-template-columns: 56px minmax(0, 1fr) 48px 56px;
   }
 

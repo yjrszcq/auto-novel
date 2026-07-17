@@ -675,6 +675,63 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await page.goto('/workspace/reader/reader-flow.txt/0');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect(page.getByText('安全文本', { exact: true })).toBeVisible();
+
+  await page.evaluate(
+    async ({ bookId }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes', 4);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction('chapter', 'readwrite');
+      const store = transaction.objectStore('chapter');
+      const chapter = await new Promise<Record<string, unknown>>(
+        (resolve, reject) => {
+          const request = store.get(`${bookId}/0`);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        },
+      );
+      store.put({
+        ...chapter,
+        gpt: {
+          glossaryId: 'gpt',
+          glossary: {},
+          paragraphs: ['安全译文', '完整译文', '长译文'],
+        },
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    { bookId },
+  );
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: '展开未翻译操作' }),
+  ).toHaveCount(0);
+  const completeChapterHeader = page.locator('.book-reader__app-bar');
+  const completeChapterMoreButton = completeChapterHeader.getByRole('button', {
+    name: '更多阅读工具',
+  });
+  const completeChapterHeaderBounds = await completeChapterHeader.boundingBox();
+  const completeChapterMoreBounds =
+    await completeChapterMoreButton.boundingBox();
+  if (
+    completeChapterHeaderBounds === null ||
+    completeChapterMoreBounds === null
+  ) {
+    throw new Error('缺少完整译文章节的手机顶栏');
+  }
+  expect(
+    Math.round(completeChapterMoreBounds.x + completeChapterMoreBounds.width),
+  ).toBe(
+    Math.round(
+      completeChapterHeaderBounds.x + completeChapterHeaderBounds.width,
+    ),
+  );
 });
 
 test('uses a configured default cover for a local book without one', async ({
