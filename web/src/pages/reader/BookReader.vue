@@ -1935,6 +1935,10 @@ onBeforeUnmount(() => {
   background: rgb(91 214 176 / 11%) !important;
 }
 
+.book-reader--sepia .book-reader__catalog-item--active {
+  color: #2faf86 !important;
+}
+
 .book-reader__catalog-summary {
   display: flex;
   align-items: center;

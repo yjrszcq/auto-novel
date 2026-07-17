@@ -603,6 +603,11 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
       .first()
       .locator('..'),
   ).toHaveCSS('background-color', 'rgb(228, 215, 184)');
+  await expect(
+    page
+      .getByRole('dialog', { name: '目录' })
+      .locator('.book-reader__catalog-item--active'),
+  ).toHaveCSS('color', 'rgb(47, 175, 134)');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await expect(
