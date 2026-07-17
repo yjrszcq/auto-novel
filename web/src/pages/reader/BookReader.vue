@@ -1633,7 +1633,7 @@ onBeforeUnmount(() => {
   --reader-chrome-background: #f1f1f1;
   --reader-chrome-border: rgb(0 0 0 / 12%);
   --reader-warning-background: #f7dfa0;
-  --reader-warning-border: #c98d13;
+  --reader-warning-border: #775710;
   --reader-warning-button-border: #775710;
   --reader-warning-text: #5b4300;
 }
@@ -1784,7 +1784,7 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   color: var(--reader-warning-text);
   background: var(--reader-warning-background);
-  border-color: var(--reader-warning-border);
+  border: 1px solid var(--reader-warning-border);
   box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
 }
 

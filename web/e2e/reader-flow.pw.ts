@@ -450,6 +450,11 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     'background-color',
     'rgb(247, 223, 160)',
   );
+  await expect(translationPopover).toHaveCSS(
+    'border-color',
+    'rgb(119, 87, 16)',
+  );
+  await expect(translationPopover).toHaveCSS('border-width', '1px');
   await expect(translationPopover.locator('strong')).toHaveCSS(
     'color',
     'rgb(91, 67, 0)',
