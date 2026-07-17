@@ -1,5 +1,5 @@
 import type { ReaderAnnotation } from '@/model/Reader';
-import { createId } from '@/util/id';
+import { createUuid } from '@/util/uuid';
 
 export interface CreateReaderAnnotationInput extends Omit<
   ReaderAnnotation,
@@ -10,7 +10,7 @@ export interface CreateReaderAnnotationInput extends Omit<
 }
 
 export const createReaderAnnotation = ({
-  id = createId(),
+  id = createUuid(),
   now = Date.now(),
   ...input
 }: CreateReaderAnnotationInput): ReaderAnnotation => ({

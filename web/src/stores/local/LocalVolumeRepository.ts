@@ -1,5 +1,5 @@
 import { parseFile } from '@/util/file';
-import { createId } from '@/util/id';
+import { createUuid } from '@/util/uuid';
 
 import type { Glossary } from '@/model/Glossary';
 import type {
@@ -29,7 +29,7 @@ export const createLocalVolumeStore = async () => {
   const updateGlossary = (id: string, glossary: Glossary) =>
     dao.updateMetadata(id, (value) => {
       value.glossary = glossary;
-      value.glossaryId = createId();
+      value.glossaryId = createUuid();
       return value;
     });
 

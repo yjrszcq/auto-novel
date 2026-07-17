@@ -1,5 +1,5 @@
 import type { ReaderBookmark } from '@/model/Reader';
-import { createId } from '@/util/id';
+import { createUuid } from '@/util/uuid';
 
 export interface CreateReaderBookmarkInput {
   bookId: string;
@@ -15,7 +15,7 @@ export const createReaderBookmark = ({
   chapterId,
   segmentId,
   label,
-  id = createId(),
+  id = createUuid(),
   now = Date.now(),
 }: CreateReaderBookmarkInput): ReaderBookmark => ({
   id,
