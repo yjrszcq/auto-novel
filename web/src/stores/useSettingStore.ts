@@ -33,6 +33,8 @@ export interface Setting {
   };
   homeDownloadMode: 'zh' | 'zh-jp' | 'jp-zh';
   homeDownloadPriority: 'gpt' | 'sakura';
+  embedMetadataInOriginalDownload: boolean;
+  embedMetadataInTranslatedDownload: boolean;
   //
   locale: 'zh-cn' | 'zh-tw';
   searchLocaleAware: boolean;
@@ -70,6 +72,8 @@ export namespace Setting {
     },
     homeDownloadMode: 'zh',
     homeDownloadPriority: 'gpt',
+    embedMetadataInOriginalDownload: false,
+    embedMetadataInTranslatedDownload: false,
     //
     locale: 'zh-cn',
     searchLocaleAware: false,
@@ -105,6 +109,12 @@ export namespace Setting {
     }
     if (setting.homeDownloadPriority === undefined) {
       setting.homeDownloadPriority = 'gpt';
+    }
+    if (setting.embedMetadataInOriginalDownload === undefined) {
+      setting.embedMetadataInOriginalDownload = false;
+    }
+    if (setting.embedMetadataInTranslatedDownload === undefined) {
+      setting.embedMetadataInTranslatedDownload = false;
     }
   };
 

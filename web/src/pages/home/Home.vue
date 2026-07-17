@@ -7,6 +7,7 @@ import {
 
 import bannerUrl from '@/image/banner.webp';
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
+import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
 import {
   LocalVolumeManagerUtil,
   useLocalVolumeManager,
@@ -272,17 +273,33 @@ const getTranslatedFile = async (
 ) => {
   const repo = await ensureLocalRepo();
   const { translationsMode } = setting.value.downloadFormat;
+  const volume = await repo.getVolume(volumeId);
+  if (volume === undefined) throw new Error('小说不存在');
   return repo.getTranslationFile({
     id: volumeId,
     mode: setting.value.homeDownloadMode,
     translationsMode,
     translations: [translator],
+    embedMetadata: shouldEmbedDownloadMetadata(
+      volume,
+      'translated',
+      setting.value.embedMetadataInTranslatedDownload,
+    ),
   });
 };
 
 const getRawFile = async (volumeId: string) => {
   const repo = await ensureLocalRepo();
-  return repo.getOriginalDownloadFile({ id: volumeId });
+  const volume = await repo.getVolume(volumeId);
+  if (volume === undefined) throw new Error('小说不存在');
+  return repo.getOriginalDownloadFile({
+    id: volumeId,
+    embedMetadata: shouldEmbedDownloadMetadata(
+      volume,
+      'original',
+      setting.value.embedMetadataInOriginalDownload,
+    ),
+  });
 };
 
 const downloadTranslatedVolume = async (

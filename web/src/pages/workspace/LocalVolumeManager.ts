@@ -1,4 +1,5 @@
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
+import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
 import { TranslateTaskDescriptor } from '@/model/Translator';
 import {
   useLocalVolumeStore,
@@ -67,11 +68,18 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       await Promise.all(
         ids.map(async (id: string) => {
           try {
+            const volume = await repo.getVolume(id);
+            if (volume === undefined) throw new Error('小说不存在');
             const { filename, blob } = await repo.getTranslationFile({
               id,
               mode,
               translationsMode,
               translations,
+              embedMetadata: shouldEmbedDownloadMetadata(
+                volume,
+                'translated',
+                setting.value.embedMetadataInTranslatedDownload,
+              ),
             });
             await writer.add(filename, new BlobReader(blob));
           } catch (error) {
@@ -101,7 +109,16 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       await Promise.all(
         ids.map(async (id: string) => {
           try {
-            const file = await repo.getOriginalDownloadFile({ id });
+            const volume = await repo.getVolume(id);
+            if (volume === undefined) throw new Error('小说不存在');
+            const file = await repo.getOriginalDownloadFile({
+              id,
+              embedMetadata: shouldEmbedDownloadMetadata(
+                volume,
+                'original',
+                setting.value.embedMetadataInOriginalDownload,
+              ),
+            });
             await writer.add(file.filename, new BlobReader(file.blob));
           } catch (error) {
             failed += 1;

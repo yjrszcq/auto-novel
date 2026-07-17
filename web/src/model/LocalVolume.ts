@@ -100,6 +100,20 @@ export const getLocalVolumeLanguages = (volume: LocalVolumeMetadata) => {
   return languages?.length ? languages : ['ja'];
 };
 
+export const shouldEmbedDownloadMetadata = (
+  volume: LocalVolumeMetadata,
+  kind: 'original' | 'translated',
+  globalDefault: boolean,
+) => {
+  const isEpub =
+    volume.sourceFormat === 'epub' || volume.id.toLowerCase().endsWith('.epub');
+  if (!isEpub) return false;
+  const policy = volume.downloadMetadataPreference?.[kind] ?? 'global';
+  if (policy === 'embed') return true;
+  if (policy === 'source') return false;
+  return globalDefault;
+};
+
 export interface LocalVolumeChapter {
   id: string;
   volumeId: string;

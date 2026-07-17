@@ -4,6 +4,7 @@ import { useKeyModifier } from '@vueuse/core';
 
 import { GenericNovelId } from '@/model/Common';
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
+import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
 import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { doAction } from '@/pages/util';
 import { Setting, useLocalVolumeStore, useSettingStore } from '@/stores';
@@ -85,11 +86,18 @@ const downloadVolume = async (volumeId: string) => {
   const repo = await useLocalVolumeStore();
 
   try {
+    const volume = await repo.getVolume(volumeId);
+    if (volume === undefined) throw new Error('小说不存在');
     const { filename, blob } = await repo.getTranslationFile({
       id: volumeId,
       mode,
       translationsMode: 'priority',
       translations: [props.type],
+      embedMetadata: shouldEmbedDownloadMetadata(
+        volume,
+        'translated',
+        setting.value.embedMetadataInTranslatedDownload,
+      ),
     });
     downloadFile(filename, blob);
   } catch (error) {

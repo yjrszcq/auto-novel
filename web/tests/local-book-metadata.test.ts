@@ -4,6 +4,7 @@ import {
   getLocalBookMetadata,
   getLocalVolumeLanguages,
   getLocalVolumeTitle,
+  shouldEmbedDownloadMetadata,
   type LocalVolumeMetadata,
 } from '../src/model/LocalVolume';
 
@@ -50,5 +51,20 @@ describe('local book metadata', () => {
     });
     expect(getLocalVolumeTitle(book)).toBe('fallback');
     expect(getLocalVolumeLanguages(book)).toEqual(['ja']);
+  });
+
+  it('resolves per-book download metadata preferences before global defaults', () => {
+    const book = volume();
+    book.sourceFormat = 'epub';
+    expect(shouldEmbedDownloadMetadata(book, 'original', true)).toBe(true);
+    book.downloadMetadataPreference = {
+      original: 'source',
+      translated: 'embed',
+    };
+    expect(shouldEmbedDownloadMetadata(book, 'original', true)).toBe(false);
+    expect(shouldEmbedDownloadMetadata(book, 'translated', false)).toBe(true);
+    book.sourceFormat = 'txt';
+    book.id = 'book.txt';
+    expect(shouldEmbedDownloadMetadata(book, 'translated', true)).toBe(false);
   });
 });

@@ -148,6 +148,23 @@ onMounted(() => {
       </n-list-item>
 
       <n-list-item>
+        <n-flex vertical>
+          <b>本地 EPUB 下载</b>
+          <n-checkbox v-model:checked="setting.embedMetadataInOriginalDownload">
+            原文下载时嵌入展示元信息
+          </n-checkbox>
+          <n-checkbox
+            v-model:checked="setting.embedMetadataInTranslatedDownload"
+          >
+            译文下载时嵌入展示元信息
+          </n-checkbox>
+          <n-text depth="3">
+            仅修改下载副本，浏览器中保存的原始 EPUB 不会改变。
+          </n-text>
+        </n-flex>
+      </n-list-item>
+
+      <n-list-item>
         <n-flex vertical :size="8">
           <b>阅读</b>
           <c-action-wrapper title="阅读偏好">

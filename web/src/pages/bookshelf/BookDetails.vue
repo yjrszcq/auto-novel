@@ -6,6 +6,7 @@ import type {
   ReaderProgress,
   ReaderReadingStats,
 } from '@/model/Reader';
+import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
 import { EditOutlined, InfoOutlined } from '@vicons/material';
 import { useKeyModifier } from '@vueuse/core';
 import { useRouter } from 'vue-router';
@@ -207,6 +208,11 @@ const downloadOriginal = async () => {
     const repository = await repositoryPromise;
     const file = await repository.getOriginalDownloadFile({
       id: bookId.value,
+      embedMetadata: shouldEmbedDownloadMetadata(
+        entry.value!.volume,
+        'original',
+        setting.value.embedMetadataInOriginalDownload,
+      ),
     });
     downloadFile(file.filename, file.blob);
     message.success('已开始下载原文');
@@ -231,6 +237,11 @@ const downloadTranslated = async () => {
       mode: setting.value.homeDownloadMode,
       translationsMode: setting.value.downloadFormat.translationsMode,
       translations,
+      embedMetadata: shouldEmbedDownloadMetadata(
+        entry.value!.volume,
+        'translated',
+        setting.value.embedMetadataInTranslatedDownload,
+      ),
     });
     downloadFile(filename, blob);
     message.success('已开始下载译文');
