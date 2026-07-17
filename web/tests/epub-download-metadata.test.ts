@@ -88,4 +88,26 @@ describe('EPUB download metadata', () => {
 
     expect(epub.setCover).not.toHaveBeenCalled();
   });
+
+  it('fails a linked-cover download without mutating saved metadata', async () => {
+    const savedVolume = volume('https://example.com/missing.jpg');
+    const before = structuredClone(savedVolume);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 404 }),
+    );
+    const epub = {
+      updateBookMetadata: vi.fn(),
+      setCover: vi.fn(),
+    };
+    const dao = { getReaderCover: vi.fn() };
+
+    await expect(
+      embedEpubDownloadMetadata(dao as never, epub as never, savedVolume),
+    ).rejects.toThrow('封面下载失败（HTTP 404）');
+    expect(savedVolume).toEqual(before);
+    expect(epub.setCover).not.toHaveBeenCalled();
+    expect(dao.getReaderCover).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
