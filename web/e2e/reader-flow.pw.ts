@@ -199,6 +199,35 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect(page.getByText(unsafeText, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__readerXss)).toBeUndefined();
+  const readerContent = page.locator('.book-reader__content');
+  const expectPaginatedVerticalAlignment = async (paddingTop: number) => {
+    await expect
+      .poll(() =>
+        readerContent.evaluate((element, expectedPaddingTop) => {
+          const viewport = element.getBoundingClientRect();
+          const layout = element
+            .querySelector<HTMLElement>('.reader-segment-layout')
+            ?.getBoundingClientRect();
+          const visibleTextTops = [...element.querySelectorAll('p')]
+            .flatMap((paragraph) => [...paragraph.getClientRects()])
+            .filter(
+              (rect) =>
+                rect.right > viewport.left && rect.left < viewport.right,
+            )
+            .map((rect) => rect.top - viewport.top);
+          const firstTextTop = Math.min(...visibleTextTops);
+          return (
+            Math.abs(window.scrollY) <= 1 &&
+            Math.abs(element.scrollTop) <= 1 &&
+            layout !== undefined &&
+            Math.abs(layout.top - viewport.top) <= 1 &&
+            Number.isFinite(firstTextTop) &&
+            Math.abs(firstTextTop - expectedPaddingTop) <= 2
+          );
+        }, paddingTop),
+      )
+      .toBe(true);
+  };
   const readerCatalogButton = page.getByRole('button', { name: '目录' });
   await readerCatalogButton.click();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
@@ -216,7 +245,6 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
 
   const readerTop = page.locator('.book-reader__app-bar');
   await expect(readerTop).toBeVisible();
-  const readerContent = page.locator('.book-reader__content');
   await page.setViewportSize({ width: 900, height: 800 });
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
   await expect(readerContent).not.toHaveClass(
@@ -423,6 +451,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     position: { x: readerBounds.width * 0.9, y: readerBounds.height * 0.5 },
   });
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+  await expectPaginatedVerticalAlignment(44);
   await readerContent.click({
     position: { x: readerBounds.width * 0.1, y: readerBounds.height * 0.5 },
   });
@@ -430,6 +459,28 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect
     .poll(() => readerContent.evaluate((element) => element.scrollLeft))
     .toBeGreaterThan(0);
+  await expectPaginatedVerticalAlignment(44);
+  for (let index = 0; index < 3; index += 1) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await readerContent.evaluate((element) =>
+        element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
+      );
+      await readerContent.click({
+        position: {
+          x: readerBounds.width * 0.9,
+          y: readerBounds.height * 0.5,
+        },
+      });
+      if (page.url().endsWith('/read/1')) break;
+    }
+    await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+    await expectPaginatedVerticalAlignment(44);
+    await readerContent.click({
+      position: { x: readerBounds.width * 0.1, y: readerBounds.height * 0.5 },
+    });
+    await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+    await expectPaginatedVerticalAlignment(44);
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(readerContent).toHaveClass(/book-reader__content--scrolled/);
   const translationToggle = page.getByRole('button', {
@@ -717,9 +768,34 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     },
   });
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+  await expectPaginatedVerticalAlignment(46);
   await expect
     .poll(() => readerContent.evaluate((element) => element.scrollLeft))
     .toBe(0);
+  for (let index = 0; index < 3; index += 1) {
+    await readerContent.click({
+      position: {
+        x: mobileReaderBounds.width * 0.1,
+        y: mobileReaderBounds.height * 0.5,
+      },
+    });
+    await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+    await expectPaginatedVerticalAlignment(46);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await readerContent.evaluate((element) =>
+        element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
+      );
+      await readerContent.click({
+        position: {
+          x: mobileReaderBounds.width * 0.9,
+          y: mobileReaderBounds.height * 0.5,
+        },
+      });
+      if (page.url().endsWith('/read/1')) break;
+    }
+    await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+    await expectPaginatedVerticalAlignment(46);
+  }
   const firstChapterTwoSegment = readerContent.locator(
     '[data-reader-segment-id="chapter-1-segment-0"]',
   );

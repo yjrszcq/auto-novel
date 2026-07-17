@@ -245,10 +245,16 @@ const updateViewportMetrics = () => {
     scrollable <= 0 ? 0 : Math.max(0, Math.min(1, window.scrollY / scrollable));
 };
 
+const resetPaginatedVerticalPosition = (viewport: HTMLElement) => {
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  viewport.scrollTop = 0;
+};
+
 const positionReaderPage = (viewport: HTMLElement, pageIndex: number) => {
   viewport.style.setProperty('--reader-page-tail-space', '0px');
   const targetLeft = Math.max(0, pageIndex) * viewport.clientWidth;
-  viewport.scrollTo({ left: targetLeft, behavior: 'auto' });
+  resetPaginatedVerticalPosition(viewport);
+  viewport.scrollTo({ top: 0, left: targetLeft, behavior: 'auto' });
   const missingTailSpace = Math.max(0, targetLeft - viewport.scrollLeft);
   if (missingTailSpace <= 0) return;
   viewport.style.setProperty(
@@ -260,7 +266,7 @@ const positionReaderPage = (viewport: HTMLElement, pageIndex: number) => {
     `${missingTailSpace}px`,
   );
   void viewport.scrollWidth;
-  viewport.scrollTo({ left: targetLeft, behavior: 'auto' });
+  viewport.scrollTo({ top: 0, left: targetLeft, behavior: 'auto' });
 };
 
 const scrollReaderPage = async (delta: number) => {
@@ -831,12 +837,21 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
     });
     return;
   }
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   if (resolvedFlow.value === 'paginated') {
     const viewport = readerViewport.value;
     if (viewport === null) return;
+    viewport.style.setProperty('--reader-page-tail-space', '0px');
+    resetPaginatedVerticalPosition(viewport);
+    void viewport.scrollWidth;
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
     const metrics = getReaderPageMetrics(viewport);
     positionReaderPage(viewport, edge === 'start' ? 0 : metrics.pageCount - 1);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+    resetPaginatedVerticalPosition(viewport);
     paginatedAnchorSegmentId = getActiveSegmentId('paginated');
     return;
   }
@@ -2039,6 +2054,7 @@ onBeforeUnmount(() => {
   padding: 0;
   overflow-x: hidden;
   overflow-y: hidden;
+  overflow-anchor: none;
   overscroll-behavior: contain;
   position: relative;
   scroll-behavior: auto;
