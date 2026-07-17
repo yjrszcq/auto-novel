@@ -15,13 +15,7 @@ describe('reader settings', () => {
     expect(defaultReaderSettings.flow).toBe('auto');
   });
 
-  it('migrates the legacy ask preference to translated', () => {
-    expect(normalizeReaderSettings({ defaultMode: 'ask' })).toMatchObject({
-      defaultMode: 'translated',
-    });
-  });
-
-  it('keeps compatible partial records and clamps unsafe values', () => {
+  it('normalizes partial records and clamps unsafe values', () => {
     expect(
       normalizeReaderSettings({
         id: 'default',

@@ -5,7 +5,7 @@ import type {
   ReaderSettingsRecord,
 } from '@/model/Reader';
 
-export type SelectableReaderMode = Exclude<ReaderMode, 'ask'>;
+export type SelectableReaderMode = ReaderMode;
 
 export const readerModes: SelectableReaderMode[] = [
   'translated',
@@ -15,7 +15,6 @@ export const readerModes: SelectableReaderMode[] = [
 ];
 
 export const readerModeLabels: Record<ReaderMode, string> = {
-  ask: '每次询问',
   translated: '中文',
   'translated-original': '中日对照',
   'original-translated': '日中对照',
@@ -49,7 +48,7 @@ export const getReaderModeLabel = (
 export const getAvailableReaderModes = (
   capabilities: BookReadingCapabilities,
 ): ReaderMode[] =>
-  capabilities.hasAnyTranslation ? ['ask', ...readerModes] : ['original'];
+  capabilities.hasAnyTranslation ? readerModes : ['original'];
 
 export const resolveReaderMode = ({
   temporaryMode,

@@ -26,7 +26,7 @@ const initFormValue = () => {
       concurrency: 1,
     };
   } else {
-    return { ...worker, concurrency: worker.concurrency ?? 1 };
+    return { ...worker };
   }
 };
 

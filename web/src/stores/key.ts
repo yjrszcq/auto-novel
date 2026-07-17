@@ -1,5 +1,5 @@
 export const LSKey = {
-  Setting: 'setting',
-  WorkspaceGpt: 'workspace-gpt',
-  WorkspaceSakura: 'workspace-sakura',
+  Setting: 'auto-novel:settings',
+  WorkspaceGpt: 'auto-novel:workspace:gpt',
+  WorkspaceSakura: 'auto-novel:workspace:sakura',
 } as const;

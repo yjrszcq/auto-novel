@@ -37,7 +37,7 @@ const progressFilterOptions = [
 ];
 
 const records = computed(() => {
-  const recordsAll = workspaceRef.value.uncompletedJobs;
+  const recordsAll = workspaceRef.value.jobRecords;
   if (progressFilter.value === 'finished') {
     return recordsAll.filter((it) => TranslateJob.isFinished(it));
   } else if (progressFilter.value === 'unfinished') {

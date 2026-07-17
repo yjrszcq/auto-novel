@@ -29,6 +29,5 @@ describe('bilingual reader layout', () => {
     for (const mode of translatedModes) {
       expect(resolveRenderedReaderMode(mode, untranslated)).toBe('original');
     }
-    expect(resolveRenderedReaderMode('ask', segments)).toBe('original');
   });
 });

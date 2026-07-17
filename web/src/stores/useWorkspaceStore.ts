@@ -3,7 +3,7 @@ import type {
   SakuraWorker,
   TranslateJobRecord,
 } from '@/model/Translator';
-import { TranslateJob, TranslateTaskDescriptor } from '@/model/Translator';
+import { TranslateJob } from '@/model/Translator';
 import { lazy, useLocalStorage } from '@/util';
 
 import { LSKey } from './key';
@@ -11,50 +11,21 @@ import { LSKey } from './key';
 interface Workspace<T> {
   workers: T[];
   jobs: TranslateJob[];
-  // 为了兼容性，仍使用 uncompletedJobs
-  uncompletedJobs: TranslateJobRecord[];
+  jobRecords: TranslateJobRecord[];
 }
-
-export const removeRemoteTasks = (workspace: {
-  jobs: TranslateJob[];
-  uncompletedJobs: TranslateJobRecord[];
-}) => {
-  workspace.jobs = workspace.jobs.filter((job) =>
-    TranslateTaskDescriptor.isLocal(job.task),
-  );
-  workspace.uncompletedJobs = workspace.uncompletedJobs.filter((job) =>
-    TranslateTaskDescriptor.isLocal(job.task),
-  );
-};
 
 const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
   id: string,
   workers: W[],
-  migrate?: (ref: Ref<Workspace<W>>) => void,
 ) => {
   const ref = useLocalStorage<Workspace<W>>(id, {
     workers,
     jobs: [],
-    uncompletedJobs: [],
+    jobRecords: [],
   });
 
-  const ensureConcurrency = (worker: W) => {
-    const typed = worker as W & { concurrency?: number };
-    if (typeof typed.concurrency !== 'number' || typed.concurrency < 1) {
-      typed.concurrency = 1;
-    }
-    return typed;
-  };
-
-  if (migrate) {
-    migrate(ref);
-  }
-  removeRemoteTasks(ref.value);
-
-  ref.value.workers.forEach(ensureConcurrency);
-
   const addWorker = (worker: W) => {
-    ref.value.workers.push(ensureConcurrency(worker));
+    ref.value.workers.push(worker);
   };
   const deleteWorker = (id: string) => {
     ref.value.workers = ref.value.workers.filter((w) => w.id !== id);
@@ -85,10 +56,10 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
 
   const addJobRecord = (job: TranslateJobRecord) => {
     deleteJobRecord(job);
-    ref.value.uncompletedJobs.push(job);
+    ref.value.jobRecords.push(job);
   };
   const deleteJobRecord = (job: TranslateJobRecord) => {
-    ref.value.uncompletedJobs = ref.value.uncompletedJobs.filter(
+    ref.value.jobRecords = ref.value.jobRecords.filter(
       (j) => j.task !== job.task,
     );
   };
@@ -102,7 +73,7 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
   };
   const retryAllJobRecords = () => {
     const newArray: TranslateJobRecord[] = [];
-    for (const job of ref.value.uncompletedJobs) {
+    for (const job of ref.value.jobRecords) {
       if (TranslateJob.isFinished(job)) {
         newArray.push(job);
       } else {
@@ -113,10 +84,10 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
         });
       }
     }
-    ref.value.uncompletedJobs = newArray;
+    ref.value.jobRecords = newArray;
   };
   const deleteAllJobRecords = () => {
-    ref.value.uncompletedJobs = [];
+    ref.value.jobRecords = [];
   };
 
   const save = () => {
@@ -144,38 +115,25 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
 };
 
 const createGptWorkspaceStore = () =>
-  createWorkspaceStore<GptWorker>(LSKey.WorkspaceGpt, [], (workspace) => {
-    // 2024-3-8
-    workspace.value.workers.forEach((it: GptWorker) => {
-      if (it.endpoint.length === 0) {
-        it.endpoint = 'https://api.openai.com';
-      }
-      if (it.model === undefined || it.model === 'gpt-3.5') {
-        it.model = 'gpt-3.5-turbo';
-      }
-    });
-  });
+  createWorkspaceStore<GptWorker>(LSKey.WorkspaceGpt, []);
 
 const createSakuraWorkspaceStore = () =>
-  createWorkspaceStore<SakuraWorker>(
-    LSKey.WorkspaceSakura,
-    [
-      { id: '本机', endpoint: 'http://127.0.0.1:8080', concurrency: 1 },
-      { id: 'AutoDL', endpoint: 'http://127.0.0.1:6006', concurrency: 1 },
-    ],
-    (workspace) => {
-      // 2024-5-14
-      workspace.value.workers.forEach((it: SakuraWorker) => {
-        if ('testContext' in it) {
-          it.testContext = undefined;
-        }
-        if ('testSegLength' in it && typeof it.testSegLength === 'number') {
-          it.segLength = it.testSegLength;
-          it.testSegLength = undefined;
-        }
-      });
+  createWorkspaceStore<SakuraWorker>(LSKey.WorkspaceSakura, [
+    {
+      id: '本机',
+      endpoint: 'http://127.0.0.1:8080',
+      segLength: 500,
+      prevSegLength: 500,
+      concurrency: 1,
     },
-  );
+    {
+      id: 'AutoDL',
+      endpoint: 'http://127.0.0.1:6006',
+      segLength: 500,
+      prevSegLength: 500,
+      concurrency: 1,
+    },
+  ]);
 
 export const useGptWorkspaceStore = lazy(createGptWorkspaceStore);
 export const useSakuraWorkspaceStore = lazy(createSakuraWorkspaceStore);

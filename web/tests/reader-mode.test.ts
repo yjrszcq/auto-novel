@@ -14,7 +14,7 @@ import {
 
 const settings: ReaderSettingsRecord = {
   id: 'default',
-  defaultMode: 'ask',
+  defaultMode: 'translated',
   translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
   updatedAt: 1,
 };
@@ -54,7 +54,7 @@ describe('reader open mode', () => {
       }),
     ).toBe('translated');
     expect(resolveReaderMode({ settings, capabilities: translated })).toBe(
-      'ask',
+      'translated',
     );
   });
 
@@ -75,7 +75,6 @@ describe('reader open mode', () => {
     expect(resolveReaderMode({ settings, capabilities })).toBe('original');
     expect(getAvailableReaderModes(capabilities)).toEqual(['original']);
     expect(getAvailableReaderModes(translated)).toEqual([
-      'ask',
       'translated',
       'translated-original',
       'original-translated',

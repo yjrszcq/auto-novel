@@ -61,14 +61,12 @@ const endpointPrefix = computed(() => {
   if (worker.translatorId === 'gpt') {
     return `${worker.model}[${worker.key.slice(-4)}]@`;
   } else {
-    return `${worker.segLength ?? 500}@`;
+    return `${worker.segLength}@`;
   }
 });
 
 const enableAutoMode = ref(true);
-const workerConcurrency = computed(() =>
-  Math.max(1, props.worker.concurrency ?? 1),
-);
+const workerConcurrency = computed(() => props.worker.concurrency);
 
 const translateTask = useTemplateRef('translateTask');
 const currentJob = ref<{

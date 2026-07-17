@@ -37,7 +37,7 @@ const initFormValue = (): {
       model: worker.model,
       endpoint: worker.endpoint,
       key: worker.key,
-      concurrency: worker.concurrency ?? 1,
+      concurrency: worker.concurrency,
     };
   }
 };

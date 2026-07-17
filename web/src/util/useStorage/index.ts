@@ -24,7 +24,8 @@ function useStorage<T extends object>(
     write: (v: T) => JSON.stringify(v),
   };
 
-  const data: StorageRef<T> = ref<T>(defaults) as StorageRef<T>;
+  const freshDefaults = () => serializer.read(serializer.write(defaults));
+  const data: StorageRef<T> = ref<T>(freshDefaults()) as StorageRef<T>;
   try {
     data.value = read();
   } catch (e) {
@@ -45,7 +46,7 @@ function useStorage<T extends object>(
 
       if (ev.key !== key) {
         // 当调用clear()时，ev.key为null
-        if (ev.key == null) data.value = defaults;
+        if (ev.key == null) data.value = freshDefaults();
         return;
       }
 
@@ -77,12 +78,9 @@ function useStorage<T extends object>(
     const rawValue = event ? event.newValue : storage.getItem(key);
 
     if (rawValue == null) {
-      return defaults;
-    } else if (!event) {
-      return { ...defaults, ...serializer.read(rawValue) };
-    } else {
-      return serializer.read(rawValue);
+      return freshDefaults();
     }
+    return serializer.read(rawValue);
   }
 
   data.save = () => write(data.value);

@@ -71,7 +71,7 @@ const onProgressUpdated = (
     processedJobs.value.delete(task);
     if (!state.abort) {
       job.finishAt = Date.now();
-      workspace.addJobRecord(job as TranslateJob);
+      workspace.addJobRecord(job);
       workspace.deleteJob(task);
     }
   } else {

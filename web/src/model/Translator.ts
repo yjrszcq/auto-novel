@@ -5,15 +5,15 @@ export interface GptWorker {
   endpoint: string;
   model: string;
   key: string;
-  concurrency?: number;
+  concurrency: number;
 }
 
 export interface SakuraWorker {
   id: string;
   endpoint: string;
-  segLength?: number;
-  prevSegLength?: number;
-  concurrency?: number;
+  segLength: number;
+  prevSegLength: number;
+  concurrency: number;
 }
 
 export interface TranslateJob {
@@ -79,22 +79,16 @@ export namespace TranslateTaskDescriptor {
   export const local = (volumeId: string, params: TranslateTaskParams) =>
     `local/${encodeURIComponent(volumeId)}` + buildTaskQueryString(params);
 
-  export const isLocal = (task: string) => {
-    const [taskString] = task.split('?');
-    return (
-      taskString.startsWith('local/') ||
-      taskString.startsWith('personal/') ||
-      taskString.startsWith('personal2/')
-    );
-  };
-
   export const parse = (task: string) => {
     const [taskString, queryString] = task.split('?');
 
-    if (!isLocal(task)) {
-      throw 'quit';
+    if (!taskString.startsWith('local/')) {
+      throw new Error(`Unsupported translation task: ${taskString}`);
     }
-    const [_, volumeId] = taskString.split('/');
+    const volumeId = taskString.slice('local/'.length);
+    if (volumeId.length === 0) {
+      throw new Error('Translation task is missing a volume id');
+    }
     const desc: TranslateTaskDesc = {
       type: 'local',
       volumeId: decodeURIComponent(volumeId),

@@ -1,5 +1,4 @@
 export type ReaderMode =
-  | 'ask'
   | 'translated'
   | 'translated-original'
   | 'original-translated'
@@ -19,12 +18,12 @@ export interface ReaderSettingsRecord {
   id: 'default';
   defaultMode: ReaderMode;
   translationPriority: ('gpt' | 'sakura' | 'youdao' | 'baidu')[];
-  fontSize?: number;
-  lineHeight?: number;
-  contentWidth?: number;
-  horizontalPadding?: number;
-  theme?: 'light' | 'dark' | 'sepia' | 'system';
-  flow?: ReaderFlow;
+  fontSize: number;
+  lineHeight: number;
+  contentWidth: number;
+  horizontalPadding: number;
+  theme: 'light' | 'dark' | 'sepia' | 'system';
+  flow: ReaderFlow;
   updatedAt: number;
 }
 
@@ -38,7 +37,7 @@ export interface ReaderBookStyleOverride {
 
 export interface ReaderBookPreference {
   bookId: string;
-  preferredMode?: Exclude<ReaderMode, 'ask'>;
+  preferredMode?: ReaderMode;
   style?: ReaderBookStyleOverride;
   updatedAt: number;
 }
@@ -49,7 +48,7 @@ export interface ReaderProgress {
   segmentId?: string;
   segmentOffset?: number;
   scrollRatio?: number;
-  mode?: Exclude<ReaderMode, 'ask'>;
+  mode?: ReaderMode;
   updatedAt: number;
 }
 

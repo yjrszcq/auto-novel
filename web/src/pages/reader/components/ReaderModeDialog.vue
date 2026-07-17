@@ -12,7 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:show': [value: boolean];
   'update:remember': [value: boolean];
-  select: [mode: Exclude<ReaderMode, 'ask'>];
+  select: [mode: ReaderMode];
 }>();
 </script>
 
@@ -25,7 +25,7 @@ const emit = defineEmits<{
     <n-card title="选择阅读方式" style="width: min(92vw, 420px)">
       <n-space vertical>
         <n-button
-          v-for="mode in props.modes.filter((item) => item !== 'ask')"
+          v-for="mode in props.modes"
           :key="mode"
           block
           @click="emit('select', mode)"

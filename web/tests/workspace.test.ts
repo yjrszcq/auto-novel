@@ -13,30 +13,40 @@ vi.hoisted(() => {
   );
 });
 
-import { removeRemoteTasks } from '../src/stores/useWorkspaceStore';
+import { TranslateTaskDescriptor } from '../src/model/Translator';
 
-describe('workspace migration', () => {
-  it('removes remote tasks while preserving local task formats', () => {
-    const workspace = {
-      jobs: [
-        { task: 'local/book-a', description: 'local', createAt: 1 },
-        { task: 'personal/book-b', description: 'legacy', createAt: 2 },
-        { task: 'web/kakuyomu/123', description: 'remote', createAt: 3 },
-      ],
-      uncompletedJobs: [
-        { task: 'personal2/book-c', description: 'legacy', createAt: 4 },
-        { task: 'wenku/123/456', description: 'remote', createAt: 5 },
-      ],
-    };
+describe('workspace task descriptors', () => {
+  it('round-trips the current local task format', () => {
+    const task = TranslateTaskDescriptor.local('book/a', {
+      level: 'all',
+      forceMetadata: true,
+      startIndex: 2,
+      endIndex: 8,
+    });
 
-    removeRemoteTasks(workspace);
+    expect(TranslateTaskDescriptor.parse(task)).toEqual({
+      desc: { type: 'local', volumeId: 'book/a' },
+      params: {
+        level: 'all',
+        forceMetadata: true,
+        startIndex: 2,
+        endIndex: 8,
+      },
+    });
+  });
 
-    expect(workspace.jobs.map((job) => job.task)).toEqual([
-      'local/book-a',
-      'personal/book-b',
-    ]);
-    expect(workspace.uncompletedJobs.map((job) => job.task)).toEqual([
-      'personal2/book-c',
-    ]);
+  it.each(['personal/book', 'personal2/book', 'web/source/book'])(
+    'rejects an obsolete task format: %s',
+    (task) => {
+      expect(() => TranslateTaskDescriptor.parse(task)).toThrow(
+        'Unsupported translation task',
+      );
+    },
+  );
+
+  it('rejects a task without a volume id', () => {
+    expect(() => TranslateTaskDescriptor.parse('local/')).toThrow(
+      'missing a volume id',
+    );
   });
 });

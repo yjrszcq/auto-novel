@@ -109,7 +109,7 @@ const availableModes = ref<ReaderMode[]>(['original']);
 let readingStartedAt: number | undefined;
 let readingBookId: string | undefined;
 let readingStatsWrite = Promise.resolve();
-let temporaryMode: Exclude<ReaderMode, 'ask'> | undefined;
+let temporaryMode: ReaderMode | undefined;
 const bookStyle = ref<ReaderBookStyleOverride>();
 const settings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 const message = useMessage();
@@ -727,10 +727,10 @@ const resolveMode = async (
     capabilities,
   });
   bookStyle.value = preference?.style;
-  showModePrompt.value = readingMode.value === 'ask';
+  showModePrompt.value = false;
 };
 
-const chooseMode = async (mode: Exclude<ReaderMode, 'ask'>) => {
+const chooseMode = async (mode: ReaderMode) => {
   const segmentId = getActiveSegmentId();
   temporaryMode = mode;
   readingMode.value = mode;
@@ -1241,8 +1241,8 @@ const chapterProgressPercent = computed(() => {
 
 const completedTranslationTasks = computed(() =>
   [
-    ...gptWorkspace.ref.value.uncompletedJobs,
-    ...sakuraWorkspace.ref.value.uncompletedJobs,
+    ...gptWorkspace.ref.value.jobRecords,
+    ...sakuraWorkspace.ref.value.jobRecords,
   ]
     .filter(TranslateJob.isFinished)
     .map((job) => job.task),
