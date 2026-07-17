@@ -452,7 +452,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   );
   await expect(translationPopover).toHaveCSS(
     'border-color',
-    'rgb(119, 87, 16)',
+    'rgb(240, 160, 32)',
   );
   await expect(translationPopover).toHaveCSS('border-width', '1px');
   await expect(translationPopover.locator('strong')).toHaveCSS(
@@ -468,7 +468,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     translationPopover
       .getByRole('button', { name: 'GPT 翻译本章' })
       .locator('.n-button__border'),
-  ).toHaveCSS('border-color', 'rgb(119, 87, 16)');
+  ).toHaveCSS('border-color', 'rgb(200, 135, 16)');
   const popoverTop = await translationPopover.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );
@@ -486,6 +486,19 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     position: { x: 4, y: translationLayerBounds.height - 4 },
   });
   await expect(page.getByRole('button', { name: 'GPT 翻译本章' })).toBeHidden();
+  await page.getByRole('button', { name: '夜晚', exact: true }).click();
+  await translationToggle.click();
+  await expect(translationPopover).toHaveCSS(
+    'border-color',
+    'rgb(158, 106, 39)',
+  );
+  await expect(
+    translationPopover
+      .getByRole('button', { name: 'GPT 翻译本章' })
+      .locator('.n-button__border'),
+  ).toHaveCSS('border-color', 'rgb(139, 120, 100)');
+  await page.getByRole('button', { name: '收起未翻译操作' }).click();
+  await page.getByRole('button', { name: '白天', exact: true }).click();
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(
     'height',
     '76px',

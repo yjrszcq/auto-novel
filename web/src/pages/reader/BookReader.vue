@@ -1633,8 +1633,8 @@ onBeforeUnmount(() => {
   --reader-chrome-background: #f1f1f1;
   --reader-chrome-border: rgb(0 0 0 / 12%);
   --reader-warning-background: #f7dfa0;
-  --reader-warning-border: #775710;
-  --reader-warning-button-border: #775710;
+  --reader-warning-border: #f0a020;
+  --reader-warning-button-border: #c88710;
   --reader-warning-text: #5b4300;
 }
 
@@ -1645,7 +1645,7 @@ onBeforeUnmount(() => {
   --reader-chrome-background: #242424;
   --reader-chrome-border: rgb(255 255 255 / 8%);
   --reader-warning-background: #302b27;
-  --reader-warning-border: #b77a2b;
+  --reader-warning-border: #9e6a27;
   --reader-warning-button-border: #8b7864;
   --reader-warning-text: #f2e8dc;
 }
@@ -2153,7 +2153,7 @@ onBeforeUnmount(() => {
     --reader-chrome-background: #242424;
     --reader-chrome-border: rgb(255 255 255 / 8%);
     --reader-warning-background: #302b27;
-    --reader-warning-border: #b77a2b;
+    --reader-warning-border: #9e6a27;
     --reader-warning-button-border: #8b7864;
     --reader-warning-text: #f2e8dc;
   }
