@@ -859,6 +859,13 @@ onMounted(() => void load());
     padding-top: 0;
   }
 
+  .book-details__title b {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
   .book-details__hero-shelf-actions {
     align-self: stretch;
     flex-wrap: wrap !important;

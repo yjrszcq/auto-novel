@@ -1139,6 +1139,9 @@ test('uses a configured default cover for a local book without one', async ({
       primaryActions: bounds('.book-details__primary-actions'),
       readingProgress: bounds('.book-details__reading-progress'),
       returnToShelf: bounds('.book-details__return-to-shelf'),
+      titleLineClamp: getComputedStyle(
+        document.querySelector<HTMLElement>('.book-details__title b')!,
+      ).webkitLineClamp,
       lastPreferenceSelect: bounds(
         '.book-details__setting-row:last-child .n-select',
       ),
@@ -1155,6 +1158,7 @@ test('uses a configured default cover for a local book without one', async ({
   expect(mobileLayout.readingProgress.top).toBeGreaterThan(
     mobileLayout.copy.top,
   );
+  expect(mobileLayout.titleLineClamp).toBe('3');
   expect(
     mobileLayout.primaryActions.top - mobileLayout.cover.bottom,
   ).toBeCloseTo(24, 0);
