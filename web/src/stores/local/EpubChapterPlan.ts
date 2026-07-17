@@ -3,7 +3,7 @@ import type { Epub } from '@/util/file/epub';
 
 import { getEpubTextParagraphElements } from './EpubParser';
 
-export interface EpubChapterSourceRange {
+interface EpubChapterSourceRange {
   href: string;
   start: number;
   end: number;
@@ -265,8 +265,4 @@ export const createEpubImportPlan = (epub: Epub): EpubImportPlan => {
     navigation: buildEpubNavigationPlan(epub.navItems, chapters),
     sources,
   };
-};
-
-export const createEpubChapterPlan = (epub: Epub) => {
-  return createEpubImportPlan(epub).chapters;
 };

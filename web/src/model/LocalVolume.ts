@@ -42,7 +42,7 @@ export interface LocalBookMetadata {
 
 export type DownloadMetadataPolicy = 'global' | 'embed' | 'source';
 
-export interface LocalDownloadMetadataPreference {
+interface LocalDownloadMetadataPreference {
   original: DownloadMetadataPolicy;
   translated: DownloadMetadataPolicy;
 }

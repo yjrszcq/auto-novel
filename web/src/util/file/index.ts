@@ -6,18 +6,6 @@ import { StandardNovel } from './standard';
 export { Epub, Srt, Txt, StandardNovel };
 export type ParsedFile = Epub | Srt | Txt;
 
-export const getFullContent = async (file: File) => {
-  if (file.name.endsWith('.txt') || file.name.endsWith('.srt')) {
-    const txt = await Txt.fromFile(file);
-    return txt.text;
-  } else if (file.name.endsWith('.epub')) {
-    const epub = await Epub.fromFile(file);
-    return await epub.getText();
-  } else {
-    return '';
-  }
-};
-
 export const parseFile = async (
   file: File,
   allowExts = ['epub', 'txt', 'srt'],

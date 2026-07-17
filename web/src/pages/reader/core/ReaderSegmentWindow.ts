@@ -3,7 +3,7 @@ export interface ReaderSegmentRange {
   end: number;
 }
 
-export const longChapterThreshold = 1_000;
+const longChapterThreshold = 1_000;
 export const readerSegmentBatchSize = 240;
 
 const clamp = (value: number, minimum: number, maximum: number) =>

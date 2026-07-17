@@ -45,7 +45,7 @@ export const BaiduApi = {
   translate,
 };
 
-export type TranslateChunk = {
+type TranslateChunk = {
   errno: number;
   errmsg: string;
   data:

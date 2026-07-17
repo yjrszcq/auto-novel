@@ -1,4 +1,4 @@
-export const workspaceMenuPaths = [
+const workspaceMenuPaths = [
   '/workspace/toolbox',
   '/workspace/gpt',
   '/workspace/sakura',

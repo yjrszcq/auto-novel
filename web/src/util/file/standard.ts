@@ -82,7 +82,7 @@ namespace NovelMark {
   };
 }
 
-export interface StandardChapter {
+interface StandardChapter {
   id: string;
   title: string;
   content: string;

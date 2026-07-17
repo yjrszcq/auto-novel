@@ -7,7 +7,7 @@ export interface CookieStatus {
   sameSite: 'no_restriction' | 'lax' | 'strict' | 'unspecified';
 }
 
-export type InfoResult = {
+type InfoResult = {
   version: string; // extension version
   homepage_url: string;
 };

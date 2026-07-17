@@ -28,7 +28,7 @@ export interface BookshelfDisplayBook extends BookshelfEntry {
 
 const translationKeys = ['gpt', 'sakura', 'youdao', 'baidu'] as const;
 
-export const getBookTitle = (volume: LocalVolumeMetadata) =>
+const getBookTitle = (volume: LocalVolumeMetadata) =>
   getLocalVolumeTitle(volume);
 
 const clamp = (value: number) => Math.max(0, Math.min(value, 100));
@@ -59,7 +59,7 @@ export const getTranslationProgress = (volume: LocalVolumeMetadata) => {
   return (translatedChapters / volume.toc.length) * 100;
 };
 
-export const toBookshelfDisplayBook = (
+const toBookshelfDisplayBook = (
   entry: BookshelfEntry,
 ): BookshelfDisplayBook => ({
   ...entry,

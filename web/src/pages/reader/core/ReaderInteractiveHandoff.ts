@@ -4,7 +4,7 @@ export interface ReaderSessionStorage {
   setItem(key: string, value: string): void;
 }
 
-export const readerInteractiveSelectionKey = 'interactive-reader-selection';
+const readerInteractiveSelectionKey = 'interactive-reader-selection';
 
 export const storeReaderInteractiveSelection = (
   storage: ReaderSessionStorage,

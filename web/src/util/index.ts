@@ -92,37 +92,6 @@ export const releaseKeepAlive = () => {
   }
 };
 
-type Context<T> = {
-  finished: number;
-  promises: Promise<T>[];
-};
-
-export const parallelExec = async <T>(
-  fns: (() => Promise<T>)[],
-  concurrent: number,
-  beforeExec: (context: Context<T>) => void,
-) => {
-  const context: Context<T> = {
-    finished: 0,
-    promises: [],
-  };
-  for (const fn of fns) {
-    const p = fn().finally(() => {
-      context.promises.splice(context.promises.indexOf(p), 1);
-      context.finished += 1;
-    });
-    context.promises.push(p);
-    if (context.promises.length === concurrent) {
-      beforeExec(context);
-      await Promise.race([...context.promises.values()]);
-    }
-  }
-  while (context.promises.length > 0) {
-    beforeExec(context);
-    await Promise.race([...context.promises.values()]);
-  }
-};
-
 export namespace RegexUtil {
   const englishChars = /[a-z]|[A-Z]/;
   export const hasEnglishChars = (str: string) => /[\u4E00-\u9FAF]/.test(str);
