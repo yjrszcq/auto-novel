@@ -234,7 +234,7 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     page.locator('.book-details__title .book-details__edit-button'),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: '编辑书籍信息', exact: true }),
+    page.getByRole('button', { name: '编辑书籍展示信息', exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText('总计 2 / GPT 0 / Sakura 0', { exact: true }),
@@ -304,60 +304,20 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(page.locator('.book-details__hero-shelf-actions')).toBeVisible();
   await expect(page.getByRole('button', { name: '置顶书籍' })).toBeVisible();
   await expect(page.getByRole('button', { name: '移出书架' })).toBeVisible();
-  await page.locator('.book-details__hero-content > .book-cover').hover();
-  const removeCoverButton = page.getByRole('button', {
-    name: '移除自定义封面',
-  });
-  await expect(removeCoverButton).toBeVisible();
-  const removeCoverStyle = await removeCoverButton.evaluate((element) => {
-    const style = getComputedStyle(element);
-    return {
-      backgroundColor: style.backgroundColor,
-      clipPath: style.clipPath,
-      width: element.getBoundingClientRect().width,
-    };
-  });
-  expect(removeCoverStyle.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-  expect(removeCoverStyle.clipPath).toContain('polygon');
-  expect(removeCoverStyle.width).toBe(48);
-  await page.getByRole('button', { name: '移除自定义封面' }).click();
+  await page
+    .getByRole('button', { name: '编辑书籍展示信息', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/edit$/);
+  const coverField = page.locator('.metadata-edit__cover-field');
   await expect(
-    page.getByRole('button', { name: '移除自定义封面' }),
-  ).toHaveCount(0);
-  await page.evaluate(async (bookId) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 4);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
-    });
-    const transaction = database.transaction('reader-cover', 'readwrite');
-    transaction.objectStore('reader-cover').put({
-      bookId,
-      blob: new Blob(['mobile custom cover'], { type: 'image/png' }),
-      source: 'custom',
-      updatedAt: 2,
-    });
-    await new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-    database.close();
-  }, bookId);
-  await page.reload();
-  const selectCoverButton = page.getByRole('button', {
-    name: '选择本地封面',
-  });
+    coverField.getByRole('button', { name: '移除', exact: true }),
+  ).toBeVisible();
+  await coverField.getByRole('button', { name: '移除', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: '移除自定义封面' }),
-  ).toHaveCount(1);
-  await selectCoverButton.dispatchEvent('pointerdown', {
-    pointerType: 'touch',
-  });
-  await page.waitForTimeout(1050);
-  await selectCoverButton.dispatchEvent('pointerup', { pointerType: 'touch' });
-  await expect(
-    page.getByRole('button', { name: '移除自定义封面' }),
-  ).toHaveCount(0);
+    coverField.getByRole('button', { name: '上传', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
   await page.getByRole('button', { name: '打开目录', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '目录', exact: true }),
@@ -413,7 +373,10 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await page.getByRole('button', { name: '从本地书架添加' }).first().click();
   await expect(page.getByText('本地小说', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '下载' })).not.toBeVisible();
-  await page.getByRole('button', { name: '加入书架' }).click();
+  await page
+    .getByRole('listitem')
+    .getByRole('button', { name: '加入书架' })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'reader-flow' }),
   ).toBeVisible();
