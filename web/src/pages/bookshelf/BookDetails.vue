@@ -338,7 +338,13 @@ onMounted(() => void load());
     </div>
 
     <template v-else-if="book !== undefined && entry !== undefined">
-      <section class="book-details__hero">
+      <section
+        class="book-details__hero"
+        :style="{
+          '--book-details-cover-shadow':
+            vars.bodyColor == '#fff' ? 'none' : '0 14px 28px rgb(0 0 0 / 24%)',
+        }"
+      >
         <div
           class="book-details__backdrop"
           aria-hidden="true"
@@ -635,7 +641,7 @@ onMounted(() => void load());
   align-self: flex-start;
   flex: none;
   border-radius: 2px;
-  box-shadow: 0 14px 28px rgb(0 0 0 / 24%);
+  box-shadow: var(--book-details-cover-shadow);
 }
 
 .book-details__hero-side {
