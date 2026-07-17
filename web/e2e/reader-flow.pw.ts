@@ -174,6 +174,40 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(
     page.getByRole('button', { name: '移除自定义封面' }),
   ).toHaveCount(0);
+  await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 4);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction('reader-cover', 'readwrite');
+    transaction.objectStore('reader-cover').put({
+      bookId,
+      blob: new Blob(['mobile custom cover'], { type: 'image/png' }),
+      source: 'custom',
+      updatedAt: 2,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, bookId);
+  await page.reload();
+  const selectCoverButton = page.getByRole('button', {
+    name: '选择本地封面',
+  });
+  await expect(
+    page.getByRole('button', { name: '移除自定义封面' }),
+  ).toHaveCount(1);
+  await selectCoverButton.dispatchEvent('pointerdown', {
+    pointerType: 'touch',
+  });
+  await page.waitForTimeout(1050);
+  await selectCoverButton.dispatchEvent('pointerup', { pointerType: 'touch' });
+  await expect(
+    page.getByRole('button', { name: '移除自定义封面' }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: '打开目录', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '目录', exact: true }),

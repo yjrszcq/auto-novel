@@ -28,6 +28,34 @@ const runtimeConfigStore = useRuntimeConfigStore();
 const vars = useThemeVars();
 const { defaultBookCoverImage, loaded, loading } =
   storeToRefs(runtimeConfigStore);
+const longPressDuration = 1000;
+let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+let suppressSelectUntil = 0;
+
+const cancelLongPress = () => {
+  if (longPressTimer !== undefined) {
+    clearTimeout(longPressTimer);
+    longPressTimer = undefined;
+  }
+};
+
+const startLongPress = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch' || !canRemoveCustomCover.value) {
+    return;
+  }
+  cancelLongPress();
+  longPressTimer = setTimeout(() => {
+    longPressTimer = undefined;
+    suppressSelectUntil = Date.now() + 500;
+    remove();
+  }, longPressDuration);
+};
+
+const preventTouchContextMenu = (event: MouseEvent) => {
+  if (longPressTimer !== undefined || Date.now() < suppressSelectUntil) {
+    event.preventDefault();
+  }
+};
 
 const clearCoverUrl = () => {
   if (coverUrl.value !== undefined) {
@@ -121,11 +149,16 @@ watch(
 );
 onMounted(observeCover);
 onBeforeUnmount(() => {
+  cancelLongPress();
   visibilityObserver?.disconnect();
   clearCoverUrl();
 });
 
 const select = () => {
+  if (Date.now() < suppressSelectUntil) {
+    suppressSelectUntil = 0;
+    return;
+  }
   if (!props.visualOnly) {
     emit('select');
   }
@@ -181,7 +214,12 @@ const shouldShowTextFallback = computed(
       class="book-cover__select"
       type="button"
       :aria-label="ariaLabel"
+      @contextmenu="preventTouchContextMenu"
       @click="select"
+      @pointercancel="cancelLongPress"
+      @pointerdown="startLongPress"
+      @pointerleave="cancelLongPress"
+      @pointerup="cancelLongPress"
     />
     <button
       v-if="canRemoveCustomCover"
@@ -306,10 +344,9 @@ const shouldShowTextFallback = computed(
   -webkit-line-clamp: 2;
 }
 
-@media (hover: none) {
+@media (hover: none) and (pointer: coarse) {
   .book-cover__remove {
-    opacity: 1;
-    transform: none;
+    display: none;
   }
 }
 </style>
