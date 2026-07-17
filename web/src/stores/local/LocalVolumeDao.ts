@@ -167,6 +167,32 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     return value;
   };
 
+  const updateBookPresentation = async ({
+    id,
+    bookMetadata,
+    downloadMetadataPreference,
+    cover,
+  }: Pick<
+    LocalVolumeMetadata,
+    'id' | 'bookMetadata' | 'downloadMetadataPreference'
+  > & {
+    cover?: ReaderCover | null;
+  }) => {
+    const tx = db.transaction(['metadata', 'reader-cover'], 'readwrite');
+    const metadataStore = tx.objectStore('metadata');
+    const coverStore = tx.objectStore('reader-cover');
+    const value = await metadataStore.get(id);
+    if (value === undefined) throw new Error('小说不存在');
+    await metadataStore.put({
+      ...value,
+      bookMetadata,
+      downloadMetadataPreference,
+    });
+    if (cover === null) await coverStore.delete(id);
+    else if (cover !== undefined) await coverStore.put(cover);
+    await tx.done;
+  };
+
   // File
   const getFile = (id: string) => db.get('file', id);
   const deleteFile = (id: string) => db.delete('file', id);
@@ -382,6 +408,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     deleteMetadata,
     createMetadata,
     updateMetadata,
+    updateBookPresentation,
     //
     getFile,
     deleteFile,

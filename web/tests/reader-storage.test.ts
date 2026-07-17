@@ -12,6 +12,58 @@ afterEach(async () => {
 });
 
 describe('reader storage migration', () => {
+  it('saves presentation metadata and its selected cover atomically', async () => {
+    const dao = await createLocalVolumeDao(databaseName);
+    await dao.createMetadata({
+      id: 'book',
+      createAt: 1,
+      toc: [],
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+    });
+    const cover = new Blob(['custom-cover'], { type: 'image/png' });
+
+    await dao.updateBookPresentation({
+      id: 'book',
+      bookMetadata: { title: '展示标题', coverUrl: '' },
+      downloadMetadataPreference: {
+        original: 'source',
+        translated: 'embed',
+      },
+      cover: {
+        bookId: 'book',
+        blob: cover,
+        source: 'custom',
+        updatedAt: 2,
+      },
+    });
+
+    expect(await dao.getMetadata('book')).toMatchObject({
+      bookMetadata: { title: '展示标题', coverUrl: '' },
+    });
+    expect(await dao.getReaderCover('book')).toMatchObject({
+      bookId: 'book',
+      source: 'custom',
+    });
+
+    await dao.updateBookPresentation({
+      id: 'book',
+      bookMetadata: {
+        title: '链接封面',
+        coverUrl: 'https://example.com/cover.jpg',
+      },
+      downloadMetadataPreference: {
+        original: 'source',
+        translated: 'embed',
+      },
+      cover: null,
+    });
+
+    expect(await dao.getReaderCover('book')).toBeUndefined();
+    dao.close();
+  });
+
   it('adds stable segment IDs and removes reader records with the volume', async () => {
     const legacy = await openDB(databaseName, 2, {
       upgrade(db) {

@@ -24,7 +24,17 @@ const loading = ref(true);
 const saving = ref(false);
 const error = ref<string>();
 const volume = shallowRef<LocalVolumeMetadata>();
-const hasCustomCover = ref(false);
+const coverInput = ref<HTMLInputElement>();
+const coverMode = ref<'none' | 'link' | 'upload'>('none');
+const coverUrlInput = ref('');
+const coverPreviewUrl = ref<string | null>(null);
+const coverMutation = shallowRef<
+  | { bookId: string; blob: Blob; source: 'custom'; updatedAt: number }
+  | null
+  | undefined
+>();
+let storedCustomCover: Blob | undefined;
+let coverObjectUrl: string | undefined;
 const form = reactive<BookMetadataFormValue>({
   title: '',
   authors: [],
@@ -53,6 +63,41 @@ const downloadPolicyOptions = [
 
 const assignForm = (value: BookMetadataFormValue) => Object.assign(form, value);
 
+const clearCoverObjectUrl = () => {
+  if (coverObjectUrl !== undefined) URL.revokeObjectURL(coverObjectUrl);
+  coverObjectUrl = undefined;
+};
+
+const previewUploadedCover = (blob: Blob) => {
+  clearCoverObjectUrl();
+  coverObjectUrl = URL.createObjectURL(blob);
+  coverPreviewUrl.value = coverObjectUrl;
+};
+
+const useUploadedCover = (blob: Blob, persist: boolean) => {
+  coverMode.value = 'upload';
+  coverUrlInput.value = '';
+  form.coverUrl = '';
+  previewUploadedCover(blob);
+  coverMutation.value = persist
+    ? {
+        bookId: bookId.value,
+        blob,
+        source: 'custom',
+        updatedAt: Date.now(),
+      }
+    : undefined;
+};
+
+const useSourceCover = (deleteStoredCustom: boolean) => {
+  clearCoverObjectUrl();
+  coverMode.value = 'none';
+  coverUrlInput.value = '';
+  form.coverUrl = '';
+  coverPreviewUrl.value = null;
+  coverMutation.value = deleteStoredCustom ? null : undefined;
+};
+
 const load = async () => {
   loading.value = true;
   error.value = undefined;
@@ -64,8 +109,19 @@ const load = async () => {
     ]);
     if (loadedVolume === undefined) throw new Error('书籍不存在');
     volume.value = loadedVolume;
-    hasCustomCover.value = cover?.source === 'custom';
-    assignForm(createBookMetadataForm(loadedVolume));
+    const initialForm = createBookMetadataForm(loadedVolume);
+    assignForm(initialForm);
+    storedCustomCover = cover?.source === 'custom' ? cover.blob : undefined;
+    coverUrlInput.value = initialForm.coverUrl.trim();
+    if (coverUrlInput.value.length > 0) {
+      coverMode.value = 'link';
+      coverPreviewUrl.value = coverUrlInput.value;
+      coverMutation.value = storedCustomCover === undefined ? undefined : null;
+    } else if (storedCustomCover !== undefined) {
+      useUploadedCover(storedCustomCover, false);
+    } else {
+      useSourceCover(false);
+    }
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '无法加载书籍信息';
   } finally {
@@ -79,7 +135,67 @@ const returnToDetails = () =>
 const restore = () => {
   if (volume.value === undefined) return;
   assignForm(restoreSourceMetadata(form, volume.value));
+  if (storedCustomCover !== undefined)
+    useUploadedCover(storedCustomCover, false);
+  else useSourceCover(false);
   message.info('已恢复原文件元信息，提交后生效');
+};
+
+const updateCoverUrlInput = (value: string) => {
+  coverUrlInput.value = value;
+  if (coverMode.value === 'link' && value.trim().length === 0) {
+    useSourceCover(storedCustomCover !== undefined);
+  }
+};
+
+const applyCoverUrl = () => {
+  const value = coverUrlInput.value.trim();
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+  } catch {
+    message.warning('请输入有效的 HTTP 或 HTTPS 图片链接');
+    return;
+  }
+  clearCoverObjectUrl();
+  coverMode.value = 'link';
+  coverUrlInput.value = value;
+  form.coverUrl = value;
+  coverPreviewUrl.value = value;
+  coverMutation.value = storedCustomCover === undefined ? undefined : null;
+};
+
+const selectCover = () => coverInput.value?.click();
+
+const uploadCover = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (file === undefined) return;
+  if (!file.type.startsWith('image/')) {
+    message.warning('请选择图片文件');
+    return;
+  }
+  useUploadedCover(file, true);
+};
+
+const removeCover = () => useSourceCover(storedCustomCover !== undefined);
+
+const coverActionLabel = computed(() => {
+  if (coverMode.value === 'upload') return '移除';
+  if (
+    coverMode.value === 'link' &&
+    coverUrlInput.value.trim() === form.coverUrl.trim()
+  ) {
+    return '移除';
+  }
+  return coverUrlInput.value.trim().length > 0 ? '应用' : '上传';
+});
+
+const handleCoverAction = () => {
+  if (coverActionLabel.value === '移除') removeCover();
+  else if (coverActionLabel.value === '应用') applyCoverUrl();
+  else selectCover();
 };
 
 const createLanguage = (label: string) => {
@@ -97,6 +213,13 @@ const submit = async () => {
     message.warning('语言列表中包含无效标签');
     return;
   }
+  if (
+    coverMode.value !== 'upload' &&
+    coverUrlInput.value.trim() !== form.coverUrl.trim()
+  ) {
+    message.warning('请先应用封面链接');
+    return;
+  }
   saving.value = true;
   try {
     const repository = await repositoryPromise;
@@ -108,6 +231,7 @@ const submit = async () => {
             translated: form.translatedDownload,
           }
         : undefined,
+      cover: coverMutation.value,
     });
     message.success('书籍信息已保存');
     returnToDetails();
@@ -119,6 +243,7 @@ const submit = async () => {
 };
 
 onMounted(() => void load());
+onBeforeUnmount(clearCoverObjectUrl);
 </script>
 
 <template>
@@ -153,6 +278,7 @@ onMounted(() => void load());
           <aside class="metadata-edit__cover">
             <BookCover
               :book-id="bookId"
+              :preview-url="coverPreviewUrl"
               :title="form.title || bookId"
               visual-only
             />
@@ -183,19 +309,32 @@ onMounted(() => void load());
                 placeholder="原文件未提供简介"
               />
             </n-form-item>
-            <n-form-item label="封面链接">
-              <div class="metadata-edit__field-stack">
+            <n-form-item label="封面">
+              <div class="metadata-edit__cover-field">
                 <n-input
-                  v-model:value="form.coverUrl"
+                  :disabled="coverMode === 'upload'"
+                  :placeholder="
+                    coverMode === 'upload'
+                      ? '已使用上传封面'
+                      : 'https://example.com/cover.jpg'
+                  "
+                  :value="coverUrlInput"
                   clearable
-                  placeholder="https://example.com/cover.jpg"
+                  @update:value="updateCoverUrlInput"
                 />
-                <n-alert v-if="hasCustomCover" type="warning">
-                  已设置本地自定义封面。封面链接为空时继续使用该封面。
-                </n-alert>
-                <n-text v-if="form.coverUrl.trim()" depth="3">
-                  封面链接会优先用于页面展示；启用下载嵌入时也优先嵌入该链接图片。
-                </n-text>
+                <n-button
+                  class="metadata-edit__cover-action"
+                  @click="handleCoverAction"
+                >
+                  {{ coverActionLabel }}
+                </n-button>
+                <input
+                  ref="coverInput"
+                  accept="image/*"
+                  hidden
+                  type="file"
+                  @change="uploadCover"
+                />
               </div>
             </n-form-item>
             <n-form-item label="语言">
@@ -299,10 +438,14 @@ onMounted(() => void load());
   width: 100%;
 }
 
-.metadata-edit__field-stack {
-  display: grid;
+.metadata-edit__cover-field {
+  display: flex;
   width: 100%;
-  gap: 10px;
+  gap: 8px;
+}
+
+.metadata-edit__cover-action {
+  flex: none;
 }
 
 @media (max-width: 700px) {

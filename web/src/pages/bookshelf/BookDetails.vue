@@ -49,8 +49,6 @@ const progress = shallowRef<ReaderProgress>();
 const readingStats = shallowRef<ReaderReadingStats>();
 const bookmarkCount = ref(0);
 const preferredMode = ref<'global' | SelectableReaderMode>('global');
-const coverInput = ref<HTMLInputElement>();
-const coverVersion = ref(0);
 const repositoryPromise = useLocalVolumeStore();
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
@@ -319,41 +317,6 @@ const togglePinned = async () => {
   await load();
 };
 
-const selectCover = () => coverInput.value?.click();
-
-const updateCover = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (file === undefined) {
-    return;
-  }
-  if (!file.type.startsWith('image/')) {
-    message.warning('请选择图片文件');
-    return;
-  }
-  const repository = await repositoryPromise;
-  await repository.putReaderCover({
-    bookId: bookId.value,
-    blob: file,
-    source: 'custom',
-    updatedAt: Date.now(),
-  });
-  coverVersion.value += 1;
-  message.success('封面已保存到当前浏览器');
-};
-const removeCover = async () => {
-  const repository = await repositoryPromise;
-  const cover = await repository.getReaderCover(bookId.value);
-  if (cover?.source === 'embedded') {
-    message.info('当前使用 EPUB 内嵌封面');
-    return;
-  }
-  await repository.deleteReaderCover(bookId.value);
-  coverVersion.value += 1;
-  message.success('已移除自定义封面');
-};
-
 onMounted(() => void load());
 </script>
 
@@ -388,23 +351,10 @@ onMounted(() => void load());
             '--book-details-overlay-end': vars.bodyColor,
           }"
         >
-          <BookCover
-            :book-id="book.id"
-            :refresh-key="coverVersion"
-            :title="book.title"
-            visual-only
-          />
+          <BookCover :book-id="book.id" :title="book.title" visual-only />
         </div>
         <div class="layout-content book-details__hero-content">
-          <BookCover
-            :book-id="book.id"
-            :refresh-key="coverVersion"
-            :title="book.title"
-            allow-custom-cover-removal
-            select-label="选择本地封面"
-            @remove="removeCover"
-            @select="selectCover"
-          />
+          <BookCover :book-id="book.id" :title="book.title" visual-only />
           <div class="book-details__hero-side">
             <n-flex class="book-details__hero-copy" vertical>
               <n-h2 class="book-details__title" prefix="bar">
@@ -522,13 +472,6 @@ onMounted(() => void load());
           </div>
         </n-flex>
 
-        <input
-          ref="coverInput"
-          accept="image/*"
-          hidden
-          type="file"
-          @change="updateCover"
-        />
         <section-header
           class="book-details__translation-header"
           title="翻译与下载"

@@ -12,6 +12,7 @@ const props = defineProps<{
   selectLabel?: string;
   allowCustomCoverRemoval?: boolean;
   visualOnly?: boolean;
+  previewUrl?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -106,6 +107,23 @@ const loadCover = async () => {
   try {
     const repository = await repositoryPromise;
     const volume = await repository.getVolume(bookId);
+    if (props.previewUrl !== undefined) {
+      externalCoverUrl.value = props.previewUrl?.trim() || undefined;
+      if (externalCoverUrl.value !== undefined) {
+        coverResolved.value = true;
+        return;
+      }
+      if (bookId.toLowerCase().endsWith('.epub')) {
+        const sourceFile = await repository.getFile(bookId);
+        const blob =
+          sourceFile === undefined
+            ? undefined
+            : await Epub.extractCoverFromFile(sourceFile.file);
+        if (bookId === props.bookId) setCoverUrl(blob);
+      }
+      coverResolved.value = true;
+      return;
+    }
     const configuredCoverUrl =
       volume === undefined ? undefined : getLocalBookMetadata(volume).coverUrl;
     if (bookId !== props.bookId) {
@@ -169,7 +187,7 @@ const loadCover = async () => {
 };
 
 watch(
-  () => [props.bookId, props.refreshKey, isVisible.value],
+  () => [props.bookId, props.refreshKey, props.previewUrl, isVisible.value],
   () => {
     if (isVisible.value) {
       void loadCover();

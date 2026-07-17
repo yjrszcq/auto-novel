@@ -95,13 +95,20 @@ export const createLocalVolumeStore = async () => {
     {
       bookMetadata,
       downloadMetadataPreference,
-    }: Pick<LocalVolumeMetadata, 'bookMetadata' | 'downloadMetadataPreference'>,
+      cover,
+    }: Pick<
+      LocalVolumeMetadata,
+      'bookMetadata' | 'downloadMetadataPreference'
+    > & {
+      cover?: Awaited<ReturnType<typeof dao.getReaderCover>> | null;
+    },
   ) =>
-    dao.updateMetadata(id, (value) => ({
-      ...value,
+    dao.updateBookPresentation({
+      id,
       bookMetadata,
       downloadMetadataPreference,
-    }));
+      cover,
+    });
 
   const getOriginalDownloadFile = async ({
     id,
