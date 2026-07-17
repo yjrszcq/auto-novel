@@ -6,10 +6,6 @@ export function useLocalStorage<T extends object>(key: string, defaults: T) {
   return useStorage<T>(key, defaults, window.localStorage);
 }
 
-export function useSessionStorage<T extends object>(key: string, defaults: T) {
-  return useStorage<T>(key, defaults, window.sessionStorage);
-}
-
 function useStorage<T extends object>(
   key: string,
   defaults: T,

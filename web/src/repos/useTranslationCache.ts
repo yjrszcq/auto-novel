@@ -16,18 +16,10 @@ interface TranslationCacheDBSchema extends DBSchema {
 type TranslationCacheType = 'gpt-seg-cache' | 'sakura-seg-cache';
 
 const createDb = lazy(() => {
-  return openDB<TranslationCacheDBSchema>('test', 3, {
-    upgrade(db, _oldVersion, _newVersion, _transaction, _event) {
-      try {
-        db.createObjectStore('gpt-seg-cache', { keyPath: 'hash' });
-      } catch (e) {
-        console.error(e);
-      }
-      try {
-        db.createObjectStore('sakura-seg-cache', { keyPath: 'hash' });
-      } catch (e) {
-        console.error(e);
-      }
+  return openDB<TranslationCacheDBSchema>('auto-novel-translation-cache', 1, {
+    upgrade(db) {
+      db.createObjectStore('gpt-seg-cache', { keyPath: 'hash' });
+      db.createObjectStore('sakura-seg-cache', { keyPath: 'hash' });
     },
   });
 });

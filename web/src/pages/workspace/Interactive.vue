@@ -20,7 +20,7 @@ onMounted(() => {
   }
 });
 
-const translatorConfig = useLocalStorage('interactive-translator', {
+const translatorConfig = useLocalStorage('auto-novel:interactive-translator', {
   translatorId: 'sakura' as TranslatorId,
   selectedGptWorkerId: undefined as string | undefined,
   selectedSakuraWorkerId: undefined as string | undefined,
