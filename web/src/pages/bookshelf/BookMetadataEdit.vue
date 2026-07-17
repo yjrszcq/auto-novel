@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { SelectOption } from 'naive-ui';
 import { ArrowBackOutlined, RestoreOutlined } from '@vicons/material';
+import { useMediaQuery } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
