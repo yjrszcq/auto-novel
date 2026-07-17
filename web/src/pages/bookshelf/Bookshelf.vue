@@ -54,6 +54,11 @@ const visibleBooks = computed(() =>
     sort: sort.value,
   }),
 );
+const selectedBook = computed(() => {
+  if (selectedBookIds.value.size !== 1) return undefined;
+  const [selectedBookId] = selectedBookIds.value;
+  return books.value.find((book) => book.volume.id === selectedBookId);
+});
 
 const reload = async () => {
   loading.value = true;
@@ -186,16 +191,16 @@ onMounted(reload);
         <n-button size="small" @click="selectAllVisible">全选</n-button>
         <n-button size="small" @click="invertVisibleSelection">反选</n-button>
         <n-button
+          v-if="selectedBook && !selectedBook.state.pinned"
           size="small"
-          :disabled="selectedBookIds.size === 0"
           :loading="batchUpdating"
           @click="updateSelectedBooks('pin')"
         >
           置顶
         </n-button>
         <n-button
+          v-if="selectedBook?.state.pinned"
           size="small"
-          :disabled="selectedBookIds.size === 0"
           :loading="batchUpdating"
           @click="updateSelectedBooks('unpin')"
         >
