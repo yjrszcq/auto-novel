@@ -6,7 +6,7 @@ import type {
   ReaderProgress,
   ReaderReadingStats,
 } from '@/model/Reader';
-import { InfoOutlined } from '@vicons/material';
+import { EditOutlined, InfoOutlined } from '@vicons/material';
 import { useKeyModifier } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
@@ -143,6 +143,8 @@ const load = async () => {
 };
 
 const returnToShelf = () => void router.push('/bookshelf');
+const editBook = () =>
+  void router.push('/books/' + encodeURIComponent(bookId.value) + '/edit');
 
 const startReading = () => {
   const chapterId =
@@ -375,6 +377,18 @@ onMounted(() => void load());
             <n-flex class="book-details__hero-copy" vertical>
               <n-h2 class="book-details__title" prefix="bar">
                 <b>{{ book.title }}</b>
+                <n-button
+                  aria-label="编辑书籍信息"
+                  class="book-details__edit-button"
+                  circle
+                  quaternary
+                  size="small"
+                  @click="editBook"
+                >
+                  <template #icon>
+                    <n-icon :component="EditOutlined" />
+                  </template>
+                </n-button>
               </n-h2>
               <div
                 class="book-details__hero-summary"
@@ -596,6 +610,19 @@ onMounted(() => void load());
   display: grid;
   min-height: 220px;
   place-items: center;
+}
+
+.book-details__title :deep(.n-h__prefix) {
+  align-self: stretch;
+}
+
+.book-details__title b {
+  min-width: 0;
+}
+
+.book-details__edit-button {
+  margin-left: 8px;
+  vertical-align: 0.08em;
 }
 
 .book-details__hero {

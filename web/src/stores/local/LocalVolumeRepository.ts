@@ -64,10 +64,7 @@ export const createLocalVolumeStore = async () => {
         try {
           const parsed = await parseFile(stored.file, ['epub']);
           if (parsed?.type === 'epub') {
-            sourceBookMetadata = {
-              ...fallback,
-              ...parsed.getBookMetadata(),
-            };
+            sourceBookMetadata = parsed.getBookMetadata();
           }
         } catch {
           // Keep old books readable when their original EPUB cannot be parsed.
@@ -91,6 +88,19 @@ export const createLocalVolumeStore = async () => {
     dao.updateMetadata(id, (value) => ({
       ...value,
       bookMetadata,
+    }));
+
+  const updateBookPresentation = (
+    id: string,
+    {
+      bookMetadata,
+      downloadMetadataPreference,
+    }: Pick<LocalVolumeMetadata, 'bookMetadata' | 'downloadMetadataPreference'>,
+  ) =>
+    dao.updateMetadata(id, (value) => ({
+      ...value,
+      bookMetadata,
+      downloadMetadataPreference,
     }));
 
   const getOriginalDownloadFile = async ({
@@ -158,6 +168,7 @@ export const createLocalVolumeStore = async () => {
     listVolume: dao.listMetadata,
     getVolume,
     updateBookMetadata,
+    updateBookPresentation,
     getOriginalDownloadFile,
     createVolume: bind(createVolume),
     ensureNativeEpubMigration: bind(ensureNativeEpubMigration),

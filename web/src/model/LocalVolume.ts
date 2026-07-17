@@ -40,6 +40,13 @@ export interface LocalBookMetadata {
   languages?: string[];
 }
 
+export type DownloadMetadataPolicy = 'global' | 'embed' | 'source';
+
+export interface LocalDownloadMetadataPreference {
+  original: DownloadMetadataPolicy;
+  translated: DownloadMetadataPolicy;
+}
+
 export interface LocalVolumeMetadata {
   id: string;
   readAt?: number;
@@ -53,6 +60,7 @@ export interface LocalVolumeMetadata {
   favoredId: string;
   sourceBookMetadata?: LocalBookMetadata;
   bookMetadata?: LocalBookMetadata;
+  downloadMetadataPreference?: LocalDownloadMetadataPreference;
 }
 
 const hasOwn = <Key extends keyof LocalBookMetadata>(
