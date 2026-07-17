@@ -2,6 +2,8 @@
 import { DeleteOutlineOutlined } from '@vicons/material';
 import { Epub } from '@/util/file';
 import { useLocalVolumeStore, useRuntimeConfigStore } from '@/stores';
+import { getLocalBookMetadata } from '@/model/LocalVolume';
+import { resolveBookCoverSource } from './BookCoverSource';
 
 const props = defineProps<{
   bookId: string;
@@ -18,7 +20,10 @@ const emit = defineEmits<{
 }>();
 
 const palette = ['#3f6e8d', '#7d5a8e', '#9b5b48', '#45766e', '#8a713d'];
-const coverUrl = ref<string>();
+const localCoverUrl = ref<string>();
+const externalCoverUrl = ref<string>();
+const coverResolved = ref(false);
+const coverImageFailed = ref(false);
 const isCustomCover = ref(false);
 const coverElement = ref<HTMLElement>();
 const isVisible = ref(false);
@@ -58,16 +63,16 @@ const preventTouchContextMenu = (event: MouseEvent) => {
 };
 
 const clearCoverUrl = () => {
-  if (coverUrl.value !== undefined) {
-    URL.revokeObjectURL(coverUrl.value);
-    coverUrl.value = undefined;
+  if (localCoverUrl.value !== undefined) {
+    URL.revokeObjectURL(localCoverUrl.value);
+    localCoverUrl.value = undefined;
   }
 };
 
 const setCoverUrl = (blob: Blob | undefined) => {
   clearCoverUrl();
   if (blob !== undefined) {
-    coverUrl.value = URL.createObjectURL(blob);
+    localCoverUrl.value = URL.createObjectURL(blob);
   }
 };
 
@@ -93,8 +98,26 @@ const observeCover = () => {
 
 const loadCover = async () => {
   const bookId = props.bookId;
+  coverResolved.value = false;
+  coverImageFailed.value = false;
+  externalCoverUrl.value = undefined;
+  setCoverUrl(undefined);
+  isCustomCover.value = false;
   try {
     const repository = await repositoryPromise;
+    const volume = await repository.getVolume(bookId);
+    const configuredCoverUrl =
+      volume === undefined ? undefined : getLocalBookMetadata(volume).coverUrl;
+    if (bookId !== props.bookId) {
+      return;
+    }
+    externalCoverUrl.value = configuredCoverUrl?.trim() || undefined;
+    if (externalCoverUrl.value !== undefined) {
+      setCoverUrl(undefined);
+      isCustomCover.value = false;
+      coverResolved.value = true;
+      return;
+    }
     let cover = await repository.getReaderCover(bookId);
     if (bookId !== props.bookId) {
       return;
@@ -129,11 +152,18 @@ const loadCover = async () => {
     if (bookId === props.bookId) {
       setCoverUrl(cover.blob);
       isCustomCover.value = cover.source === 'custom';
+      coverResolved.value = true;
     }
   } catch {
     if (bookId === props.bookId) {
       setCoverUrl(undefined);
+      externalCoverUrl.value = undefined;
       isCustomCover.value = false;
+      coverResolved.value = true;
+    }
+  } finally {
+    if (bookId === props.bookId) {
+      coverResolved.value = true;
     }
   }
 };
@@ -188,13 +218,26 @@ const canRemoveCustomCover = computed(
   () =>
     !props.visualOnly && props.allowCustomCoverRemoval && isCustomCover.value,
 );
-const displayedCoverUrl = computed(
-  () => coverUrl.value ?? defaultBookCoverImage.value,
+const displayedCover = computed(() =>
+  resolveBookCoverSource({
+    externalUrl: externalCoverUrl.value,
+    localUrl: localCoverUrl.value,
+    defaultUrl: coverResolved.value ? defaultBookCoverImage.value : undefined,
+  }),
+);
+const displayedCoverUrl = computed(() =>
+  displayedCover.value.kind === 'text' ? '' : displayedCover.value.url,
 );
 const shouldShowTextFallback = computed(
   () =>
-    displayedCoverUrl.value.length === 0 && (loaded.value || !loading.value),
+    coverResolved.value &&
+    displayedCover.value.kind === 'text' &&
+    (loaded.value || !loading.value),
 );
+
+const handleCoverImageError = () => {
+  coverImageFailed.value = true;
+};
 </script>
 
 <template>
@@ -232,12 +275,13 @@ const shouldShowTextFallback = computed(
       <DeleteOutlineOutlined class="book-cover__remove-icon" />
     </button>
     <img
-      v-if="displayedCoverUrl.length > 0"
+      v-if="displayedCoverUrl.length > 0 && !coverImageFailed"
       class="book-cover__image"
       :src="displayedCoverUrl"
       :alt="`${props.title} 封面`"
       decoding="async"
       loading="lazy"
+      @error="handleCoverImageError"
     />
     <template v-else-if="shouldShowTextFallback">
       <span class="book-cover__eyebrow">LOCAL BOOK</span>
