@@ -6,6 +6,7 @@ import type {
   ReaderProgress,
   ReaderReadingStats,
 } from '@/model/Reader';
+import { InfoOutlined } from '@vicons/material';
 import { useKeyModifier } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
@@ -373,9 +374,14 @@ onMounted(() => void load());
                 <n-text class="book-details__reading-progress" depth="3">
                   阅读进度 {{ Math.round(readingProgress) }}%
                 </n-text>
-                <n-button size="small" @click="showBookInfo = true">
-                  书籍信息
-                </n-button>
+                <button
+                  class="book-details__info-button"
+                  type="button"
+                  @click="showBookInfo = true"
+                >
+                  <span>书籍信息</span>
+                  <n-icon :component="InfoOutlined" />
+                </button>
               </div>
             </n-flex>
             <n-flex
@@ -669,6 +675,23 @@ onMounted(() => void load());
 .book-details__reading-progress {
   flex: none;
   white-space: nowrap;
+}
+
+.book-details__info-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  gap: 4px;
+  color: var(--n-text-color-3);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.book-details__info-button:is(:hover, :focus-visible, :active) {
+  color: #fff;
 }
 
 .book-details__info-dialog {
