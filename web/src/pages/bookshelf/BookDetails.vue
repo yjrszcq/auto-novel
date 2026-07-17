@@ -63,6 +63,24 @@ const readingProgress = computed(() =>
     ? 0
     : getReadingProgress({ ...entry.value, progress: progress.value }),
 );
+const description = computed(() => book.value?.description?.trim() ?? '');
+const formatMetadataList = (values: string[] | undefined) =>
+  values?.length ? values.join('\n') : '—';
+const languageLabels: Record<string, string> = {
+  zh: '中文',
+  ja: '日语',
+  en: '英语',
+  ko: '韩语',
+};
+const formatLanguage = (language: string) => {
+  const label = languageLabels[language.toLowerCase().split('-')[0]];
+  return label === undefined ? language : `${label}（${language}）`;
+};
+const formattedLanguages = computed(() =>
+  book.value?.languages?.length
+    ? book.value.languages.map(formatLanguage).join('\n')
+    : '—',
+);
 const translatorCompleted = (type: LocalTranslator) =>
   entry.value?.volume.toc.filter(
     (chapter) => chapter[type] === entry.value?.volume.glossaryId,
@@ -462,6 +480,14 @@ onMounted(() => void load());
           </n-button>
         </div>
 
+        <section
+          v-if="description.length > 0"
+          class="book-details__description"
+          aria-label="书籍简介"
+        >
+          {{ description }}
+        </section>
+
         <section-header
           class="book-details__preferences-header"
           title="阅读偏好"
@@ -579,6 +605,14 @@ onMounted(() => void load());
           @close="showBookInfo = false"
         >
           <dl class="book-details__info-list">
+            <div>
+              <dt>作者</dt>
+              <dd>{{ formatMetadataList(book.authors) }}</dd>
+            </div>
+            <div>
+              <dt>语言</dt>
+              <dd>{{ formattedLanguages }}</dd>
+            </div>
             <div>
               <dt>章节</dt>
               <dd>{{ book.chapterCount }} 章</dd>
@@ -723,6 +757,16 @@ onMounted(() => void load());
   margin-bottom: 16px;
 }
 
+.book-details__description {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 2px 0 22px;
+  color: var(--n-text-color-2);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .book-details__reading-progress {
   flex: none;
   color: var(--book-details-summary-color);
@@ -769,6 +813,7 @@ onMounted(() => void load());
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .book-details__return-to-shelf {
