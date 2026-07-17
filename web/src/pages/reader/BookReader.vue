@@ -1764,15 +1764,16 @@ onBeforeUnmount(() => {
 .book-reader__translation-popover {
   width: min(100%, 720px);
   margin: 0 auto;
-  color: #5c3b00;
-  background: #fff3d6;
-  border-color: #e6a23c;
+  color: #f2e8dc;
+  background: #302b27;
+  border-color: #b77a2b;
   box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
 }
 
 .book-reader__translation-panel {
   display: grid;
   width: 100%;
+  color: #f2e8dc;
   text-align: center;
   gap: 12px;
 }
@@ -1789,6 +1790,10 @@ onBeforeUnmount(() => {
 
 .book-reader__translation-panel-actions > :last-child {
   grid-column: 1 / -1;
+}
+
+.book-reader__translation-panel-actions :deep(.n-button__content) {
+  color: #f2e8dc;
 }
 
 .book-reader__catalog {

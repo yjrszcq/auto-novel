@@ -272,6 +272,18 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
     'height',
     '52px',
   );
+  await expect
+    .poll(async () => {
+      const before = await readerContent.evaluate(
+        (element) => element.scrollWidth,
+      );
+      await page.waitForTimeout(200);
+      const after = await readerContent.evaluate(
+        (element) => element.scrollWidth,
+      );
+      return before === after ? after : -1;
+    })
+    .toBeGreaterThan(0);
   const visibleControlsGeometry = await readerContent.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return {
@@ -425,8 +437,17 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(translationLayer).toHaveCSS('position', 'fixed');
   await expect(translationPopover).toHaveCSS(
     'background-color',
-    'rgb(255, 243, 214)',
+    'rgb(48, 43, 39)',
   );
+  await expect(translationPopover.locator('strong')).toHaveCSS(
+    'color',
+    'rgb(242, 232, 220)',
+  );
+  await expect(
+    translationPopover
+      .getByRole('button', { name: 'GPT 翻译本章' })
+      .locator('.n-button__content'),
+  ).toHaveCSS('color', 'rgb(242, 232, 220)');
   const popoverTop = await translationPopover.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );
