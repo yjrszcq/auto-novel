@@ -96,6 +96,23 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   ).toHaveCount(0);
   await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
+  const titleAlignment = await page.evaluate(() => {
+    const title = document.querySelector<HTMLElement>('.book-details__title b');
+    const edit = document.querySelector<HTMLElement>(
+      '.book-details__edit-button',
+    );
+    if (title === null || edit === null) {
+      throw new Error('缺少书名或编辑按钮');
+    }
+    const titleBounds = title.getBoundingClientRect();
+    const editBounds = edit.getBoundingClientRect();
+    return Math.abs(
+      titleBounds.top +
+        titleBounds.height / 2 -
+        (editBounds.top + editBounds.height / 2),
+    );
+  });
+  expect(titleAlignment).toBeLessThanOrEqual(1);
   await expect(
     page.getByText('总计 2 / GPT 0 / Sakura 0', { exact: true }),
   ).toBeVisible();

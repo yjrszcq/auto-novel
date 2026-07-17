@@ -674,6 +674,7 @@ onMounted(() => void load());
 }
 
 .book-details__title {
+  display: flex;
   align-items: center;
 }
 
@@ -690,7 +691,6 @@ onMounted(() => void load());
   margin-left: 8px;
   border: 0;
   line-height: 1;
-  vertical-align: middle;
 }
 
 .book-details__edit-button :deep(.n-icon) {
