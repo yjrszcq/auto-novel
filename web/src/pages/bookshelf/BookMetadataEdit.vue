@@ -249,6 +249,7 @@ onMounted(() => void load());
 
 <style scoped>
 .metadata-edit {
+  box-sizing: border-box;
   width: min(1040px, 100%);
   padding-block: 40px 64px;
 }
