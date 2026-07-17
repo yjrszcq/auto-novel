@@ -21,6 +21,7 @@ import type {
 import { TranslateJob, TranslateTaskDescriptor } from '@/model/Translator';
 import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { darkTheme, lightTheme } from 'naive-ui';
+import type { GlobalThemeOverrides } from 'naive-ui';
 import { useRouter } from 'vue-router';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
@@ -500,6 +501,88 @@ const isDarkReaderTheme = computed(
 
 const readerNaiveTheme = computed(() =>
   isDarkReaderTheme.value ? darkTheme : lightTheme,
+);
+
+const sepiaNaiveThemeOverrides: GlobalThemeOverrides = {
+  common: {
+    baseColor: '#f4ecd8',
+    bodyColor: '#f4ecd8',
+    cardColor: '#eee3c8',
+    modalColor: '#eee3c8',
+    popoverColor: '#f0e5cb',
+    inputColor: '#f0e5cb',
+    actionColor: '#e8ddc3',
+    hoverColor: '#e3d5b7',
+    pressedColor: '#d9c8a5',
+    borderColor: '#aa9978',
+    dividerColor: 'rgb(74 57 37 / 14%)',
+    railColor: '#c7b99a',
+    textColorBase: '#4a3925',
+    textColor1: '#4a3925',
+    textColor2: '#5f4b32',
+    textColor3: '#806f58',
+    placeholderColor: '#8f7e65',
+    iconColor: '#806f58',
+  },
+  Button: {
+    color: 'transparent',
+    colorHover: '#e8ddc3',
+    colorPressed: '#dfd1b2',
+    colorFocus: '#e8ddc3',
+    textColor: '#4a3925',
+    textColorHover: '#4a3925',
+    textColorPressed: '#4a3925',
+    textColorFocus: '#4a3925',
+    border: '1px solid #9d8b6c',
+    borderHover: '1px solid #806f58',
+    borderPressed: '1px solid #806f58',
+    borderFocus: '1px solid #806f58',
+  },
+  Tag: {
+    color: '#e4d7b8',
+    colorBordered: '#e4d7b8',
+    border: '1px solid #b7a583',
+    textColor: '#4a3925',
+  },
+  Slider: {
+    railColor: '#c7b99a',
+    railColorHover: '#b7a786',
+  },
+  Select: {
+    peers: {
+      InternalSelection: {
+        color: '#f0e5cb',
+        colorActive: '#f0e5cb',
+        textColor: '#4a3925',
+        arrowColor: '#806f58',
+        border: '1px solid #aa9978',
+        borderHover: '1px solid #806f58',
+        peers: {
+          Popover: {
+            color: '#f0e5cb',
+            textColor: '#4a3925',
+            dividerColor: 'rgb(74 57 37 / 14%)',
+          },
+        },
+      },
+      InternalSelectMenu: {
+        color: '#f0e5cb',
+        optionTextColor: '#4a3925',
+        optionTextColorPressed: '#4a3925',
+        optionTextColorActive: '#129b6c',
+        optionColorPending: '#e3d5b7',
+        optionColorActive: '#e4ddc3',
+        optionColorActivePending: '#ddd0b1',
+      },
+    },
+  },
+};
+
+const readerNaiveThemeOverrides = computed<GlobalThemeOverrides | undefined>(
+  () =>
+    activeSettings.value.theme === 'sepia'
+      ? sepiaNaiveThemeOverrides
+      : undefined,
 );
 
 const toggleQuickTheme = () => {
@@ -1233,7 +1316,7 @@ onBeforeUnmount(() => {
     :class="`book-reader--${activeSettings.theme}`"
     :style="readerStyle"
     :theme="readerNaiveTheme"
-    :theme-overrides="null"
+    :theme-overrides="readerNaiveThemeOverrides"
   >
     <header
       v-if="controlsVisible"

@@ -574,6 +574,47 @@ test('opens a local bookshelf book safely and keeps the legacy reader link', asy
   await expect(
     page.locator('.book-reader__settings-grid .n-form-item-label').first(),
   ).toHaveCSS('color', 'rgb(31, 34, 37)');
+  const themeSetting = page
+    .locator('.book-reader__settings-theme')
+    .filter({ hasText: '主题' });
+  await themeSetting.locator('.n-base-selection').click();
+  await page.locator('.n-base-select-menu').getByText('护眼').click();
+  await expect(page.locator('.book-reader')).toHaveClass(/book-reader--sepia/);
+  await expect(themeSetting.locator('.n-base-selection-label')).toHaveCSS(
+    'background-color',
+    'rgb(240, 229, 203)',
+  );
+  await expect(page.locator('.n-slider-rail').first()).toHaveCSS(
+    'background-color',
+    'rgb(199, 185, 154)',
+  );
+  await themeSetting.locator('.n-base-selection').click();
+  await expect(page.locator('.n-base-select-menu')).toHaveCSS(
+    'background-color',
+    'rgb(240, 229, 203)',
+  );
+  await page.locator('.n-base-select-menu').getByText('护眼').click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog', { name: '目录' })
+      .getByText('未翻译', { exact: true })
+      .first()
+      .locator('..'),
+  ).toHaveCSS('background-color', 'rgb(228, 215, 184)');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '添加书签' })
+      .locator('.n-button__border'),
+  ).toHaveCSS('border-top-color', 'rgb(157, 139, 108)');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await themeSetting.locator('.n-base-selection').click();
+  await page.locator('.n-base-select-menu').getByText('浅色').click();
   const flowSetting = page
     .locator('.book-reader__settings-theme')
     .filter({ hasText: '阅读流' });
