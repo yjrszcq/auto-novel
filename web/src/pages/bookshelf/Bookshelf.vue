@@ -14,6 +14,7 @@ import {
 import BookCard from './components/BookCard.vue';
 
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
+import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { useLocalVolumeStore } from '@/stores';
 import { useRuntimePanel } from '@/util/useRuntimePanel';
 
@@ -30,6 +31,7 @@ const addingLocalBooks = ref(false);
 const selectionMode = ref(false);
 const selectedBookIds = ref(new Set<string>());
 const batchUpdating = ref(false);
+const downloadingSelectedBooks = ref(false);
 const message = useMessage();
 const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
 
@@ -139,6 +141,19 @@ const invertVisibleSelection = () => {
   selectedBookIds.value = selected;
 };
 
+const downloadSelectedBooks = async () => {
+  const ids = [...selectedBookIds.value];
+  if (ids.length === 0) return;
+  downloadingSelectedBooks.value = true;
+  try {
+    const { success, failed } =
+      await useLocalVolumeManager().downloadVolumes(ids);
+    message.info(`${success}本小说已下载，${failed}本失败`);
+  } finally {
+    downloadingSelectedBooks.value = false;
+  }
+};
+
 const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'remove') => {
   const ids = [...selectedBookIds.value];
   if (ids.length === 0) return;
@@ -210,6 +225,14 @@ onMounted(reload);
         <n-text>已选择 {{ selectedBookIds.size }} 本</n-text>
         <n-button size="small" @click="selectAllVisible">全选</n-button>
         <n-button size="small" @click="invertVisibleSelection">反选</n-button>
+        <n-button
+          size="small"
+          :disabled="selectedBookIds.size === 0"
+          :loading="downloadingSelectedBooks"
+          @click="downloadSelectedBooks"
+        >
+          下载
+        </n-button>
         <n-button
           v-if="selectedBook && !selectedBook.state.pinned"
           size="small"

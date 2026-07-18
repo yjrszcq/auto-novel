@@ -233,6 +233,14 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .filter({ hasText: 'Alpha Upload' })
     .getByRole('button', { name: '选择书籍', exact: true })
     .click();
+  const selectionToolbar = page.locator('.bookshelf-selection-toolbar');
+  const singleShelfDownload = page.waitForEvent('download');
+  await selectionToolbar
+    .getByRole('button', { name: '下载', exact: true })
+    .click();
+  expect((await singleShelfDownload).suggestedFilename()).not.toMatch(
+    /\.zip$/i,
+  );
   await page.getByRole('button', { name: '置顶', exact: true }).click();
   await page.reload();
   const alphaCard = page
@@ -245,6 +253,25 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .locator('.book-card')
     .filter({ hasText: 'Beta Upload' })
     .getByRole('button', { name: '选择书籍', exact: true })
+    .click();
+  await page
+    .locator('.book-card')
+    .filter({ hasText: 'Alpha Upload' })
+    .getByRole('button', { name: '选择书籍', exact: true })
+    .click();
+  const multipleShelfDownload = page.waitForEvent('download');
+  await selectionToolbar
+    .getByRole('button', { name: '下载', exact: true })
+    .click();
+  const shelfArchive = await multipleShelfDownload;
+  expect(shelfArchive.suggestedFilename()).toBe('批量下载[2].zip');
+  expect(
+    await listArchiveEntries(await readDownload(shelfArchive)),
+  ).toHaveLength(2);
+  await page
+    .locator('.book-card')
+    .filter({ hasText: 'Alpha Upload' })
+    .getByRole('button', { name: '取消选择', exact: true })
     .click();
   await page.getByRole('button', { name: '移出书架', exact: true }).click();
   await page.getByRole('button', { name: '确认', exact: true }).click();
