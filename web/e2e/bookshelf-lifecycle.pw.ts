@@ -150,6 +150,31 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(page.locator('.bookshelf-toolbar__filter')).toContainText(
     '筛选',
   );
+  const headerActionLayout = await page
+    .locator('.bookshelf-page__header-actions button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const bounds = button.getBoundingClientRect();
+        return {
+          height: Math.round(bounds.height),
+          left: Math.round(bounds.left),
+          right: Math.round(bounds.right),
+          top: Math.round(bounds.top),
+        };
+      }),
+    );
+  expect(headerActionLayout).toHaveLength(3);
+  expect(new Set(headerActionLayout.map(({ height }) => height)).size).toBe(1);
+  expect(new Set(headerActionLayout.map(({ top }) => top)).size).toBe(1);
+  expect(
+    headerActionLayout
+      .slice(1)
+      .every(
+        ({ left }, index) =>
+          left - headerActionLayout[index].right >= 0 &&
+          left - headerActionLayout[index].right <= 12,
+      ),
+  ).toBe(true);
 
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
@@ -247,6 +272,23 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .getByRole('button', { name: '选择书籍', exact: true })
     .click();
   const selectionToolbar = page.locator('.bookshelf-selection-toolbar');
+  const batchButtonStyles = await selectionToolbar
+    .getByRole('button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const style = getComputedStyle(button);
+        return {
+          borderRadius: Number.parseFloat(style.borderRadius),
+          height: button.getBoundingClientRect().height,
+        };
+      }),
+    );
+  expect(new Set(batchButtonStyles.map(({ height }) => height)).size).toBe(1);
+  expect(
+    batchButtonStyles.every(
+      ({ borderRadius, height }) => borderRadius >= height / 2 - 1,
+    ),
+  ).toBe(true);
   await selectionToolbar
     .getByRole('button', { name: '排队 GPT', exact: true })
     .click();

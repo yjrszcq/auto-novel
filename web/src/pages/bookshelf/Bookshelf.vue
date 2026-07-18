@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+import {
+  ChecklistOutlined,
+  CloseOutlined,
+  RefreshOutlined,
+} from '@vicons/material';
 import { useRouter } from 'vue-router';
 
 import {
@@ -245,14 +250,14 @@ onMounted(reload);
     <header class="bookshelf-page__header">
       <h1 v-if="!props.embedded">书架</h1>
       <div class="bookshelf-page__header-actions">
-        <n-button
+        <c-button
+          :label="selectionMode ? '取消选择' : '选择'"
+          :icon="selectionMode ? CloseOutlined : ChecklistOutlined"
           :type="selectionMode ? 'primary' : 'default'"
-          @click="toggleSelectionMode"
-        >
-          {{ selectionMode ? '取消选择' : '选择' }}
-        </n-button>
+          @action="toggleSelectionMode"
+        />
         <local-volume-upload-button @done="reload" />
-        <c-button label="刷新" @action="reload" />
+        <c-button label="刷新" :icon="RefreshOutlined" @action="reload" />
       </div>
       <bulletin
         v-if="!props.hideNotice && infoPanelHtml"
@@ -274,7 +279,7 @@ onMounted(reload);
         <n-text>已选择 {{ selectedBookIds.size }} 本</n-text>
         <n-button
           v-if="selectedBook && !selectedBook.state.pinned"
-          size="small"
+          round
           :loading="batchUpdating"
           @click="updateSelectedBooks('pin')"
         >
@@ -282,31 +287,31 @@ onMounted(reload);
         </n-button>
         <n-button
           v-if="selectedBook?.state.pinned"
-          size="small"
+          round
           :loading="batchUpdating"
           @click="updateSelectedBooks('unpin')"
         >
           取消置顶
         </n-button>
-        <n-button size="small" @click="toggleVisibleSelection">
+        <n-button round @click="toggleVisibleSelection">
           {{ allVisibleBooksSelected ? '反选' : '全选' }}
         </n-button>
         <n-button
-          size="small"
+          round
           :disabled="selectedBookIds.size === 0"
           @click="queueSelectedBooks('gpt')"
         >
           排队 GPT
         </n-button>
         <n-button
-          size="small"
+          round
           :disabled="selectedBookIds.size === 0"
           @click="queueSelectedBooks('sakura')"
         >
           排队 Sakura
         </n-button>
         <n-button
-          size="small"
+          round
           :disabled="selectedBookIds.size === 0"
           :loading="downloadingSelectedBooks"
           @click="downloadSelectedBooks"
@@ -319,8 +324,9 @@ onMounted(reload);
         >
           <template #trigger>
             <n-button
-              size="small"
-              type="warning"
+              round
+              secondary
+              type="error"
               :disabled="selectedBookIds.size === 0"
               :loading="batchUpdating"
             >
@@ -345,6 +351,7 @@ onMounted(reload);
           placeholder="搜索书名"
         />
         <n-button
+          round
           class="bookshelf-toolbar__filter"
           :type="filterButtonActive ? 'primary' : 'default'"
           aria-label="书架筛选"
@@ -496,18 +503,23 @@ onMounted(reload);
 }
 
 .bookshelf-page--embedded {
-  padding-top: 0;
+  padding-top: 12px;
 }
 
 .bookshelf-page--embedded .bookshelf-page__header {
-  justify-content: end;
-  margin-bottom: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 12px;
 }
 
 .bookshelf-page__header-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.bookshelf-page__header-actions :deep(.n-upload) {
+  width: auto;
 }
 
 .bookshelf-page h1 {
@@ -557,16 +569,17 @@ onMounted(reload);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 12px 14px;
   margin-bottom: 12px;
   border: 1px solid var(--n-border-color);
-  border-radius: var(--n-border-radius);
+  border-radius: 10px;
   background: var(--n-card-color);
 }
 
 .bookshelf-selection-toolbar > :first-child {
-  margin-right: auto;
+  padding-right: 4px;
+  font-weight: 500;
 }
 
 .book-grid {
@@ -599,7 +612,7 @@ onMounted(reload);
   }
 
   .bookshelf-page__header-actions {
-    margin-left: auto;
+    gap: 6px;
   }
 
   .bookshelf-page__header-actions :deep(.n-button) {
