@@ -324,6 +324,37 @@ describe('translator HTTP integration', () => {
     expect(server.requests).toHaveLength(2);
   });
 
+  it('does not poison in-flight cache state after provider failure', async () => {
+    const server = await startOpenAiTestServer({
+      onChat: (request) =>
+        request.index === 0
+          ? {
+              content: 'temporary test failure',
+              errorCode: 'invalid_request',
+              status: 400,
+            }
+          : { content: '失败后恢复译文' },
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create(
+      {
+        id: 'gpt',
+        endpoint: server.endpoint,
+        key: 'cache-failure-key',
+        model: 'cache-failure-model',
+      },
+      true,
+    );
+
+    await expect(translator.translate(['缓存失败原文'])).rejects.toThrow(
+      'invalid_request',
+    );
+    await expect(translator.translate(['缓存失败原文'])).resolves.toEqual([
+      '失败后恢复译文',
+    ]);
+    expect(server.requests).toHaveLength(2);
+  });
+
   it('isolates GPT cache entries by endpoint and model identity', async () => {
     const server = await startOpenAiTestServer({
       onChat: (request) => ({

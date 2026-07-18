@@ -154,18 +154,18 @@ describe('translation optimization baselines', () => {
     expect(server.requests).toHaveLength(0);
   });
 
-  it('records duplicate provider work for simultaneous identical cache misses', async () => {
+  it('deduplicates simultaneous identical cache misses', async () => {
     let releaseRequests = () => {};
     const requestBarrier = new Promise<void>((resolve) => {
       releaseRequests = resolve;
     });
-    let reportTwoRequests = () => {};
-    const twoRequestsArrived = new Promise<void>((resolve) => {
-      reportTwoRequests = resolve;
+    let reportFirstRequest = () => {};
+    const firstRequestArrived = new Promise<void>((resolve) => {
+      reportFirstRequest = resolve;
     });
     const server = await startOpenAiTestServer({
       onChat: async (request) => {
-        if (request.index === 1) reportTwoRequests();
+        if (request.index === 0) reportFirstRequest();
         await requestBarrier;
         return { content: '#1:共享译文' };
       },
@@ -183,14 +183,16 @@ describe('translation optimization baselines', () => {
 
     const first = translator.translate(['相同原文']);
     const second = translator.translate(['相同原文']);
-    await twoRequestsArrived;
+    await firstRequestArrived;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(server.requests).toHaveLength(1);
     releaseRequests();
 
     await expect(Promise.all([first, second])).resolves.toEqual([
       ['共享译文'],
       ['共享译文'],
     ]);
-    expect(server.requests).toHaveLength(2);
+    expect(server.requests).toHaveLength(1);
   });
 
   it('keeps FIFO admission and the configured global request ceiling', async () => {

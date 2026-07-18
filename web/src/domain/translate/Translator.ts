@@ -230,7 +230,7 @@ export class Translator {
           translator: this.segTranslator.cacheIdentity,
         };
         cacheKey = this.segCache.cacheKey(seg, extra);
-        if (!force) {
+        if (!force && this.segCache.getOrCreate === undefined) {
           const cachedSegOutput = await this.segCache.get(cacheKey);
           if (cachedSegOutput && cachedSegOutput.length === seg.length) {
             log('从缓存恢复');
@@ -243,24 +243,42 @@ export class Translator {
       }
     }
 
-    // 翻译
-    const segOutput = await this.segTranslator.translate(seg, {
-      glossary: segGlossary,
-      prevSegs,
-      signal,
-      logger: (msg, detail) => this.log(`${logLabel} ${msg}`, detail),
-    });
-    if (segOutput.length !== seg.length) {
-      throw new Error('分段翻译结果行数不匹配，请反馈给站长');
+    const translateAndNormalize = async () => {
+      const segOutput = await this.segTranslator.translate(seg, {
+        glossary: segGlossary,
+        prevSegs,
+        signal,
+        logger: (msg, detail) => this.log(`${logLabel} ${msg}`, detail),
+      });
+      if (segOutput.length !== seg.length) {
+        throw new Error('分段翻译结果行数不匹配，请反馈给站长');
+      }
+
+      // 翻译器通常不会保留行首空格，尝试手动恢复
+      for (let i = 0; i < seg.length; i++) {
+        const lineJp = seg[i];
+        if (lineJp.trim().length === 0) continue;
+        const space = RegexUtil.getLeadingSpaces(lineJp);
+        segOutput[i] = space + segOutput[i].trimStart();
+      }
+      return segOutput;
+    };
+
+    if (
+      !force &&
+      cacheKey !== undefined &&
+      this.segCache?.getOrCreate !== undefined
+    ) {
+      const result = await this.segCache.getOrCreate(
+        cacheKey,
+        translateAndNormalize,
+      );
+      if (result.source === 'cache') log('从缓存恢复');
+      if (result.source === 'deduplicated') log('复用进行中的相同翻译');
+      return result.output;
     }
 
-    // 翻译器通常不会保留行首空格，尝试手动恢复
-    for (let i = 0; i < seg.length; i++) {
-      const lineJp = seg[i];
-      if (lineJp.trim().length === 0) continue;
-      const space = RegexUtil.getLeadingSpaces(lineJp);
-      segOutput[i] = space + segOutput[i].trimStart();
-    }
+    const segOutput = await translateAndNormalize();
 
     // 保存分段缓存
     if (this.segCache && cacheKey !== undefined) {

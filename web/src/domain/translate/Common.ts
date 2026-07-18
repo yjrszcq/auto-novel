@@ -224,19 +224,63 @@ export interface SegmentCache {
   cacheKey(seg: string[], extra?: unknown): string;
   get(cacheKey: string): Promise<string[] | undefined>;
   save(cacheKey: string, output: string[]): Promise<void>;
+  getOrCreate?: (
+    cacheKey: string,
+    producer: () => Promise<string[]>,
+  ) => Promise<{
+    output: string[];
+    source: 'cache' | 'deduplicated' | 'provider';
+  }>;
 }
+
+const cacheInFlight = {
+  'gpt-seg-cache': new Map<
+    string,
+    { generation: number; promise: Promise<string[]> }
+  >(),
+  'sakura-seg-cache': new Map<
+    string,
+    { generation: number; promise: Promise<string[]> }
+  >(),
+};
 
 export const createSegIndexedDbCache = async (
   storeName: 'gpt-seg-cache' | 'sakura-seg-cache',
 ) => {
+  const get = (hash: string): Promise<string[] | undefined> =>
+    TranslationCacheRepo.get(storeName, hash);
+  const save = (hash: string, text: string[]): Promise<void> =>
+    TranslationCacheRepo.create(storeName, hash, text).then(() => {});
   return <SegmentCache>{
     cacheKey: (seg: string[], extra?: unknown): string =>
       MD5(JSON.stringify({ seg, extra })).toString(),
 
-    get: (hash: string): Promise<string[] | undefined> =>
-      TranslationCacheRepo.get(storeName, hash),
+    get,
+    save,
+    getOrCreate: async (hash, producer) => {
+      const generation = TranslationCacheRepo.generation(storeName);
+      const cached = await get(hash).catch(() => undefined);
+      if (cached !== undefined) return { output: cached, source: 'cache' };
 
-    save: (hash: string, text: string[]): Promise<void> =>
-      TranslationCacheRepo.create(storeName, hash, text).then(() => {}),
+      const active = cacheInFlight[storeName].get(hash);
+      if (active?.generation === generation) {
+        return { output: await active.promise, source: 'deduplicated' };
+      }
+
+      const pending = producer();
+      const inFlight = { generation, promise: pending };
+      cacheInFlight[storeName].set(hash, inFlight);
+      try {
+        const output = await pending;
+        if (TranslationCacheRepo.generation(storeName) === generation) {
+          await save(hash, output).catch(() => {});
+        }
+        return { output, source: 'provider' };
+      } finally {
+        if (cacheInFlight[storeName].get(hash) === inFlight) {
+          cacheInFlight[storeName].delete(hash);
+        }
+      }
+    },
   };
 };
