@@ -466,23 +466,10 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     exact: true,
   });
   await expect(filterButton).toHaveAttribute('aria-pressed', 'false');
-  const filterTransitionDurations = await page
-    .locator('.bookshelf-toolbar__filter')
-    .evaluate((button) =>
-      [
-        button,
-        ...button.querySelectorAll(
-          '.n-button__border, .n-button__state-border',
-        ),
-      ].map((element) => getComputedStyle(element).transitionDuration),
-    );
-  expect(filterTransitionDurations.every((duration) => duration === '0s')).toBe(
-    true,
-  );
   await filterButton.click();
   const filterPanel = page.locator('.bookshelf-filter-panel');
   await expect(filterPanel).toBeVisible();
-  await expect(filterButton).toHaveText('取消筛选');
+  await expect(filterButton).toHaveText('筛选');
   await expect(filterButton).toHaveAttribute('aria-pressed', 'true');
   const inlineFilterLayout = await page.evaluate(() => {
     const toolbar = document.querySelector<HTMLElement>('.bookshelf-toolbar');
@@ -559,7 +546,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(page.getByRole('heading', { name: 'Alpha Upload' })).toHaveCount(
     0,
   );
-  await expect(filterButton).toHaveText('取消筛选');
+  await expect(filterButton).toHaveText('筛选');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByPlaceholder('输入书名，搜索书架')).toBeVisible();

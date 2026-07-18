@@ -351,7 +351,7 @@ onMounted(reload);
           :aria-pressed="filterButtonActive"
           @click="handleFilterButtonClick"
         >
-          {{ filterButtonActive ? '取消筛选' : '筛选' }}
+          筛选
         </n-button>
         <n-select
           v-model:value="sort"
@@ -534,12 +534,6 @@ onMounted(reload);
 
 .bookshelf-toolbar__filter {
   width: 100%;
-  transition: none !important;
-}
-
-.bookshelf-toolbar__filter :deep(.n-button__border),
-.bookshelf-toolbar__filter :deep(.n-button__state-border) {
-  transition: none !important;
 }
 
 .bookshelf-filter-panel {
