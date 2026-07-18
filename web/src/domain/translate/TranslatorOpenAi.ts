@@ -3,7 +3,7 @@ import type { Glossary } from '@/model/Glossary';
 import { delay, RegexUtil } from '@/util';
 
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
-import { createLengthSegmentor } from './Common';
+import { createBudgetSegmentor } from './Common';
 
 type OpenAi = ReturnType<typeof createOpenAiApi>;
 
@@ -25,7 +25,7 @@ export class OpenAiTranslator implements SegmentTranslator {
     this.api = createOpenAiApi(endpoint, key);
   }
 
-  segmentor = createLengthSegmentor(1500, 30);
+  segmentor = createBudgetSegmentor(1_500, 30, 4);
 
   async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, signal } = context;
@@ -64,7 +64,7 @@ export class OpenAiTranslator implements SegmentTranslator {
     };
 
     let retry = 0;
-    let failBecasueLineNumberNotMatch = 0;
+    let lineNumberMismatchCount = 0;
     while (true) {
       const result = await this.translateLines(seg, glossary, signal);
 
@@ -73,8 +73,12 @@ export class OpenAiTranslator implements SegmentTranslator {
         logSegInfo({ retry, lineNumber: [seg.length, result.answer.length] });
 
         if (seg.length !== result.answer.length) {
-          failBecasueLineNumberNotMatch += 1;
+          lineNumberMismatchCount += 1;
           log('输出错误：输出行数不匹配');
+          if (seg.length > 1) {
+            log('直接拆分异常分段，避免重复请求相同内容');
+            break;
+          }
         } else if (!isChinese) {
           log('输出错误：输出语言不是中文');
         } else {
@@ -87,7 +91,7 @@ export class OpenAiTranslator implements SegmentTranslator {
 
       retry += 1;
       if (retry >= 3) {
-        if (failBecasueLineNumberNotMatch === 3 && seg.length > 1) {
+        if (lineNumberMismatchCount === 3 && seg.length > 1) {
           log('连续三次行数不匹配，启动二分翻译');
           break;
         } else {
@@ -121,7 +125,7 @@ export class OpenAiTranslator implements SegmentTranslator {
             binaryRange: [left, right],
             lineNumber: [right - left, NaN],
           });
-          await this.onError(result, undefined, log);
+          await this.onError(result, signal, log);
         }
       } else {
         logSegInfo({
@@ -158,15 +162,34 @@ export class OpenAiTranslator implements SegmentTranslator {
     { message: string; delaySeconds?: number } | { answer: string[] }
   > {
     const parseAnswer = (answer: string) => {
-      return answer
+      const lines = answer
+        .replace(/^\s*```[^\n]*\n?/u, '')
+        .replace(/\n?```\s*$/u, '')
         .split('\n')
-        .filter((s) => s.trim())
-        .map((s, i) =>
-          s
-            .replace(`#${i + 1}:`, '')
-            .replace(`#${i + 1}：`, '')
-            .trim(),
+        .filter((line) => line.trim().length > 0);
+      const numbered = new Map<number, string>();
+      let duplicateNumber = false;
+      for (const line of lines) {
+        const match = /^\s*#(\d+)\s*[:：]\s?(.*)$/u.exec(line);
+        if (match === null) continue;
+        const lineNumber = Number(match[1]);
+        if (numbered.has(lineNumber)) duplicateNumber = true;
+        numbered.set(lineNumber, match[2].trim());
+      }
+      if (
+        !duplicateNumber &&
+        numbered.size === lines.length &&
+        Array.from({ length: lines.length }, (_, index) => index + 1).every(
+          (lineNumber) => numbered.has(lineNumber),
+        )
+      ) {
+        return Array.from({ length: lines.length }, (_, index) =>
+          numbered.get(index + 1)!,
         );
+      }
+      return lines.map((line) =>
+        line.replace(/^\s*#\d+\s*[:：]\s?/u, '').trim(),
+      );
     };
 
     return askApi(this.api, this.model, buildMessages(lines, glossary), signal)

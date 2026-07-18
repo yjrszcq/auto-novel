@@ -6,7 +6,10 @@ vi.hoisted(() => {
   vi.stubGlobal('Audio', class {});
 });
 
-import { createLengthSegmentor } from '../src/domain/translate/Common';
+import {
+  createBudgetSegmentor,
+  estimateTranslationSize,
+} from '../src/domain/translate/Common';
 import {
   createConcurrencyLimiter,
   runWithConcurrency,
@@ -43,21 +46,31 @@ describe('translation optimization baselines', () => {
       '丁'.repeat(15),
       '戊戊',
     ];
-    const segments = createLengthSegmentor(10, 3)(lines);
+    const segments = createBudgetSegmentor(10, 3)(lines);
 
-    expect(segments.map(([input]) => input.join('').length)).toEqual([
-      10, 1, 15, 2,
-    ]);
-    expect(segments.flatMap(([input]) => input)).toEqual(lines);
     expect(
-      Math.max(...segments.map(([input]) => input.join('').length)),
-    ).toBeGreaterThan(10);
+      segments.map(([input]) => input.map(estimateTranslationSize)),
+    ).toEqual([[6, 4], [1], [10], [5, 2]]);
+    const reconstructed = Array.from({ length: lines.length }, () => '');
+    segments.forEach(([input, , sourceLineIndexes]) => {
+      input.forEach((part, index) => {
+        reconstructed[sourceLineIndexes[index]] += part;
+      });
+    });
+    expect(reconstructed).toEqual(lines);
+    expect(
+      Math.max(
+        ...segments.map(([input]) =>
+          input.reduce((size, line) => size + estimateTranslationSize(line), 0),
+        ),
+      ),
+    ).toBeLessThanOrEqual(10);
   });
 
   it('records whole-segment retry amplification before binary recovery', async () => {
     const server = await startOpenAiTestServer({
       onChat: (request) => {
-        if (request.index < 3) {
+        if (request.index === 0) {
           return { content: '#1:行数错误' };
         }
         const prompt = request.body.messages.at(-1)?.content ?? '';
@@ -75,7 +88,47 @@ describe('translation optimization baselines', () => {
     await expect(
       translator.translate(['甲', '乙', '丙', '丁']),
     ).resolves.toEqual(['译文1', '译文2', '译文1', '译文2']);
-    expect(server.requests).toHaveLength(5);
+    expect(server.requests).toHaveLength(3);
+  });
+
+  it('restores numbered output order from fenced model responses', async () => {
+    const server = await startOpenAiTestServer({
+      onChat: () => ({
+        content: '```text\n#2：第二行译文\n#1: 第一行译文\n```',
+      }),
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'ordered-output-key',
+      model: 'ordered-output-model',
+    });
+
+    await expect(translator.translate(['第一行', '第二行'])).resolves.toEqual([
+      '第一行译文',
+      '第二行译文',
+    ]);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('reconstructs unchanged translations after oversized source lines split', async () => {
+    const server = await startOpenAiTestServer();
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'split-reuse-key',
+      model: 'split-reuse-model',
+    });
+    translator.segTranslator.segmentor = createBudgetSegmentor(3);
+
+    await expect(
+      translator.translate(['这是需要拆分的超长原文'], {
+        oldTextZh: ['这是应当完整复用的旧译文'],
+      }),
+    ).resolves.toEqual(['这是应当完整复用的旧译文']);
+    expect(server.requests).toHaveLength(0);
   });
 
   it('records duplicate provider work for simultaneous identical cache misses', async () => {
@@ -157,7 +210,7 @@ describe('translation optimization baselines', () => {
     const lines = Array.from({ length: 20_000 }, (_, index) =>
       `${index}`.padStart(8, '0'),
     );
-    const segments = createLengthSegmentor(1_500, 30)(lines);
+    const segments = createBudgetSegmentor(1_500, 30)(lines);
     const visited: number[] = [];
 
     await runWithConcurrency(segments, 4, async ([input]) => {

@@ -94,6 +94,28 @@ export class Translator {
         const segs = this.segTranslator.segmentor(textJp, oldTextZh);
         const size = segs.length;
         const segsZh: Array<string[] | undefined> = new Array(size);
+        const reconstructOutput = (
+          segmentLimit = size,
+          padToSourceLength = false,
+        ) => {
+          const coveredSourceIndexes = segs
+            .slice(0, segmentLimit)
+            .flatMap(([, , sourceLineIndexes]) => sourceLineIndexes);
+          const outputLength = padToSourceLength
+            ? textJp.length
+            : Math.max(-1, ...coveredSourceIndexes) + 1;
+          const reconstructed = Array.from({ length: outputLength }, () => '');
+          segs
+            .slice(0, segmentLimit)
+            .forEach(([, , sourceLineIndexes], segmentIndex) => {
+              const output = segsZh[segmentIndex];
+              if (output === undefined) return;
+              output.forEach((part, partIndex) => {
+                reconstructed[sourceLineIndexes[partIndex]] += part;
+              });
+            });
+          return reconstructed;
+        };
         const concurrency =
           this.segTranslator instanceof SakuraTranslator
             ? 1
@@ -124,9 +146,7 @@ export class Translator {
                 {
                   ...context,
                   signal: workerSignal,
-                  prevSegs: segsZh
-                    .slice(0, segIndex)
-                    .filter((it): it is string[] => Array.isArray(it)),
+                  prevSegs: segIndex === 0 ? [] : [reconstructOutput(segIndex)],
                   oldSegZh,
                   logger,
                 },
@@ -149,7 +169,7 @@ export class Translator {
           context?.signal,
         );
 
-        return segsZh.flat() as string[];
+        return reconstructOutput(size, true);
       },
     );
     return textZh;
@@ -200,7 +220,7 @@ export class Translator {
           glossary,
           prevSegs:
             this.segTranslator instanceof SakuraTranslator
-              ? prevSegs
+              ? this.segTranslator.selectPreviousContext(prevSegs)
               : undefined,
           translator: this.segTranslator.cacheIdentity,
         };

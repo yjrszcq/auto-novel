@@ -14,7 +14,7 @@ vi.hoisted(() => {
 
 import { Translator } from '../src/domain/translate/Translator';
 import {
-  createLengthSegmentor,
+  createBudgetSegmentor,
   type SegmentCache,
 } from '../src/domain/translate/Common';
 import { createConcurrencyLimiter } from '../src/domain/translate/Concurrency';
@@ -99,7 +99,7 @@ describe('translator HTTP integration', () => {
       key: 'barrier-key',
       model: 'barrier-model',
     });
-    translator.segTranslator.segmentor = createLengthSegmentor(1);
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
 
     const translation = translator.translate(
       ['原文甲', '原文乙', '原文丙'],
@@ -144,7 +144,7 @@ describe('translator HTTP integration', () => {
       key: 'ordering-key',
       model: 'ordering-model',
     });
-    translator.segTranslator.segmentor = createLengthSegmentor(1);
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
 
     const translation = translator.translate(
       ['原文甲', '原文乙', '原文丙'],
@@ -184,7 +184,7 @@ describe('translator HTTP integration', () => {
       key: 'limit-key',
       model: 'limit-model',
     });
-    translator.segTranslator.segmentor = createLengthSegmentor(1);
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
     const requestLimiter = createConcurrencyLimiter(2);
 
     const translations = Promise.all([
@@ -348,7 +348,7 @@ describe('translator HTTP integration', () => {
       key: 'context-free-key',
       model: 'context-free-model',
     });
-    translator.segTranslator.segmentor = createLengthSegmentor(1);
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
     const cacheValues = new Map<string, string[]>();
     const cacheExtras: unknown[] = [];
     const cache: SegmentCache = {
@@ -398,6 +398,7 @@ describe('translator HTTP integration', () => {
       },
       true,
     );
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
 
     await expect(translator.translate(['前文甲', '共同句'])).resolves.toEqual([
       '甲前文',
@@ -421,6 +422,7 @@ describe('translator HTTP integration', () => {
       segLength: 1,
       prevSegLength: 1,
     });
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
 
     await expect(
       translator.translate(['原文甲', '原文乙', '原文丙'], undefined, {

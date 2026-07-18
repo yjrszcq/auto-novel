@@ -13,7 +13,7 @@ vi.hoisted(() => {
   );
 });
 
-import { createLengthSegmentor } from '../src/domain/translate/Common';
+import { createBudgetSegmentor } from '../src/domain/translate/Common';
 import { translateLocal } from '../src/domain/translate/TranslateLocal';
 import { Translator } from '../src/domain/translate/Translator';
 import type {
@@ -132,7 +132,7 @@ describe('local volume concurrent translation', () => {
       key: 'chapter-key',
       model: 'chapter-model',
     });
-    translator.segTranslator.segmentor = createLengthSegmentor(1);
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
     const { callback, state } = createCallback();
 
     const translation = translateVolume(volumeId, callback, translator);

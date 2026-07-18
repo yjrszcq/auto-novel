@@ -1,7 +1,7 @@
 import { YoudaoApi } from '@/api';
 import { RegexUtil, safeJson } from '@/util';
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
-import { createGlossaryWrapper, createLengthSegmentor } from './Common';
+import { createBudgetSegmentor, createGlossaryWrapper } from './Common';
 
 export class YoudaoTranslator implements SegmentTranslator {
   id = <const>'youdao';
@@ -21,7 +21,7 @@ export class YoudaoTranslator implements SegmentTranslator {
     return this;
   }
 
-  segmentor = createLengthSegmentor(3500);
+  segmentor = createBudgetSegmentor(3500);
 
   async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, signal } = context;

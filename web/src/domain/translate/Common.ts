@@ -5,10 +5,16 @@ import { TranslationCacheRepo } from '@/repos';
 import type { Glossary } from '@/model/Glossary';
 import type { TranslatorId } from '@/model/Translator';
 
+export type TranslationSegment = [
+  input: string[],
+  previous: string[] | undefined,
+  sourceLineIndexes: number[],
+];
+
 export type Segmentor = (
   textJp: string[],
   textZh?: string[],
-) => [string[], string[]?][];
+) => TranslationSegment[];
 
 export type Logger = (message: string, detail?: string[]) => void;
 
@@ -115,52 +121,93 @@ export const createGlossaryWrapper = (glossary: Glossary) => {
   };
 };
 
-export const createLengthSegmentor = (
-  maxLength: number,
+export const estimateTranslationSize = (text: string) => {
+  let size = 0;
+  for (const character of text) {
+    if (/\s/u.test(character)) size += 0.25;
+    else if (/^[\x00-\x7f]$/u.test(character)) size += 0.5;
+    else if (
+      /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}/u.test(character)
+    ) {
+      size += 1;
+    } else size += 1;
+  }
+  return size;
+};
+
+const splitLineByBudget = (line: string, budget: number) => {
+  const characters = Array.from(line);
+  const parts: string[] = [];
+  let start = 0;
+  while (start < characters.length) {
+    let size = 0;
+    let end = start;
+    let naturalEnd = -1;
+    while (end < characters.length) {
+      const nextSize = estimateTranslationSize(characters[end]);
+      if (end > start && size + nextSize > budget) break;
+      size += nextSize;
+      end += 1;
+      if (
+        size >= budget * 0.6 &&
+        /[。！？.!?；;、，,：:\s]/u.test(characters[end - 1])
+      ) {
+        naturalEnd = end;
+      }
+    }
+    const splitAt =
+      end < characters.length && naturalEnd > start ? naturalEnd : end;
+    parts.push(characters.slice(start, splitAt).join(''));
+    start = splitAt;
+  }
+  return parts;
+};
+
+export const createBudgetSegmentor = (
+  maxSize: number,
   maxLine?: number,
+  lineOverhead = 0,
 ): Segmentor => {
   maxLine = maxLine ?? 65536;
+  const budget = Math.max(1, maxSize);
+  const contentBudget = Math.max(1, budget - lineOverhead);
 
   return (textJp: string[], textZh?: string[]) => {
-    type Seg = [string[], string[]?];
-    const segs: Seg[] = [];
+    const segs: TranslationSegment[] = [];
     let segJp: string[] = [];
     let segZh: string[] = [];
+    let sourceLineIndexes: number[] = [];
     let segSize = 0;
 
-    for (let i = 0; i < textJp.length; i++) {
-      const lineJp = textJp[i];
-      const lineJpSize = lineJp.length;
+    const flush = () => {
+      if (segJp.length === 0) return;
+      segs.push([
+        segJp,
+        textZh === undefined ? undefined : segZh,
+        sourceLineIndexes,
+      ]);
+      segJp = [];
+      segZh = [];
+      sourceLineIndexes = [];
+      segSize = 0;
+    };
 
-      if (segSize + lineJpSize > maxLength || segJp.length >= maxLine) {
-        if (segJp.length > 0) {
-          if (textZh === undefined) {
-            segs.push([segJp]);
-          } else {
-            segs.push([segJp, segZh]);
-            segZh = [];
-          }
-          segJp = [];
-          segSize = 0;
+    for (let i = 0; i < textJp.length; i++) {
+      const lineParts = splitLineByBudget(textJp[i], contentBudget);
+      for (let partIndex = 0; partIndex < lineParts.length; partIndex++) {
+        const lineJp = lineParts[partIndex];
+        const lineSize = estimateTranslationSize(lineJp) + lineOverhead;
+        if (segSize + lineSize > budget || segJp.length >= maxLine) flush();
+
+        segJp.push(lineJp);
+        sourceLineIndexes.push(i);
+        segSize += lineSize;
+        if (textZh !== undefined) {
+          segZh.push(partIndex === 0 ? textZh[i] : '');
         }
       }
-
-      if (textZh !== undefined) {
-        const lineZh = textZh[i];
-        segZh.push(lineZh);
-      }
-
-      segJp.push(lineJp);
-      segSize += lineJpSize;
     }
-
-    if (segJp.length > 0) {
-      if (textZh === undefined) {
-        segs.push([segJp]);
-      } else {
-        segs.push([segJp, segZh]);
-      }
-    }
+    flush();
     return segs;
   };
 };

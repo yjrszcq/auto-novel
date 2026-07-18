@@ -2,7 +2,7 @@ import { createOpenAiApi } from '@/api';
 import type { Glossary } from '@/model/Glossary';
 
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
-import { createLengthSegmentor } from './Common';
+import { createBudgetSegmentor, estimateTranslationSize } from './Common';
 
 export class SakuraTranslator implements SegmentTranslator {
   id = <const>'sakura';
@@ -13,7 +13,7 @@ export class SakuraTranslator implements SegmentTranslator {
   model?: {
     id: string;
   };
-  segmentor = createLengthSegmentor(500);
+  segmentor = createBudgetSegmentor(500);
   segLength = 500;
   prevSegLength = 500;
 
@@ -25,7 +25,7 @@ export class SakuraTranslator implements SegmentTranslator {
     this.cacheIdentity = { endpoint, version: this.version };
     this.api = createOpenAiApi(endpoint, 'no-key');
     if (segLength !== undefined) {
-      this.segmentor = createLengthSegmentor(segLength);
+      this.segmentor = createBudgetSegmentor(segLength);
       this.segLength = segLength;
     }
     if (prevSegLength !== undefined) {
@@ -55,10 +55,7 @@ export class SakuraTranslator implements SegmentTranslator {
     const { glossary, prevSegs, signal } = context;
     const log = context.logger ?? this.log;
     const concatedSeg = seg.join('\n');
-    const prevSegCount = -Math.ceil(this.prevSegLength / this.segLength);
-
-    const concatedPrevSeg =
-      prevSegCount === 0 ? '' : prevSegs.slice(prevSegCount).flat().join('\n');
+    const concatedPrevSeg = this.selectPreviousContext(prevSegs).join('\n');
 
     // 正常翻译
     let retry = 1;
@@ -118,6 +115,20 @@ export class SakuraTranslator implements SegmentTranslator {
       }
       return resultPerLine;
     }
+  }
+
+  selectPreviousContext(prevSegs: string[][]) {
+    const lines = prevSegs.flat();
+    const selected: string[] = [];
+    let size = 0;
+    for (let index = lines.length - 1; index >= 0; index--) {
+      const line = lines[index];
+      const lineSize = estimateTranslationSize(line);
+      if (selected.length > 0 && size + lineSize > this.prevSegLength) break;
+      selected.push(line);
+      size += lineSize;
+    }
+    return selected.reverse();
   }
 
   private async detectModel() {
