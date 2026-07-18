@@ -8,11 +8,20 @@ import {
 } from '@/pages/workspace/LocalVolumeManager';
 import { Setting, useSettingStore } from '@/stores';
 
-const props = defineProps<{
-  options?: { [key: string]: (volumes: LocalVolumeMetadata[]) => void };
-  filter?: (volume: LocalVolumeMetadata) => boolean;
-  showManagement?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    options?: { [key: string]: (volumes: LocalVolumeMetadata[]) => void };
+    filter?: (volume: LocalVolumeMetadata) => boolean;
+    showManagement?: boolean;
+    showMenu?: boolean;
+  }>(),
+  {
+    options: undefined,
+    filter: undefined,
+    showManagement: true,
+    showMenu: true,
+  },
+);
 
 const emit = defineEmits<{
   volumeAdd: [File];
@@ -46,11 +55,11 @@ const handleSelect = (key: string) => {
 };
 
 const downloadVolumes = async () => {
-  if (sortedVolumes.value.length === 0) {
-    message.info('没有选中小说');
+  if (volumes.value.length === 0) {
+    message.info('本地书库为空');
     return;
   }
-  const ids = sortedVolumes.value.map((it) => it.id);
+  const ids = volumes.value.map((it) => it.id);
   const { success, failed } = await store.downloadVolumes(ids);
   message.info(`${success}本小说被打包，${failed}本失败`);
 };
@@ -93,23 +102,23 @@ const sortedVolumes = computed(() => {
   <c-drawer-right title="本地小说">
     <template #action>
       <local-volume-upload-button
-        v-if="props.showManagement !== false"
+        v-if="props.showManagement"
         @done="emit('volumeAdd', $event)"
       />
       <c-button
-        v-if="props.showManagement !== false"
+        v-if="props.showManagement"
         label="下载"
         :icon="FileDownloadOutlined"
-        @click="downloadVolumes"
+        @action="downloadVolumes"
       />
       <n-dropdown
-        v-if="props.showManagement !== false"
+        v-if="props.showManagement && props.showMenu"
         trigger="click"
         :options="options"
         :keyboard="false"
         @select="handleSelect"
       >
-        <n-button circle>
+        <n-button circle aria-label="更多本地小说操作">
           <n-icon :component="MoreVertOutlined" />
         </n-button>
       </n-dropdown>

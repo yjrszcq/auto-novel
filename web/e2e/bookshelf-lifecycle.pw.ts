@@ -88,6 +88,17 @@ const readDownload = async (download: Download) => {
   return Buffer.concat(chunks);
 };
 
+const listArchiveEntries = async (buffer: Buffer) => {
+  const reader = new ZipReader(
+    new BlobReader(new Blob([Uint8Array.from(buffer)])),
+  );
+  try {
+    return (await reader.getEntries()).map((entry) => entry.filename).sort();
+  } finally {
+    await reader.close();
+  }
+};
+
 const inspectEpub = async (buffer: Buffer) => {
   const reader = new ZipReader(
     new BlobReader(new Blob([Uint8Array.from(buffer)])),
@@ -245,8 +256,43 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     0,
   );
 
+  await page.evaluate(() => {
+    const key = 'auto-novel:settings';
+    const settings = {
+      theme: 'system',
+      autoTopJobWhenAddTask: false,
+      menuCollapsed: false,
+      workspaceSound: false,
+      localVolumeOrder: { value: 'byCreateAt', desc: true },
+      homeDownloadMode: 'zh',
+      homeDownloadPriority: 'gpt',
+      embedMetadataInOriginalDownload: false,
+      embedMetadataInTranslatedDownload: false,
+      downloadFormat: {
+        mode: 'jp-zh',
+        translationsMode: 'parallel',
+        translations: ['gpt', 'sakura'],
+      },
+    };
+    localStorage.setItem(key, JSON.stringify(settings));
+  });
+  await page.reload();
   await page.getByRole('button', { name: '从本地书架添加' }).click();
   const localDrawer = page.locator('.n-drawer').filter({ hasText: '本地小说' });
+  await expect(
+    localDrawer.getByRole('button', { name: '添加', exact: true }),
+  ).toBeVisible();
+  await expect(
+    localDrawer.getByRole('button', { name: '更多本地小说操作' }),
+  ).toHaveCount(0);
+  const archiveDownload = page.waitForEvent('download');
+  await localDrawer.getByRole('button', { name: '下载', exact: true }).click();
+  const archive = await archiveDownload;
+  expect(archive.suggestedFilename()).toBe('批量下载[2].zip');
+  expect(await listArchiveEntries(await readDownload(archive))).toEqual([
+    'jp-zh.Bgs.Alpha Upload.txt',
+    'jp-zh.Bgs.Beta Upload.txt',
+  ]);
   await expect(
     localDrawer.getByText(betaFilename, { exact: true }),
   ).toBeVisible();

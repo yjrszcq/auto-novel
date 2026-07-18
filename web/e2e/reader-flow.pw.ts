@@ -378,9 +378,22 @@ test('opens a local bookshelf book safely through the current reader route', asy
     page.getByText('书架中还没有书籍', { exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '从本地书架添加' }).first().click();
-  await expect(page.getByText('本地小说', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '下载' })).not.toBeVisible();
-  await page
+  const bookshelfLocalDrawer = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: /^本地小说/ }),
+  });
+  await expect(bookshelfLocalDrawer).toBeVisible();
+  await expect(
+    bookshelfLocalDrawer.getByRole('button', { name: '添加', exact: true }),
+  ).toBeVisible();
+  await expect(
+    bookshelfLocalDrawer.getByRole('button', { name: '下载', exact: true }),
+  ).toBeVisible();
+  await expect(
+    bookshelfLocalDrawer.getByRole('button', {
+      name: '更多本地小说操作',
+    }),
+  ).toHaveCount(0);
+  await bookshelfLocalDrawer
     .getByRole('listitem')
     .getByRole('button', { name: '加入书架' })
     .click();
@@ -2549,6 +2562,21 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await page.reload();
 
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
+  const gptLocalDrawer = page
+    .locator('.n-drawer')
+    .filter({ hasText: '本地小说' });
+  await expect(
+    gptLocalDrawer.getByRole('button', { name: '添加', exact: true }),
+  ).toBeVisible();
+  await expect(
+    gptLocalDrawer.getByRole('button', { name: '下载', exact: true }),
+  ).toBeVisible();
+  await gptLocalDrawer
+    .getByRole('button', { name: '更多本地小说操作' })
+    .click();
+  await expect(page.getByText('全部排队', { exact: true })).toBeVisible();
+  await expect(page.getByText('批量删除', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
   const formatRetryInfo = page.getByRole('button', {
     name: '格式异常重试说明',
@@ -2600,6 +2628,21 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     page.getByRole('heading', { name: 'Sakura工作区' }),
   ).toBeVisible();
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
+  const sakuraLocalDrawer = page
+    .locator('.n-drawer')
+    .filter({ hasText: '本地小说' });
+  await expect(
+    sakuraLocalDrawer.getByRole('button', { name: '添加', exact: true }),
+  ).toBeVisible();
+  await expect(
+    sakuraLocalDrawer.getByRole('button', { name: '下载', exact: true }),
+  ).toBeVisible();
+  await sakuraLocalDrawer
+    .getByRole('button', { name: '更多本地小说操作' })
+    .click();
+  await expect(page.getByText('全部排队', { exact: true })).toBeVisible();
+  await expect(page.getByText('批量删除', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
   await expect(
     page.getByRole('textbox', { name: '格式异常完整重试次数' }),

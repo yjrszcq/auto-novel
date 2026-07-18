@@ -319,7 +319,8 @@ onMounted(reload);
       <local-volume-list
         v-model:show="showLocalVolumes"
         :filter="(volume) => unlistedBookIds.includes(volume.id)"
-        :show-management="false"
+        :show-menu="false"
+        @volume-add="reload"
       >
         <template #extra="{ volumes }">
           <n-flex align="center" :wrap="true">
