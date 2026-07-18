@@ -1,7 +1,7 @@
 FROM node:24.17.0-alpine3.24 AS builder
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@11.13.1 --activate
+RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
 WORKDIR /web
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile

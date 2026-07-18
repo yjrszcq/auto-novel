@@ -47,8 +47,7 @@ export class SakuraTranslator implements SegmentTranslator {
       model: this.model?.id,
       version: this.version,
     };
-    console.log('Model:');
-    console.log(this.model);
+    this.log(`模型：${this.model?.id ?? '未知'}`);
     return this;
   }
 
