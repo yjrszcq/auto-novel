@@ -212,6 +212,12 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     rightAlignedToolbar.headerRight,
   );
   expect(rightAlignedToolbar.toolbarWidth).toBeLessThanOrEqual(286);
+  const refreshWidth = await page
+    .locator('.bookshelf-toolbar__refresh')
+    .evaluate((button) => Math.round(button.getBoundingClientRect().width));
+  expect(refreshWidth).toBe(
+    headerActionLayout[0].right - headerActionLayout[0].left,
+  );
 
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
@@ -297,6 +303,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   ]);
 
   await page.getByRole('button', { name: '选择', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '选择', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(
     page.getByRole('button', { name: '排队 GPT', exact: true }),
   ).toBeDisabled();

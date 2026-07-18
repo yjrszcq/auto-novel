@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import {
   ChecklistOutlined,
-  CloseOutlined,
   FilterAltOutlined,
   RefreshOutlined,
 } from '@vicons/material';
@@ -257,9 +256,10 @@ onMounted(reload);
           @done="reload"
         />
         <c-button
-          :label="selectionMode ? '取消选择' : '选择'"
-          :icon="selectionMode ? CloseOutlined : ChecklistOutlined"
+          label="选择"
+          :icon="ChecklistOutlined"
           :type="selectionMode ? 'primary' : 'default'"
+          :aria-pressed="selectionMode"
           compact-on-mobile
           :round="false"
           @action="toggleSelectionMode"
@@ -557,12 +557,12 @@ onMounted(reload);
 
 .bookshelf-page--embedded .bookshelf-toolbar {
   flex: 0 0 auto;
-  grid-template-columns: 96px 180px;
+  grid-template-columns: max-content 180px;
   margin: 0 0 0 auto;
 }
 
 .bookshelf-toolbar__refresh {
-  width: 100%;
+  justify-self: end;
 }
 
 .bookshelf-filter-panel {
@@ -663,7 +663,7 @@ onMounted(reload);
 
   .bookshelf-page--embedded .bookshelf-toolbar {
     grid-column: auto;
-    grid-template-columns: minmax(64px, 0.7fr) minmax(0, 1.3fr);
+    grid-template-columns: max-content minmax(0, 1fr);
   }
 
   .bookshelf-page--embedded .bookshelf-toolbar__refresh,

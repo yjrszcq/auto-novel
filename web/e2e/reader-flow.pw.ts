@@ -1927,6 +1927,9 @@ test('uses a configured default cover for a local book without one', async ({
   expect(bookshelfLayout.refresh.left).toBeGreaterThanOrEqual(
     bookshelfLayout.add.right,
   );
+  expect(bookshelfLayout.refresh.right - bookshelfLayout.refresh.left).toBe(
+    bookshelfLayout.filter.right - bookshelfLayout.filter.left,
+  );
   expect(bookshelfLayout.sort.left).toBeGreaterThan(
     bookshelfLayout.filter.left,
   );
