@@ -24,8 +24,21 @@ export type SegmentProgressInfo = {
   chapter?: { index?: number; total?: number; id?: string };
   segmentIndex: number;
   segmentTotal: number;
+  workerId?: string;
   status: 'start' | 'success' | 'complete' | 'failed';
 };
+
+export type TranslationSegmentAssignment = {
+  chapter?: { index?: number; total?: number; id?: string };
+  segmentIndex: number;
+  segmentTotal: number;
+};
+
+export type SegmentDispatcher = (request: {
+  assignment: TranslationSegmentAssignment;
+  signal: AbortSignal;
+  execute: (translator: Translator, signal: AbortSignal) => Promise<string[]>;
+}) => Promise<{ output: string[]; workerId?: string }>;
 
 export type TranslatorConfig =
   | { id: 'baidu' }
@@ -36,6 +49,7 @@ export type TranslatorConfig =
 type TranslateRuntimeOptions = {
   concurrency?: number;
   requestLimiter?: ConcurrencyLimiter;
+  segmentDispatcher?: SegmentDispatcher;
   chapter?: {
     index: number;
     total: number;
@@ -123,14 +137,17 @@ export class Translator {
               segIndex + 1,
               size,
             );
-            const logger = (message: string, detail?: string[]) =>
-              this.log(`${logLabel} ${message}`, detail);
-            const translateSegment = () =>
-              this.translateSeg(
+            const translateSegment = (
+              translator: Translator,
+              signal: AbortSignal,
+            ) => {
+              const logger = (message: string, detail?: string[]) =>
+                translator.log(`${logLabel} ${message}`, detail);
+              return translator.translateSeg(
                 segJp,
                 {
                   ...context,
-                  signal: workerSignal,
+                  signal,
                   prevSegs:
                     usesSequentialContext && sequentialContextLength > 0
                       ? [sequentialContext.slice(0, sequentialContextLength)]
@@ -140,9 +157,27 @@ export class Translator {
                 },
                 logLabel,
               );
-            const segZh = options?.requestLimiter
-              ? await options.requestLimiter.run(translateSegment, workerSignal)
-              : await translateSegment();
+            };
+            let workerId: string | undefined;
+            let segZh: string[];
+            if (options?.segmentDispatcher) {
+              const dispatched = await options.segmentDispatcher({
+                assignment: {
+                  chapter: options.chapter,
+                  segmentIndex: segIndex + 1,
+                  segmentTotal: size,
+                },
+                signal: workerSignal,
+                execute: translateSegment,
+              });
+              segZh = dispatched.output;
+              workerId = dispatched.workerId;
+            } else {
+              const execute = () => translateSegment(this, workerSignal);
+              segZh = options?.requestLimiter
+                ? await options.requestLimiter.run(execute, workerSignal)
+                : await execute();
+            }
             if (segJp.length !== segZh.length) {
               throw new Error('翻译结果行数不匹配。不应当出现，请反馈给站长。');
             }
@@ -161,6 +196,7 @@ export class Translator {
               chapter: options?.chapter,
               segmentIndex: segIndex + 1,
               segmentTotal: size,
+              workerId,
               status: 'success',
             });
           },

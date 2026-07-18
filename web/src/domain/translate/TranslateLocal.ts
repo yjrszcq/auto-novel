@@ -11,7 +11,11 @@ import type {
 import { normalizeTranslationConcurrency } from '@/model/Translator';
 import { useLocalVolumeStore } from '@/stores';
 import { createConcurrencyLimiter, runWithConcurrency } from './Concurrency';
-import type { SegmentProgressInfo, Translator } from './Translator';
+import type {
+  SegmentDispatcher,
+  SegmentProgressInfo,
+  Translator,
+} from './Translator';
 
 export const translateLocal = async (
   { volumeId }: LocalTranslateTaskDesc,
@@ -21,6 +25,7 @@ export const translateLocal = async (
   signal?: AbortSignal,
   options?: {
     concurrency?: number;
+    segmentDispatcher?: SegmentDispatcher;
     onSegmentProgress?: (info: SegmentProgressInfo) => void;
   },
 ) => {
@@ -110,7 +115,11 @@ export const translateLocal = async (
         },
         {
           concurrency,
-          requestLimiter,
+          requestLimiter:
+            options?.segmentDispatcher === undefined
+              ? requestLimiter
+              : undefined,
+          segmentDispatcher: options?.segmentDispatcher,
           chapter: {
             index: schedulerIndex + 1,
             total: chapters.length,
