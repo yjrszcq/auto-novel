@@ -250,20 +250,6 @@ onMounted(reload);
     <header class="bookshelf-page__header">
       <h1 v-if="!props.embedded">书架</h1>
       <div class="bookshelf-page__header-actions">
-        <local-volume-upload-button
-          compact-on-mobile
-          :round="false"
-          @done="reload"
-        />
-        <c-button
-          label="选择"
-          :icon="ChecklistOutlined"
-          :type="selectionMode ? 'primary' : 'default'"
-          :aria-pressed="selectionMode"
-          compact-on-mobile
-          :round="false"
-          @action="toggleSelectionMode"
-        />
         <c-button
           label="筛选"
           :icon="FilterAltOutlined"
@@ -274,6 +260,20 @@ onMounted(reload);
           compact-on-mobile
           :round="false"
           @action="handleFilterButtonClick"
+        />
+        <c-button
+          label="选择"
+          :icon="ChecklistOutlined"
+          :type="selectionMode ? 'primary' : 'default'"
+          :aria-pressed="selectionMode"
+          compact-on-mobile
+          :round="false"
+          @action="toggleSelectionMode"
+        />
+        <local-volume-upload-button
+          compact-on-mobile
+          :round="false"
+          @done="reload"
         />
       </div>
       <div
@@ -320,59 +320,63 @@ onMounted(reload);
 
     <template v-else>
       <div v-if="selectionMode" class="bookshelf-selection-toolbar">
-        <n-text>已选择 {{ selectedBookIds.size }} 本</n-text>
-        <n-button
-          v-if="selectedBook && !selectedBook.state.pinned"
-          :loading="batchUpdating"
-          @click="updateSelectedBooks('pin')"
-        >
-          置顶
-        </n-button>
-        <n-button
-          v-if="selectedBook?.state.pinned"
-          :loading="batchUpdating"
-          @click="updateSelectedBooks('unpin')"
-        >
-          取消置顶
-        </n-button>
-        <n-button @click="toggleVisibleSelection">
-          {{ allVisibleBooksSelected ? '反选' : '全选' }}
-        </n-button>
-        <n-button
-          :disabled="selectedBookIds.size === 0"
-          @click="queueSelectedBooks('gpt')"
-        >
-          排队 GPT
-        </n-button>
-        <n-button
-          :disabled="selectedBookIds.size === 0"
-          @click="queueSelectedBooks('sakura')"
-        >
-          排队 Sakura
-        </n-button>
-        <n-button
-          :disabled="selectedBookIds.size === 0"
-          :loading="downloadingSelectedBooks"
-          @click="downloadSelectedBooks"
-        >
-          下载
-        </n-button>
-        <n-popconfirm
-          :disabled="selectedBookIds.size === 0"
-          @positive-click="updateSelectedBooks('delete')"
-        >
-          <template #trigger>
-            <n-button
-              secondary
-              type="error"
-              :disabled="selectedBookIds.size === 0"
-              :loading="batchUpdating"
-            >
-              删除书籍
-            </n-button>
-          </template>
-          确定永久删除所选书籍及其阅读数据吗？此操作无法恢复。
-        </n-popconfirm>
+        <n-text class="bookshelf-selection-toolbar__summary">
+          已选择 {{ selectedBookIds.size }} 本
+        </n-text>
+        <div class="bookshelf-selection-toolbar__actions">
+          <n-button
+            v-if="selectedBook && !selectedBook.state.pinned"
+            :loading="batchUpdating"
+            @click="updateSelectedBooks('pin')"
+          >
+            置顶
+          </n-button>
+          <n-button
+            v-if="selectedBook?.state.pinned"
+            :loading="batchUpdating"
+            @click="updateSelectedBooks('unpin')"
+          >
+            取消置顶
+          </n-button>
+          <n-button @click="toggleVisibleSelection">
+            {{ allVisibleBooksSelected ? '反选' : '全选' }}
+          </n-button>
+          <n-button
+            :disabled="selectedBookIds.size === 0"
+            @click="queueSelectedBooks('gpt')"
+          >
+            排队 GPT
+          </n-button>
+          <n-button
+            :disabled="selectedBookIds.size === 0"
+            @click="queueSelectedBooks('sakura')"
+          >
+            排队 Sakura
+          </n-button>
+          <n-button
+            :disabled="selectedBookIds.size === 0"
+            :loading="downloadingSelectedBooks"
+            @click="downloadSelectedBooks"
+          >
+            下载
+          </n-button>
+          <n-popconfirm
+            :disabled="selectedBookIds.size === 0"
+            @positive-click="updateSelectedBooks('delete')"
+          >
+            <template #trigger>
+              <n-button
+                secondary
+                type="error"
+                :disabled="selectedBookIds.size === 0"
+                :loading="batchUpdating"
+              >
+                删除书籍
+              </n-button>
+            </template>
+            确定永久删除所选书籍及其阅读数据吗？此操作无法恢复。
+          </n-popconfirm>
+        </div>
       </div>
 
       <div v-show="showFilterPanel" class="bookshelf-filter-panel">
@@ -585,7 +589,6 @@ onMounted(reload);
 .bookshelf-selection-toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 10px;
   padding: 12px 14px;
   margin-bottom: 12px;
@@ -594,9 +597,18 @@ onMounted(reload);
   background: var(--n-card-color);
 }
 
-.bookshelf-selection-toolbar > :first-child {
-  padding-right: 4px;
+.bookshelf-selection-toolbar__summary {
+  flex: 0 0 auto;
   font-weight: 500;
+}
+
+.bookshelf-selection-toolbar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .book-grid {

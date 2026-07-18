@@ -164,7 +164,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(headerActionLayout).toHaveLength(3);
   await expect(
     page.locator('.bookshelf-page__header-actions button'),
-  ).toHaveText(['添加', '选择', '筛选']);
+  ).toHaveText(['筛选', '选择', '添加']);
   expect(
     new Set(headerActionLayout.map(({ left, right }) => right - left)).size,
   ).toBe(1);
@@ -318,6 +318,22 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .getByRole('button', { name: '选择书籍', exact: true })
     .click();
   const selectionToolbar = page.locator('.bookshelf-selection-toolbar');
+  const selectionActionAlignment = await selectionToolbar.evaluate(
+    (toolbar) => {
+      const actions = toolbar.querySelector<HTMLElement>(
+        '.bookshelf-selection-toolbar__actions',
+      );
+      if (actions === null) throw new Error('缺少书架批量操作组');
+      return {
+        actionsRight: Math.round(actions.getBoundingClientRect().right),
+        toolbarRight: Math.round(toolbar.getBoundingClientRect().right),
+      };
+    },
+  );
+  expect(
+    selectionActionAlignment.toolbarRight -
+      selectionActionAlignment.actionsRight,
+  ).toBeLessThanOrEqual(16);
   const batchButtonStyles = await selectionToolbar
     .getByRole('button')
     .evaluateAll((buttons) =>
