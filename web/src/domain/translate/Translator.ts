@@ -8,6 +8,7 @@ import { YoudaoTranslator } from './TranslatorYoudao';
 import type { Logger, SegmentCache, SegmentTranslator } from './Common';
 import { createSegIndexedDbCache } from './Common';
 import { RegexUtil } from '@/util';
+import type { ConcurrencyLimiter } from './Concurrency';
 import { runWithConcurrency } from './Concurrency';
 
 const glossariesEqual = (left: Glossary, right: Glossary) => {
@@ -33,6 +34,7 @@ export type TranslatorConfig =
 
 type TranslateRuntimeOptions = {
   concurrency?: number;
+  requestLimiter?: ConcurrencyLimiter;
   chapter?: {
     index: number;
     total: number;
@@ -92,7 +94,10 @@ export class Translator {
         const segs = this.segTranslator.segmentor(textJp, oldTextZh);
         const size = segs.length;
         const segsZh: Array<string[] | undefined> = new Array(size);
-        const concurrency = Math.max(1, options?.concurrency ?? 1);
+        const concurrency =
+          this.segTranslator instanceof SakuraTranslator
+            ? 1
+            : Math.max(1, options?.concurrency ?? 1);
 
         options?.onSegmentProgress?.({
           chapter: options?.chapter,
@@ -104,7 +109,7 @@ export class Translator {
         await runWithConcurrency(
           Array.from({ length: size }, (_, i) => i),
           concurrency,
-          async (segIndex) => {
+          async (segIndex, _index, workerSignal) => {
             const [segJp, oldSegZh] = segs[segIndex];
             const logLabel = buildLogLabel(
               options?.chapter,
@@ -113,18 +118,23 @@ export class Translator {
             );
             const logger = (message: string, detail?: string[]) =>
               this.log(`${logLabel} ${message}`, detail);
-            const segZh = await this.translateSeg(
-              segJp,
-              {
-                ...context,
-                prevSegs: segsZh
-                  .slice(0, segIndex)
-                  .filter((it): it is string[] => Array.isArray(it)),
-                oldSegZh,
-                logger,
-              },
-              logLabel,
-            );
+            const translateSegment = () =>
+              this.translateSeg(
+                segJp,
+                {
+                  ...context,
+                  signal: workerSignal,
+                  prevSegs: segsZh
+                    .slice(0, segIndex)
+                    .filter((it): it is string[] => Array.isArray(it)),
+                  oldSegZh,
+                  logger,
+                },
+                logLabel,
+              );
+            const segZh = options?.requestLimiter
+              ? await options.requestLimiter.run(translateSegment, workerSignal)
+              : await translateSegment();
             if (segJp.length !== segZh.length) {
               throw new Error('翻译结果行数不匹配。不应当出现，请反馈给站长。');
             }
@@ -186,20 +196,18 @@ export class Translator {
     let cacheKey: string | undefined;
     if (this.segCache) {
       try {
-        const extra: {
-          glossary: Glossary;
-          version?: string;
-          model?: SakuraTranslator['model'];
-        } = { glossary };
-        if (this.segTranslator instanceof SakuraTranslator) {
-          extra.version = this.segTranslator.version;
-          extra.model = this.segTranslator.model;
-        }
+        const extra = {
+          glossary,
+          prevSegs,
+          translator: this.segTranslator.cacheIdentity,
+        };
         cacheKey = this.segCache.cacheKey(seg, extra);
-        const cachedSegOutput = await this.segCache.get(cacheKey);
-        if (cachedSegOutput && cachedSegOutput.length === seg.length) {
-          log('从缓存恢复');
-          return cachedSegOutput;
+        if (!force) {
+          const cachedSegOutput = await this.segCache.get(cacheKey);
+          if (cachedSegOutput && cachedSegOutput.length === seg.length) {
+            log('从缓存恢复');
+            return cachedSegOutput;
+          }
         }
       } catch (e) {
         console.error('缓存读取失败');

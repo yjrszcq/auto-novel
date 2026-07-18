@@ -22,7 +22,7 @@ export const createOpenAiApi = (endpoint: string, key: string) => {
   });
 
   const listModels = (options?: Options): Promise<ModelsPage> =>
-    client.get('models', options).json<ModelsPage>();
+    client.get('models', options).json<ModelsPage>().catch(OpenAiError.handle);
 
   const createChatCompletionsStream = (
     json: ChatCompletion.Params & { stream: true },
@@ -31,7 +31,8 @@ export const createOpenAiApi = (endpoint: string, key: string) => {
     client
       .post('chat/completions', { json, ...options })
       .text()
-      .then(parseEventStream<ChatCompletionChunk>);
+      .then(parseEventStream<ChatCompletionChunk>)
+      .catch(OpenAiError.handle);
 
   const createChatCompletions = (
     json: ChatCompletion.Params & { stream?: false },
@@ -39,7 +40,8 @@ export const createOpenAiApi = (endpoint: string, key: string) => {
   ): Promise<ChatCompletion> =>
     client
       .post('chat/completions', { json, ...options })
-      .json<ChatCompletion>();
+      .json<ChatCompletion>()
+      .catch(OpenAiError.handle);
 
   return {
     listModels,

@@ -21,6 +21,7 @@ export type SegmentContext = {
 
 export interface SegmentTranslator {
   id: TranslatorId;
+  cacheIdentity?: Readonly<Record<string, unknown>>;
   segmentor: Segmentor;
   translate: (seg: string[], context: SegmentContext) => Promise<string[]>;
   log: (message: string, detail?: string[]) => void;

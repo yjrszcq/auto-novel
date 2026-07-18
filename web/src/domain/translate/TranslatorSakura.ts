@@ -6,6 +6,7 @@ import { createLengthSegmentor } from './Common';
 
 export class SakuraTranslator implements SegmentTranslator {
   id = <const>'sakura';
+  cacheIdentity: Readonly<Record<string, unknown>>;
   log: (message: string, detail?: string[]) => void;
   private api;
   version: string = '0.9';
@@ -21,6 +22,7 @@ export class SakuraTranslator implements SegmentTranslator {
     { endpoint, segLength, prevSegLength }: SakuraTranslator.Config,
   ) {
     this.log = log;
+    this.cacheIdentity = { endpoint, version: this.version };
     this.api = createOpenAiApi(endpoint, 'no-key');
     if (segLength !== undefined) {
       this.segmentor = createLengthSegmentor(segLength);
@@ -40,15 +42,17 @@ export class SakuraTranslator implements SegmentTranslator {
       else if (id.includes('0.10')) this.version = '0.10';
       else if (id.includes('1.0')) this.version = '1.0';
     }
+    this.cacheIdentity = {
+      ...this.cacheIdentity,
+      model: this.model?.id,
+      version: this.version,
+    };
     console.log('Model:');
     console.log(this.model);
     return this;
   }
 
-  async translate(
-    seg: string[],
-    context: SegmentContext,
-  ): Promise<string[]> {
+  async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, prevSegs, signal } = context;
     const log = context.logger ?? this.log;
     const concatedSeg = seg.join('\n');

@@ -9,6 +9,7 @@ type OpenAi = ReturnType<typeof createOpenAiApi>;
 
 export class OpenAiTranslator implements SegmentTranslator {
   id = <const>'gpt';
+  cacheIdentity: Readonly<Record<string, unknown>>;
   log: Logger;
   private api: OpenAi;
   private model: string;
@@ -16,6 +17,11 @@ export class OpenAiTranslator implements SegmentTranslator {
   constructor(log: Logger, { model, endpoint, key }: OpenAiTranslator.Config) {
     this.log = log;
     this.model = model;
+    this.cacheIdentity = {
+      endpoint,
+      model,
+      prompt: 'openai-light-novel-v1',
+    };
     this.api = createOpenAiApi(endpoint, key);
   }
 

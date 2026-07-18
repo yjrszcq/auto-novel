@@ -9,7 +9,7 @@ import type {
   TranslateTaskParams,
 } from '@/model/Translator';
 import { useLocalVolumeStore } from '@/stores';
-import { runWithConcurrency } from './Concurrency';
+import { createConcurrencyLimiter, runWithConcurrency } from './Concurrency';
 import type { SegmentProgressInfo, Translator } from './Translator';
 
 export const translateLocal = async (
@@ -18,7 +18,10 @@ export const translateLocal = async (
   callback: TranslateTaskCallback,
   translator: Translator,
   signal?: AbortSignal,
-  options?: { concurrency?: number; onSegmentProgress?: (info: SegmentProgressInfo) => void },
+  options?: {
+    concurrency?: number;
+    onSegmentProgress?: (info: SegmentProgressInfo) => void;
+  },
 ) => {
   const localVolumeRepository = await useLocalVolumeStore();
   // Api
@@ -83,11 +86,13 @@ export const translateLocal = async (
 
   const forceSeg = level === 'all';
   const concurrency = Math.max(1, options?.concurrency ?? 1);
+  const requestLimiter = createConcurrencyLimiter(concurrency);
 
-  const translateChapter = async ({
-    chapterId,
-    index,
-  }: (typeof chapters)[number]) => {
+  const translateChapter = async (
+    { chapterId, index }: (typeof chapters)[number],
+    _schedulerIndex: number,
+    workerSignal: AbortSignal,
+  ) => {
     try {
       callback.log(`\n[${index}] ${volumeId}/${chapterId}`);
       const chapter = await getChapter(chapterId);
@@ -109,10 +114,11 @@ export const translateLocal = async (
             ? oldTextsZh[translator.id]?.paragraphs
             : undefined,
           force: forceSeg,
-          signal,
+          signal: workerSignal,
         },
         {
           concurrency,
+          requestLimiter,
           chapter: {
             index: index + 1,
             total: chapters.length,
