@@ -351,51 +351,75 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     const selection = toolbar.querySelector<HTMLElement>(
       '.bookshelf-selection-toolbar__selection',
     );
-    const actions = toolbar.querySelector<HTMLElement>(
-      '.bookshelf-selection-toolbar__actions',
+    const pinActions = toolbar.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar__pin-actions',
     );
-    const selectAll = toolbar.querySelector<HTMLElement>(
-      '.bookshelf-selection-toolbar__select-all',
+    const queueActions = toolbar.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar__queue-actions',
     );
-    const summary = toolbar.querySelector<HTMLElement>(
-      '.bookshelf-selection-toolbar__summary',
+    const fileActions = toolbar.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar__file-actions',
     );
     if (
       selection === null ||
-      actions === null ||
-      selectAll === null ||
-      summary === null
+      pinActions === null ||
+      queueActions === null ||
+      fileActions === null
     ) {
       throw new Error('缺少手机版书架选择工具栏元素');
     }
     const toolbarBounds = toolbar.getBoundingClientRect();
     const selectionBounds = selection.getBoundingClientRect();
-    const actionsBounds = actions.getBoundingClientRect();
-    const selectAllBounds = selectAll.getBoundingClientRect();
-    const summaryBounds = summary.getBoundingClientRect();
+    const pinBounds = pinActions.getBoundingClientRect();
+    const queueBounds = queueActions.getBoundingClientRect();
+    const fileBounds = fileActions.getBoundingClientRect();
     return {
-      actionsTop: Math.round(actionsBounds.top),
-      selectAllBottom: Math.round(selectAllBounds.bottom),
-      selectAllLeft: Math.round(selectAllBounds.left),
+      fileLeft: Math.round(fileBounds.left),
+      fileRight: Math.round(fileBounds.right),
+      fileTop: Math.round(fileBounds.top),
+      pinLeft: Math.round(pinBounds.left),
+      pinRight: Math.round(pinBounds.right),
+      pinTop: Math.round(pinBounds.top),
+      queueLeft: Math.round(queueBounds.left),
+      queueRight: Math.round(queueBounds.right),
+      queueTop: Math.round(queueBounds.top),
+      selectionBottom: Math.round(selectionBounds.bottom),
       selectionLeft: Math.round(selectionBounds.left),
       selectionRight: Math.round(selectionBounds.right),
-      summaryRight: Math.round(summaryBounds.right),
+      selectionTop: Math.round(selectionBounds.top),
+      toolbarLeft: Math.round(toolbarBounds.left),
       toolbarRight: Math.round(toolbarBounds.right),
-      actionsRight: Math.round(actionsBounds.right),
     };
   });
   expect(
-    mobileSelectionLayout.selectAllLeft - mobileSelectionLayout.selectionLeft,
-  ).toBeLessThanOrEqual(1);
+    mobileSelectionLayout.selectionLeft - mobileSelectionLayout.toolbarLeft,
+  ).toBeLessThanOrEqual(16);
   expect(
-    mobileSelectionLayout.selectionRight - mobileSelectionLayout.summaryRight,
-  ).toBeLessThanOrEqual(1);
-  expect(mobileSelectionLayout.actionsTop).toBeGreaterThan(
-    mobileSelectionLayout.selectAllBottom,
+    mobileSelectionLayout.toolbarRight - mobileSelectionLayout.pinRight,
+  ).toBeLessThanOrEqual(16);
+  expect(mobileSelectionLayout.pinRight).toBeLessThanOrEqual(
+    mobileSelectionLayout.toolbarRight,
+  );
+  expect(mobileSelectionLayout.pinLeft).toBeGreaterThanOrEqual(
+    mobileSelectionLayout.selectionRight,
+  );
+  expect(mobileSelectionLayout.pinTop).toBe(mobileSelectionLayout.selectionTop);
+  expect(mobileSelectionLayout.queueTop).toBeGreaterThan(
+    mobileSelectionLayout.selectionBottom,
   );
   expect(
-    mobileSelectionLayout.actionsRight - mobileSelectionLayout.toolbarRight,
-  ).toBeLessThanOrEqual(0);
+    mobileSelectionLayout.queueLeft - mobileSelectionLayout.toolbarLeft,
+  ).toBeLessThanOrEqual(16);
+  expect(mobileSelectionLayout.fileTop).toBe(mobileSelectionLayout.queueTop);
+  expect(
+    mobileSelectionLayout.toolbarRight - mobileSelectionLayout.fileRight,
+  ).toBeLessThanOrEqual(16);
+  expect(mobileSelectionLayout.fileRight).toBeLessThanOrEqual(
+    mobileSelectionLayout.toolbarRight,
+  );
+  expect(mobileSelectionLayout.fileLeft).toBeGreaterThanOrEqual(
+    mobileSelectionLayout.queueRight,
+  );
   if (desktopViewport !== null) {
     await page.setViewportSize(desktopViewport);
   }
@@ -479,7 +503,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .filter({ hasText: 'Alpha Upload' })
     .getByRole('button', { name: '取消选择', exact: true })
     .click();
-  await page.getByRole('button', { name: '删除书籍', exact: true }).click();
+  await selectionToolbar
+    .getByRole('button', { name: '删除', exact: true })
+    .click();
   await page.getByRole('button', { name: '确认', exact: true }).click();
   await expect(page.getByText('1 本书已删除，0 本删除失败')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(

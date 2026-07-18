@@ -332,55 +332,61 @@ onMounted(reload);
           </n-text>
         </div>
         <div class="bookshelf-selection-toolbar__actions">
-          <n-button
-            v-if="selectedBook && !selectedBook.state.pinned"
-            :loading="batchUpdating"
-            @click="updateSelectedBooks('pin')"
-          >
-            置顶
-          </n-button>
-          <n-button
-            v-if="selectedBook?.state.pinned"
-            :loading="batchUpdating"
-            @click="updateSelectedBooks('unpin')"
-          >
-            取消置顶
-          </n-button>
-          <n-button
-            :disabled="selectedBookIds.size === 0"
-            @click="queueSelectedBooks('gpt')"
-          >
-            排队 GPT
-          </n-button>
-          <n-button
-            :disabled="selectedBookIds.size === 0"
-            @click="queueSelectedBooks('sakura')"
-          >
-            排队 Sakura
-          </n-button>
-          <n-button
-            :disabled="selectedBookIds.size === 0"
-            :loading="downloadingSelectedBooks"
-            @click="downloadSelectedBooks"
-          >
-            下载
-          </n-button>
-          <n-popconfirm
-            :disabled="selectedBookIds.size === 0"
-            @positive-click="updateSelectedBooks('delete')"
-          >
-            <template #trigger>
-              <n-button
-                secondary
-                type="error"
-                :disabled="selectedBookIds.size === 0"
-                :loading="batchUpdating"
-              >
-                删除书籍
-              </n-button>
-            </template>
-            确定永久删除所选书籍及其阅读数据吗？此操作无法恢复。
-          </n-popconfirm>
+          <div class="bookshelf-selection-toolbar__pin-actions">
+            <n-button
+              v-if="selectedBook && !selectedBook.state.pinned"
+              :loading="batchUpdating"
+              @click="updateSelectedBooks('pin')"
+            >
+              置顶
+            </n-button>
+            <n-button
+              v-if="selectedBook?.state.pinned"
+              :loading="batchUpdating"
+              @click="updateSelectedBooks('unpin')"
+            >
+              取消置顶
+            </n-button>
+          </div>
+          <div class="bookshelf-selection-toolbar__queue-actions">
+            <n-button
+              :disabled="selectedBookIds.size === 0"
+              @click="queueSelectedBooks('gpt')"
+            >
+              排队 GPT
+            </n-button>
+            <n-button
+              :disabled="selectedBookIds.size === 0"
+              @click="queueSelectedBooks('sakura')"
+            >
+              排队 Sakura
+            </n-button>
+          </div>
+          <div class="bookshelf-selection-toolbar__file-actions">
+            <n-button
+              :disabled="selectedBookIds.size === 0"
+              :loading="downloadingSelectedBooks"
+              @click="downloadSelectedBooks"
+            >
+              下载
+            </n-button>
+            <n-popconfirm
+              :disabled="selectedBookIds.size === 0"
+              @positive-click="updateSelectedBooks('delete')"
+            >
+              <template #trigger>
+                <n-button
+                  secondary
+                  type="error"
+                  :disabled="selectedBookIds.size === 0"
+                  :loading="batchUpdating"
+                >
+                  删除
+                </n-button>
+              </template>
+              确定永久删除所选书籍及其阅读数据吗？此操作无法恢复。
+            </n-popconfirm>
+          </div>
         </div>
       </div>
 
@@ -623,6 +629,14 @@ onMounted(reload);
   gap: 10px;
 }
 
+.bookshelf-selection-toolbar__pin-actions,
+.bookshelf-selection-toolbar__queue-actions,
+.bookshelf-selection-toolbar__file-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .book-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -705,17 +719,45 @@ onMounted(reload);
 
   .bookshelf-selection-toolbar {
     align-items: stretch;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .bookshelf-selection-toolbar__selection {
-    justify-content: space-between;
-    width: 100%;
+    grid-column: 1;
+    grid-row: 1;
   }
 
   .bookshelf-selection-toolbar__actions {
-    flex: 0 0 auto;
-    width: 100%;
+    display: contents;
+  }
+
+  .bookshelf-selection-toolbar__pin-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .bookshelf-selection-toolbar__queue-actions {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .bookshelf-selection-toolbar__file-actions {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .bookshelf-selection-toolbar__pin-actions,
+  .bookshelf-selection-toolbar__queue-actions,
+  .bookshelf-selection-toolbar__file-actions {
+    gap: 6px;
+  }
+
+  .bookshelf-selection-toolbar__actions .n-button {
+    padding-inline: 8px;
   }
 }
 </style>
