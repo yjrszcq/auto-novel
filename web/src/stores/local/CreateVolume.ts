@@ -2,8 +2,10 @@ import { parseFile, Srt } from '@/util/file';
 import { createUuid } from '@/util/uuid';
 
 import type {
+  LocalVolumeChapter,
   LocalVolumeChapterSourceRange,
   LocalBookMetadata,
+  LocalVolumeMetadata,
   LocalVolumeNavigationEntry,
   LocalVolumeTocEntry,
 } from '@/model/LocalVolume';
@@ -66,16 +68,16 @@ export const createVolume = async (
     chapters.push({ chapterId: '0', title: '字幕', paragraphs: lines });
   }
 
-  for (const { chapterId, paragraphs, sourceRanges } of chapters) {
-    await dao.createChapter({
+  const storedChapters = chapters.map<LocalVolumeChapter>(
+    ({ chapterId, paragraphs, sourceRanges }) => ({
       id: `${id}/${chapterId}`,
       volumeId: id,
       paragraphs,
       segmentIds: paragraphs.map(() => createUuid()),
       sourceRanges,
-    });
-  }
-  await dao.createMetadata({
+    }),
+  );
+  const metadata: LocalVolumeMetadata = {
     id,
     createAt: Date.now(),
     toc: chapters.map<LocalVolumeTocEntry>((it) => ({
@@ -90,14 +92,19 @@ export const createVolume = async (
     glossary: {},
     favoredId,
     sourceBookMetadata,
+  };
+  await dao.createVolume({
+    metadata,
+    file,
+    chapters: storedChapters,
+    cover:
+      embeddedCover === undefined
+        ? undefined
+        : {
+            bookId: id,
+            blob: embeddedCover,
+            source: 'embedded',
+            updatedAt: Date.now(),
+          },
   });
-  await dao.createFile(id, file);
-  if (embeddedCover !== undefined) {
-    await dao.putReaderCover({
-      bookId: id,
-      blob: embeddedCover,
-      source: 'embedded',
-      updatedAt: Date.now(),
-    });
-  }
 };

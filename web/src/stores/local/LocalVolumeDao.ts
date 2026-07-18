@@ -156,6 +156,35 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   const getFile = (id: string) => db.get('file', id);
   const createFile = (id: string, file: File) => db.put('file', { id, file });
 
+  const createVolume = async ({
+    metadata,
+    file,
+    chapters,
+    cover,
+  }: {
+    metadata: LocalVolumeMetadata;
+    file: File;
+    chapters: LocalVolumeChapter[];
+    cover?: ReaderCover;
+  }) => {
+    const tx = db.transaction(
+      ['metadata', 'file', 'chapter', 'reader-cover'],
+      'readwrite',
+    );
+    if (await tx.objectStore('metadata').get(metadata.id)) {
+      throw new Error('小说已经存在');
+    }
+    await Promise.all([
+      tx.objectStore('metadata').add(metadata),
+      tx.objectStore('file').add({ id: metadata.id, file }),
+      ...chapters.map((chapter) => tx.objectStore('chapter').add(chapter)),
+      cover === undefined
+        ? Promise.resolve()
+        : tx.objectStore('reader-cover').add(cover),
+    ]);
+    await tx.done;
+  };
+
   // Chapter
   const getChapter = (id: string, chapterId: string) =>
     db.get('chapter', `${id}/${chapterId}`);
@@ -292,6 +321,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     //
     getFile,
     createFile,
+    createVolume,
     //
     getChapter,
     createChapter,

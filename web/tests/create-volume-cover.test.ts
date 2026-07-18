@@ -54,10 +54,7 @@ describe('local EPUB import cover', () => {
 
     const dao = {
       getMetadata: vi.fn().mockResolvedValue(undefined),
-      createChapter: vi.fn().mockResolvedValue(undefined),
-      createMetadata: vi.fn().mockResolvedValue(undefined),
-      createFile: vi.fn().mockResolvedValue(undefined),
-      putReaderCover: vi.fn().mockResolvedValue(undefined),
+      createVolume: vi.fn().mockResolvedValue(undefined),
     } as unknown as LocalVolumeDao;
 
     await createVolume(
@@ -66,20 +63,21 @@ describe('local EPUB import cover', () => {
       'default',
     );
 
-    expect(dao.putReaderCover).toHaveBeenCalledWith({
-      bookId: 'book.epub',
-      blob: cover,
-      source: 'embedded',
-      updatedAt: expect.any(Number),
-    });
-    expect(dao.createChapter).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'book.epub/chapter.xhtml',
-        sourceRanges: [{ href: 'chapter.xhtml', start: 0, end: 1 }],
-      }),
-    );
-    expect(dao.createMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(dao.createVolume).toHaveBeenCalledWith({
+      file: expect.any(File),
+      cover: {
+        bookId: 'book.epub',
+        blob: cover,
+        source: 'embedded',
+        updatedAt: expect.any(Number),
+      },
+      chapters: [
+        expect.objectContaining({
+          id: 'book.epub/chapter.xhtml',
+          sourceRanges: [{ href: 'chapter.xhtml', start: 0, end: 1 }],
+        }),
+      ],
+      metadata: expect.objectContaining({
         sourceFormat: 'epub',
         toc: [{ chapterId: 'chapter.xhtml', title: '第一章' }],
         navigation: [
@@ -94,6 +92,6 @@ describe('local EPUB import cover', () => {
           languages: ['ja'],
         },
       }),
-    );
+    });
   });
 });
