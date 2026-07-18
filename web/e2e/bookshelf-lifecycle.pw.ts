@@ -235,12 +235,26 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   ]);
 
   await page.getByRole('button', { name: '选择', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '排队 GPT', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: '排队 Sakura', exact: true }),
+  ).toBeDisabled();
   await page
     .locator('.book-card')
     .filter({ hasText: 'Alpha Upload' })
     .getByRole('button', { name: '选择书籍', exact: true })
     .click();
   const selectionToolbar = page.locator('.bookshelf-selection-toolbar');
+  await selectionToolbar
+    .getByRole('button', { name: '排队 GPT', exact: true })
+    .click();
+  await expect(page.getByText('1本小说已排队，0本失败').last()).toBeVisible();
+  await selectionToolbar
+    .getByRole('button', { name: '排队 Sakura', exact: true })
+    .click();
+  await expect(page.getByText('1本小说已排队，0本失败').last()).toBeVisible();
   const singleShelfDownload = page.waitForEvent('download');
   await selectionToolbar
     .getByRole('button', { name: '下载', exact: true })
@@ -448,7 +462,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await page.reload();
 
   const filterButton = page.getByRole('button', {
-    name: '筛选',
+    name: '书架筛选',
     exact: true,
   });
   await expect(filterButton).toHaveAttribute('aria-pressed', 'false');
@@ -483,6 +497,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(page.getByRole('heading', { name: 'Alpha Upload' })).toHaveCount(
     0,
   );
+  await expect(filterButton).toHaveText('取消筛选');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByPlaceholder('输入书名，搜索书架')).toBeVisible();
@@ -494,6 +509,13 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   ).toBeLessThanOrEqual(390);
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
+  ).toBeVisible();
+  await filterButton.click();
+  await expect(filterButton).toHaveText('筛选');
+  await expect(filterButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(filterPanel).toBeHidden();
+  await expect(
+    page.getByRole('heading', { name: 'Alpha Upload' }),
   ).toBeVisible();
 
   await page.goto('/');

@@ -37,6 +37,7 @@ const loading = ref(true);
 const error = ref<string>();
 const readingFilter = ref<BookshelfReadingFilter>();
 const translationFilter = ref<BookshelfTranslationFilter>();
+const showFilterPanel = ref(false);
 const sort = ref<BookshelfSort>('recent-read');
 const selectionMode = ref(false);
 const selectedBookIds = ref(new Set<string>());
@@ -146,6 +147,18 @@ const downloadSelectedBooks = async () => {
   }
 };
 
+const queueSelectedBooks = (type: 'gpt' | 'sakura') => {
+  const { success, failed } = localVolumeManager.queueJobsToWorkspace(
+    [...selectedBookIds.value],
+    {
+      level: 'all',
+      type,
+      shouldTop: false,
+    },
+  );
+  message.info(`${success}本小说已排队，${failed}本失败`);
+};
+
 const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'delete') => {
   const ids = [...selectedBookIds.value];
   if (ids.length === 0) return;
@@ -178,10 +191,23 @@ const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'delete') => {
   }
 };
 
-const resetFilters = () => {
-  query.value = '';
+const clearStatusFilters = () => {
   readingFilter.value = undefined;
   translationFilter.value = undefined;
+};
+
+const resetFilters = () => {
+  query.value = '';
+  clearStatusFilters();
+};
+
+const handleFilterButtonClick = () => {
+  if (hasActiveFilters.value) {
+    clearStatusFilters();
+    showFilterPanel.value = false;
+    return;
+  }
+  showFilterPanel.value = !showFilterPanel.value;
 };
 
 const toggleReadingFilter = (value: BookshelfReadingFilter) => {
@@ -256,6 +282,20 @@ onMounted(reload);
         <n-button
           size="small"
           :disabled="selectedBookIds.size === 0"
+          @click="queueSelectedBooks('gpt')"
+        >
+          排队 GPT
+        </n-button>
+        <n-button
+          size="small"
+          :disabled="selectedBookIds.size === 0"
+          @click="queueSelectedBooks('sakura')"
+        >
+          排队 Sakura
+        </n-button>
+        <n-button
+          size="small"
+          :disabled="selectedBookIds.size === 0"
           :loading="downloadingSelectedBooks"
           @click="downloadSelectedBooks"
         >
@@ -292,14 +332,20 @@ onMounted(reload);
           clearable
           placeholder="搜索书名"
         />
-        <n-popover trigger="click" placement="bottom-start">
+        <n-popover
+          v-model:show="showFilterPanel"
+          trigger="manual"
+          placement="bottom-start"
+        >
           <template #trigger>
             <n-button
               class="bookshelf-toolbar__filter"
               :type="hasActiveFilters ? 'primary' : 'default'"
+              aria-label="书架筛选"
               :aria-pressed="hasActiveFilters"
+              @click="handleFilterButtonClick"
             >
-              筛选
+              {{ hasActiveFilters ? '取消筛选' : '筛选' }}
             </n-button>
           </template>
           <div class="bookshelf-filter-panel">
