@@ -88,6 +88,7 @@ const showSettings = ref(false);
 const showModePrompt = ref(false);
 const showCatalog = ref(false);
 const showTools = ref(false);
+const showBookInfo = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
 const showSearch = ref(false);
@@ -223,6 +224,7 @@ const hasOpenReaderPanel = () =>
   showCatalog.value ||
   showSettings.value ||
   showTools.value ||
+  showBookInfo.value ||
   showBookmarks.value ||
   showAnnotations.value ||
   showSearch.value ||
@@ -233,6 +235,7 @@ const closeReaderPanels = () => {
   showCatalog.value = false;
   showSettings.value = false;
   showTools.value = false;
+  showBookInfo.value = false;
   showBookmarks.value = false;
   showAnnotations.value = false;
   showSearch.value = false;
@@ -1489,14 +1492,59 @@ onBeforeUnmount(() => {
       >
         <n-icon :component="WarningAmberOutlined" />
       </button>
-      <button
-        class="book-reader__app-bar-action"
-        type="button"
-        aria-label="更多阅读工具"
-        @click="openTools"
+      <n-popover
+        v-model:show="showBookInfo"
+        trigger="click"
+        placement="bottom-end"
+        :show-arrow="false"
+        :content-style="{
+          width: 'min(320px, calc(100vw - 24px))',
+          maxHeight: 'min(60dvh, 480px)',
+          overflow: 'auto',
+          padding: '0',
+        }"
       >
-        <n-icon :component="MoreVertOutlined" />
-      </button>
+        <template #trigger>
+          <button
+            class="book-reader__app-bar-action"
+            type="button"
+            aria-label="书籍信息"
+            :aria-expanded="showBookInfo"
+            @click="showMobileTranslationNotice = false"
+          >
+            <n-icon :component="MoreVertOutlined" />
+          </button>
+        </template>
+        <section
+          v-if="result?.kind === 'ready'"
+          class="book-reader__book-info"
+          aria-label="书籍信息"
+        >
+          <h2>书籍信息</h2>
+          <dl>
+            <div>
+              <dt>书名</dt>
+              <dd>{{ result.book.title }}</dd>
+            </div>
+            <div>
+              <dt>作者</dt>
+              <dd>{{ result.book.author || '—' }}</dd>
+            </div>
+            <div>
+              <dt>章节</dt>
+              <dd>{{ result.book.chapterCount }} 章</dd>
+            </div>
+            <div>
+              <dt>当前章节</dt>
+              <dd>{{ result.chapter.title }}</dd>
+            </div>
+            <div>
+              <dt>阅读进度</dt>
+              <dd>{{ Math.round(chapterProgressPercent) }}%</dd>
+            </div>
+          </dl>
+        </section>
+      </n-popover>
     </header>
 
     <div
@@ -2203,6 +2251,38 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.book-reader__book-info {
+  padding: 14px 16px 16px;
+  color: inherit;
+}
+
+.book-reader__book-info h2 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.book-reader__book-info dl {
+  display: grid;
+  margin: 0;
+  gap: 8px;
+}
+
+.book-reader__book-info dl > div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.book-reader__book-info dt {
+  opacity: 0.68;
+}
+
+.book-reader__book-info dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .book-reader__tool-grid {

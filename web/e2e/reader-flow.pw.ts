@@ -464,7 +464,38 @@ test('opens a local bookshelf book safely through the current reader route', asy
 
   const readerTop = page.locator('.book-reader__app-bar');
   await expect(readerTop).toBeVisible();
+  const bookInfoButton = readerTop.getByRole('button', {
+    name: '书籍信息',
+  });
+  const expectBookInfoInsideViewport = async () => {
+    const bookInfo = page.locator('.book-reader__book-info');
+    await expect(bookInfo).toBeVisible();
+    await expect(bookInfo.locator('dd')).toHaveText([
+      'reader-flow',
+      '—',
+      '2 章',
+      'reader-flow - 0',
+      '0%',
+    ]);
+    const bounds = await bookInfo.boundingBox();
+    if (bounds === null) throw new Error('缺少阅读器书籍信息弹窗');
+    const viewport = page.viewportSize();
+    if (viewport === null) throw new Error('缺少阅读器视口');
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+  };
+  await bookInfoButton.click();
+  await expectBookInfoInsideViewport();
+  await bookInfoButton.click();
+  await expect(page.locator('.book-reader__book-info')).toHaveCount(0);
+
   await page.setViewportSize({ width: 900, height: 800 });
+  await bookInfoButton.click();
+  await expectBookInfoInsideViewport();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.book-reader__book-info')).toHaveCount(0);
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
   await expect(readerContent).not.toHaveClass(
     /book-reader__content--double-spread/,
@@ -1070,7 +1101,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   ).toHaveCount(0);
   const completeChapterHeader = page.locator('.book-reader__app-bar');
   const completeChapterMoreButton = completeChapterHeader.getByRole('button', {
-    name: '更多阅读工具',
+    name: '书籍信息',
   });
   const completeChapterHeaderBounds = await completeChapterHeader.boundingBox();
   const completeChapterMoreBounds =
