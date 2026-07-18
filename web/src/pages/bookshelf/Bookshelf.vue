@@ -702,5 +702,20 @@ onMounted(reload);
   .bookshelf-filter-panel__group {
     grid-template-columns: 72px minmax(0, 1fr);
   }
+
+  .bookshelf-selection-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bookshelf-selection-toolbar__selection {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .bookshelf-selection-toolbar__actions {
+    flex: 0 0 auto;
+    width: 100%;
+  }
 }
 </style>

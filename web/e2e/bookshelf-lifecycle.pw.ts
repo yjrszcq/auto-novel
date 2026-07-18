@@ -345,6 +345,60 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     selectionActionAlignment.selectionLeft -
       selectionActionAlignment.toolbarLeft,
   ).toBeLessThanOrEqual(16);
+  const desktopViewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileSelectionLayout = await selectionToolbar.evaluate((toolbar) => {
+    const selection = toolbar.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar__selection',
+    );
+    const actions = toolbar.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar__actions',
+    );
+    const selectAll = toolbar.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar__select-all',
+    );
+    const summary = toolbar.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar__summary',
+    );
+    if (
+      selection === null ||
+      actions === null ||
+      selectAll === null ||
+      summary === null
+    ) {
+      throw new Error('缺少手机版书架选择工具栏元素');
+    }
+    const toolbarBounds = toolbar.getBoundingClientRect();
+    const selectionBounds = selection.getBoundingClientRect();
+    const actionsBounds = actions.getBoundingClientRect();
+    const selectAllBounds = selectAll.getBoundingClientRect();
+    const summaryBounds = summary.getBoundingClientRect();
+    return {
+      actionsTop: Math.round(actionsBounds.top),
+      selectAllBottom: Math.round(selectAllBounds.bottom),
+      selectAllLeft: Math.round(selectAllBounds.left),
+      selectionLeft: Math.round(selectionBounds.left),
+      selectionRight: Math.round(selectionBounds.right),
+      summaryRight: Math.round(summaryBounds.right),
+      toolbarRight: Math.round(toolbarBounds.right),
+      actionsRight: Math.round(actionsBounds.right),
+    };
+  });
+  expect(
+    mobileSelectionLayout.selectAllLeft - mobileSelectionLayout.selectionLeft,
+  ).toBeLessThanOrEqual(1);
+  expect(
+    mobileSelectionLayout.selectionRight - mobileSelectionLayout.summaryRight,
+  ).toBeLessThanOrEqual(1);
+  expect(mobileSelectionLayout.actionsTop).toBeGreaterThan(
+    mobileSelectionLayout.selectAllBottom,
+  );
+  expect(
+    mobileSelectionLayout.actionsRight - mobileSelectionLayout.toolbarRight,
+  ).toBeLessThanOrEqual(0);
+  if (desktopViewport !== null) {
+    await page.setViewportSize(desktopViewport);
+  }
   const batchButtonStyles = await selectionToolbar
     .getByRole('button')
     .evaluateAll((buttons) =>
