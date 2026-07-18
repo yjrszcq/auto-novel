@@ -2123,11 +2123,18 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
           JSON.stringify({
             workers: [
               {
-                id: 'integration-worker',
+                id: 'integration-worker-a',
                 endpoint,
-                model: 'integration-model',
-                key: 'integration-key',
-                concurrency: 2,
+                model: 'integration-model-a',
+                key: 'integration-key-a',
+                concurrency: 1,
+              },
+              {
+                id: 'integration-worker-b',
+                endpoint,
+                model: 'integration-model-b',
+                key: 'integration-key-b',
+                concurrency: 1,
               },
             ],
             jobs: [
@@ -2197,14 +2204,24 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     );
 
     await page.reload();
-    const worker = page
+    const firstWorker = page
       .locator('.n-list-item')
-      .filter({ hasText: 'integration-worker' });
-    await expect(worker).toBeVisible();
-    await worker.getByRole('button', { name: '启动', exact: true }).click();
+      .filter({ hasText: 'integration-worker-a' });
+    const secondWorker = page
+      .locator('.n-list-item')
+      .filter({ hasText: 'integration-worker-b' });
+    await expect(firstWorker).toBeVisible();
+    await expect(secondWorker).toBeVisible();
+    await firstWorker
+      .getByRole('button', { name: '启动', exact: true })
+      .click();
+    await secondWorker
+      .getByRole('button', { name: '启动', exact: true })
+      .click();
     await twoRequestsArrived;
     expect(server.activeRequests).toBe(2);
     expect(server.requests).toHaveLength(2);
+    await expect(page.getByText(/共享池 2 个工作者/)).toBeVisible();
     releaseRequests();
 
     await expect
@@ -2287,7 +2304,7 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
       page
         .locator('.n-list-item')
         .filter({ hasText: volumeId })
-        .getByText('已完成', { exact: true }),
+        .getByText('已完成'),
     ).toBeVisible();
     await page.goto(`/books/${volumeId}/details`);
     await expect(page.getByText('总计 2 / GPT 2 / Sakura 0')).toBeVisible();

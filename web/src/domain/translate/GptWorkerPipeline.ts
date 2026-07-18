@@ -5,6 +5,7 @@ import type {
 } from '@/model/Translator';
 import { normalizeTranslationConcurrency } from '@/model/Translator';
 
+import { normalizeConcurrencyLimit } from './Concurrency';
 import { SharedWorkerPool } from './SharedWorkerPool';
 import { translateLocal } from './TranslateLocal';
 import type {
@@ -24,6 +25,7 @@ export type GptWorkerPipelineSnapshot = ReturnType<
 >;
 
 export class GptWorkerPipeline {
+  private readonly producerConcurrency: number;
   private readonly workers = new Map<string, Translator>();
   private readonly pool: SharedWorkerPool<
     GptWorkerLane,
@@ -34,8 +36,12 @@ export class GptWorkerPipeline {
     highWaterMark?: number;
     onSnapshot?: (snapshot: GptWorkerPipelineSnapshot) => void;
   }) {
+    this.producerConcurrency = normalizeConcurrencyLimit(
+      options?.highWaterMark,
+      100,
+    );
     this.pool = new SharedWorkerPool({
-      highWaterMark: options?.highWaterMark,
+      highWaterMark: this.producerConcurrency,
       onSnapshot: options?.onSnapshot,
     });
   }
@@ -83,7 +89,7 @@ export class GptWorkerPipeline {
       throw new Error('没有正在运行的 GPT 翻译器');
     }
     return translateLocal(desc, params, callback, planner, signal, {
-      concurrency: this.snapshot().aggregateMaximum,
+      concurrency: this.producerConcurrency,
       segmentDispatcher: this.dispatchSegment,
       onSegmentProgress: options?.onSegmentProgress,
     });

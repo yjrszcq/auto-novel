@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { SegmentProgressInfo, TranslatorConfig } from '@/domain/translate';
+import type {
+  GptWorkerPipeline,
+  SegmentProgressInfo,
+  TranslatorConfig,
+} from '@/domain/translate';
 import { translate } from '@/domain/translate';
 import type {
   TranslateTaskDesc,
@@ -160,20 +164,26 @@ const elapsedLabel = computed(() => {
 const running = ref(false);
 const cardRef = ref<InstanceType<typeof CTaskCard>>();
 
-const startTask = async (
-  desc: TranslateTaskDesc,
+type ProgressCallback = {
+  onProgressUpdated: (progress: {
+    finished: number;
+    error: number;
+    total: number;
+    elapsedMs: number;
+    remainingChapterIds: string[];
+  }) => void;
+};
+
+type TaskExecutor = (
+  callback: Parameters<typeof translate>[2],
+  onSegmentProgress: (info: SegmentProgressInfo) => void,
+) => Promise<Awaited<ReturnType<typeof translate>>>;
+
+const runTask = async (
   params: TranslateTaskParams,
-  translatorDesc: TranslatorConfig,
-  callback?: {
-    onProgressUpdated: (progress: {
-      finished: number;
-      error: number;
-      total: number;
-      elapsedMs: number;
-      remainingChapterIds: string[];
-    }) => void;
-  },
-  signal?: AbortSignal,
+  translatorId: TranslatorConfig['id'],
+  execute: TaskExecutor,
+  callback?: ProgressCallback,
 ) => {
   if (running.value) {
     message.info('已有任务在运行。');
@@ -187,7 +197,7 @@ const startTask = async (
       gpt: 'GPT',
       sakura: 'Sakura',
     };
-    let label = `${idToLaber[translatorDesc.id]}翻译`;
+    let label = `${idToLaber[translatorId]}翻译`;
     const suffixParts: string[] = [];
     if (params.level === 'expire') {
       suffixParts.push('过期章节');
@@ -233,13 +243,9 @@ const startTask = async (
   } catch (error) {
     cardRef.value!.pushLog({ message: `无法保持设备唤醒：${error}` });
   }
-  const concurrency = normalizeTranslationConcurrency(props.concurrency);
-
   let state: Awaited<ReturnType<typeof translate>> | 'unexpected-error';
   try {
-    state = await translate(
-      desc,
-      params,
+    state = await execute(
       {
         onStart: (total, chapterIds) => {
           chapterTotal.value = total;
@@ -249,11 +255,11 @@ const startTask = async (
         onChapterSuccess: ({ chapterId, jp, zh }) => {
           if (jp !== undefined) emit('update:jp', jp);
           if (zh !== undefined) {
-            if (translatorDesc.id === 'baidu') {
+            if (translatorId === 'baidu') {
               emit('update:baidu', zh);
-            } else if (translatorDesc.id === 'youdao') {
+            } else if (translatorId === 'youdao') {
               emit('update:youdao', zh);
-            } else if (translatorDesc.id === 'gpt') {
+            } else if (translatorId === 'gpt') {
               emit('update:gpt', zh);
             } else {
               emit('update:sakura', zh);
@@ -271,12 +277,7 @@ const startTask = async (
           cardRef.value!.pushLog({ message, detail });
         },
       },
-      translatorDesc,
-      signal,
-      {
-        concurrency,
-        onSegmentProgress: handleSegmentProgress,
-      },
+      handleSegmentProgress,
     );
   } catch (error) {
     state = 'unexpected-error';
@@ -302,7 +303,47 @@ const startTask = async (
   return 'uncomplete';
 };
 
-defineExpose({ startTask });
+const startTask = (
+  desc: TranslateTaskDesc,
+  params: TranslateTaskParams,
+  translatorDesc: TranslatorConfig,
+  callback?: ProgressCallback,
+  signal?: AbortSignal,
+) => {
+  const concurrency = normalizeTranslationConcurrency(props.concurrency);
+  return runTask(
+    params,
+    translatorDesc.id,
+    (taskCallback, onSegmentProgress) =>
+      translate(desc, params, taskCallback, translatorDesc, signal, {
+        concurrency,
+        onSegmentProgress,
+      }),
+    callback,
+  );
+};
+
+const startGptPipelineTask = (
+  desc: TranslateTaskDesc,
+  params: TranslateTaskParams,
+  pipeline: GptWorkerPipeline,
+  callback?: ProgressCallback,
+  signal?: AbortSignal,
+) =>
+  runTask(
+    params,
+    'gpt',
+    (taskCallback, onSegmentProgress) =>
+      pipeline.translateLocal(desc, params, taskCallback, signal, {
+        onSegmentProgress,
+      }),
+    callback,
+  );
+
+const pushLog = (line: { message: string; detail?: string[] }) =>
+  cardRef.value?.pushLog(line);
+
+defineExpose({ startTask, startGptPipelineTask, pushLog });
 </script>
 
 <template>

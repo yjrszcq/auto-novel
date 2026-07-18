@@ -12,17 +12,15 @@ import {
 
 import type { TranslatorConfig } from '@/domain/translate';
 import { Translator } from '@/domain/translate';
-import type { GptWorker, SakuraWorker, TranslateJob } from '@/model/Translator';
+import type { SakuraWorker, TranslateJob } from '@/model/Translator';
 import {
   normalizeTranslationConcurrency,
   TranslateTaskDescriptor,
 } from '@/model/Translator';
-import { useWorkspaceStore } from '@/stores';
+import { useSakuraWorkspaceStore } from '@/stores';
 
 const props = defineProps<{
-  worker:
-    | ({ translatorId: 'sakura' } & SakuraWorker)
-    | ({ translatorId: 'gpt' } & GptWorker);
+  worker: SakuraWorker;
   getNextJob: () => TranslateJob | undefined;
 }>();
 
@@ -45,33 +43,17 @@ const emit = defineEmits<{
 
 const message = useMessage();
 
-const translatorConfig = computed(() => {
-  const worker = props.worker;
-  if (worker.translatorId === 'gpt') {
-    return <TranslatorConfig & { id: 'gpt' }>{
-      id: 'gpt',
-      model: worker.model,
-      endpoint: worker.endpoint,
-      key: worker.key,
-    };
-  } else {
-    return <TranslatorConfig & { id: 'sakura' }>{
+const translatorConfig = computed(
+  () =>
+    <TranslatorConfig & { id: 'sakura' }>{
       id: 'sakura',
-      endpoint: worker.endpoint,
-      segLength: worker.segLength,
-      prevSegLength: worker.prevSegLength,
-    };
-  }
-});
+      endpoint: props.worker.endpoint,
+      segLength: props.worker.segLength,
+      prevSegLength: props.worker.prevSegLength,
+    },
+);
 
-const endpointPrefix = computed(() => {
-  const worker = props.worker;
-  if (worker.translatorId === 'gpt') {
-    return `${worker.model}[${worker.key.slice(-4)}]@`;
-  } else {
-    return `${worker.segLength}@`;
-  }
-});
+const endpointPrefix = computed(() => `${props.worker.segLength}@`);
 
 const enableAutoMode = ref(true);
 const workerConcurrency = computed(() =>
@@ -148,16 +130,13 @@ const stopWorker = () => {
   abortHandler();
 };
 const deleteWorker = () => {
-  const worker = props.worker;
   abortHandler();
-  const workspace = useWorkspaceStore(worker.translatorId);
-  workspace.deleteWorker(worker.id);
+  useSakuraWorkspaceStore().deleteWorker(props.worker.id);
 };
 
 const testWorker = async () => {
   if (testingTranslator.value) return;
   testingTranslator.value = true;
-  const worker = props.worker;
   const textJp = [
     '国境の長いトンネルを抜けると雪国であった。夜の底が白くなった。信号所に汽車が止まった。',
   ];
@@ -168,17 +147,13 @@ const testWorker = async () => {
     const lineJp = textJp[0];
     const lineZh = textZh[0];
 
-    if (worker.translatorId === 'gpt') {
-      message.success(`原文：${lineJp}\n译文：${lineZh}`);
-    } else {
-      message.success(
-        [
-          `原文：${lineJp}`,
-          `译文：${lineZh}`,
-          `模型：${translator.sakuraModel()}`,
-        ].join('\n'),
-      );
-    }
+    message.success(
+      [
+        `原文：${lineJp}`,
+        `译文：${lineZh}`,
+        `模型：${translator.sakuraModel()}`,
+      ].join('\n'),
+    );
   } catch (e: unknown) {
     message.error(`翻译器错误：${e}`);
   } finally {
@@ -275,14 +250,5 @@ const showEditWorkerModal = ref(false);
     style="margin-top: 20px"
   />
 
-  <sakura-worker-modal
-    v-if="worker.translatorId === 'sakura'"
-    v-model:show="showEditWorkerModal"
-    :worker="worker"
-  />
-  <gpt-worker-modal
-    v-else
-    v-model:show="showEditWorkerModal"
-    :worker="worker"
-  />
+  <sakura-worker-modal v-model:show="showEditWorkerModal" :worker="worker" />
 </template>

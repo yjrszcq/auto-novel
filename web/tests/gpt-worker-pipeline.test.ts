@@ -99,6 +99,52 @@ const createTranslator = (endpoint: string, model: string, cache = false) =>
   Translator.create({ id: 'gpt', endpoint, model, key: `${model}-key` }, cache);
 
 describe('GPT shared worker pipeline', () => {
+  it('uses a worker added after the task has already started', async () => {
+    const volumeId = 'hot-join-volume.epub';
+    await seedVolume(volumeId, ['热加入原文一', '热加入原文二']);
+    const release = deferred();
+    const firstStarted = deferred();
+    const bothStarted = deferred();
+    const startedBy: string[] = [];
+    const createFakeTranslator = (label: string) =>
+      new Translator({
+        id: 'gpt',
+        cacheIdentity: { label },
+        segmentor: createBudgetSegmentor(100, 1),
+        log: () => {},
+        translate: async (segment) => {
+          startedBy.push(label);
+          if (startedBy.length === 1) firstStarted.resolve();
+          if (startedBy.length === 2) bothStarted.resolve();
+          await release.promise;
+          return segment.map((line) => `${label}译-${line}`);
+        },
+      } satisfies SegmentTranslator);
+    const pipeline = new GptWorkerPipeline({ highWaterMark: 2 });
+    pipeline.register({
+      id: 'first',
+      translator: createFakeTranslator('甲'),
+      concurrency: 1,
+    });
+    const translation = pipeline.translateLocal(
+      { type: 'local', volumeId },
+      taskParams(),
+      createCallback().callback,
+    );
+
+    await firstStarted.promise;
+    pipeline.register({
+      id: 'second',
+      translator: createFakeTranslator('乙'),
+      concurrency: 1,
+    });
+    await bothStarted.promise;
+    expect(new Set(startedBy)).toEqual(new Set(['甲', '乙']));
+    release.resolve();
+    await translation;
+    pipeline.close();
+  });
+
   it('uses aggregate capacity above the legacy per-worker ceiling', async () => {
     const volumeId = 'aggregate-capacity-volume.epub';
     await seedVolume(

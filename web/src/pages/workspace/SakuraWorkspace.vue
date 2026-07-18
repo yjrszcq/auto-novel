@@ -156,7 +156,7 @@ const clearCache = async () => {
       >
         <n-list-item v-for="worker of workspaceRef.workers" :key="worker.id">
           <job-worker
-            :worker="{ translatorId: 'sakura', ...worker }"
+            :worker="worker"
             :get-next-job="getNextJob"
             @update:progress="onProgressUpdated"
           />
