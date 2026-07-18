@@ -153,6 +153,23 @@ onBeforeUnmount(() => returnFocus?.focus());
   padding: 14px 20px max(20px, env(safe-area-inset-bottom));
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-color: var(--reader-scrollbar-thumb, #626262)
+    var(--reader-scrollbar-track, #242424);
+}
+
+.reader-sheet__content::-webkit-scrollbar-track,
+.reader-sheet__content::-webkit-scrollbar-track-piece {
+  background: var(--reader-scrollbar-track, #242424);
+}
+
+.reader-sheet__content::-webkit-scrollbar-thumb {
+  background: var(--reader-scrollbar-thumb, #626262);
+  border: 3px solid var(--reader-scrollbar-track, #242424);
+  border-radius: 999px;
+}
+
+.reader-sheet__content::-webkit-scrollbar-thumb:hover {
+  background: var(--reader-scrollbar-thumb-hover, #7a7a7a);
 }
 
 @media only screen and (max-width: 600px) {

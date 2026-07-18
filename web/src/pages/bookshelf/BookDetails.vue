@@ -54,6 +54,11 @@ const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
 const localVolumeManager = useLocalVolumeManager();
 const shouldTopJob = useKeyModifier('Control');
+const catalogScrollbarStyle = computed(() => ({
+  '--book-details-scrollbar-track': vars.value.bodyColor,
+  '--book-details-scrollbar-thumb': vars.value.scrollbarColor,
+  '--book-details-scrollbar-thumb-hover': vars.value.scrollbarColorHover,
+}));
 
 const bookId = computed(() => String(route.params.bookId));
 const readingProgress = computed(() =>
@@ -508,7 +513,9 @@ onMounted(() => void load());
 
       <n-drawer
         v-model:show="showCatalog"
+        class="book-details-catalog-drawer"
         placement="right"
+        :style="catalogScrollbarStyle"
         width="min(440px, 84vw)"
       >
         <n-drawer-content :closable="false">
@@ -975,5 +982,29 @@ onMounted(() => void load());
   .book-details__select {
     width: 100%;
   }
+}
+</style>
+
+<style>
+.book-details-catalog-drawer .n-scrollbar-container {
+  scrollbar-color: var(--book-details-scrollbar-thumb)
+    var(--book-details-scrollbar-track);
+}
+
+.book-details-catalog-drawer .n-scrollbar-container::-webkit-scrollbar-track,
+.book-details-catalog-drawer
+  .n-scrollbar-container::-webkit-scrollbar-track-piece {
+  background: var(--book-details-scrollbar-track);
+}
+
+.book-details-catalog-drawer .n-scrollbar-container::-webkit-scrollbar-thumb {
+  background: var(--book-details-scrollbar-thumb);
+  border: 3px solid var(--book-details-scrollbar-track);
+  border-radius: 999px;
+}
+
+.book-details-catalog-drawer
+  .n-scrollbar-container::-webkit-scrollbar-thumb:hover {
+  background: var(--book-details-scrollbar-thumb-hover);
 }
 </style>

@@ -1436,7 +1436,10 @@ onBeforeUnmount(() => {
   <n-config-provider
     tag="main"
     class="book-reader"
-    :class="`book-reader--${resolvedReaderTheme}`"
+    :class="[
+      `book-reader--${resolvedReaderTheme}`,
+      `book-reader--${resolvedFlow}`,
+    ]"
     :style="readerStyle"
     :theme="readerNaiveTheme"
     :theme-overrides="readerNaiveThemeOverrides"
@@ -1917,6 +1920,7 @@ onBeforeUnmount(() => {
   --reader-app-bar-height: 40px;
   --reader-bottom-navigation-height: 52px;
   width: 100%;
+  box-sizing: border-box;
   min-height: 100vh;
   min-height: 100dvh;
   padding-top: 24px;
@@ -1936,6 +1940,9 @@ onBeforeUnmount(() => {
   --reader-warning-border: #c88710;
   --reader-warning-button-border: #f0a020;
   --reader-warning-text: #5b4300;
+  --reader-scrollbar-track: #f1f1f1;
+  --reader-scrollbar-thumb: #aaa;
+  --reader-scrollbar-thumb-hover: #888;
 }
 
 .book-reader--dark {
@@ -1948,6 +1955,9 @@ onBeforeUnmount(() => {
   --reader-warning-border: #9e6a27;
   --reader-warning-button-border: #8b7864;
   --reader-warning-text: #f2e8dc;
+  --reader-scrollbar-track: #242424;
+  --reader-scrollbar-thumb: #626262;
+  --reader-scrollbar-thumb-hover: #7a7a7a;
 }
 
 .book-reader--sepia {
@@ -1960,6 +1970,15 @@ onBeforeUnmount(() => {
   --reader-warning-border: #b57b20;
   --reader-warning-button-border: #6f511c;
   --reader-warning-text: #543b0b;
+  --reader-scrollbar-track: #e8ddc3;
+  --reader-scrollbar-thumb: #a08e6d;
+  --reader-scrollbar-thumb-hover: #806f58;
+}
+
+.book-reader--paginated {
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: hidden;
 }
 
 .book-reader__app-bar {

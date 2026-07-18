@@ -97,6 +97,12 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
     'background-color',
     'rgb(36, 36, 36)',
   );
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expect(page.locator('.reader-sheet__content')).toHaveCSS(
+    'scrollbar-color',
+    'rgb(98, 98, 98) rgb(36, 36, 36)',
+  );
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: '白天', exact: true }).click();
   await expect(reader).toHaveClass(/book-reader--light/);
@@ -872,6 +878,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
       .getByRole('dialog', { name: '目录' })
       .locator('.book-reader__catalog-item--active'),
   ).toHaveCSS('color', 'rgb(47, 175, 134)');
+  await expect(page.locator('.reader-sheet__content')).toHaveCSS(
+    'scrollbar-color',
+    'rgb(160, 142, 109) rgb(232, 221, 195)',
+  );
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await expect(
@@ -1172,6 +1182,15 @@ test('persists keyboard pagination and every reading mode across responsive layo
   const readerContent = page.locator('.book-reader__content');
   const layout = readerContent.locator('.reader-segment-layout');
   await expect(reader).toHaveClass(/book-reader--dark/);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollHeight <=
+          document.documentElement.clientHeight,
+      ),
+    )
+    .toBe(true);
   await expect(page.locator('.book-reader__app-bar')).toHaveCSS(
     'background-color',
     'rgb(36, 36, 36)',
