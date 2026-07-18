@@ -64,12 +64,13 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
     );
   };
   const retryJobRecord = (job: TranslateJobRecord) => {
-    addJob({
-      task: job.task,
+    const added = addJob({
+      task: job.resumeTask ?? job.task,
       description: job.description,
       createAt: Date.now(),
     });
-    deleteJobRecord(job);
+    if (added) deleteJobRecord(job);
+    return added;
   };
   const retryAllJobRecords = () => {
     const newArray: TranslateJobRecord[] = [];
@@ -77,11 +78,12 @@ const createWorkspaceStore = <W extends GptWorker | SakuraWorker>(
       if (TranslateJob.isFinished(job)) {
         newArray.push(job);
       } else {
-        addJob({
-          task: job.task,
+        const added = addJob({
+          task: job.resumeTask ?? job.task,
           description: job.description,
           createAt: Date.now(),
         });
+        if (!added) newArray.push(job);
       }
     }
     ref.value.jobRecords = newArray;

@@ -18,6 +18,7 @@ export interface SakuraWorker {
 
 export interface TranslateJob {
   task: string;
+  resumeTask?: string;
   description: string;
   createAt: number;
   finishAt?: number;
@@ -28,6 +29,7 @@ export type TranslateJobRecord = TranslateJob & {
     finished: number;
     error: number;
     total: number;
+    elapsedMs: number;
   };
 };
 
@@ -48,12 +50,17 @@ export type TranslateTaskParams = {
   forceMetadata: boolean; // 强制重翻元数据
   startIndex: number;
   endIndex: number;
+  chapterIds?: string[];
 };
 
 export type TranslateTaskCallback = {
-  onStart: (total: number) => void;
-  onChapterSuccess: (state: { jp?: number; zh?: number }) => void;
-  onChapterFailure: () => void;
+  onStart: (total: number, chapterIds: string[]) => void;
+  onChapterSuccess: (state: {
+    chapterId: string;
+    jp?: number;
+    zh?: number;
+  }) => void;
+  onChapterFailure: (chapterId: string) => void;
   log: (message: string, detail?: string[]) => void;
 };
 
@@ -65,6 +72,7 @@ export namespace TranslateTaskDescriptor {
     forceMetadata,
     startIndex,
     endIndex,
+    chapterIds,
   }: TranslateTaskParams) => {
     const searchParamsInit: { [key: string]: string } = {
       level,
@@ -72,6 +80,9 @@ export namespace TranslateTaskDescriptor {
       startIndex: startIndex.toString(),
       endIndex: endIndex.toString(),
     };
+    if (chapterIds !== undefined) {
+      searchParamsInit.chapterIds = JSON.stringify(chapterIds);
+    }
     const searchParams = new URLSearchParams(searchParamsInit).toString();
     return searchParams ? `?${searchParams}` : '';
   };
@@ -111,7 +122,25 @@ export namespace TranslateTaskDescriptor {
       startIndex: queryInt('startIndex', 0),
       endIndex: queryInt('endIndex', 65535),
     };
+    const chapterIds = parseChapterIds(query.get('chapterIds'));
+    if (chapterIds !== undefined) params.chapterIds = chapterIds;
 
     return { desc, params };
+  };
+
+  const parseChapterIds = (value: string | null) => {
+    if (value === null) return undefined;
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((chapterId) => typeof chapterId === 'string')
+      ) {
+        return parsed;
+      }
+    } catch {
+      // Report one consistent descriptor error below.
+    }
+    throw new Error('Translation task has invalid chapter ids');
   };
 }

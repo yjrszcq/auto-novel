@@ -65,4 +65,35 @@ describe('current chapter translation task', () => {
       params: { forceMetadata: true, startIndex: 3, endIndex: 4 },
     });
   });
+
+  it('retries only the exact persisted remaining chapter scope', () => {
+    const workspace = useGptWorkspaceStore();
+    workspace.ref.value.jobs = [];
+    workspace.ref.value.jobRecords = [];
+    const originalTask = TranslateTaskDescriptor.local('book', {
+      level: 'all',
+      forceMetadata: false,
+      startIndex: 0,
+      endIndex: 10,
+    });
+    const resumeTask = TranslateTaskDescriptor.local('book', {
+      level: 'all',
+      forceMetadata: false,
+      startIndex: 0,
+      endIndex: 10,
+      chapterIds: ['chapter-failed', 'chapter-unstarted'],
+    });
+    const record = {
+      task: originalTask,
+      resumeTask,
+      description: 'exact resume',
+      createAt: 1,
+      progress: { finished: 1, error: 1, total: 3, elapsedMs: 500 },
+    };
+    workspace.addJobRecord(record);
+
+    expect(workspace.retryJobRecord(record)).toBe(true);
+    expect(workspace.ref.value.jobs[0].task).toBe(resumeTask);
+    expect(workspace.ref.value.jobRecords).toHaveLength(0);
+  });
 });

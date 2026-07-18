@@ -35,6 +35,29 @@ describe('workspace task descriptors', () => {
     });
   });
 
+  it('round-trips an exact remaining chapter scope', () => {
+    const task = TranslateTaskDescriptor.local('book/a', {
+      level: 'all',
+      forceMetadata: false,
+      startIndex: 0,
+      endIndex: 100,
+      chapterIds: ['chapter-z', 'chapter-a'],
+    });
+
+    expect(TranslateTaskDescriptor.parse(task).params.chapterIds).toEqual([
+      'chapter-z',
+      'chapter-a',
+    ]);
+  });
+
+  it('rejects malformed exact chapter scopes', () => {
+    expect(() =>
+      TranslateTaskDescriptor.parse(
+        'local/book?level=all&chapterIds=%5B1%2C2%5D',
+      ),
+    ).toThrow('invalid chapter ids');
+  });
+
   it.each(['personal/book', 'personal2/book', 'web/source/book'])(
     'rejects an obsolete task format: %s',
     (task) => {

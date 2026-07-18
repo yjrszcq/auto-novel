@@ -22,7 +22,12 @@ const showLocalVolumeDrawer = ref(false);
 const { html: infoPanelHtml } = useRuntimePanel('html/info-gpt.html');
 
 type ProcessedJob = TranslateJob & {
-  progress?: { finished: number; error: number; total: number };
+  progress?: {
+    finished: number;
+    error: number;
+    total: number;
+    elapsedMs: number;
+  };
 };
 
 const processedJobs = ref<Map<string, ProcessedJob>>(new Map());
@@ -57,7 +62,14 @@ const onProgressUpdated = (
   task: string,
   state:
     | { state: 'finish'; abort: boolean }
-    | { state: 'processed'; finished: number; error: number; total: number },
+    | {
+        state: 'processed';
+        finished: number;
+        error: number;
+        total: number;
+        elapsedMs: number;
+        remainingChapterIds: string[];
+      },
 ) => {
   if (state.state === 'finish') {
     const job = processedJobs.value.get(task)!;
@@ -72,6 +84,7 @@ const onProgressUpdated = (
       finished: state.finished,
       error: state.error,
       total: state.total,
+      elapsedMs: state.elapsedMs,
     };
   }
 };

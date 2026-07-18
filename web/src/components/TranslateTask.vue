@@ -32,6 +32,9 @@ const title = ref('');
 const chapterTotal = ref<number>();
 const chapterFinished = ref(0);
 const chapterError = ref(0);
+const elapsedMs = ref(0);
+let taskStartedAt = 0;
+let remainingChapterIds = new Set<string>();
 
 type ChapterProgressEntry = {
   key: string;
@@ -108,10 +111,7 @@ const handleSegmentProgress = (info: SegmentProgressInfo) => {
     );
   } else if (info.status === 'failed') {
     entry.totalSegments =
-      entry.totalSegments ||
-      info.segmentTotal ||
-      entry.successSegments ||
-      1;
+      entry.totalSegments || info.segmentTotal || entry.successSegments || 1;
     entry.status = 'failure';
     const remaining = entry.totalSegments - entry.successSegments;
     entry.failureSegments = remaining > 0 ? remaining : entry.totalSegments;
@@ -120,10 +120,8 @@ const handleSegmentProgress = (info: SegmentProgressInfo) => {
 };
 
 const formatChapterLabel = (chapter: ChapterProgressEntry) => {
-  const index =
-    chapter.chapterIndex !== undefined ? chapter.chapterIndex : '?';
-  const total =
-    chapter.chapterTotal !== undefined ? chapter.chapterTotal : '-';
+  const index = chapter.chapterIndex !== undefined ? chapter.chapterIndex : '?';
+  const total = chapter.chapterTotal !== undefined ? chapter.chapterTotal : '-';
   return `章节${index}/${total}`;
 };
 
@@ -146,6 +144,18 @@ const overallStatus = computed(() => {
   return chapterError.value > 0 ? 'error' : 'success';
 });
 
+const throughput = computed(() => {
+  const processed = chapterFinished.value + chapterError.value;
+  if (processed === 0 || elapsedMs.value === 0) return 0;
+  return (processed * 60_000) / elapsedMs.value;
+});
+
+const elapsedLabel = computed(() => {
+  const seconds = Math.floor(elapsedMs.value / 1_000);
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0 ? `${minutes}分${seconds % 60}秒` : `${seconds}秒`;
+});
+
 const running = ref(false);
 const cardRef = ref<InstanceType<typeof CTaskCard>>();
 
@@ -158,6 +168,8 @@ const startTask = async (
       finished: number;
       error: number;
       total: number;
+      elapsedMs: number;
+      remainingChapterIds: string[];
     }) => void;
   },
   signal?: AbortSignal,
@@ -200,13 +212,20 @@ const startTask = async (
   chapterFinished.value = 0;
   chapterError.value = 0;
   chapterProgress.value = [];
+  elapsedMs.value = 0;
+  taskStartedAt = Date.now();
+  remainingChapterIds = new Set();
 
-  const onProgressUpdated = () =>
+  const onProgressUpdated = () => {
+    elapsedMs.value = Date.now() - taskStartedAt;
     callback?.onProgressUpdated({
       finished: chapterFinished.value,
       error: chapterError.value,
       total: chapterTotal.value ?? 0,
+      elapsedMs: elapsedMs.value,
+      remainingChapterIds: [...remainingChapterIds],
     });
+  };
 
   await requestKeepAlive();
   const concurrency = Math.max(1, props.concurrency ?? 1);
@@ -215,11 +234,12 @@ const startTask = async (
     desc,
     params,
     {
-      onStart: (total) => {
+      onStart: (total, chapterIds) => {
         chapterTotal.value = total;
+        remainingChapterIds = new Set(chapterIds);
         onProgressUpdated();
       },
-      onChapterSuccess: ({ jp, zh }) => {
+      onChapterSuccess: ({ chapterId, jp, zh }) => {
         if (jp !== undefined) emit('update:jp', jp);
         if (zh !== undefined) {
           if (translatorDesc.id === 'baidu') {
@@ -232,6 +252,7 @@ const startTask = async (
             emit('update:sakura', zh);
           }
         }
+        remainingChapterIds.delete(chapterId);
         chapterFinished.value += 1;
         onProgressUpdated();
       },
@@ -250,6 +271,8 @@ const startTask = async (
       onSegmentProgress: handleSegmentProgress,
     },
   );
+
+  onProgressUpdated();
 
   cardRef.value!.pushLog({ message: '\n结束' });
   running.value = false;
@@ -282,9 +305,9 @@ defineExpose({ startTask });
     >
       <div class="chapter-progress-summary">
         <n-text>
-          成功 {{ chapterFinished }}/{{ chapterTotal ?? '-' }}
-          &nbsp;&nbsp;
-          失败 {{ chapterError }}/{{ chapterTotal ?? '-' }}
+          成功 {{ chapterFinished }}/{{ chapterTotal ?? '-' }} &nbsp;&nbsp; 失败
+          {{ chapterError }}/{{ chapterTotal ?? '-' }} &nbsp;&nbsp; 用时
+          {{ elapsedLabel }} / {{ throughput.toFixed(1) }} 章/分钟
         </n-text>
         <n-progress
           type="line"
@@ -321,8 +344,7 @@ defineExpose({ startTask });
               成功 {{ chapter.successSegments }}/{{
                 chapter.totalSegments || '-'
               }}
-              /
-              失败 {{ chapter.failureSegments }}/{{
+              / 失败 {{ chapter.failureSegments }}/{{
                 chapter.totalSegments || '-'
               }}
             </n-text>

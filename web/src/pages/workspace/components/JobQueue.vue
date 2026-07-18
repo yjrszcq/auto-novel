@@ -10,7 +10,12 @@ import type { TranslateJob } from '@/model/Translator';
 
 const props = defineProps<{
   job: TranslateJob;
-  progress?: { finished: number; error: number; total: number };
+  progress?: {
+    finished: number;
+    error: number;
+    total: number;
+    elapsedMs: number;
+  };
 }>();
 const emit = defineEmits<{
   topJob: [];
@@ -28,6 +33,11 @@ const percentage = computed(() => {
   } else {
     return Math.round((1000 * (finished + error)) / total) / 10;
   }
+});
+const throughput = computed(() => {
+  if (!props.progress?.elapsedMs) return 0;
+  const processed = props.progress.finished + props.progress.error;
+  return (processed * 60_000) / props.progress.elapsedMs;
 });
 </script>
 
@@ -75,6 +85,10 @@ const percentage = computed(() => {
       {{ job.description }}
       <template v-if="percentage">
         <n-progress :percentage="percentage" style="max-width: 600px" />
+        <n-text depth="3">
+          {{ (progress!.elapsedMs / 1000).toFixed(1) }} 秒 /
+          {{ throughput.toFixed(1) }} 章/分钟
+        </n-text>
       </template>
     </template>
   </n-thing>

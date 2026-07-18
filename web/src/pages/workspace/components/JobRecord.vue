@@ -2,7 +2,7 @@
 import { DeleteOutlineOutlined, RefreshOutlined } from '@vicons/material';
 
 import type { TranslateJobRecord } from '@/model/Translator';
-import { TranslateJob } from '@/model/Translator';
+import { TranslateJob, TranslateTaskDescriptor } from '@/model/Translator';
 
 const props = defineProps<{
   job: TranslateJobRecord;
@@ -13,6 +13,13 @@ const emit = defineEmits<{
   deleteJob: [];
 }>();
 const isFinished = computed(() => TranslateJob.isFinished(props.job));
+const remainingCount = computed(() => {
+  if (props.job.resumeTask === undefined) return 0;
+  return (
+    TranslateTaskDescriptor.parse(props.job.resumeTask).params.chapterIds
+      ?.length ?? 0
+  );
+});
 </script>
 
 <template>
@@ -46,7 +53,8 @@ const isFinished = computed(() => TranslateJob.isFinished(props.job));
           未完成
           <template v-if="job.progress !== undefined">
             总共 {{ job.progress?.total }} / 成功 {{ job.progress?.finished }} /
-            失败 {{ job.progress?.error }}
+            失败 {{ job.progress?.error }} / 待重试 {{ remainingCount }} / 用时
+            {{ (job.progress.elapsedMs / 1000).toFixed(1) }} 秒
           </template>
         </template>
         <template v-else>

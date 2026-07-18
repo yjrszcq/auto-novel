@@ -14,7 +14,7 @@ import type { SegmentProgressInfo, Translator } from './Translator';
 
 export const translateLocal = async (
   { volumeId }: LocalTranslateTaskDesc,
-  { level, startIndex, endIndex }: TranslateTaskParams,
+  { level, startIndex, endIndex, chapterIds }: TranslateTaskParams,
   callback: TranslateTaskCallback,
   translator: Translator,
   signal?: AbortSignal,
@@ -53,33 +53,30 @@ export const translateLocal = async (
     return;
   }
 
-  const chapters = (() => {
-    if (level === 'all') {
-      return metadata.toc
-        .slice(startIndex, endIndex)
-        .map((it, idx) => ({ chapterId: it.chapterId, index: idx }));
-    } else {
-      const untranslatedChapters = metadata.toc
-        .slice(startIndex, endIndex)
-        .filter((it) => it[translator.id] === undefined)
-        .map((it, idx) => ({ chapterId: it.chapterId, index: idx }));
-      if (level === 'normal') {
-        return untranslatedChapters;
-      }
+  const requestedChapterIds = new Set(chapterIds ?? []);
+  const chapters = metadata.toc
+    .map((chapter, tocIndex) => ({ chapter, tocIndex }))
+    .slice(startIndex, endIndex)
+    .filter(
+      ({ chapter }) =>
+        chapterIds === undefined || requestedChapterIds.has(chapter.chapterId),
+    )
+    .filter(({ chapter }) => {
+      if (level === 'all') return true;
+      if (chapter[translator.id] === undefined) return true;
+      return (
+        level !== 'normal' && chapter[translator.id] !== metadata.glossaryId
+      );
+    })
+    .map(({ chapter, tocIndex }) => ({
+      chapterId: chapter.chapterId,
+      tocIndex,
+    }));
 
-      const expiredChapters = metadata.toc
-        .slice(startIndex, endIndex)
-        .filter(
-          (it) =>
-            it[translator.id] !== undefined &&
-            it[translator.id] !== metadata.glossaryId,
-        )
-        .map((it, idx) => ({ chapterId: it.chapterId, index: idx }));
-      return untranslatedChapters.concat(expiredChapters);
-    }
-  })().sort((a, b) => a.chapterId.localeCompare(b.chapterId));
-
-  callback.onStart(chapters.length);
+  callback.onStart(
+    chapters.length,
+    chapters.map(({ chapterId }) => chapterId),
+  );
   if (chapters.length === 0) {
     callback.log(`没有需要更新的章节`);
   }
@@ -89,30 +86,24 @@ export const translateLocal = async (
   const requestLimiter = createConcurrencyLimiter(concurrency);
 
   const translateChapter = async (
-    { chapterId, index }: (typeof chapters)[number],
-    _schedulerIndex: number,
+    { chapterId, tocIndex }: (typeof chapters)[number],
+    schedulerIndex: number,
     workerSignal: AbortSignal,
   ) => {
     try {
-      callback.log(`\n[${index}] ${volumeId}/${chapterId}`);
+      callback.log(`\n[${tocIndex + 1}] ${volumeId}/${chapterId}`);
       const chapter = await getChapter(chapterId);
       if (chapter === undefined) {
         throw new Error('章节不存在');
       }
       const textsJp = chapter?.paragraphs;
 
-      const oldTextsZh = await localVolumeRepository.getChapter(
-        volumeId,
-        chapterId,
-      );
       const textsZh = await translator.translate(
         textsJp,
         {
           glossary: metadata.glossary,
           oldGlossary: chapter[translator.id]?.glossary,
-          oldTextZh: oldTextsZh
-            ? oldTextsZh[translator.id]?.paragraphs
-            : undefined,
+          oldTextZh: chapter[translator.id]?.paragraphs,
           force: forceSeg,
           signal: workerSignal,
         },
@@ -120,7 +111,7 @@ export const translateLocal = async (
           concurrency,
           requestLimiter,
           chapter: {
-            index: index + 1,
+            index: schedulerIndex + 1,
             total: chapters.length,
             id: chapterId,
           },
@@ -134,10 +125,10 @@ export const translateLocal = async (
         glossary: metadata.glossary,
         paragraphs: textsZh,
       });
-      callback.onChapterSuccess({ zh: state });
+      callback.onChapterSuccess({ chapterId, zh: state });
       options?.onSegmentProgress?.({
         chapter: {
-          index: index + 1,
+          index: schedulerIndex + 1,
           total: chapters.length,
           id: chapterId,
         },
@@ -154,10 +145,10 @@ export const translateLocal = async (
         throw e;
       } else {
         callback.log(`发生错误，跳过：${await formatError(e)}`);
-        callback.onChapterFailure();
+        callback.onChapterFailure(chapterId);
         options?.onSegmentProgress?.({
           chapter: {
-            index: index + 1,
+            index: schedulerIndex + 1,
             total: chapters.length,
             id: chapterId,
           },

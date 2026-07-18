@@ -12,7 +12,7 @@ import {
 
 import type { TranslatorConfig } from '@/domain/translate';
 import { Translator } from '@/domain/translate';
-import type { GptWorker, SakuraWorker } from '@/model/Translator';
+import type { GptWorker, SakuraWorker, TranslateJob } from '@/model/Translator';
 import { TranslateTaskDescriptor } from '@/model/Translator';
 import { useWorkspaceStore } from '@/stores';
 
@@ -20,9 +20,7 @@ const props = defineProps<{
   worker:
     | ({ translatorId: 'sakura' } & SakuraWorker)
     | ({ translatorId: 'gpt' } & GptWorker);
-  getNextJob: () =>
-    | { task: string; description: string; createAt: number }
-    | undefined;
+  getNextJob: () => TranslateJob | undefined;
 }>();
 
 const emit = defineEmits<{
@@ -30,7 +28,14 @@ const emit = defineEmits<{
     string,
     (
       | { state: 'finish'; abort: boolean }
-      | { state: 'processed'; finished: number; error: number; total: number }
+      | {
+          state: 'processed';
+          finished: number;
+          error: number;
+          total: number;
+          elapsedMs: number;
+          remainingChapterIds: string[];
+        }
     ),
   ];
 }>();
@@ -69,11 +74,7 @@ const enableAutoMode = ref(true);
 const workerConcurrency = computed(() => props.worker.concurrency);
 
 const translateTask = useTemplateRef('translateTask');
-const currentJob = ref<{
-  task: string;
-  description: string;
-  createAt: number;
-}>();
+const currentJob = ref<TranslateJob>();
 const running = computed(() => currentJob.value !== undefined);
 const testingTranslator = ref(false);
 
@@ -89,7 +90,9 @@ const processTasks = async () => {
     currentJob.value = job;
 
     if (job === undefined) break;
-    const { desc, params } = TranslateTaskDescriptor.parse(job.task);
+    const { desc, params } = TranslateTaskDescriptor.parse(
+      job.resumeTask ?? job.task,
+    );
 
     const state = await translateTask.value!.startTask(
       desc,
@@ -97,6 +100,13 @@ const processTasks = async () => {
       translatorConfig.value,
       {
         onProgressUpdated: (progress) => {
+          job.resumeTask =
+            progress.remainingChapterIds.length === 0
+              ? undefined
+              : TranslateTaskDescriptor.local(desc.volumeId, {
+                  ...params,
+                  chapterIds: progress.remainingChapterIds,
+                });
           emit('update:progress', job.task, {
             state: 'processed',
             ...progress,

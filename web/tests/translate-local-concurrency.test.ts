@@ -22,6 +22,7 @@ import type {
 } from '../src/model/LocalVolume';
 import type { TranslateTaskCallback } from '../src/model/Translator';
 import { createLocalVolumeDao } from '../src/stores/local/LocalVolumeDao';
+import { useLocalVolumeStore } from '../src/stores/local';
 import { startOpenAiTestServer } from './helpers/openai-test-server';
 
 const cleanupCallbacks: Array<() => Promise<void>> = [];
@@ -104,6 +105,61 @@ const translateVolume = (
   );
 
 describe('local volume concurrent translation', () => {
+  it('preserves TOC order, exact scope, and one chapter read per task', async () => {
+    const volumeId = 'ordered-volume.epub';
+    await seedVolume(volumeId, [
+      { id: 'chapter-z', paragraphs: ['最先'] },
+      { id: 'chapter-skip', paragraphs: ['跳过'] },
+      { id: 'chapter-a', paragraphs: ['最后'] },
+    ]);
+    const server = await startOpenAiTestServer({
+      onChat: (request) => ({ content: `#1:译文${request.index + 1}` }),
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'ordered-key',
+      model: 'ordered-model',
+    });
+    const { callback, state } = createCallback();
+    const repository = await useLocalVolumeStore();
+    const getChapter = vi.spyOn(repository, 'getChapter');
+
+    await translateLocal(
+      { type: 'local', volumeId },
+      {
+        level: 'all',
+        forceMetadata: false,
+        startIndex: 0,
+        endIndex: 3,
+        chapterIds: ['chapter-a', 'chapter-z'],
+      },
+      callback,
+      translator,
+      undefined,
+      { concurrency: 1 },
+    );
+
+    expect(state).toMatchObject({ total: 2, successes: 2, failures: 0 });
+    expect(
+      server.requests.map(
+        (request) => request.body.messages.at(-1)?.content ?? '',
+      ),
+    ).toEqual([
+      expect.stringContaining('最先'),
+      expect.stringContaining('最后'),
+    ]);
+    expect(getChapter).toHaveBeenCalledTimes(2);
+    expect(state.logs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('[1]'),
+        expect.stringContaining('[3]'),
+      ]),
+    );
+    getChapter.mockRestore();
+  });
+
   it('caps total HTTP requests across concurrent chapters and segments', async () => {
     const volumeId = 'concurrency-volume.epub';
     await seedVolume(volumeId, [

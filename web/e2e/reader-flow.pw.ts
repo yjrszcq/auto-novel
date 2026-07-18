@@ -2212,7 +2212,12 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
       .toEqual({
         queued: 0,
         records: 1,
-        progress: { finished: 2, error: 0, total: 2 },
+        progress: {
+          finished: 2,
+          error: 0,
+          total: 2,
+          elapsedMs: expect.any(Number),
+        },
       });
     expect(server.requests).toHaveLength(2);
     expect(server.maximumActiveRequests).toBe(2);
