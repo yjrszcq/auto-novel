@@ -2222,6 +2222,16 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     expect(server.activeRequests).toBe(2);
     expect(server.requests).toHaveLength(2);
     await expect(page.getByText(/共享池 2 个工作者/)).toBeVisible();
+    await expect(
+      page.getByRole('alert').filter({ hasText: '正在混用不同模型或接口' }),
+    ).toBeVisible();
+    await expect(firstWorker.getByText(/活跃 1\/1/)).toBeVisible();
+    await expect(secondWorker.getByText(/活跃 1\/1/)).toBeVisible();
+    await firstWorker
+      .getByRole('button', { name: '停止', exact: true })
+      .click();
+    await expect(page.getByText(/共享池 1 个工作者/)).toBeVisible();
+    await expect(firstWorker.getByText(/已停止 · 活跃 0\/1/)).toBeVisible();
     releaseRequests();
 
     await expect
@@ -2252,10 +2262,10 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
           elapsedMs: expect.any(Number),
         },
       });
-    expect(server.requests).toHaveLength(2);
+    expect(server.requests).toHaveLength(3);
     expect(server.maximumActiveRequests).toBe(2);
     await expect(
-      page.getByText(/缓存 2 条 .*命中 0 .*未命中 0 .*请求 2 .*故障 0/),
+      page.getByText(/缓存 2 条 .*命中 0 .*未命中 0 .*请求 3 .*故障 0/),
     ).toBeVisible();
 
     const persisted = await page.evaluate(async (bookId) => {
@@ -2335,11 +2345,62 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     ).toContainText('译文第1行');
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
-    expect(failedRequests).toEqual([]);
+    expect(failedRequests).toHaveLength(1);
+    expect(failedRequests[0]).toContain('/v1/chat/completions');
   } finally {
     releaseRequests();
     await server.close();
   }
+});
+
+test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/workspace/gpt');
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'auto-novel:workspace:gpt',
+      JSON.stringify({
+        workers: [
+          {
+            id: 'mobile-worker-a',
+            endpoint: 'http://127.0.0.1:1',
+            model: 'mobile-model-a',
+            key: 'mobile-key-a',
+            concurrency: 1,
+          },
+          {
+            id: 'mobile-worker-b',
+            endpoint: 'http://127.0.0.1:2',
+            model: 'mobile-model-b',
+            key: 'mobile-key-b',
+            concurrency: 2,
+          },
+        ],
+        jobs: [],
+        jobRecords: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  await page.getByRole('button', { name: '启动全部', exact: true }).click();
+  await expect(page.getByText(/共享池 2 个工作者/)).toBeVisible();
+  await expect(page.getByText(/活跃请求 0\/3/)).toBeVisible();
+  await expect(
+    page.getByRole('alert').filter({ hasText: '正在混用不同模型或接口' }),
+  ).toBeVisible();
+  await expect(page.getByText('空闲，等待共享任务')).toHaveCount(2);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+
+  await page.getByRole('button', { name: '停止全部', exact: true }).click();
+  await expect(page.getByText(/共享池 0 个工作者/)).toBeVisible();
+  expect(pageErrors).toEqual([]);
 });
 
 test('loads only the current GPT workspace schema', async ({ page }) => {

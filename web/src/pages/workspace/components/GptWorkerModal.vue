@@ -195,7 +195,11 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
       </n-form-item-row>
 
       <n-text depth="3" style="display: block; font-size: 12px">
-        并发量是该翻译器的全局请求上限；遇到限流时会自动降低实际吞吐并退避重试。
+        并发量是该翻译器的请求上限；共享池的实际总上限是所有已启动翻译器之和。遇到限流时会自动降低实际吞吐并退避重试。
+      </n-text>
+
+      <n-text depth="3" style="display: block; font-size: 12px">
+        同时启动不同模型或接口时，它们可能共同翻译同一章节；需要统一文风时请使用相同配置。
       </n-text>
 
       <n-text depth="3" style="font-size: 12px">

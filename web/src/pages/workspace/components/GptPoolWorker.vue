@@ -8,13 +8,14 @@ import {
   StopOutlined,
 } from '@vicons/material';
 
-import { Translator } from '@/domain/translate';
+import { Translator, type GptWorkerPipelineSnapshot } from '@/domain/translate';
 import type { GptWorker } from '@/model/Translator';
 
 const props = defineProps<{
   worker: GptWorker;
   active: boolean;
   starting: boolean;
+  activity?: GptWorkerPipelineSnapshot['workers'][number];
 }>();
 
 const emit = defineEmits<{
@@ -40,6 +41,16 @@ const translatorConfig = computed(
 const endpointPrefix = computed(
   () => `${props.worker.model}[${props.worker.key.slice(-4)}]@`,
 );
+
+const assignmentLabel = (
+  assignment: GptWorkerPipelineSnapshot['workers'][number]['assignments'][number],
+) => {
+  const chapter = assignment.chapter;
+  const chapterLabel = chapter?.index
+    ? `章节 ${chapter.index}/${chapter.total ?? '-'}`
+    : '章节准备中';
+  return `${chapterLabel} · 分段 ${assignment.segmentIndex}/${assignment.segmentTotal}`;
+};
 
 const testWorker = async () => {
   if (testingTranslator.value || props.active || props.starting) return;
@@ -79,15 +90,34 @@ const testWorker = async () => {
     </template>
 
     <template #description>
-      <n-text :type="active ? 'success' : undefined" depth="3">
-        {{ starting ? '正在连接' : active ? '已加入共享池' : '已停止' }} ·
-        最大并发
-        {{ worker.concurrency }}
-      </n-text>
+      <n-flex vertical :size="2">
+        <n-text :type="active ? 'success' : undefined" depth="3">
+          {{ starting ? '正在连接' : active ? '已加入共享池' : '已停止' }} ·
+          活跃 {{ activity?.active ?? 0 }}/{{
+            activity?.maximum ?? worker.concurrency
+          }}
+          · 错误 {{ activity?.errors ?? 0 }}
+        </n-text>
+        <n-text
+          v-for="assignment of activity?.assignments ?? []"
+          :key="`${assignment.chapter?.id ?? '?'}-${assignment.segmentIndex}`"
+          depth="3"
+          style="font-size: 12px"
+        >
+          {{ assignmentLabel(assignment) }}
+        </n-text>
+        <n-text
+          v-if="active && activity?.active === 0"
+          depth="3"
+          style="font-size: 12px"
+        >
+          空闲，等待共享任务
+        </n-text>
+      </n-flex>
     </template>
 
     <template #header-extra>
-      <n-flex :size="6" :wrap="false">
+      <n-flex :size="6" :wrap="true" justify="end">
         <c-button
           v-if="active"
           label="停止"

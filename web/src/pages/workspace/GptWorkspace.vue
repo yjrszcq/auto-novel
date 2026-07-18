@@ -76,6 +76,8 @@ const workerIsActive = (workerId: string) =>
   pipelineSnapshot.value.workers.some((worker) => worker.id === workerId);
 const workerIsStarting = (workerId: string) =>
   startingWorkerIds.value.has(workerId);
+const workerActivity = (workerId: string) =>
+  pipelineSnapshot.value.workers.find((worker) => worker.id === workerId);
 const setWorkerStarting = (workerId: string, starting: boolean) => {
   const next = new Set(startingWorkerIds.value);
   if (starting) next.add(workerId);
@@ -207,6 +209,33 @@ const deleteWorker = (workerId: string) => {
   workspace.deleteWorker(workerId);
 };
 
+const startAllWorkers = () =>
+  Promise.all(workspaceRef.value.workers.map((worker) => startWorker(worker)));
+
+const stopAllWorkers = () => {
+  for (const worker of [...pipelineSnapshot.value.workers]) {
+    stopWorker(worker.id);
+  }
+};
+
+const activeWorkerConfigs = computed(() => {
+  const activeIds = new Set(
+    pipelineSnapshot.value.workers.map((worker) => worker.id),
+  );
+  return workspaceRef.value.workers.filter((worker) =>
+    activeIds.has(worker.id),
+  );
+});
+
+const mixesWorkerConfigurations = computed(
+  () =>
+    new Set(
+      activeWorkerConfigs.value.map(
+        (worker) => `${worker.endpoint}\n${worker.model}`,
+      ),
+    ).size > 1,
+);
+
 const stopCurrentTask = () => {
   taskController?.abort();
 };
@@ -274,6 +303,18 @@ onBeforeUnmount(() => {
         :icon="DeleteOutlineOutlined"
         @action="clearCache"
       />
+      <c-button
+        label="启动全部"
+        :icon="PlayArrowOutlined"
+        :disabled="workspaceRef.workers.length === 0"
+        @action="startAllWorkers"
+      />
+      <c-button
+        label="停止全部"
+        :icon="StopOutlined"
+        :disabled="pipelineSnapshot.workers.length === 0"
+        @action="stopAllWorkers"
+      />
     </section-header>
     <n-text v-if="cacheMetrics" depth="3">
       缓存 {{ cacheMetrics.entryCount }} 条 /
@@ -287,8 +328,19 @@ onBeforeUnmount(() => {
       {{ pipelineSnapshot.aggregateActive }}/{{
         pipelineSnapshot.aggregateMaximum
       }}
-      · 排队 {{ pipelineSnapshot.queued }}
+      · 未完成 {{ pipelineSnapshot.outstanding }} · 排队
+      {{ pipelineSnapshot.queued }} · 背压等待
+      {{ pipelineSnapshot.waitingProducers }}
     </n-text>
+
+    <n-alert
+      v-if="mixesWorkerConfigurations"
+      type="warning"
+      title="正在混用不同模型或接口"
+      style="margin-top: 12px"
+    >
+      同一章节的不同分段可能由不同模型完成，文风和术语一致性取决于各模型输出。若一致性优先，请只启动同配置工作者。
+    </n-alert>
 
     <n-empty
       v-if="workspaceRef.workers.length === 0"
@@ -305,6 +357,7 @@ onBeforeUnmount(() => {
             :worker="worker"
             :active="workerIsActive(worker.id)"
             :starting="workerIsStarting(worker.id)"
+            :activity="workerActivity(worker.id)"
             @start="startWorker"
             @stop="stopWorker"
             @delete="deleteWorker"
