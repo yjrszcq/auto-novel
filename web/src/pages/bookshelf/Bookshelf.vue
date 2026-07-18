@@ -254,10 +254,50 @@ onMounted(reload);
           :label="selectionMode ? '取消选择' : '选择'"
           :icon="selectionMode ? CloseOutlined : ChecklistOutlined"
           :type="selectionMode ? 'primary' : 'default'"
+          compact-on-mobile
+          :round="false"
           @action="toggleSelectionMode"
         />
-        <local-volume-upload-button @done="reload" />
-        <c-button label="刷新" :icon="RefreshOutlined" @action="reload" />
+        <local-volume-upload-button
+          compact-on-mobile
+          :round="false"
+          @done="reload"
+        />
+        <c-button
+          label="刷新"
+          :icon="RefreshOutlined"
+          compact-on-mobile
+          :round="false"
+          @action="reload"
+        />
+      </div>
+      <div
+        class="bookshelf-toolbar"
+        :class="{
+          'bookshelf-toolbar--without-search': props.hideSearch,
+        }"
+      >
+        <n-input
+          v-if="!props.hideSearch"
+          v-model:value="query"
+          class="bookshelf-toolbar__search"
+          clearable
+          placeholder="搜索书名"
+        />
+        <n-button
+          class="bookshelf-toolbar__filter"
+          :type="filterButtonActive ? 'primary' : 'default'"
+          aria-label="书架筛选"
+          :aria-pressed="filterButtonActive"
+          @click="handleFilterButtonClick"
+        >
+          筛选
+        </n-button>
+        <n-select
+          v-model:value="sort"
+          class="bookshelf-toolbar__sort"
+          :options="sortOptions"
+        />
       </div>
       <bulletin
         v-if="!props.hideNotice && infoPanelHtml"
@@ -279,7 +319,6 @@ onMounted(reload);
         <n-text>已选择 {{ selectedBookIds.size }} 本</n-text>
         <n-button
           v-if="selectedBook && !selectedBook.state.pinned"
-          round
           :loading="batchUpdating"
           @click="updateSelectedBooks('pin')"
         >
@@ -287,31 +326,27 @@ onMounted(reload);
         </n-button>
         <n-button
           v-if="selectedBook?.state.pinned"
-          round
           :loading="batchUpdating"
           @click="updateSelectedBooks('unpin')"
         >
           取消置顶
         </n-button>
-        <n-button round @click="toggleVisibleSelection">
+        <n-button @click="toggleVisibleSelection">
           {{ allVisibleBooksSelected ? '反选' : '全选' }}
         </n-button>
         <n-button
-          round
           :disabled="selectedBookIds.size === 0"
           @click="queueSelectedBooks('gpt')"
         >
           排队 GPT
         </n-button>
         <n-button
-          round
           :disabled="selectedBookIds.size === 0"
           @click="queueSelectedBooks('sakura')"
         >
           排队 Sakura
         </n-button>
         <n-button
-          round
           :disabled="selectedBookIds.size === 0"
           :loading="downloadingSelectedBooks"
           @click="downloadSelectedBooks"
@@ -324,7 +359,6 @@ onMounted(reload);
         >
           <template #trigger>
             <n-button
-              round
               secondary
               type="error"
               :disabled="selectedBookIds.size === 0"
@@ -335,36 +369,6 @@ onMounted(reload);
           </template>
           确定永久删除所选书籍及其阅读数据吗？此操作无法恢复。
         </n-popconfirm>
-      </div>
-
-      <div
-        class="bookshelf-toolbar"
-        :class="{
-          'bookshelf-toolbar--without-search': props.hideSearch,
-        }"
-      >
-        <n-input
-          v-if="!props.hideSearch"
-          v-model:value="query"
-          class="bookshelf-toolbar__search"
-          clearable
-          placeholder="搜索书名"
-        />
-        <n-button
-          round
-          class="bookshelf-toolbar__filter"
-          :type="filterButtonActive ? 'primary' : 'default'"
-          aria-label="书架筛选"
-          :aria-pressed="filterButtonActive"
-          @click="handleFilterButtonClick"
-        >
-          筛选
-        </n-button>
-        <n-select
-          v-model:value="sort"
-          class="bookshelf-toolbar__sort"
-          :options="sortOptions"
-        />
       </div>
 
       <div v-show="showFilterPanel" class="bookshelf-filter-panel">
@@ -507,14 +511,16 @@ onMounted(reload);
 }
 
 .bookshelf-page--embedded .bookshelf-page__header {
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 12px;
 }
 
 .bookshelf-page__header-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
   gap: 8px;
 }
 
@@ -532,6 +538,7 @@ onMounted(reload);
 
 .bookshelf-toolbar {
   display: grid;
+  grid-column: 1 / -1;
   grid-template-columns: minmax(0, 1fr) minmax(132px, 0.4fr) minmax(
       132px,
       0.4fr
@@ -542,6 +549,12 @@ onMounted(reload);
 
 .bookshelf-toolbar--without-search {
   grid-template-columns: repeat(2, minmax(132px, 220px));
+}
+
+.bookshelf-page--embedded .bookshelf-toolbar {
+  flex: 0 1 410px;
+  grid-template-columns: minmax(100px, 2fr) minmax(160px, 3fr);
+  margin: 0;
 }
 
 .bookshelf-toolbar__filter {
@@ -611,12 +624,14 @@ onMounted(reload);
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .bookshelf-page__header-actions {
+  .bookshelf-page--embedded .bookshelf-page__header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 6px;
   }
 
-  .bookshelf-page__header-actions :deep(.n-button) {
-    padding-inline: 10px;
+  .bookshelf-page__header-actions {
+    gap: 6px;
   }
 
   .bookshelf-toolbar {
@@ -640,6 +655,16 @@ onMounted(reload);
   .bookshelf-toolbar__sort {
     grid-row: 2;
     grid-column: 2;
+  }
+
+  .bookshelf-page--embedded .bookshelf-toolbar {
+    grid-column: auto;
+    grid-template-columns: minmax(64px, 0.7fr) minmax(0, 1.3fr);
+  }
+
+  .bookshelf-page--embedded .bookshelf-toolbar__filter,
+  .bookshelf-page--embedded .bookshelf-toolbar__sort {
+    grid-row: auto;
   }
 
   .bookshelf-filter-panel {

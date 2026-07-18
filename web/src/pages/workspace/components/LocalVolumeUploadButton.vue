@@ -4,9 +4,18 @@ import type { UploadCustomRequestOptions, UploadFileInfo } from 'naive-ui';
 
 import { useLocalVolumeManager } from '../LocalVolumeManager';
 
-const props = defineProps<{
-  favoredId?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    favoredId?: string;
+    compactOnMobile?: boolean;
+    round?: boolean;
+  }>(),
+  {
+    favoredId: undefined,
+    compactOnMobile: false,
+    round: true,
+  },
+);
 const emit = defineEmits<{
   done: [File];
 }>();
@@ -22,7 +31,11 @@ const handleFinish = ({ file }: { file: UploadFileInfo }) => {
 
 const beforeUpload = ({ file }: { file: UploadFileInfo }) => {
   const filename = file.name.toLowerCase();
-  if (!filename.endsWith('.txt') && !filename.endsWith('.epub') && !filename.endsWith('.srt')) {
+  if (
+    !filename.endsWith('.txt') &&
+    !filename.endsWith('.epub') &&
+    !filename.endsWith('.srt')
+  ) {
     message.error(`上传失败: 文件类型不允许\n文件名：${file.name}`);
     return false;
   }
@@ -60,7 +73,12 @@ const customRequest = ({
   >
     <n-tooltip trigger="hover">
       <template #trigger>
-        <c-button label="添加" :icon="PlusOutlined" />
+        <c-button
+          label="添加"
+          :icon="PlusOutlined"
+          :compact-on-mobile="props.compactOnMobile"
+          :round="props.round"
+        />
       </template>
       支持拖拽上传 EPUB/TXT/SRT 文件
     </n-tooltip>

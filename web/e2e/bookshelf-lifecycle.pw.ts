@@ -175,6 +175,19 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
           left - headerActionLayout[index].right <= 12,
       ),
   ).toBe(true);
+  const commandBarTops = await page.evaluate(() => {
+    const top = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (element === null) throw new Error(`缺少首页操作控件：${selector}`);
+      return Math.round(element.getBoundingClientRect().top);
+    };
+    return [
+      top('.bookshelf-page__header-actions button'),
+      top('.bookshelf-toolbar__filter'),
+      top('.bookshelf-toolbar__sort'),
+    ];
+  });
+  expect(new Set(commandBarTops).size).toBe(1);
 
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
@@ -285,8 +298,11 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     );
   expect(new Set(batchButtonStyles.map(({ height }) => height)).size).toBe(1);
   expect(
+    new Set(batchButtonStyles.map(({ borderRadius }) => borderRadius)).size,
+  ).toBe(1);
+  expect(
     batchButtonStyles.every(
-      ({ borderRadius, height }) => borderRadius >= height / 2 - 1,
+      ({ borderRadius, height }) => borderRadius < height / 2 - 1,
     ),
   ).toBe(true);
   await selectionToolbar
