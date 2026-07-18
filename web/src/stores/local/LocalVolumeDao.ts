@@ -110,7 +110,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   //Metadata
   const listMetadata = () => db.getAll('metadata');
   const getMetadata = (id: string) => db.get('metadata', id);
-  const deleteMetadata = (id: string) => db.delete('metadata', id);
   const createMetadata = (value: LocalVolumeMetadata) =>
     db.put('metadata', value);
   const updateMetadata = async (
@@ -155,7 +154,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
 
   // File
   const getFile = (id: string) => db.get('file', id);
-  const deleteFile = (id: string) => db.delete('file', id);
   const createFile = (id: string, file: File) => db.put('file', { id, file });
 
   // Chapter
@@ -176,13 +174,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     }
     await tx.done;
     return value;
-  };
-  const deleteChapterByVolumeId = async (id: string) => {
-    const tx = db.transaction('chapter', 'readwrite');
-    for await (const cursor of tx.store.index('byVolumeId').iterate(id)) {
-      tx.store.delete(cursor.primaryKey);
-    }
-    await tx.done;
   };
   const listChapterByVolumeId = (id: string) =>
     db.getAllFromIndex('chapter', 'byVolumeId', id);
@@ -227,9 +218,12 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     db.put('reader-chapter-cache', value);
   const listReaderChapterCaches = (bookId: string) =>
     db.getAllFromIndex('reader-chapter-cache', 'byBookId', bookId);
-  const deleteReaderDataByVolumeId = async (bookId: string) => {
+  const deleteVolume = async (bookId: string) => {
     const tx = db.transaction(
       [
+        'metadata',
+        'file',
+        'chapter',
         'reader-bookshelf',
         'reader-book-preference',
         'reader-progress',
@@ -241,6 +235,14 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       ],
       'readwrite',
     );
+    const deleteChapters = async () => {
+      for await (const cursor of tx
+        .objectStore('chapter')
+        .index('byVolumeId')
+        .iterate(bookId)) {
+        cursor.delete();
+      }
+    };
     const deleteBookmarks = async () => {
       for await (const cursor of tx
         .objectStore('reader-bookmark')
@@ -266,11 +268,14 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       }
     };
     await Promise.all([
+      tx.objectStore('metadata').delete(bookId),
+      tx.objectStore('file').delete(bookId),
       tx.objectStore('reader-bookshelf').delete(bookId),
       tx.objectStore('reader-book-preference').delete(bookId),
       tx.objectStore('reader-progress').delete(bookId),
       tx.objectStore('reader-reading-stats').delete(bookId),
       tx.objectStore('reader-cover').delete(bookId),
+      deleteChapters(),
       deleteBookmarks(),
       deleteAnnotations(),
       deleteCaches(),
@@ -281,19 +286,16 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   return {
     listMetadata,
     getMetadata,
-    deleteMetadata,
     createMetadata,
     updateMetadata,
     updateBookPresentation,
     //
     getFile,
-    deleteFile,
     createFile,
     //
     getChapter,
     createChapter,
     updateChapter,
-    deleteChapterByVolumeId,
     listChapterByVolumeId,
     //
     getReaderSettings,
@@ -313,7 +315,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     putReaderAnnotation,
     deleteReaderAnnotation,
     listReaderAnnotations,
-    deleteReaderDataByVolumeId,
+    deleteVolume,
     close,
     getReaderCover,
     putReaderCover,

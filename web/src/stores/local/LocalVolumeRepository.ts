@@ -18,13 +18,7 @@ import { createLocalVolumeDao } from './LocalVolumeDao';
 export const createLocalVolumeStore = async () => {
   const dao = await createLocalVolumeDao();
 
-  const deleteVolume = (id: string) =>
-    Promise.all([
-      dao.deleteChapterByVolumeId(id),
-      dao.deleteMetadata(id),
-      dao.deleteFile(id),
-      dao.deleteReaderDataByVolumeId(id),
-    ]);
+  const deleteVolume = dao.deleteVolume;
 
   const updateGlossary = (id: string, glossary: Glossary) =>
     dao.updateMetadata(id, (value) => {

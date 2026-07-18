@@ -87,7 +87,7 @@ describe('reader storage', () => {
     dao.close();
   });
 
-  it('persists stable segment IDs and removes reader records with the volume', async () => {
+  it('persists stable segment IDs and atomically removes the complete volume graph', async () => {
     const dao = await createLocalVolumeDao(databaseName);
     await dao.createMetadata({
       id: 'book',
@@ -114,6 +114,10 @@ describe('reader storage', () => {
     const reopened = await createLocalVolumeDao(databaseName);
     expect((await reopened.getChapter('book', '0'))?.segmentIds).toEqual(
       initialSegmentIds,
+    );
+    await reopened.createFile(
+      'book',
+      new File(['source'], 'book.txt', { type: 'text/plain' }),
     );
 
     await reopened.putReaderBookshelf({
@@ -237,8 +241,23 @@ describe('reader storage', () => {
       cachedAt: 1,
     });
 
-    await reopened.deleteReaderDataByVolumeId('book');
+    await reopened.putReaderSettings({
+      id: 'default',
+      defaultMode: 'original-translated',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      fontSize: 18,
+      lineHeight: 1.8,
+      contentWidth: 900,
+      horizontalPadding: 24,
+      theme: 'system',
+      flow: 'auto',
+      updatedAt: 1,
+    });
+    await reopened.deleteVolume('book');
 
+    expect(await reopened.getMetadata('book')).toBeUndefined();
+    expect(await reopened.getFile('book')).toBeUndefined();
+    expect(await reopened.getChapter('book', '0')).toBeUndefined();
     expect(await reopened.getReaderBookshelf('book')).toBeUndefined();
     expect(await reopened.getReaderProgress('book')).toBeUndefined();
     expect(await reopened.getReaderReadingStats('book')).toBeUndefined();
@@ -250,12 +269,6 @@ describe('reader storage', () => {
     expect(await reopened.listReaderChapterCaches('other-book')).toHaveLength(
       1,
     );
-    await reopened.putReaderSettings({
-      id: 'default',
-      defaultMode: 'original-translated',
-      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
-      updatedAt: 1,
-    });
     reopened.close();
 
     const settingsReloaded = await createLocalVolumeDao(databaseName);

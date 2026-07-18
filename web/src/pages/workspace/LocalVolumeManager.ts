@@ -58,9 +58,8 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
 
       const repo = await useLocalVolumeStore();
 
-      const { BlobReader, BlobWriter, ZipWriter } = await import(
-        '@zip.js/zip.js'
-      );
+      const { BlobReader, BlobWriter, ZipWriter } =
+        await import('@zip.js/zip.js');
       const zipBlobWriter = new BlobWriter();
       const writer = new ZipWriter(zipBlobWriter);
 
@@ -82,44 +81,6 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
               ),
             });
             await writer.add(filename, new BlobReader(blob));
-          } catch (error) {
-            failed += 1;
-            console.error(`生成文件错误：${error}\n标题:${id}`);
-          }
-        }),
-      );
-
-      await writer.close();
-      const zipBlob = await zipBlobWriter.getData();
-      downloadFile(`批量下载[${ids.length}].zip`, zipBlob);
-
-      return { success: ids.length - failed, failed };
-    },
-
-    async downloadRawVolumes(ids: string[]) {
-      const repo = await useLocalVolumeStore();
-
-      const { BlobReader, BlobWriter, ZipWriter } = await import(
-        '@zip.js/zip.js'
-      );
-      const zipBlobWriter = new BlobWriter();
-      const writer = new ZipWriter(zipBlobWriter);
-
-      let failed = 0;
-      await Promise.all(
-        ids.map(async (id: string) => {
-          try {
-            const volume = await repo.getVolume(id);
-            if (volume === undefined) throw new Error('小说不存在');
-            const file = await repo.getOriginalDownloadFile({
-              id,
-              embedMetadata: shouldEmbedDownloadMetadata(
-                volume,
-                'original',
-                setting.value.embedMetadataInOriginalDownload,
-              ),
-            });
-            await writer.add(file.filename, new BlobReader(file.blob));
           } catch (error) {
             failed += 1;
             console.error(`生成文件错误：${error}\n标题:${id}`);

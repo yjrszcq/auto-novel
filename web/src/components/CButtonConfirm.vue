@@ -15,7 +15,7 @@ defineProps<{
     style="max-width: 300px"
   >
     <template #trigger>
-      <n-button round v-bind="$attrs">
+      <n-button :aria-label="label || hint" round v-bind="$attrs">
         <template v-if="icon && label" #icon>
           <n-icon :component="icon" />
         </template>

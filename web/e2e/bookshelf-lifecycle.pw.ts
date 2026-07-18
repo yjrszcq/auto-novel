@@ -1,4 +1,12 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Download, type Page } from '@playwright/test';
+import {
+  BlobReader,
+  BlobWriter,
+  TextReader,
+  TextWriter,
+  ZipReader,
+  ZipWriter,
+} from '@zip.js/zip.js';
 
 const alphaFilename = 'Alpha Upload.txt';
 const betaFilename = 'Beta Upload.txt';
@@ -21,6 +29,90 @@ const uploadBooks = async (page: Page) => {
       buffer: Buffer.from('Beta line 1\nBeta line 2'),
     },
   ]);
+};
+
+const epubFilename = 'Presentation Lifecycle.epub';
+const sourceCover = Uint8Array.from([1, 2, 3, 4]);
+const customCover = Uint8Array.from([5, 6, 7, 8]);
+const linkedCover = Uint8Array.from([9, 10, 11, 12]);
+
+const createMinimalEpub = async () => {
+  const output = new BlobWriter('application/epub+zip');
+  const writer = new ZipWriter(output);
+  await writer.add('mimetype', new TextReader('application/epub+zip'), {
+    level: 0,
+  });
+  await writer.add(
+    'META-INF/container.xml',
+    new TextReader(`<?xml version="1.0" encoding="utf-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+</container>`),
+  );
+  await writer.add(
+    'OEBPS/content.opf',
+    new TextReader(`<?xml version="1.0" encoding="utf-8"?>
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="book-id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">presentation-lifecycle</dc:identifier>
+    <dc:title>原始 EPUB 标题</dc:title>
+    <dc:creator>原始作者</dc:creator>
+    <dc:description>原始简介</dc:description>
+    <dc:language>ja</dc:language>
+  </metadata>
+  <manifest>
+    <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+    <item id="cover" href="images/cover.png" media-type="image/png" properties="cover-image"/>
+  </manifest>
+  <spine><itemref idref="chapter"/></spine>
+</package>`),
+  );
+  await writer.add(
+    'OEBPS/chapter.xhtml',
+    new TextReader(`<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title></head>
+<body><h1>第一章</h1><p>原文段落</p></body></html>`),
+  );
+  await writer.add(
+    'OEBPS/images/cover.png',
+    new BlobReader(new Blob([sourceCover], { type: 'image/png' })),
+  );
+  await writer.close();
+  return Buffer.from(await (await output.getData()).arrayBuffer());
+};
+
+const readDownload = async (download: Download) => {
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
+};
+
+const inspectEpub = async (buffer: Buffer) => {
+  const reader = new ZipReader(
+    new BlobReader(new Blob([Uint8Array.from(buffer)])),
+  );
+  try {
+    const entries = new Map(
+      (await reader.getEntries()).map((entry) => [entry.filename, entry]),
+    );
+    const packageXml = await entries.get('OEBPS/content.opf')!.getData!(
+      new TextWriter(),
+    );
+    const chapterXml = await entries.get('OEBPS/chapter.xhtml')!.getData!(
+      new TextWriter(),
+    );
+    const cover = await entries.get('OEBPS/images/cover.png')!.getData!(
+      new BlobWriter(),
+    );
+    return {
+      packageXml,
+      chapterXml,
+      cover: Buffer.from(await cover.arrayBuffer()),
+    };
+  } finally {
+    await reader.close();
+  }
 };
 
 test('imports and persists the complete bookshelf listing lifecycle', async ({
@@ -250,4 +342,423 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     buffer: Buffer.from('not a supported novel'),
   });
   await expect(page.getByText(/上传失败: 文件类型不允许/)).toBeVisible();
+});
+
+test('keeps EPUB presentation edits, downloads, and source data independent', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const sourceEpub = await createMinimalEpub();
+  await page.route('**/linked-cover.png', (route) =>
+    route.fulfill({
+      body: Buffer.from(linkedCover),
+      contentType: 'image/png',
+    }),
+  );
+  await page.goto('/');
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: epubFilename,
+    mimeType: 'application/epub+zip',
+    buffer: sourceEpub,
+  });
+  await expect(page.getByText(epubFilename, { exact: true })).toBeVisible();
+
+  await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'chapter'],
+      'readwrite',
+    );
+    const metadataStore = transaction.objectStore('metadata');
+    const metadataRequest = metadataStore.get(bookId);
+    metadataRequest.onsuccess = () => {
+      const metadata = metadataRequest.result;
+      const chapterId = metadata.toc[0].chapterId;
+      const chapterStore = transaction.objectStore('chapter');
+      const chapterRequest = chapterStore.get(`${bookId}/${chapterId}`);
+      chapterRequest.onsuccess = () => {
+        const chapter = chapterRequest.result;
+        chapter.gpt = {
+          glossaryId: metadata.glossaryId,
+          glossary: {},
+          paragraphs: chapter.paragraphs.map(
+            (_: string, index: number) => `真实译文 ${index + 1}`,
+          ),
+        };
+        chapterStore.put(chapter);
+        metadata.toc[0].gpt = metadata.glossaryId;
+        metadataStore.put(metadata);
+      };
+    };
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, epubFilename);
+
+  await page.goto(`/books/${encodeURIComponent(epubFilename)}/edit`);
+  const form = page.locator('.metadata-edit__form');
+  await form.locator('input').first().fill('展示 EPUB 标题');
+  await form.locator('textarea').fill('展示简介');
+  await page
+    .locator('.metadata-edit__cover-field input[type="file"]')
+    .setInputFiles({
+      name: 'custom.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(customCover),
+    });
+  const selects = form.locator('.n-select');
+  await selects.nth(1).click();
+  await page
+    .locator('.n-base-select-menu:visible')
+    .last()
+    .getByText('开启', { exact: true })
+    .click();
+  await selects.nth(2).click();
+  await page
+    .locator('.n-base-select-menu:visible')
+    .last()
+    .getByText('关闭', { exact: true })
+    .click();
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page).toHaveURL(/\/details$/);
+
+  const storedAfterEdit = await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'file', 'reader-cover'],
+      'readonly',
+    );
+    const metadataRequest = transaction.objectStore('metadata').get(bookId);
+    const fileRequest = transaction.objectStore('file').get(bookId);
+    const coverRequest = transaction.objectStore('reader-cover').get(bookId);
+    const result = await new Promise<{
+      metadata: {
+        sourceBookMetadata: unknown;
+        bookMetadata: unknown;
+        downloadMetadataPreference: unknown;
+      };
+      file: { file: File };
+      cover: { source?: string };
+    }>((resolve, reject) => {
+      transaction.oncomplete = () =>
+        resolve({
+          metadata: metadataRequest.result,
+          file: fileRequest.result,
+          cover: coverRequest.result,
+        });
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+    return {
+      ...result,
+      fileBytes: Array.from(
+        new Uint8Array(await result.file.file.arrayBuffer()),
+      ),
+    };
+  }, epubFilename);
+  expect(storedAfterEdit.metadata).toMatchObject({
+    sourceBookMetadata: {
+      title: '原始 EPUB 标题',
+      authors: ['原始作者'],
+      description: '原始简介',
+      languages: ['ja'],
+    },
+    bookMetadata: {
+      title: '展示 EPUB 标题',
+      description: '展示简介',
+    },
+    downloadMetadataPreference: {
+      original: 'embed',
+      translated: 'source',
+    },
+  });
+  expect(storedAfterEdit.cover.source).toBe('custom');
+  expect(Buffer.from(storedAfterEdit.fileBytes)).toEqual(sourceEpub);
+
+  const [embeddedOriginalDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载原文', exact: true }).click(),
+  ]);
+  const embeddedOriginal = await inspectEpub(
+    await readDownload(embeddedOriginalDownload),
+  );
+  expect(embeddedOriginal.packageXml).toContain('展示 EPUB 标题');
+  expect(embeddedOriginal.packageXml).toContain('展示简介');
+  expect(embeddedOriginal.cover).toEqual(Buffer.from(customCover));
+
+  const [translatedDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载译文', exact: true }).click(),
+  ]);
+  const translated = await inspectEpub(await readDownload(translatedDownload));
+  expect(translated.packageXml).toContain('原始 EPUB 标题');
+  expect(translated.chapterXml).toContain('真实译文');
+  expect(translated.cover).toEqual(Buffer.from(sourceCover));
+
+  await page.goto(`/books/${encodeURIComponent(epubFilename)}/edit`);
+  const coverField = page.locator('.metadata-edit__cover-field');
+  await coverField.getByRole('button', { name: '移除', exact: true }).click();
+  await coverField
+    .locator('input[type="text"]')
+    .fill('http://127.0.0.1:4173/linked-cover.png');
+  await coverField.getByRole('button', { name: '应用', exact: true }).click();
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page).toHaveURL(/\/details$/);
+  const [linkedOriginalDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载原文', exact: true }).click(),
+  ]);
+  const linkedOriginal = await inspectEpub(
+    await readDownload(linkedOriginalDownload),
+  );
+  expect(linkedOriginal.cover).toEqual(Buffer.from(linkedCover));
+
+  await page.goto(`/books/${encodeURIComponent(epubFilename)}/edit`);
+  await page
+    .getByRole('button', { name: '还原原始元信息', exact: true })
+    .click();
+  await expect(form.locator('input').first()).toHaveValue('原始 EPUB 标题');
+  await expect(form.locator('textarea')).toHaveValue('原始简介');
+  await expect(form).toContainText('原始作者');
+  await expect(form).toContainText('日语');
+  await expect(
+    coverField.getByRole('button', { name: '上传', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page).toHaveURL(/\/details$/);
+
+  const restored = await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'reader-cover'],
+      'readonly',
+    );
+    const metadataRequest = transaction.objectStore('metadata').get(bookId);
+    const coverRequest = transaction.objectStore('reader-cover').get(bookId);
+    const result = await new Promise<{
+      metadata: unknown;
+      cover: unknown;
+    }>((resolve, reject) => {
+      transaction.oncomplete = () =>
+        resolve({
+          metadata: metadataRequest.result,
+          cover: coverRequest.result,
+        });
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+    return result;
+  }, epubFilename);
+  expect(restored.metadata).toMatchObject({
+    sourceBookMetadata: { title: '原始 EPUB 标题' },
+    bookMetadata: {
+      title: '原始 EPUB 标题',
+      authors: ['原始作者'],
+      description: '原始简介',
+      coverUrl: '',
+      languages: ['ja'],
+    },
+    downloadMetadataPreference: {
+      original: 'embed',
+      translated: 'source',
+    },
+  });
+  expect(restored.cover).toBeUndefined();
+});
+
+test('permanent deletion removes exactly one complete book graph', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.goto('/');
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: betaFilename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('delete me'),
+    });
+  await expect(page.getByText(betaFilename, { exact: true })).toBeVisible();
+  await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const stores = [
+      'reader-settings',
+      'reader-bookshelf',
+      'reader-book-preference',
+      'reader-progress',
+      'reader-reading-stats',
+      'reader-cover',
+      'reader-bookmark',
+      'reader-annotation',
+      'reader-chapter-cache',
+    ];
+    const transaction = database.transaction(stores, 'readwrite');
+    transaction.objectStore('reader-settings').put({
+      id: 'default',
+      defaultMode: 'original',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      fontSize: 18,
+      lineHeight: 1.8,
+      contentWidth: 900,
+      horizontalPadding: 24,
+      theme: 'system',
+      flow: 'auto',
+      updatedAt: 1,
+    });
+    for (const target of [bookId, 'other-book']) {
+      transaction.objectStore('reader-bookshelf').put({
+        bookId: target,
+        listed: true,
+        pinned: false,
+        addedAt: 1,
+        updatedAt: 1,
+      });
+      transaction.objectStore('reader-book-preference').put({
+        bookId: target,
+        preferredMode: 'original',
+        updatedAt: 1,
+      });
+      transaction.objectStore('reader-progress').put({
+        bookId: target,
+        chapterId: '0',
+        updatedAt: 1,
+      });
+      transaction.objectStore('reader-reading-stats').put({
+        bookId: target,
+        totalReadingMs: 1,
+        lastReadAt: 1,
+      });
+      transaction.objectStore('reader-cover').put({
+        bookId: target,
+        blob: new Blob([target], { type: 'image/png' }),
+        source: 'custom',
+        updatedAt: 1,
+      });
+      transaction.objectStore('reader-bookmark').put({
+        id: `${target}-bookmark`,
+        bookId: target,
+        chapterId: '0',
+        createdAt: 1,
+      });
+      transaction.objectStore('reader-annotation').put({
+        id: `${target}-annotation`,
+        bookId: target,
+        chapterId: '0',
+        segmentId: 'segment',
+        languageSide: 'original',
+        startOffset: 0,
+        endOffset: 1,
+        quote: 'x',
+        style: 'highlight',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      transaction.objectStore('reader-chapter-cache').put({
+        key: `${target}/0/current`,
+        bookId: target,
+        chapterId: '0',
+        contentRevision: 'current',
+        cachedAt: 1,
+      });
+    }
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, betaFilename);
+
+  const [rawDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page
+      .locator('.n-list-item')
+      .filter({ hasText: betaFilename })
+      .getByRole('button', { name: '原文', exact: true })
+      .click(),
+  ]);
+  expect((await readDownload(rawDownload)).toString()).toBe('delete me');
+
+  const targetItem = page
+    .locator('.n-list-item')
+    .filter({ hasText: betaFilename });
+  await targetItem
+    .getByRole('button', {
+      name: `真的要删除《${betaFilename}》吗？`,
+      exact: true,
+    })
+    .click();
+  await page.getByRole('button', { name: '确认', exact: true }).click();
+  await expect(page.getByText(betaFilename, { exact: true })).toHaveCount(0);
+
+  const remaining = await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const storeNames = Array.from(database.objectStoreNames);
+    const transaction = database.transaction(storeNames, 'readonly');
+    const read = (store: string, key: string) =>
+      transaction.objectStore(store).get(key);
+    const targetRequests = [
+      read('metadata', bookId),
+      read('file', bookId),
+      read('chapter', `${bookId}/0`),
+      read('reader-bookshelf', bookId),
+      read('reader-book-preference', bookId),
+      read('reader-progress', bookId),
+      read('reader-reading-stats', bookId),
+      read('reader-cover', bookId),
+      read('reader-bookmark', `${bookId}-bookmark`),
+      read('reader-annotation', `${bookId}-annotation`),
+      read('reader-chapter-cache', `${bookId}/0/current`),
+    ];
+    const preservedRequests = [
+      read('reader-settings', 'default'),
+      read('reader-bookshelf', 'other-book'),
+      read('reader-book-preference', 'other-book'),
+      read('reader-progress', 'other-book'),
+      read('reader-reading-stats', 'other-book'),
+      read('reader-cover', 'other-book'),
+      read('reader-bookmark', 'other-book-bookmark'),
+      read('reader-annotation', 'other-book-annotation'),
+      read('reader-chapter-cache', 'other-book/0/current'),
+    ];
+    const result = await new Promise<{
+      target: unknown[];
+      preserved: unknown[];
+    }>((resolve, reject) => {
+      transaction.oncomplete = () =>
+        resolve({
+          target: targetRequests.map((request) => request.result),
+          preserved: preservedRequests.map((request) => request.result),
+        });
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+    return result;
+  }, betaFilename);
+  expect(remaining.target.every((value) => value === undefined)).toBe(true);
+  expect(remaining.preserved.every((value) => value !== undefined)).toBe(true);
+  await page.reload();
+  await expect(page.getByText(betaFilename, { exact: true })).toHaveCount(0);
 });
