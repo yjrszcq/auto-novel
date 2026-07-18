@@ -136,6 +136,28 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(page.getByText(alphaFilename, { exact: true })).toBeVisible();
   await expect(page.getByText(betaFilename, { exact: true })).toBeVisible();
 
+  const alphaHomeTitle = page.getByRole('button', {
+    name: `打开《${alphaFilename}》`,
+  });
+  await alphaHomeTitle.click();
+  const addToBookshelfDialog = page
+    .getByRole('dialog')
+    .filter({ hasText: '尚未加入书架' });
+  await expect(addToBookshelfDialog).toContainText(alphaFilename);
+  await addToBookshelfDialog
+    .getByRole('button', { name: '加入书架', exact: true })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/books/${encodeURIComponent(alphaFilename)}/details$`),
+  );
+
+  await page.goto('/');
+  await page.getByRole('button', { name: `打开《${alphaFilename}》` }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/books/${encodeURIComponent(alphaFilename)}/details$`),
+  );
+  await page.goto('/');
+
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -348,6 +370,15 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   const workspaceDrawer = page
     .locator('.n-drawer')
     .filter({ hasText: '本地小说' });
+  await expect(
+    workspaceDrawer.getByRole('link', { name: betaFilename, exact: true }),
+  ).toHaveAttribute(
+    'href',
+    `/books/${encodeURIComponent(betaFilename)}/read/0`,
+  );
+  await expect(
+    workspaceDrawer.getByRole('button', { name: '阅读', exact: true }),
+  ).toHaveCount(0);
   await workspaceDrawer
     .getByRole('button', { name: '全选', exact: true })
     .click();

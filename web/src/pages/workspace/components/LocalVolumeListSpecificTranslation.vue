@@ -158,7 +158,12 @@ const progressFilterFunc = computed(() => {
 
     <template #volume="volume">
       <n-flex :size="4" vertical>
-        <n-text>{{ volume.id }}</n-text>
+        <router-link
+          class="local-volume-title-link"
+          :to="`/books/${encodeURIComponent(volume.id)}/read/0`"
+        >
+          {{ volume.id }}
+        </router-link>
 
         <n-text depth="3">
           <n-time :time="volume.createAt" type="relative" />
@@ -174,15 +179,6 @@ const progressFilterFunc = computed(() => {
             secondary
             @action="queueVolume(volume.id, volume.toc.length)"
           />
-
-          <router-link
-            v-if="!volume.id.endsWith('.epub')"
-            :to="`/books/${encodeURIComponent(volume.id)}/read/0`"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <c-button label="阅读" size="tiny" secondary />
-          </router-link>
 
           <c-button
             label="下载"
@@ -214,3 +210,19 @@ const progressFilterFunc = computed(() => {
     </template>
   </local-volume-list>
 </template>
+
+<style scoped>
+.local-volume-title-link {
+  overflow: hidden;
+  color: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-volume-title-link:hover,
+.local-volume-title-link:focus-visible {
+  text-decoration: underline;
+}
+</style>

@@ -12,6 +12,7 @@ import {
   LocalVolumeManagerUtil,
   useLocalVolumeManager,
 } from '@/pages/workspace/LocalVolumeManager';
+import { createBookshelfService } from '@/pages/bookshelf/BookshelfService';
 import {
   Setting,
   useLocalVolumeStore,
@@ -24,6 +25,7 @@ import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const bp = useBreakPoints();
 const showShortcut = bp.smaller('tablet');
+const router = useRouter();
 
 const vars = useThemeVars();
 
@@ -63,6 +65,8 @@ const { volumes } = storeToRefs(localVolumeManager);
 const localShelfSearch = reactive({ query: '', enableRegexMode: false });
 const localShelfLoading = ref(false);
 const showDeleteModal = ref(false);
+const showAddToBookshelfModal = ref(false);
+const pendingBookshelfVolume = shallowRef<LocalVolumeMetadata>();
 
 const progressFilter = ref<'all' | 'finished' | 'unfinished'>('all');
 const progressFilterOptions = [
@@ -367,6 +371,39 @@ const deleteLocalVolume = async (volumeId: string) => {
     message.error(`删除失败：${error}`);
   }
 };
+
+const bookDetailsPath = (volumeId: string) =>
+  `/books/${encodeURIComponent(volumeId)}/details`;
+
+const openLocalVolume = async (volume: LocalVolumeMetadata) => {
+  try {
+    const repository = await ensureLocalRepo();
+    const bookshelfState = await repository.getReaderBookshelf(volume.id);
+    if (bookshelfState?.listed) {
+      await router.push(bookDetailsPath(volume.id));
+      return;
+    }
+    pendingBookshelfVolume.value = volume;
+    showAddToBookshelfModal.value = true;
+  } catch (error) {
+    message.error(`无法打开书籍：${String(error)}`);
+  }
+};
+
+const addPendingVolumeToBookshelf = async () => {
+  const volume = pendingBookshelfVolume.value;
+  if (volume === undefined) return;
+  try {
+    const repository = await ensureLocalRepo();
+    await createBookshelfService(repository).setListed(volume.id, true);
+    showAddToBookshelfModal.value = false;
+    pendingBookshelfVolume.value = undefined;
+    message.success('已加入书架');
+    await router.push(bookDetailsPath(volume.id));
+  } catch (error) {
+    message.error(`加入书架失败：${String(error)}`);
+  }
+};
 </script>
 
 <template>
@@ -481,7 +518,17 @@ const deleteLocalVolume = async (volumeId: string) => {
       />
       <n-list v-else class="local-shelf-list">
         <n-list-item v-for="volume in filteredLocalVolumes" :key="volume.id">
-          <n-thing :title="volume.id">
+          <n-thing>
+            <template #header>
+              <n-button
+                text
+                class="local-shelf-title"
+                :aria-label="`打开《${volume.id}》`"
+                @click="openLocalVolume(volume)"
+              >
+                {{ volume.id }}
+              </n-button>
+            </template>
             <template #description>
               <n-text depth="3">
                 创建于
@@ -560,10 +607,37 @@ const deleteLocalVolume = async (volumeId: string) => {
         />
       </template>
     </c-modal>
+
+    <c-modal title="加入书架" v-model:show="showAddToBookshelfModal">
+      <n-p>
+        《{{ pendingBookshelfVolume?.id }}》尚未加入书架，是否现在加入？
+      </n-p>
+
+      <template #action>
+        <c-button label="取消" @action="showAddToBookshelfModal = false" />
+        <c-button
+          label="加入书架"
+          type="primary"
+          @action="addPendingVolumeToBookshelf"
+        />
+      </template>
+    </c-modal>
   </div>
 </template>
 
 <style scoped>
+.local-shelf-title {
+  max-width: 100%;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.local-shelf-title :deep(.n-button__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #banner {
   max-width: 800px;
   padding-top: 20px;
