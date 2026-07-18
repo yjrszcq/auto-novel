@@ -683,14 +683,23 @@ onMounted(reload);
         </div>
       </div>
 
-      <n-empty v-if="books.length === 0" description="还没有本地书籍">
+      <n-empty
+        v-if="books.length === 0"
+        class="bookshelf-empty-state"
+        description="还没有本地书籍"
+      >
         <template #extra>
-          <local-volume-upload-button @done="reload" />
+          <local-volume-upload-button
+            :enable-drop-zone="false"
+            :round="false"
+            @done="reload"
+          />
         </template>
       </n-empty>
 
       <n-empty
         v-else-if="visibleBooks.length === 0"
+        class="bookshelf-empty-state"
         description="没有符合当前筛选条件的书籍"
       >
         <template #extra>
@@ -895,6 +904,10 @@ onMounted(reload);
   min-width: 150px;
   padding: 6px 12px;
   opacity: 0.85;
+}
+
+.bookshelf-empty-state {
+  padding-top: clamp(56px, 8vh, 88px);
 }
 
 .book-grid {

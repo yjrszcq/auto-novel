@@ -5,24 +5,41 @@ import { useEventListener } from '@vueuse/core';
 const showDropZone = ref(false);
 const dragFlag = { isDragStart: false };
 
+const closeDropZone = () => {
+  showDropZone.value = false;
+};
+
 // 将文件从操作系统拖拽到浏览器内，不会触发 dragstart 和 dragend 事件
-useEventListener(document, ['dragenter', 'dragstart', 'dragend'], (e) => {
-  if (e.type === 'dragstart') {
-    dragFlag.isDragStart = true;
-  } else if (e.type === 'dragenter' && !dragFlag.isDragStart) {
-    e.preventDefault();
-    showDropZone.value = true;
-  } else if (e.type === 'dragend') {
-    dragFlag.isDragStart = false;
-  }
-});
+useEventListener(
+  document,
+  ['dragenter', 'dragleave', 'dragstart', 'dragend', 'drop'],
+  (e) => {
+    if (e.type === 'dragstart') {
+      dragFlag.isDragStart = true;
+    } else if (e.type === 'dragenter' && !dragFlag.isDragStart) {
+      e.preventDefault();
+      showDropZone.value = true;
+    } else if (
+      e.type === 'dragleave' &&
+      (e as DragEvent).relatedTarget === null
+    ) {
+      closeDropZone();
+    } else if (e.type === 'drop') {
+      closeDropZone();
+    } else if (e.type === 'dragend') {
+      dragFlag.isDragStart = false;
+      closeDropZone();
+    }
+  },
+);
+useEventListener(window, 'blur', closeDropZone);
 const handleDragLeave = (e: DragEvent) => {
   e.preventDefault();
-  showDropZone.value = false;
+  closeDropZone();
 };
 const handleDrop = (e: DragEvent) => {
   e.preventDefault();
-  showDropZone.value = false;
+  closeDropZone();
 };
 </script>
 

@@ -134,6 +134,73 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     page.getByRole('heading', { name: '轻小说机翻机器人' }),
   ).toBeVisible();
+  const emptyBookshelf = page.locator('.bookshelf-empty-state');
+  await expect(emptyBookshelf).toContainText('还没有本地书籍');
+  const emptyBookshelfLayout = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>(
+      '.bookshelf-page__header',
+    );
+    const icon = document.querySelector<HTMLElement>(
+      '.bookshelf-empty-state .n-empty__icon',
+    );
+    const addButton = document.querySelector<HTMLElement>(
+      '.bookshelf-empty-state button',
+    );
+    if (header === null || icon === null || addButton === null) {
+      throw new Error('缺少空书架布局元素');
+    }
+    const buttonBounds = addButton.getBoundingClientRect();
+    return {
+      buttonBorderRadius: Number.parseFloat(
+        getComputedStyle(addButton).borderRadius,
+      ),
+      buttonHeight: buttonBounds.height,
+      iconGap:
+        icon.getBoundingClientRect().top -
+        header.getBoundingClientRect().bottom,
+    };
+  });
+  expect(emptyBookshelfLayout.iconGap).toBeGreaterThanOrEqual(50);
+  expect(emptyBookshelfLayout.buttonBorderRadius).toBeLessThan(
+    emptyBookshelfLayout.buttonHeight / 2 - 1,
+  );
+  await expect(page.locator('.drop-zone-wrap')).toHaveCount(1);
+  await page.evaluate(() => {
+    document.dispatchEvent(
+      new DragEvent('dragenter', { bubbles: true, cancelable: true }),
+    );
+  });
+  await expect(page.locator('.drop-zone-wrap')).toBeVisible();
+  await page.evaluate(() => {
+    document.dispatchEvent(
+      new DragEvent('dragleave', {
+        bubbles: true,
+        cancelable: true,
+        relatedTarget: null,
+      }),
+    );
+  });
+  await expect(page.locator('.drop-zone-wrap')).toBeHidden();
+  const emptyStateDesktopViewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileEmptyIconGap = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>(
+      '.bookshelf-page__header',
+    );
+    const icon = document.querySelector<HTMLElement>(
+      '.bookshelf-empty-state .n-empty__icon',
+    );
+    if (header === null || icon === null) {
+      throw new Error('缺少手机版空书架布局元素');
+    }
+    return (
+      icon.getBoundingClientRect().top - header.getBoundingClientRect().bottom
+    );
+  });
+  expect(mobileEmptyIconGap).toBeGreaterThanOrEqual(50);
+  if (emptyStateDesktopViewport !== null) {
+    await page.setViewportSize(emptyStateDesktopViewport);
+  }
   await expect(
     page.getByText('本版本仅管理本地导入的小说', { exact: false }),
   ).toHaveCount(0);
@@ -994,6 +1061,23 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
     0,
   );
+  const filteredEmptyState = page.locator('.bookshelf-empty-state');
+  await expect(filteredEmptyState).toContainText('没有符合当前筛选条件的书籍');
+  const filteredEmptyIconGap = await page.evaluate(() => {
+    const filter = document.querySelector<HTMLElement>(
+      '.bookshelf-filter-panel',
+    );
+    const icon = document.querySelector<HTMLElement>(
+      '.bookshelf-empty-state .n-empty__icon',
+    );
+    if (filter === null || icon === null) {
+      throw new Error('缺少筛选空状态布局元素');
+    }
+    return (
+      icon.getBoundingClientRect().top - filter.getBoundingClientRect().bottom
+    );
+  });
+  expect(filteredEmptyIconGap).toBeGreaterThanOrEqual(50);
   await readingFilters.getByRole('button', { name: '全部' }).click();
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),

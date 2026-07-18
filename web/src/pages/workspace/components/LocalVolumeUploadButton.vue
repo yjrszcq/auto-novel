@@ -8,11 +8,13 @@ const props = withDefaults(
   defineProps<{
     favoredId?: string;
     compactOnMobile?: boolean;
+    enableDropZone?: boolean;
     round?: boolean;
   }>(),
   {
     favoredId: undefined,
     compactOnMobile: false,
+    enableDropZone: true,
     round: true,
   },
 );
@@ -84,6 +86,7 @@ const customRequest = ({
     </n-tooltip>
   </n-upload>
   <DropZone
+    v-if="props.enableDropZone"
     @finish="handleFinish"
     accept=".txt,.epub,.srt"
     multiple
