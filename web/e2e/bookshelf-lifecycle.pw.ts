@@ -345,6 +345,51 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     selectionActionAlignment.selectionLeft -
       selectionActionAlignment.toolbarLeft,
   ).toBeLessThanOrEqual(16);
+  const filterButtonForLayout = page.getByRole('button', {
+    name: '书架筛选',
+    exact: true,
+  });
+  await filterButtonForLayout.click();
+  const filterPanelForLayout = page.locator('.bookshelf-filter-panel');
+  await expect(filterPanelForLayout).toBeVisible();
+  const desktopExpandedGaps = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>(
+      '.bookshelf-page__header',
+    );
+    const selection = document.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar',
+    );
+    const filter = document.querySelector<HTMLElement>(
+      '.bookshelf-filter-panel',
+    );
+    const firstBook = document.querySelector<HTMLElement>('.book-card');
+    if (
+      header === null ||
+      selection === null ||
+      filter === null ||
+      firstBook === null
+    ) {
+      throw new Error('缺少电脑版书架展开布局元素');
+    }
+    return {
+      filterToBooks:
+        firstBook.getBoundingClientRect().top -
+        filter.getBoundingClientRect().bottom,
+      headerToSelection:
+        selection.getBoundingClientRect().top -
+        header.getBoundingClientRect().bottom,
+      selectionToFilter:
+        filter.getBoundingClientRect().top -
+        selection.getBoundingClientRect().bottom,
+    };
+  });
+  expect(desktopExpandedGaps.headerToSelection).toBeGreaterThanOrEqual(0);
+  expect(desktopExpandedGaps.headerToSelection).toBeLessThanOrEqual(6);
+  expect(desktopExpandedGaps.selectionToFilter).toBeGreaterThanOrEqual(0);
+  expect(desktopExpandedGaps.selectionToFilter).toBeLessThanOrEqual(4);
+  expect(desktopExpandedGaps.filterToBooks).toBeGreaterThanOrEqual(0);
+  expect(desktopExpandedGaps.filterToBooks).toBeLessThanOrEqual(12);
+
   const desktopViewport = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileSelectionLayout = await selectionToolbar.evaluate((toolbar) => {
@@ -420,12 +465,8 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(mobileSelectionLayout.fileLeft).toBeGreaterThanOrEqual(
     mobileSelectionLayout.queueRight,
   );
-  const mobileFilterButton = page.getByRole('button', {
-    name: '书架筛选',
-    exact: true,
-  });
-  await mobileFilterButton.click();
-  const mobileFilterPanel = page.locator('.bookshelf-filter-panel');
+  const mobileFilterButton = filterButtonForLayout;
+  const mobileFilterPanel = filterPanelForLayout;
   await expect(mobileFilterPanel).toBeVisible();
   const mobileVerticalGaps = await page.evaluate(() => {
     const header = document.querySelector<HTMLElement>(
@@ -458,9 +499,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
         selection.getBoundingClientRect().bottom,
     };
   });
-  expect(mobileVerticalGaps.headerToSelection).toBeLessThanOrEqual(4);
+  expect(mobileVerticalGaps.headerToSelection).toBeLessThanOrEqual(6);
   expect(mobileVerticalGaps.selectionToFilter).toBeLessThanOrEqual(4);
-  expect(mobileVerticalGaps.filterToBooks).toBeLessThanOrEqual(8);
+  expect(mobileVerticalGaps.filterToBooks).toBeLessThanOrEqual(12);
 
   await selectionToolbar
     .getByRole('button', { name: '删除', exact: true })
@@ -812,6 +853,27 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(
     mobileFilterPanelBounds!.x + mobileFilterPanelBounds!.width,
   ).toBeLessThanOrEqual(390);
+  const mobileSort = page.locator('.bookshelf-toolbar__sort');
+  const mobileSortBounds = await mobileSort.boundingBox();
+  expect(mobileSortBounds).not.toBeNull();
+  expect(mobileSortBounds!.width).toBeGreaterThanOrEqual(124);
+  await mobileSort.locator('.n-base-selection').click();
+  const mobileSortMenu = page.locator('.n-base-select-menu');
+  await expect(mobileSortMenu).toBeVisible();
+  const mobileSortOptions = mobileSortMenu.locator(
+    '.n-base-select-option__content',
+  );
+  await expect(mobileSortOptions).toHaveCount(5);
+  const mobileSortOptionsFit = await mobileSortOptions.evaluateAll((options) =>
+    options.every((option) => option.scrollWidth <= option.clientWidth),
+  );
+  expect(mobileSortOptionsFit).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.keyboard.press('Escape');
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
@@ -819,6 +881,30 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(filterButton).toHaveText('筛选');
   await expect(filterButton).toHaveAttribute('aria-pressed', 'false');
   await expect(filterPanel).toBeHidden();
+  const collapsedMobileGaps = await page.evaluate(() => {
+    const notice = document.querySelector<HTMLElement>('.notice');
+    const header = document.querySelector<HTMLElement>(
+      '.bookshelf-page__header',
+    );
+    const firstBook = document.querySelector<HTMLElement>('.book-card');
+    if (notice === null || header === null || firstBook === null) {
+      throw new Error('缺少手机版书架收起布局元素');
+    }
+    return {
+      menuToBooks:
+        firstBook.getBoundingClientRect().top -
+        header.getBoundingClientRect().bottom,
+      noticeToMenu:
+        header.getBoundingClientRect().top -
+        notice.getBoundingClientRect().bottom,
+    };
+  });
+  expect(Math.abs(collapsedMobileGaps.menuToBooks - 12)).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(
+      collapsedMobileGaps.menuToBooks - collapsedMobileGaps.noticeToMenu,
+    ),
+  ).toBeLessThanOrEqual(1);
   await expect(
     page.getByRole('heading', { name: 'Alpha Upload' }),
   ).toBeVisible();

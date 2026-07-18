@@ -245,6 +245,8 @@ onMounted(reload);
     :class="{
       'layout-content': !props.embedded,
       'bookshelf-page--embedded': props.embedded,
+      'bookshelf-page--filter-open': showFilterPanel,
+      'bookshelf-page--selection-mode': selectionMode,
     }"
   >
     <header class="bookshelf-page__header">
@@ -301,6 +303,7 @@ onMounted(reload);
           v-model:value="sort"
           class="bookshelf-toolbar__sort"
           :options="sortOptions"
+          :consistent-menu-width="false"
         />
       </div>
       <bulletin
@@ -538,6 +541,12 @@ onMounted(reload);
   margin-bottom: 12px;
 }
 
+.bookshelf-page--embedded.bookshelf-page--filter-open .bookshelf-page__header,
+.bookshelf-page--embedded.bookshelf-page--selection-mode
+  .bookshelf-page__header {
+  margin-bottom: 6px;
+}
+
 .bookshelf-page__header-actions {
   display: flex;
   align-items: center;
@@ -584,9 +593,9 @@ onMounted(reload);
 
 .bookshelf-filter-panel {
   display: grid;
-  gap: 12px;
-  padding: 14px 16px;
-  margin: -8px 0 18px;
+  gap: 8px;
+  padding: 8px 16px;
+  margin: 0 0 12px;
   border: 1px solid var(--n-border-color);
   border-radius: var(--n-border-radius);
   background: var(--n-card-color);
@@ -608,6 +617,10 @@ onMounted(reload);
   border: 1px solid var(--n-border-color);
   border-radius: 10px;
   background: var(--n-card-color);
+}
+
+.bookshelf-page--filter-open .bookshelf-selection-toolbar {
+  margin-bottom: 4px;
 }
 
 .bookshelf-selection-toolbar__selection {
@@ -672,7 +685,6 @@ onMounted(reload);
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: 6px;
-    margin-bottom: 4px;
   }
 
   .bookshelf-page__header-actions {
@@ -700,6 +712,7 @@ onMounted(reload);
   .bookshelf-toolbar__sort {
     grid-row: 2;
     grid-column: 2;
+    min-width: 124px;
   }
 
   .bookshelf-page--embedded .bookshelf-toolbar {
@@ -713,9 +726,6 @@ onMounted(reload);
   }
 
   .bookshelf-filter-panel {
-    gap: 8px;
-    margin: 0 0 8px;
-    padding-block: 8px;
     padding-inline: 12px;
   }
 
@@ -727,7 +737,6 @@ onMounted(reload);
     align-items: stretch;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    margin-bottom: 4px;
     padding: 8px 10px;
   }
 
