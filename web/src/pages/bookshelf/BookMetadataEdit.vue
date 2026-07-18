@@ -298,7 +298,7 @@ onBeforeUnmount(clearCoverObjectUrl);
               <n-input
                 v-model:value="form.description"
                 type="textarea"
-                :autosize="{ minRows: 5, maxRows: 14 }"
+                :rows="5"
                 maxlength="5000"
                 show-count
                 placeholder="原文件未提供简介"

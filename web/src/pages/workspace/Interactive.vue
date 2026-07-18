@@ -248,7 +248,7 @@ const clearSavedTranslation = () => {
         v-model:value="textJp"
         placeholder="输入需要翻译的文本"
         type="textarea"
-        :autosize="{ minRows: 15 }"
+        :rows="15"
         show-count
         :maxlength="5000"
         style="flex: 1"
@@ -260,7 +260,7 @@ const clearSavedTranslation = () => {
         readonly
         placeholder="翻译结果"
         type="textarea"
-        :autosize="{ minRows: 15 }"
+        :rows="15"
         show-count
         style="flex: 1"
         :input-props="{ spellcheck: false }"

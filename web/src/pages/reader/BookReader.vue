@@ -1325,7 +1325,15 @@ const refreshCurrentChapter = async () => {
 
 watch(
   () => [bookId.value, requestedChapterId.value],
-  () => void load(),
+  ([nextBookId], previous) => {
+    if (previous !== undefined && nextBookId !== previous[0]) {
+      searchRequestId += 1;
+      searchQuery.value = '';
+      searchResults.value = [];
+      searchLoading.value = false;
+    }
+    void load();
+  },
   { immediate: true },
 );
 watch(completedTranslationTasks, (tasks, previousTasks) => {

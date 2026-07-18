@@ -537,33 +537,22 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
   await page.getByRole('button', { name: '提交', exact: true }).click();
   await expect(page).toHaveURL(/\/details$/);
 
-  const restored = await page.evaluate(async (bookId) => {
+  const restoredMetadata = await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('volumes', 5);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
-    const transaction = database.transaction(
-      ['metadata', 'reader-cover'],
-      'readonly',
-    );
-    const metadataRequest = transaction.objectStore('metadata').get(bookId);
-    const coverRequest = transaction.objectStore('reader-cover').get(bookId);
-    const result = await new Promise<{
-      metadata: unknown;
-      cover: unknown;
-    }>((resolve, reject) => {
-      transaction.oncomplete = () =>
-        resolve({
-          metadata: metadataRequest.result,
-          cover: coverRequest.result,
-        });
-      transaction.onerror = () => reject(transaction.error);
+    const transaction = database.transaction('metadata', 'readonly');
+    const request = transaction.objectStore('metadata').get(bookId);
+    const metadata = await new Promise<unknown>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
     });
     database.close();
-    return result;
+    return metadata;
   }, epubFilename);
-  expect(restored.metadata).toMatchObject({
+  expect(restoredMetadata).toMatchObject({
     sourceBookMetadata: { title: '原始 EPUB 标题' },
     bookMetadata: {
       title: '原始 EPUB 标题',
@@ -577,7 +566,27 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
       translated: 'source',
     },
   });
-  expect(restored.cover).toBeUndefined();
+  await expect
+    .poll(() =>
+      page.evaluate(async (bookId) => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 5);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction('reader-cover', 'readonly');
+        const request = transaction.objectStore('reader-cover').get(bookId);
+        const cover = await new Promise<{ source?: string } | undefined>(
+          (resolve, reject) => {
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          },
+        );
+        database.close();
+        return cover?.source;
+      }, epubFilename),
+    )
+    .toBe('embedded');
 });
 
 test('permanent deletion removes exactly one complete book graph', async ({
