@@ -2052,11 +2052,19 @@ test('restores the complete source book presentation', async ({ page }) => {
 
   await page.goto(`/books/${restoredBookId}/edit`);
   const form = page.locator('.metadata-edit__form');
-  await expect(form.locator('input').first()).toHaveValue('修改标题');
+  const titleInput = form.locator('input').first();
+  await expect(titleInput).toHaveValue('修改标题');
   await expect(form.locator('textarea')).toHaveValue('修改简介');
   await expect(
     page.getByRole('button', { name: '移除', exact: true }),
   ).toBeVisible();
+
+  await titleInput.fill('   ');
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page).toHaveURL(/\/books\/restore-metadata\.epub\/edit$/);
+  await expect(form.locator('.n-form-item-feedback')).toHaveText(
+    '书名不能为空',
+  );
 
   await page
     .getByRole('button', { name: '还原原始元信息', exact: true })

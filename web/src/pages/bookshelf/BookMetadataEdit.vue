@@ -23,6 +23,7 @@ const isMobile = useMediaQuery('(max-width: 700px)');
 const loading = ref(true);
 const saving = ref(false);
 const error = ref<string>();
+const titleError = ref(false);
 const volume = shallowRef<LocalVolumeMetadata>();
 const coverInput = ref<HTMLInputElement>();
 const coverMode = ref<'none' | 'link' | 'upload'>('none');
@@ -207,6 +208,11 @@ const createLanguage = (label: string) => {
 
 const submit = async () => {
   if (volume.value === undefined) return;
+  if (form.title.trim().length === 0) {
+    titleError.value = true;
+    message.warning('书名不能为空');
+    return;
+  }
   if (form.languages.some((language) => !isValidLanguageTag(language))) {
     message.warning('语言列表中包含无效标签');
     return;
@@ -239,6 +245,13 @@ const submit = async () => {
     saving.value = false;
   }
 };
+
+watch(
+  () => form.title,
+  (title) => {
+    if (title.trim().length > 0) titleError.value = false;
+  },
+);
 
 onMounted(() => void load());
 onBeforeUnmount(clearCoverObjectUrl);
@@ -283,7 +296,11 @@ onBeforeUnmount(clearCoverObjectUrl);
             :label-placement="isMobile ? 'top' : 'left'"
             :label-width="isMobile ? 'auto' : 72"
           >
-            <n-form-item label="书名">
+            <n-form-item
+              label="书名"
+              :validation-status="titleError ? 'error' : undefined"
+              :feedback="titleError ? '书名不能为空' : undefined"
+            >
               <n-input
                 v-model:value="form.title"
                 maxlength="200"
