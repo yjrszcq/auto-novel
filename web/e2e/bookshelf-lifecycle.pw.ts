@@ -134,6 +134,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     page.getByRole('heading', { name: '轻小说机翻机器人' }),
   ).toBeVisible();
+  await expect(
+    page.getByText('本版本仅管理本地导入的小说', { exact: false }),
+  ).toHaveCount(0);
   await uploadBooks(page);
   await expect(
     page.getByRole('heading', { name: 'Alpha Upload' }),
@@ -1122,8 +1125,24 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
 
   await page.goto(`/books/${encodeURIComponent(epubFilename)}/edit`);
   const form = page.locator('.metadata-edit__form');
+  const descriptionInput = form.locator('textarea');
+  await expect(descriptionInput).toHaveAttribute('rows', '10');
+  const desktopDescriptionHeight = await descriptionInput.evaluate(
+    (element) => element.getBoundingClientRect().height,
+  );
+  expect(desktopDescriptionHeight).toBeGreaterThanOrEqual(180);
+  const metadataEditDesktopViewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(descriptionInput).toHaveAttribute('rows', '10');
+  const mobileDescriptionHeight = await descriptionInput.evaluate(
+    (element) => element.getBoundingClientRect().height,
+  );
+  expect(mobileDescriptionHeight).toBeGreaterThanOrEqual(180);
+  if (metadataEditDesktopViewport !== null) {
+    await page.setViewportSize(metadataEditDesktopViewport);
+  }
   await form.locator('input').first().fill('展示 EPUB 标题');
-  await form.locator('textarea').fill('展示简介');
+  await descriptionInput.fill('展示简介');
   await page
     .locator('.metadata-edit__cover-field input[type="file"]')
     .setInputFiles({
