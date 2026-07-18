@@ -312,22 +312,24 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     localDrawer.getByRole('button', { name: '更多本地小说操作' }),
   ).toHaveCount(0);
-  const downloadButton = localDrawer.getByRole('button', {
-    name: '下载选中的书',
+  const addSelectedButton = localDrawer.getByRole('button', {
+    name: '将选中的书加入书架',
     exact: true,
   });
-  await expect(downloadButton).toBeDisabled();
+  await expect(addSelectedButton).toBeDisabled();
+  await expect(
+    localDrawer.getByRole('button', { name: '下载选中的书', exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    localDrawer.getByRole('button', { name: '加入书架', exact: true }),
+  ).toHaveCount(0);
   await localDrawer
     .getByRole('checkbox', { name: `选择 ${betaFilename}` })
     .click();
   await expect(
     localDrawer.getByText('已选择 1 本', { exact: true }),
   ).toBeVisible();
-  const singleDownload = page.waitForEvent('download');
-  await downloadButton.click();
-  const single = await singleDownload;
-  expect(single.suggestedFilename()).toBe('jp-zh.Bgs.Beta Upload.txt');
-  expect((await readDownload(single)).toString()).toContain('该分段翻译缺失');
+  await expect(addSelectedButton).toBeEnabled();
 
   await page.goto('/workspace/gpt');
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
@@ -387,9 +389,10 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     addDrawer.getByText(betaFilename, { exact: true }),
   ).toBeVisible();
   await addDrawer
-    .locator('.n-list-item')
-    .filter({ hasText: betaFilename })
-    .getByRole('button', { name: '加入书架', exact: true })
+    .getByRole('checkbox', { name: `选择 ${betaFilename}` })
+    .click();
+  await addDrawer
+    .getByRole('button', { name: '将选中的书加入书架', exact: true })
     .click();
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),

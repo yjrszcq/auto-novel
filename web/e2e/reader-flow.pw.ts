@@ -387,18 +387,32 @@ test('opens a local bookshelf book safely through the current reader route', asy
   ).toBeVisible();
   await expect(
     bookshelfLocalDrawer.getByRole('button', {
-      name: '下载选中的书',
+      name: '将选中的书加入书架',
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    bookshelfLocalDrawer.getByRole('button', {
+      name: '下载选中的书',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    bookshelfLocalDrawer.getByRole('button', {
+      name: '加入书架',
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await expect(
     bookshelfLocalDrawer.getByRole('button', {
       name: '更多本地小说操作',
     }),
   ).toHaveCount(0);
   await bookshelfLocalDrawer
-    .getByRole('listitem')
-    .getByRole('button', { name: '加入书架' })
+    .getByRole('checkbox', { name: `选择 ${bookId}` })
+    .click();
+  await bookshelfLocalDrawer
+    .getByRole('button', { name: '将选中的书加入书架', exact: true })
     .click();
   await expect(
     page.getByRole('heading', { name: 'reader-flow' }),

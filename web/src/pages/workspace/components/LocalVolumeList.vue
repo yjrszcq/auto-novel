@@ -133,13 +133,15 @@ const handleDrawerVisibility = (show: boolean) => {
   <c-drawer-right title="本地小说" @update:show="handleDrawerVisibility">
     <template #action>
       <local-volume-upload-button @done="emit('volumeAdd', $event)" />
-      <c-button
-        label="下载"
-        aria-label="下载选中的书"
-        :icon="FileDownloadOutlined"
-        :disabled="selectedVolumes.length === 0"
-        @action="downloadVolumes"
-      />
+      <slot name="selected-action" :volumes="selectedVolumes">
+        <c-button
+          label="下载"
+          aria-label="下载选中的书"
+          :icon="FileDownloadOutlined"
+          :disabled="selectedVolumes.length === 0"
+          @action="downloadVolumes"
+        />
+      </slot>
       <n-dropdown
         v-if="props.showMenu"
         trigger="click"
@@ -177,7 +179,6 @@ const handleDrawerVisibility = (show: boolean) => {
               反选
             </n-button>
             <n-text>已选择 {{ selectedVolumes.length }} 本</n-text>
-            <slot name="selection-action" :volumes="selectedVolumes" />
           </n-flex>
         </c-action-wrapper>
       </n-flex>

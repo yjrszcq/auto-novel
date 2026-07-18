@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { LibraryAddOutlined } from '@vicons/material';
 import { useRouter } from 'vue-router';
 
 import {
@@ -79,13 +80,6 @@ const reload = async () => {
   } finally {
     loading.value = false;
   }
-};
-
-const addLocalBook = async (bookId: string) => {
-  const repository = await useLocalVolumeStore();
-  await createBookshelfService(repository).setListed(bookId, true);
-  showLocalVolumes.value = false;
-  await reload();
 };
 
 const addSelectedLocalBooks = async (volumes: LocalVolumeMetadata[]) => {
@@ -320,30 +314,20 @@ onMounted(reload);
         :show-menu="false"
         @volume-add="reload"
       >
-        <template #selection-action="{ volumes }">
-          <n-button
-            size="small"
-            type="primary"
+        <template #selected-action="{ volumes }">
+          <c-button
+            label="加入书架"
+            aria-label="将选中的书加入书架"
+            :icon="LibraryAddOutlined"
             :disabled="volumes.length === 0"
-            :loading="addingLocalBooks"
-            @click="addSelectedLocalBooks(volumes)"
-          >
-            加入书架
-          </n-button>
+            :icon-hidden="addingLocalBooks"
+            @action="addSelectedLocalBooks(volumes)"
+          />
         </template>
         <template #volume="volume">
-          <n-flex align="center" justify="space-between" :wrap="false">
-            <n-flex vertical :size="2">
-              <n-text>{{ volume.id }}</n-text>
-              <n-text depth="3">共 {{ volume.toc.length }} 章</n-text>
-            </n-flex>
-            <n-button
-              size="small"
-              type="primary"
-              @click="addLocalBook(volume.id)"
-            >
-              加入书架
-            </n-button>
+          <n-flex vertical :size="2">
+            <n-text>{{ volume.id }}</n-text>
+            <n-text depth="3">共 {{ volume.toc.length }} 章</n-text>
           </n-flex>
         </template>
       </local-volume-list>
