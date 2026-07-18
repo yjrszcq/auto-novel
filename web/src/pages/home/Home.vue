@@ -395,8 +395,6 @@ const openLocalVolume = (volume: LocalVolumeMetadata) => {
 const addPendingVolumeToBookshelf = async () => {
   const volume = pendingBookshelfVolume.value;
   if (volume === undefined) return;
-  const detailsWindow = window.open('about:blank', '_blank');
-  if (detailsWindow !== null) detailsWindow.opener = null;
   try {
     const repository = await ensureLocalRepo();
     await createBookshelfService(repository).setListed(volume.id, true);
@@ -404,13 +402,7 @@ const addPendingVolumeToBookshelf = async () => {
     showAddToBookshelfModal.value = false;
     pendingBookshelfVolume.value = undefined;
     message.success('已加入书架');
-    if (detailsWindow !== null) {
-      detailsWindow.location.replace(bookDetailsPath(volume.id));
-    } else {
-      message.warning('浏览器阻止了新标签页，请再次点击书名');
-    }
   } catch (error) {
-    detailsWindow?.close();
     message.error(`加入书架失败：${String(error)}`);
   }
 };

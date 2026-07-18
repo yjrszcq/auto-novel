@@ -147,16 +147,12 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .getByRole('dialog')
     .filter({ hasText: '尚未加入书架' });
   await expect(addToBookshelfDialog).toContainText(alphaFilename);
-  const addedBookPagePromise = page.waitForEvent('popup');
   await addToBookshelfDialog
     .getByRole('button', { name: '加入书架', exact: true })
     .click();
-  const addedBookPage = await addedBookPagePromise;
-  await expect(addedBookPage).toHaveURL(
-    new RegExp(`/books/${encodeURIComponent(alphaFilename)}/details$`),
-  );
+  await expect(addToBookshelfDialog).toHaveCount(0);
+  await expect(page.getByText('已加入书架', { exact: true })).toBeVisible();
   await expect(page).toHaveURL('/');
-  await addedBookPage.close();
 
   const existingBookPagePromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: `打开《${alphaFilename}》` }).click();
