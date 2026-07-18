@@ -1914,7 +1914,8 @@ test('uses a configured default cover for a local book without one', async ({
     };
     return {
       add: bounds('.bookshelf-page__header-actions'),
-      filter: bounds('.bookshelf-toolbar__filter'),
+      filter: bounds('.bookshelf-header-filter'),
+      refresh: bounds('.bookshelf-toolbar__refresh'),
       sort: bounds('.bookshelf-toolbar__sort'),
       viewportWidth: window.innerWidth,
     };
@@ -1923,7 +1924,7 @@ test('uses a configured default cover for a local book without one', async ({
     bookshelfLayout.viewportWidth,
   );
   expect(bookshelfLayout.filter.top).toBe(bookshelfLayout.add.top);
-  expect(bookshelfLayout.filter.left).toBeGreaterThanOrEqual(
+  expect(bookshelfLayout.refresh.left).toBeGreaterThanOrEqual(
     bookshelfLayout.add.right,
   );
   expect(bookshelfLayout.sort.left).toBeGreaterThan(

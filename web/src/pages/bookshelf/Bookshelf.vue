@@ -2,6 +2,7 @@
 import {
   ChecklistOutlined,
   CloseOutlined,
+  FilterAltOutlined,
   RefreshOutlined,
 } from '@vicons/material';
 import { useRouter } from 'vue-router';
@@ -264,11 +265,15 @@ onMounted(reload);
           @action="toggleSelectionMode"
         />
         <c-button
-          label="刷新"
-          :icon="RefreshOutlined"
+          label="筛选"
+          :icon="FilterAltOutlined"
+          class="bookshelf-header-filter"
+          :type="filterButtonActive ? 'primary' : 'default'"
+          aria-label="书架筛选"
+          :aria-pressed="filterButtonActive"
           compact-on-mobile
           :round="false"
-          @action="reload"
+          @action="handleFilterButtonClick"
         />
       </div>
       <div
@@ -284,15 +289,14 @@ onMounted(reload);
           clearable
           placeholder="搜索书名"
         />
-        <n-button
-          class="bookshelf-toolbar__filter"
-          :type="filterButtonActive ? 'primary' : 'default'"
-          aria-label="书架筛选"
-          :aria-pressed="filterButtonActive"
-          @click="handleFilterButtonClick"
-        >
-          筛选
-        </n-button>
+        <c-button
+          label="刷新"
+          :icon="RefreshOutlined"
+          class="bookshelf-toolbar__refresh"
+          compact-on-mobile
+          :round="false"
+          @action="reload"
+        />
         <n-select
           v-model:value="sort"
           class="bookshelf-toolbar__sort"
@@ -557,7 +561,7 @@ onMounted(reload);
   margin: 0 0 0 auto;
 }
 
-.bookshelf-toolbar__filter {
+.bookshelf-toolbar__refresh {
   width: 100%;
 }
 
@@ -647,7 +651,7 @@ onMounted(reload);
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .bookshelf-toolbar__filter {
+  .bookshelf-toolbar__refresh {
     grid-row: 2;
     grid-column: 1;
   }
@@ -662,7 +666,7 @@ onMounted(reload);
     grid-template-columns: minmax(64px, 0.7fr) minmax(0, 1.3fr);
   }
 
-  .bookshelf-page--embedded .bookshelf-toolbar__filter,
+  .bookshelf-page--embedded .bookshelf-toolbar__refresh,
   .bookshelf-page--embedded .bookshelf-toolbar__sort {
     grid-row: auto;
   }

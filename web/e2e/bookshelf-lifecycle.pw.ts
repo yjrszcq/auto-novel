@@ -147,9 +147,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     page.getByRole('button', { name: '刷新', exact: true }),
   ).toBeVisible();
-  await expect(page.locator('.bookshelf-toolbar__filter')).toContainText(
-    '筛选',
-  );
+  await expect(page.locator('.bookshelf-header-filter')).toContainText('筛选');
   const headerActionLayout = await page
     .locator('.bookshelf-page__header-actions button')
     .evaluateAll((buttons) =>
@@ -166,7 +164,10 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(headerActionLayout).toHaveLength(3);
   await expect(
     page.locator('.bookshelf-page__header-actions button'),
-  ).toHaveText(['添加', '选择', '刷新']);
+  ).toHaveText(['添加', '选择', '筛选']);
+  expect(
+    new Set(headerActionLayout.map(({ left, right }) => right - left)).size,
+  ).toBe(1);
   expect(new Set(headerActionLayout.map(({ height }) => height)).size).toBe(1);
   expect(new Set(headerActionLayout.map(({ top }) => top)).size).toBe(1);
   expect(
@@ -186,7 +187,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     };
     return [
       top('.bookshelf-page__header-actions button'),
-      top('.bookshelf-toolbar__filter'),
+      top('.bookshelf-header-filter'),
       top('.bookshelf-toolbar__sort'),
     ];
   });
