@@ -5,6 +5,7 @@ import {
   WorkspacesOutlined,
 } from '@vicons/material';
 
+import BookshelfCollection from '@/pages/bookshelf/Bookshelf.vue';
 import bannerUrl from '@/image/banner.webp';
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
 import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
@@ -23,6 +24,10 @@ import { useBreakPoints } from '@/pages/util';
 import { downloadFile } from '@/util';
 import { useRuntimePanel } from '@/util/useRuntimePanel';
 
+const props = withDefaults(defineProps<{ localShelfOnly?: boolean }>(), {
+  localShelfOnly: false,
+});
+
 const bp = useBreakPoints();
 const showShortcut = bp.smaller('tablet');
 
@@ -37,6 +42,9 @@ const bannerBackgroundUrl = computed(() =>
 
 const keyword = ref('');
 const { html: infoPanelHtml } = useRuntimePanel('html/info.html');
+const { html: bookshelfInfoPanelHtml } = useRuntimePanel(
+  'html/info-bookshelf.html',
+);
 
 const quickActions = [
   { label: '小说工具箱', to: '/workspace/toolbox', icon: WorkspacesOutlined },
@@ -128,17 +136,8 @@ const filteredLocalVolumes = computed(() =>
   }),
 );
 
-watch(
-  () => keyword.value,
-  (value) => {
-    localShelfSearch.query = value;
-  },
-);
-
 const handleSearch = () => {
-  const trimmed = keyword.value.trim();
-  keyword.value = trimmed;
-  localShelfSearch.query = trimmed;
+  keyword.value = keyword.value.trim();
 };
 
 const loadLocalShelf = async () => {
@@ -160,9 +159,13 @@ const loadLocalShelf = async () => {
   }
 };
 
-onMounted(() => {
-  loadLocalShelf();
-});
+watch(
+  () => props.localShelfOnly,
+  (localShelfOnly) => {
+    if (localShelfOnly) void loadLocalShelf();
+  },
+  { immediate: true },
+);
 
 const getTranslationStats = (
   volume: LocalVolumeMetadata,
@@ -410,6 +413,7 @@ const addPendingVolumeToBookshelf = async () => {
 
 <template>
   <div
+    v-if="!props.localShelfOnly"
     :style="{
       background: bannerBackgroundUrl
         ? `rgba(0, 0, 0, .25) url(${bannerBackgroundUrl})`
@@ -435,7 +439,7 @@ const addPendingVolumeToBookshelf = async () => {
         <n-input
           v-model:value="keyword"
           size="large"
-          placeholder="输入小说文件名，搜索本地书架"
+          placeholder="输入书名，搜索书架"
           :input-props="{ spellcheck: false }"
           @keyup.enter="handleSearch"
           :style="{ 'background-color': vars.bodyColor }"
@@ -448,174 +452,202 @@ const addPendingVolumeToBookshelf = async () => {
   </div>
 
   <div class="layout-content">
-    <n-flex
-      v-if="showShortcut"
-      :size="0"
-      justify="space-around"
-      :wrap="false"
-      style="margin: 8px 0px"
-    >
-      <router-link
-        v-for="action in quickActions"
-        :key="action.to"
-        :to="action.to"
-        style="flex: 1"
+    <template v-if="!props.localShelfOnly">
+      <n-flex
+        v-if="showShortcut"
+        :size="0"
+        justify="space-around"
+        :wrap="false"
+        style="margin: 8px 0px"
       >
-        <n-button quaternary style="width: 100%; height: 64px">
-          <n-flex align="center" vertical style="font-size: 12px">
-            <n-icon size="24" :component="action.icon" />
-            {{ action.label }}
-          </n-flex>
-        </n-button>
-      </router-link>
-    </n-flex>
-    <div v-else style="height: 16px" />
-
-    <bulletin v-if="infoPanelHtml">
-      <!-- eslint-disable-next-line vue/no-v-html -->
-      <div v-html="infoPanelHtml" />
-    </bulletin>
-
-    <section-header title="本地书架">
-      <local-volume-upload-button />
-      <c-button label="刷新" @action="handleRefreshShelf" />
-      <n-dropdown
-        trigger="click"
-        :options="batchMenuOptions"
-        :keyboard="false"
-        @select="handleBatchMenuSelect"
-      >
-        <n-button circle>
-          <n-icon :component="MoreVertOutlined" />
-        </n-button>
-      </n-dropdown>
-    </section-header>
-
-    <n-card class="local-shelf-card" size="small">
-      <n-flex vertical :size="12">
-        <c-action-wrapper title="排序" align="center">
-          <order-sort
-            v-model:value="setting.localVolumeOrder"
-            :options="Setting.localVolumeOrderOptions"
-          />
-        </c-action-wrapper>
-
-        <c-action-wrapper title="状态">
-          <c-radio-group
-            v-model:value="progressFilter"
-            :options="progressFilterOptions"
-            size="small"
-          />
-        </c-action-wrapper>
+        <router-link
+          v-for="action in quickActions"
+          :key="action.to"
+          :to="action.to"
+          style="flex: 1"
+        >
+          <n-button quaternary style="width: 100%; height: 64px">
+            <n-flex align="center" vertical style="font-size: 12px">
+              <n-icon size="24" :component="action.icon" />
+              {{ action.label }}
+            </n-flex>
+          </n-button>
+        </router-link>
       </n-flex>
+      <div v-else style="height: 16px" />
 
-      <n-divider style="margin: 16px 0 8px" />
+      <bulletin v-if="infoPanelHtml">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-html="infoPanelHtml" />
+      </bulletin>
 
-      <n-skeleton v-if="localShelfLoading" text :repeat="3" />
-      <n-empty
-        v-else-if="filteredLocalVolumes.length === 0"
-        :description="
-          keyword.length === 0 ? '还没有本地小说' : '没有匹配的小说'
-        "
+      <BookshelfCollection
+        v-model:query="keyword"
+        embedded
+        hide-search
+        hide-notice
       />
-      <n-list v-else class="local-shelf-list">
-        <n-list-item v-for="volume in filteredLocalVolumes" :key="volume.id">
-          <n-thing>
-            <template #header>
-              <n-button
-                text
-                class="local-shelf-title"
-                :aria-label="`打开《${volume.id}》`"
-                @click="openLocalVolume(volume)"
-              >
-                {{ volume.id }}
-              </n-button>
-            </template>
-            <template #description>
-              <n-text depth="3">
-                创建于
-                <n-time :time="volume.createAt" type="relative" />
-                ，共 {{ volume.toc.length }} 个分段
-              </n-text>
-            </template>
-            <template #footer>
-              <n-space :size="8" wrap>
-                <n-tag size="small" type="info">
-                  GPT · {{ formatTranslationSummary(volume, 'gpt') }}
-                </n-tag>
-                <n-tag size="small" type="success">
-                  Sakura · {{ formatTranslationSummary(volume, 'sakura') }}
-                </n-tag>
-              </n-space>
+    </template>
 
-              <n-flex :size="8" wrap style="margin-top: 8px">
-                <c-button
-                  label="排队 GPT"
-                  size="tiny"
-                  secondary
-                  @action="queueVolumeToWorkspace(volume, 'gpt')"
-                />
-                <c-button
-                  label="排队 Sakura"
-                  size="tiny"
-                  secondary
-                  @action="queueVolumeToWorkspace(volume, 'sakura')"
-                />
-                <c-button
-                  label="下载"
-                  size="tiny"
-                  secondary
-                  @action="handleDownloadVolume(volume.id)"
-                />
-                <c-button
-                  label="原文"
-                  size="tiny"
-                  secondary
-                  @action="downloadRawVolume(volume.id)"
-                />
-                <div style="flex: 1" />
-                <c-button-confirm
-                  :hint="`真的要删除《${volume.id}》吗？`"
-                  :icon="DeleteOutlineOutlined"
-                  size="tiny"
-                  secondary
-                  circle
-                  type="error"
-                  @action="deleteLocalVolume(volume.id)"
-                />
-              </n-flex>
-            </template>
-          </n-thing>
-        </n-list-item>
-      </n-list>
-    </n-card>
+    <template v-else>
+      <section-header title="本地书架">
+        <local-volume-upload-button />
+        <c-button label="刷新" @action="handleRefreshShelf" />
+        <n-dropdown
+          trigger="click"
+          :options="batchMenuOptions"
+          :keyboard="false"
+          @select="handleBatchMenuSelect"
+        >
+          <n-button circle>
+            <n-icon :component="MoreVertOutlined" />
+          </n-button>
+        </n-dropdown>
+      </section-header>
 
-    <c-modal title="清空所有文件" v-model:show="showDeleteModal">
-      <n-p>这将删除当前筛选结果中的所有EPUB/TXT文件，无法恢复。你确定吗？</n-p>
+      <bulletin v-if="bookshelfInfoPanelHtml">
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div v-html="bookshelfInfoPanelHtml" />
+      </bulletin>
 
-      <template #action>
-        <c-button
-          label="确定"
-          type="primary"
-          @action="deleteAllFilteredVolumes"
+      <n-card class="local-shelf-card" size="small">
+        <n-flex vertical :size="12">
+          <c-action-wrapper title="搜索">
+            <search-input
+              v-model:value="localShelfSearch"
+              placeholder="搜索本地小说"
+              style="max-width: 480px"
+            />
+          </c-action-wrapper>
+
+          <c-action-wrapper title="排序" align="center">
+            <order-sort
+              v-model:value="setting.localVolumeOrder"
+              :options="Setting.localVolumeOrderOptions"
+            />
+          </c-action-wrapper>
+
+          <c-action-wrapper title="状态">
+            <c-radio-group
+              v-model:value="progressFilter"
+              :options="progressFilterOptions"
+              size="small"
+            />
+          </c-action-wrapper>
+        </n-flex>
+
+        <n-divider style="margin: 16px 0 8px" />
+
+        <n-skeleton v-if="localShelfLoading" text :repeat="3" />
+        <n-empty
+          v-else-if="filteredLocalVolumes.length === 0"
+          :description="
+            localShelfSearch.query.length === 0
+              ? '还没有本地小说'
+              : '没有匹配的小说'
+          "
         />
-      </template>
-    </c-modal>
+        <n-list v-else class="local-shelf-list">
+          <n-list-item v-for="volume in filteredLocalVolumes" :key="volume.id">
+            <n-thing>
+              <template #header>
+                <n-button
+                  text
+                  class="local-shelf-title"
+                  :aria-label="`打开《${volume.id}》`"
+                  @click="openLocalVolume(volume)"
+                >
+                  {{ volume.id }}
+                </n-button>
+              </template>
+              <template #description>
+                <n-text depth="3">
+                  创建于
+                  <n-time :time="volume.createAt" type="relative" />
+                  ，共 {{ volume.toc.length }} 个分段
+                </n-text>
+              </template>
+              <template #footer>
+                <n-space :size="8" wrap>
+                  <n-tag size="small" type="info">
+                    GPT · {{ formatTranslationSummary(volume, 'gpt') }}
+                  </n-tag>
+                  <n-tag size="small" type="success">
+                    Sakura · {{ formatTranslationSummary(volume, 'sakura') }}
+                  </n-tag>
+                </n-space>
 
-    <c-modal title="加入书架" v-model:show="showAddToBookshelfModal">
-      <n-p>
-        《{{ pendingBookshelfVolume?.id }}》尚未加入书架，是否现在加入？
-      </n-p>
+                <n-flex :size="8" wrap style="margin-top: 8px">
+                  <c-button
+                    label="排队 GPT"
+                    size="tiny"
+                    secondary
+                    @action="queueVolumeToWorkspace(volume, 'gpt')"
+                  />
+                  <c-button
+                    label="排队 Sakura"
+                    size="tiny"
+                    secondary
+                    @action="queueVolumeToWorkspace(volume, 'sakura')"
+                  />
+                  <c-button
+                    label="下载"
+                    size="tiny"
+                    secondary
+                    @action="handleDownloadVolume(volume.id)"
+                  />
+                  <c-button
+                    label="原文"
+                    size="tiny"
+                    secondary
+                    @action="downloadRawVolume(volume.id)"
+                  />
+                  <div style="flex: 1" />
+                  <c-button-confirm
+                    :hint="`真的要删除《${volume.id}》吗？`"
+                    :icon="DeleteOutlineOutlined"
+                    size="tiny"
+                    secondary
+                    circle
+                    type="error"
+                    @action="deleteLocalVolume(volume.id)"
+                  />
+                </n-flex>
+              </template>
+            </n-thing>
+          </n-list-item>
+        </n-list>
+      </n-card>
 
-      <template #action>
-        <c-button label="取消" @action="showAddToBookshelfModal = false" />
-        <c-button
-          label="加入书架"
-          type="primary"
-          @action="addPendingVolumeToBookshelf"
-        />
-      </template>
-    </c-modal>
+      <c-modal title="清空所有文件" v-model:show="showDeleteModal">
+        <n-p>
+          这将删除当前筛选结果中的所有EPUB/TXT文件，无法恢复。你确定吗？
+        </n-p>
+
+        <template #action>
+          <c-button
+            label="确定"
+            type="primary"
+            @action="deleteAllFilteredVolumes"
+          />
+        </template>
+      </c-modal>
+
+      <c-modal title="加入书架" v-model:show="showAddToBookshelfModal">
+        <n-p>
+          《{{ pendingBookshelfVolume?.id }}》尚未加入书架，是否现在加入？
+        </n-p>
+
+        <template #action>
+          <c-button label="取消" @action="showAddToBookshelfModal = false" />
+          <c-button
+            label="加入书架"
+            type="primary"
+            @action="addPendingVolumeToBookshelf"
+          />
+        </template>
+      </c-modal>
+    </template>
   </div>
 </template>
 

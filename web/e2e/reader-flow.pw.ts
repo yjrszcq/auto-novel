@@ -32,8 +32,10 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
   page,
 }) => {
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
   await expect(page.locator('.n-skeleton')).toHaveCount(0);
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -128,13 +130,15 @@ test('opens a local bookshelf book safely through the current reader route', asy
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/bookshelf');
+  await page.goto('/');
   expect(
     await page
       .locator('html')
       .evaluate((element) => getComputedStyle(element).scrollBehavior),
   ).toBe('auto');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
 
   await page.evaluate(
     async ({ bookId, descriptionHtml, unsafeText }) => {
@@ -394,7 +398,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(
     page.getByRole('button', { name: '加入书架', exact: true }),
   ).toBeVisible();
-  await page.goto('/bookshelf');
+  await page.goto('/');
   await expect(
     page.getByText('书架中还没有书籍', { exact: true }),
   ).toBeVisible();
@@ -1124,8 +1128,10 @@ test('persists keyboard pagination and every reading mode across responsive layo
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('volumes', 5);
@@ -1137,7 +1143,13 @@ test('persists keyboard pagination and every reading mode across responsive layo
       (_, index) => `原文 ${index + 1} ${'分页稳定性内容'.repeat(10)}`,
     );
     const transaction = database.transaction(
-      ['metadata', 'chapter', 'reader-settings', 'reader-book-preference'],
+      [
+        'metadata',
+        'chapter',
+        'reader-settings',
+        'reader-bookshelf',
+        'reader-book-preference',
+      ],
       'readwrite',
     );
     transaction.objectStore('metadata').put({
@@ -1175,6 +1187,13 @@ test('persists keyboard pagination and every reading mode across responsive layo
       horizontalPadding: 24,
       theme: 'light',
       flow: 'paginated',
+      updatedAt: 1,
+    });
+    transaction.objectStore('reader-bookshelf').put({
+      bookId,
+      listed: true,
+      pinned: false,
+      addedAt: 1,
       updatedAt: 1,
     });
     transaction.objectStore('reader-book-preference').put({
@@ -1394,8 +1413,10 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
     });
     Object.assign(window, { __readerSpeechEvents: speechEvents });
   });
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('volumes', 5);
@@ -1619,8 +1640,10 @@ test('continues paging backward after loading an earlier long-chapter window', a
 }) => {
   const windowedBookId = 'windowed-reader.txt';
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
   await page.evaluate(
     async ({ bookId }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -1714,8 +1737,10 @@ test('continues paging backward after loading an earlier long-chapter window', a
 test('uses a configured default cover for a local book without one', async ({
   page,
 }) => {
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
 
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -1904,14 +1929,16 @@ test('uses a configured default cover for a local book without one', async ({
     ),
   ).toBeLessThanOrEqual(1);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: '前往工作区', exact: true }),
   ).toHaveCount(0);
-  await expect(page.locator('.bookshelf-page__notice')).toContainText(
-    '书籍和阅读数据仅保存在当前浏览器。',
-  );
+  await expect(page.getByPlaceholder('输入书名，搜索书架')).toBeVisible();
+  await expect(page.locator('.bookshelf-page__notice')).toHaveCount(0);
+  await expect(page.locator('.bookshelf-page h1')).toHaveCount(0);
   const bookshelfLayout = await page.evaluate(() => {
     const bounds = (selector: string) => {
       const element = document.querySelector<HTMLElement>(selector);
@@ -1928,27 +1955,20 @@ test('uses a configured default cover for a local book without one', async ({
     };
     return {
       add: bounds('.bookshelf-page__header-actions'),
-      notice: bounds('.bookshelf-page__notice'),
       filter: bounds('.bookshelf-toolbar__filter'),
       header: bounds('.bookshelf-page__header'),
-      search: bounds('.bookshelf-toolbar__search'),
       sort: bounds('.bookshelf-toolbar__sort'),
-      title: bounds('.bookshelf-page h1'),
+      viewportWidth: window.innerWidth,
     };
   });
-  expect(bookshelfLayout.add.left).toBeGreaterThan(bookshelfLayout.title.left);
-  expect(bookshelfLayout.add.top).toBeLessThan(bookshelfLayout.search.top);
-  expect(
-    Math.abs(
-      bookshelfLayout.add.top +
-        bookshelfLayout.add.height / 2 -
-        (bookshelfLayout.title.top + bookshelfLayout.title.height / 2),
-    ),
-  ).toBeLessThanOrEqual(1);
-  expect(bookshelfLayout.notice.left).toBe(bookshelfLayout.header.left);
-  expect(bookshelfLayout.notice.right).toBe(bookshelfLayout.header.right);
-  expect(bookshelfLayout.search.top).toBeLessThan(bookshelfLayout.filter.top);
-  expect(bookshelfLayout.filter.left).toBe(bookshelfLayout.search.left);
+  expect(bookshelfLayout.add.right).toBeLessThanOrEqual(
+    bookshelfLayout.viewportWidth,
+  );
+  expect(bookshelfLayout.add.top).toBe(bookshelfLayout.header.top);
+  expect(bookshelfLayout.filter.top).toBeGreaterThan(
+    bookshelfLayout.header.top + bookshelfLayout.header.height,
+  );
+  expect(bookshelfLayout.filter.left).toBe(bookshelfLayout.header.left);
   expect(bookshelfLayout.sort.left).toBeGreaterThan(
     bookshelfLayout.filter.left,
   );
@@ -1971,8 +1991,10 @@ test('uses a configured default cover for a local book without one', async ({
 });
 test('restores the complete source book presentation', async ({ page }) => {
   const restoredBookId = 'restore-metadata.epub';
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('volumes', 5);

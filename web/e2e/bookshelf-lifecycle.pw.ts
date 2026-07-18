@@ -130,7 +130,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   page,
 }) => {
   test.setTimeout(60_000);
-  await page.goto('/');
+  await page.goto('/bookshelf');
   await expect(page.getByRole('heading', { name: '本地书架' })).toBeVisible();
   await uploadBooks(page);
   await expect(page.getByText(alphaFilename, { exact: true })).toBeVisible();
@@ -138,11 +138,16 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     page.getByRole('button', { name: '阅读', exact: true }),
   ).toHaveCount(0);
+  const localShelfSearch = page.getByPlaceholder('搜索本地小说');
+  await localShelfSearch.fill('Beta');
+  await expect(page.getByText(betaFilename, { exact: true })).toBeVisible();
+  await expect(page.getByText(alphaFilename, { exact: true })).toHaveCount(0);
+  await localShelfSearch.clear();
 
-  const alphaHomeTitle = page.getByRole('button', {
+  const alphaLocalTitle = page.getByRole('button', {
     name: `打开《${alphaFilename}》`,
   });
-  await alphaHomeTitle.click();
+  await alphaLocalTitle.click();
   const addToBookshelfDialog = page
     .getByRole('dialog')
     .filter({ hasText: '尚未加入书架' });
@@ -152,7 +157,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .click();
   await expect(addToBookshelfDialog).toHaveCount(0);
   await expect(page.getByText('已加入书架', { exact: true })).toBeVisible();
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL('/bookshelf');
 
   const existingBookPagePromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: `打开《${alphaFilename}》` }).click();
@@ -160,7 +165,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(existingBookPage).toHaveURL(
     new RegExp(`/books/${encodeURIComponent(alphaFilename)}/details$`),
   );
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL('/bookshelf');
   await existingBookPage.close();
 
   const imported = await page.evaluate(
@@ -226,7 +231,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   ).toBe(true);
   expect(imported.hasFile).toBe(true);
 
-  await page.goto('/bookshelf');
+  await page.goto('/');
   await expect(
     page.getByRole('heading', { name: 'Alpha Upload' }),
   ).toBeVisible();
@@ -234,7 +239,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
 
-  const search = page.getByPlaceholder('搜索书名');
+  const search = page.getByPlaceholder('输入书名，搜索书架');
   await search.fill('beta');
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
@@ -433,7 +438,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(deleteDialog).toContainText('这将删除选中的 1 本书');
   await page.keyboard.press('Escape');
 
-  await page.goto('/bookshelf');
+  await page.goto('/');
   await page.getByRole('button', { name: '从本地书架添加' }).click();
   const addDrawer = page.locator('.n-drawer').filter({ hasText: '本地小说' });
   await expect(
@@ -513,12 +518,12 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.bookshelf-toolbar__search')).toBeVisible();
+  await expect(page.getByPlaceholder('输入书名，搜索书架')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
 
-  await page.goto('/');
+  await page.goto('/bookshelf');
   const uploadInput = page.locator('input[type="file"]').first();
   await uploadInput.setInputFiles({
     name: alphaFilename,
@@ -545,7 +550,7 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
       contentType: 'image/png',
     }),
   );
-  await page.goto('/');
+  await page.goto('/bookshelf');
   await page.locator('input[type="file"]').first().setInputFiles({
     name: epubFilename,
     mimeType: 'application/epub+zip',
@@ -783,7 +788,7 @@ test('permanent deletion removes exactly one complete book graph', async ({
   page,
 }) => {
   test.setTimeout(60_000);
-  await page.goto('/');
+  await page.goto('/bookshelf');
   await page
     .locator('input[type="file"]')
     .first()

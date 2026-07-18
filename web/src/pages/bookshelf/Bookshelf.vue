@@ -19,11 +19,23 @@ import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { useLocalVolumeStore } from '@/stores';
 import { useRuntimePanel } from '@/util/useRuntimePanel';
 
+const props = withDefaults(
+  defineProps<{
+    embedded?: boolean;
+    hideSearch?: boolean;
+    hideNotice?: boolean;
+  }>(),
+  {
+    embedded: false,
+    hideSearch: false,
+    hideNotice: false,
+  },
+);
+const query = defineModel<string>('query', { default: '' });
 const router = useRouter();
 const books = ref<BookshelfEntry[]>([]);
 const loading = ref(true);
 const error = ref<string>();
-const query = ref('');
 const filter = ref<BookshelfFilter>('all');
 const sort = ref<BookshelfSort>('recent-read');
 const showLocalVolumes = ref(false);
@@ -202,9 +214,15 @@ onMounted(reload);
 </script>
 
 <template>
-  <main class="layout-content bookshelf-page">
+  <main
+    class="bookshelf-page"
+    :class="{
+      'layout-content': !props.embedded,
+      'bookshelf-page--embedded': props.embedded,
+    }"
+  >
     <header class="bookshelf-page__header">
-      <h1>书架</h1>
+      <h1 v-if="!props.embedded">书架</h1>
       <div class="bookshelf-page__header-actions">
         <n-button
           :type="selectionMode ? 'primary' : 'default'"
@@ -214,7 +232,10 @@ onMounted(reload);
         </n-button>
         <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
       </div>
-      <bulletin v-if="infoPanelHtml" class="bookshelf-page__notice">
+      <bulletin
+        v-if="!props.hideNotice && infoPanelHtml"
+        class="bookshelf-page__notice"
+      >
         <!-- eslint-disable-next-line vue/no-v-html -->
         <div v-html="infoPanelHtml" />
       </bulletin>
@@ -274,8 +295,14 @@ onMounted(reload);
         </n-popconfirm>
       </div>
 
-      <div class="bookshelf-toolbar">
+      <div
+        class="bookshelf-toolbar"
+        :class="{
+          'bookshelf-toolbar--without-search': props.hideSearch,
+        }"
+      >
         <n-input
+          v-if="!props.hideSearch"
           v-model:value="query"
           class="bookshelf-toolbar__search"
           clearable
@@ -361,6 +388,15 @@ onMounted(reload);
   margin-bottom: 24px;
 }
 
+.bookshelf-page--embedded {
+  padding-top: 0;
+}
+
+.bookshelf-page--embedded .bookshelf-page__header {
+  justify-content: end;
+  margin-bottom: 8px;
+}
+
 .bookshelf-page__header-actions {
   display: flex;
   align-items: center;
@@ -383,6 +419,10 @@ onMounted(reload);
     );
   gap: 10px;
   margin-bottom: 18px;
+}
+
+.bookshelf-toolbar--without-search {
+  grid-template-columns: repeat(2, minmax(132px, 220px));
 }
 
 .bookshelf-selection-toolbar {
@@ -445,6 +485,10 @@ onMounted(reload);
   .bookshelf-toolbar__search {
     grid-row: 1;
     grid-column: 1 / -1;
+  }
+
+  .bookshelf-toolbar--without-search {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .bookshelf-toolbar__filter {
