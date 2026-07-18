@@ -2264,9 +2264,11 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     ).toBeVisible();
     await expect(firstWorker.getByText(/活跃 1\/1/)).toBeVisible();
     await expect(secondWorker.getByText(/活跃 1\/1/)).toBeVisible();
+    await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
     await firstWorker
       .getByRole('button', { name: '停止', exact: true })
       .click();
+    await page.getByRole('button', { name: '翻译器运行统计' }).click();
     await expect(workerMetric).toContainText('1');
     await expect(firstWorker.getByText(/已停止 · 活跃 0\/1/)).toBeVisible();
     await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
@@ -2591,7 +2593,7 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   await page.goto('/workspace/gpt');
 
   const trigger = page.getByRole('button', { name: '翻译器运行统计' });
-  const title = page.getByRole('heading', { name: '翻译器', exact: true });
+  const title = page.getByRole('heading', { name: 'GPT工作区', exact: true });
   const triggerBounds = await trigger.boundingBox();
   const titleBounds = await title.boundingBox();
   expect(triggerBounds).not.toBeNull();
@@ -2672,6 +2674,20 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   await expect(
     sakuraPanel.getByRole('region', { name: '共享池统计' }),
   ).toHaveCount(0);
+  const panelBody = sakuraPanel.locator('.workspace-metrics-panel__body');
+  const panelBodyBounds = await panelBody.boundingBox();
+  expect(panelBodyBounds).not.toBeNull();
+  const longPressX = panelBodyBounds!.x + panelBodyBounds!.width / 2;
+  const longPressY = panelBodyBounds!.y + panelBodyBounds!.height / 2;
+  await page.mouse.move(longPressX, longPressY);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await expect(sakuraPanel).toBeVisible();
+  await page.mouse.down();
+  await page.waitForTimeout(1050);
+  await expect(sakuraPanel).toHaveCount(0);
+  await page.mouse.up();
 });
 
 test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
@@ -2757,14 +2773,30 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     ),
   ).toBe(true);
   const formatRetryInput = page.getByRole('textbox', {
-    name: '格式异常完整重试次数',
+    name: '格式异常重试次数',
   });
+  const taskNumberInput = page.getByRole('textbox', { name: '均分任务数' });
+  expect(
+    await formatRetryInput.evaluate(
+      (input) =>
+        input.closest('.n-input-number')?.getBoundingClientRect().width,
+    ),
+  ).toBe(
+    await taskNumberInput.evaluate(
+      (input) =>
+        input.closest('.n-input-number')?.getBoundingClientRect().width,
+    ),
+  );
   await expect(formatRetryInput).toHaveValue('3');
   await formatRetryInput.fill('5');
   await expect(formatRetryInput).toHaveValue('5');
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: '启动全部', exact: true }).click();
+  const workerControl = page.getByRole('button', {
+    name: '批量控制翻译器',
+  });
+  await workerControl.click();
+  await page.getByText('启动全部', { exact: true }).click();
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   const metricsPanel = page.getByRole('dialog', {
     name: '翻译器运行统计',
@@ -2791,7 +2823,8 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
 
   await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
   await expect(metricsPanel).toHaveCount(0);
-  await page.getByRole('button', { name: '停止全部', exact: true }).click();
+  await workerControl.click();
+  await page.getByText('停止全部', { exact: true }).click();
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   await expect(
     metricsPanel
@@ -2833,8 +2866,11 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
   await expect(
-    page.getByRole('textbox', { name: '格式异常完整重试次数' }),
+    page.getByRole('textbox', { name: '格式异常重试次数' }),
   ).toHaveValue('3');
+  await page.getByRole('button', { name: '批量控制翻译器' }).click();
+  await expect(page.getByText('启动全部', { exact: true })).toBeVisible();
+  await expect(page.getByText('停止全部', { exact: true })).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 

@@ -134,6 +134,11 @@ const deleteWorker = () => {
   useSakuraWorkspaceStore().deleteWorker(props.worker.id);
 };
 
+defineExpose({
+  start: startWorker,
+  stop: stopWorker,
+});
+
 const testWorker = async () => {
   if (testingTranslator.value) return;
   testingTranslator.value = true;

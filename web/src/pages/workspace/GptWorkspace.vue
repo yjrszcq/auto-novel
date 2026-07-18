@@ -4,6 +4,7 @@ import {
   DeleteOutlineOutlined,
   FontDownloadOffOutlined,
   FontDownloadOutlined,
+  MoreVertOutlined,
   PlayArrowOutlined,
   PlusOutlined,
   StopOutlined,
@@ -218,6 +219,24 @@ const stopAllWorkers = () => {
   }
 };
 
+const workerControlOptions = computed(() => [
+  {
+    label: '启动全部',
+    key: 'start',
+    disabled: workspaceRef.value.workers.length === 0,
+  },
+  {
+    label: '停止全部',
+    key: 'stop',
+    disabled: pipelineSnapshot.value.workers.length === 0,
+  },
+]);
+
+const handleWorkerControl = (key: string | number) => {
+  if (key === 'start') void startAllWorkers();
+  if (key === 'stop') stopAllWorkers();
+};
+
 const activeWorkerConfigs = computed(() => {
   const activeIds = new Set(
     pipelineSnapshot.value.workers.map((worker) => worker.id),
@@ -284,7 +303,18 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="layout-content">
-    <n-h1>GPT工作区</n-h1>
+    <n-flex
+      align="center"
+      justify="space-between"
+      :wrap="false"
+      style="margin-bottom: 0.5em"
+    >
+      <n-h1 style="margin: 0">GPT工作区</n-h1>
+      <workspace-metrics-panel
+        :cache-metrics="cacheMetrics"
+        :pipeline-metrics="pipelineSnapshot"
+      />
+    </n-flex>
 
     <bulletin v-if="infoPanelHtml">
       <!-- eslint-disable-next-line vue/no-v-html -->
@@ -292,12 +322,6 @@ onBeforeUnmount(() => {
     </bulletin>
 
     <section-header title="翻译器">
-      <template #title-action>
-        <workspace-metrics-panel
-          :cache-metrics="cacheMetrics"
-          :pipeline-metrics="pipelineSnapshot"
-        />
-      </template>
       <c-button
         label="添加翻译器"
         :icon="PlusOutlined"
@@ -309,18 +333,16 @@ onBeforeUnmount(() => {
         :icon="DeleteOutlineOutlined"
         @action="clearCache"
       />
-      <c-button
-        label="启动全部"
-        :icon="PlayArrowOutlined"
-        :disabled="workspaceRef.workers.length === 0"
-        @action="startAllWorkers"
-      />
-      <c-button
-        label="停止全部"
-        :icon="StopOutlined"
-        :disabled="pipelineSnapshot.workers.length === 0"
-        @action="stopAllWorkers"
-      />
+      <n-dropdown
+        trigger="click"
+        :options="workerControlOptions"
+        :keyboard="false"
+        @select="handleWorkerControl"
+      >
+        <n-button circle aria-label="批量控制翻译器">
+          <n-icon :component="MoreVertOutlined" />
+        </n-button>
+      </n-dropdown>
     </section-header>
 
     <n-alert

@@ -58,7 +58,7 @@ defineExpose({
     <c-action-wrapper title="格式异常">
       <div class="local-translate-options__task-split">
         <n-input-group>
-          <n-input-group-label size="small">完整重试</n-input-group-label>
+          <n-input-group-label size="small">重试</n-input-group-label>
           <n-input-number
             v-model:value="formatRetryCount"
             class="local-translate-options__number"
@@ -66,8 +66,8 @@ defineExpose({
             :show-button="false"
             :min="formatRetryBounds.minimum"
             :max="formatRetryBounds.maximum"
-            :input-props="{ 'aria-label': '格式异常完整重试次数' }"
-            style="width: 52px"
+            :input-props="{ 'aria-label': '格式异常重试次数' }"
+            style="width: 40px"
           />
           <n-input-group-label size="small">次后再拆分</n-input-group-label>
         </n-input-group>
@@ -122,6 +122,7 @@ defineExpose({
               class="local-translate-options__number"
               :show-button="false"
               :min="1"
+              :input-props="{ 'aria-label': '均分任务数' }"
               style="width: 40px"
             />
             <n-input-group-label size="small">个任务</n-input-group-label>

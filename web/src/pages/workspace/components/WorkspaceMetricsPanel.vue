@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { CloseOutlined, MoreHorizOutlined } from '@vicons/material';
+import { CloseOutlined } from '@vicons/material';
 import { useEventListener } from '@vueuse/core';
 
 type CacheMetrics = {
@@ -72,11 +72,39 @@ const toggle = () => {
 };
 
 const close = () => {
+  cancelLongPress();
   open.value = false;
 };
 
 let removeMoveListener: (() => void) | undefined;
 let removeUpListener: (() => void) | undefined;
+let longPressTimer: number | undefined;
+let longPressOrigin: { x: number; y: number } | undefined;
+
+const cancelLongPress = () => {
+  if (longPressTimer !== undefined) window.clearTimeout(longPressTimer);
+  longPressTimer = undefined;
+  longPressOrigin = undefined;
+};
+
+const startLongPress = (event: PointerEvent) => {
+  if (window.innerWidth >= 640 || event.button !== 0) return;
+  cancelLongPress();
+  longPressOrigin = { x: event.clientX, y: event.clientY };
+  longPressTimer = window.setTimeout(close, 1000);
+};
+
+const trackLongPress = (event: PointerEvent) => {
+  if (
+    longPressOrigin !== undefined &&
+    Math.hypot(
+      event.clientX - longPressOrigin.x,
+      event.clientY - longPressOrigin.y,
+    ) > 8
+  ) {
+    cancelLongPress();
+  }
+};
 
 const finishDrag = () => {
   removeMoveListener?.();
@@ -103,20 +131,20 @@ const startDrag = (event: PointerEvent) => {
 useEventListener(window, 'resize', () => {
   if (open.value) void placePanel();
 });
-onBeforeUnmount(finishDrag);
+onBeforeUnmount(() => {
+  finishDrag();
+  cancelLongPress();
+});
 </script>
 
 <template>
-  <n-button
-    circle
-    size="small"
+  <c-button
+    label="运行统计"
     class="workspace-metrics-trigger"
     aria-label="翻译器运行统计"
     :type="open ? 'primary' : 'default'"
-    @click="toggle"
-  >
-    <n-icon :component="MoreHorizOutlined" />
-  </n-button>
+    @action="toggle"
+  />
 
   <section
     v-if="open"
@@ -146,7 +174,14 @@ onBeforeUnmount(finishDrag);
         </n-button>
       </header>
 
-      <div class="workspace-metrics-panel__body">
+      <div
+        class="workspace-metrics-panel__body"
+        @pointerdown="startLongPress"
+        @pointermove="trackLongPress"
+        @pointerup="cancelLongPress"
+        @pointercancel="cancelLongPress"
+        @pointerleave="cancelLongPress"
+      >
         <section aria-label="翻译缓存统计">
           <n-text depth="3" class="workspace-metrics-panel__section-title">
             翻译缓存
@@ -226,13 +261,6 @@ onBeforeUnmount(finishDrag);
 <style scoped>
 .workspace-metrics-trigger {
   flex: none;
-  width: 32px;
-  height: 32px;
-  transform: translateY(4px);
-}
-
-.workspace-metrics-trigger :deep(.n-icon) {
-  font-size: 20px;
 }
 
 .workspace-metrics-panel {
@@ -316,15 +344,6 @@ onBeforeUnmount(finishDrag);
 }
 
 @media (max-width: 639px) {
-  .workspace-metrics-trigger {
-    width: 28px;
-    height: 28px;
-  }
-
-  .workspace-metrics-trigger :deep(.n-icon) {
-    font-size: 18px;
-  }
-
   .workspace-metrics-panel {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 66px);

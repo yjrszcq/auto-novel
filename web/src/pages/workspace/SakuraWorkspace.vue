@@ -2,6 +2,7 @@
 import {
   BookOutlined,
   DeleteOutlineOutlined,
+  MoreVertOutlined,
   PlusOutlined,
 } from '@vicons/material';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -41,6 +42,37 @@ type ProcessedJob = TranslateJob & {
 };
 
 const processedJobs = ref<Map<string, ProcessedJob>>(new Map());
+type SakuraWorkerControl = {
+  start: () => void;
+  stop: () => void;
+};
+const workerControls = useTemplateRef<SakuraWorkerControl[]>('workerControls');
+
+const startAllWorkers = () => {
+  for (const worker of workerControls.value ?? []) worker.start();
+};
+
+const stopAllWorkers = () => {
+  for (const worker of workerControls.value ?? []) worker.stop();
+};
+
+const workerControlOptions = computed(() => [
+  {
+    label: '启动全部',
+    key: 'start',
+    disabled: workspaceRef.value.workers.length === 0,
+  },
+  {
+    label: '停止全部',
+    key: 'stop',
+    disabled: processedJobs.value.size === 0,
+  },
+]);
+
+const handleWorkerControl = (key: string | number) => {
+  if (key === 'start') startAllWorkers();
+  if (key === 'stop') stopAllWorkers();
+};
 
 const getNextJob = () => {
   const job = workspaceRef.value.jobs.find(
@@ -116,7 +148,15 @@ const clearCache = async () => {
 
 <template>
   <div class="layout-content">
-    <n-h1>Sakura工作区</n-h1>
+    <n-flex
+      align="center"
+      justify="space-between"
+      :wrap="false"
+      style="margin-bottom: 0.5em"
+    >
+      <n-h1 style="margin: 0">Sakura工作区</n-h1>
+      <workspace-metrics-panel :cache-metrics="cacheMetrics" />
+    </n-flex>
 
     <bulletin v-if="infoPanelHtml">
       <!-- eslint-disable-next-line vue/no-v-html -->
@@ -124,9 +164,6 @@ const clearCache = async () => {
     </bulletin>
 
     <section-header title="翻译器">
-      <template #title-action>
-        <workspace-metrics-panel :cache-metrics="cacheMetrics" />
-      </template>
       <c-button
         label="添加翻译器"
         :icon="PlusOutlined"
@@ -138,6 +175,16 @@ const clearCache = async () => {
         :icon="DeleteOutlineOutlined"
         @action="clearCache"
       />
+      <n-dropdown
+        trigger="click"
+        :options="workerControlOptions"
+        :keyboard="false"
+        @select="handleWorkerControl"
+      >
+        <n-button circle aria-label="批量控制翻译器">
+          <n-icon :component="MoreVertOutlined" />
+        </n-button>
+      </n-dropdown>
     </section-header>
 
     <n-empty
@@ -152,6 +199,7 @@ const clearCache = async () => {
       >
         <n-list-item v-for="worker of workspaceRef.workers" :key="worker.id">
           <sakura-job-worker
+            ref="workerControls"
             :worker="worker"
             :get-next-job="getNextJob"
             @update:progress="onProgressUpdated"
