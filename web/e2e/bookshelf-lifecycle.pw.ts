@@ -320,12 +320,19 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   const selectionToolbar = page.locator('.bookshelf-selection-toolbar');
   const selectionActionAlignment = await selectionToolbar.evaluate(
     (toolbar) => {
+      const selectAll = toolbar.querySelector<HTMLElement>(
+        '.bookshelf-selection-toolbar__select-all',
+      );
       const actions = toolbar.querySelector<HTMLElement>(
         '.bookshelf-selection-toolbar__actions',
       );
-      if (actions === null) throw new Error('缺少书架批量操作组');
+      if (selectAll === null || actions === null) {
+        throw new Error('缺少书架批量操作组');
+      }
       return {
         actionsRight: Math.round(actions.getBoundingClientRect().right),
+        selectAllLeft: Math.round(selectAll.getBoundingClientRect().left),
+        toolbarLeft: Math.round(toolbar.getBoundingClientRect().left),
         toolbarRight: Math.round(toolbar.getBoundingClientRect().right),
       };
     },
@@ -333,6 +340,10 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(
     selectionActionAlignment.toolbarRight -
       selectionActionAlignment.actionsRight,
+  ).toBeLessThanOrEqual(16);
+  expect(
+    selectionActionAlignment.selectAllLeft -
+      selectionActionAlignment.toolbarLeft,
   ).toBeLessThanOrEqual(16);
   const batchButtonStyles = await selectionToolbar
     .getByRole('button')
@@ -401,13 +412,17 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .getByRole('button', { name: '反选', exact: true })
     .click();
   await expect(
-    selectionToolbar.getByText('已选择 0 本', { exact: true }),
+    page
+      .locator('.bookshelf-page__selection-summary')
+      .getByText('已选择 0 本', { exact: true }),
   ).toBeVisible();
   await selectionToolbar
     .getByRole('button', { name: '全选', exact: true })
     .click();
   await expect(
-    selectionToolbar.getByText('已选择 2 本', { exact: true }),
+    page
+      .locator('.bookshelf-page__selection-summary')
+      .getByText('已选择 2 本', { exact: true }),
   ).toBeVisible();
   await page
     .locator('.book-card')
