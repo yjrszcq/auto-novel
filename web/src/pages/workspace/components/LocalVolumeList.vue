@@ -169,13 +169,17 @@ const handleDrawerVisibility = (show: boolean) => {
             :options="Setting.localVolumeOrderOptions"
           />
         </c-action-wrapper>
-        <n-flex align="center" :wrap="true">
-          <n-text>已选择 {{ selectedVolumes.length }} 本</n-text>
-          <n-button size="small" @click="selectAllVolumes">全选</n-button>
-          <n-button size="small" @click="invertVolumeSelection">反选</n-button>
-          <slot name="selection-action" :volumes="selectedVolumes" />
-        </n-flex>
         <slot name="extra" :volumes="sortedVolumes ?? []" />
+        <c-action-wrapper title="选择" align="center">
+          <n-flex align="center" :wrap="true">
+            <n-text>已选择 {{ selectedVolumes.length }} 本</n-text>
+            <n-button size="small" @click="selectAllVolumes">全选</n-button>
+            <n-button size="small" @click="invertVolumeSelection">
+              反选
+            </n-button>
+            <slot name="selection-action" :volumes="selectedVolumes" />
+          </n-flex>
+        </c-action-wrapper>
       </n-flex>
 
       <n-divider style="margin: 16px 0 8px" />
