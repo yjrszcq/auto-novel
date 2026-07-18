@@ -17,7 +17,7 @@
     "lint:dist": "eslint dist",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:performance": "vitest run tests/translation-performance.test.ts tests/concurrency.test.ts tests/translator-http-integration.test.ts tests/translate-local-concurrency.test.ts tests/translation-cache.test.ts tests/local-volume-reader-adapter.test.ts tests/reader-segment-window.test.ts",
+    "test:performance": "vitest run tests/translation-performance.test.ts tests/concurrency.test.ts tests/shared-worker-pool.test.ts tests/gpt-worker-pipeline.test.ts tests/translator-http-integration.test.ts tests/translate-local-concurrency.test.ts tests/translation-cache.test.ts tests/local-volume-reader-adapter.test.ts tests/reader-segment-window.test.ts",
     "test:gate": "pnpm lint && pnpm test && pnpm build && pnpm test:e2e",
     "test:runtime-smoke": "node scripts/runtime-smoke.mjs",
     "prepare": "cd .. && husky web/.husky || true",

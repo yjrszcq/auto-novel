@@ -99,6 +99,80 @@ const createTranslator = (endpoint: string, model: string, cache = false) =>
   Translator.create({ id: 'gpt', endpoint, model, key: `${model}-key` }, cache);
 
 describe('GPT shared worker pipeline', () => {
+  it('keeps healthy capacity busy while another provider is cooling down', async () => {
+    const volumeId = 'provider-cooldown-volume.epub';
+    const chapterId = await seedVolume(volumeId, [
+      '限流原文一',
+      '限流原文二',
+      '限流原文三',
+      '限流原文四',
+    ]);
+    const healthyFinishedThree = deferred();
+    const coolingServer = await startOpenAiTestServer({
+      onChat: (request) => {
+        if (request.index === 0) {
+          return {
+            content: 'rate limited',
+            errorCode: 'rate_limit_exceeded',
+            status: 429,
+            headers: { 'Retry-After': '1' },
+          };
+        }
+        const prompt = request.body.messages.at(-1)?.content ?? '';
+        return { content: `#1:甲译-${sourceLine(prompt)}` };
+      },
+    });
+    const healthyServer = await startOpenAiTestServer({
+      onChat: (request) => {
+        if (request.index === 2) healthyFinishedThree.resolve();
+        const prompt = request.body.messages.at(-1)?.content ?? '';
+        return { content: `#1:乙译-${sourceLine(prompt)}` };
+      },
+    });
+    cleanupCallbacks.push(coolingServer.close, healthyServer.close);
+    const cooling = await createTranslator(
+      coolingServer.endpoint,
+      'cooling-model',
+    );
+    const healthy = await createTranslator(
+      healthyServer.endpoint,
+      'healthy-model',
+    );
+    cooling.segTranslator.segmentor = createBudgetSegmentor(100, 1);
+    healthy.segTranslator.segmentor = createBudgetSegmentor(100, 1);
+    const pipeline = new GptWorkerPipeline({ highWaterMark: 4 });
+    pipeline.register({ id: 'cooling', translator: cooling, concurrency: 1 });
+    pipeline.register({ id: 'healthy', translator: healthy, concurrency: 1 });
+
+    const translation = pipeline.translateLocal(
+      { type: 'local', volumeId },
+      taskParams(),
+      createCallback().callback,
+    );
+    await healthyFinishedThree.promise;
+    expect(coolingServer.requests).toHaveLength(1);
+    expect(healthyServer.requests).toHaveLength(3);
+    expect(pipeline.snapshot().workers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'cooling', active: 1, errors: 0 }),
+      ]),
+    );
+    await translation;
+
+    expect(coolingServer.requests).toHaveLength(2);
+    expect(healthyServer.requests).toHaveLength(3);
+    const dao = await createLocalVolumeDao();
+    const stored = await dao.getChapter(volumeId, chapterId);
+    dao.close();
+    expect(stored?.gpt?.paragraphs).toEqual([
+      '甲译-限流原文一',
+      '乙译-限流原文二',
+      '乙译-限流原文三',
+      '乙译-限流原文四',
+    ]);
+    pipeline.close();
+  });
+
   it('uses a worker added after the task has already started', async () => {
     const volumeId = 'hot-join-volume.epub';
     await seedVolume(volumeId, ['热加入原文一', '热加入原文二']);
