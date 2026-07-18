@@ -1,4 +1,8 @@
-import type { ReaderChapterContent } from '@/model/Reader';
+import type {
+  ReaderChapterContent,
+  ReaderChapterSummary,
+  ReaderContentAdapter,
+} from '@/model/Reader';
 
 export interface ReaderSearchResult {
   chapterId: string;
@@ -59,4 +63,57 @@ export const searchReaderChapters = (
     }
   }
   return results;
+};
+
+export type ReaderSearchResponse =
+  | { kind: 'stale' }
+  | { kind: 'results'; results: ReaderSearchResult[]; truncated: boolean };
+
+export const createReaderSearchController = (
+  adapter: ReaderContentAdapter,
+  options?: { batchSize?: number; maximumResults?: number },
+) => {
+  const batchSize = Math.max(1, Math.floor(options?.batchSize ?? 12));
+  const maximumResults = Math.max(
+    1,
+    Math.floor(options?.maximumResults ?? readerSearchResultLimit),
+  );
+  let requestId = 0;
+
+  const cancel = () => {
+    requestId += 1;
+  };
+
+  const search = async (input: {
+    bookId: string;
+    chapters: ReaderChapterSummary[];
+    query: string;
+  }): Promise<ReaderSearchResponse> => {
+    const currentRequest = ++requestId;
+    const found: ReaderSearchResult[] = [];
+    for (let index = 0; index < input.chapters.length; index += batchSize) {
+      const chapters = await Promise.all(
+        input.chapters.slice(index, index + batchSize).map((chapter) =>
+          adapter.getChapter({
+            bookId: input.bookId,
+            chapterId: chapter.id,
+          }),
+        ),
+      );
+      if (currentRequest !== requestId) return { kind: 'stale' };
+      found.push(
+        ...searchReaderChapters(
+          chapters,
+          input.query,
+          maximumResults - found.length,
+        ),
+      );
+      if (found.length >= maximumResults) {
+        return { kind: 'results', results: found, truncated: true };
+      }
+    }
+    return { kind: 'results', results: found, truncated: false };
+  };
+
+  return { search, cancel };
 };

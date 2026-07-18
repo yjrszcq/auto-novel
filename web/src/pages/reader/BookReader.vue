@@ -14,7 +14,6 @@ import type {
   ReaderAnnotation,
   ReaderBookmark,
   ReaderBookStyleOverride,
-  ReaderChapterContent,
   ReaderChapterSummary,
   ReaderMode,
   ReaderSettingsRecord,
@@ -53,10 +52,7 @@ import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
 import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
 import { createBrowserSpeechController } from './core/ReaderSpeech';
 import type { ReaderSearchResult } from './core/ReaderSearch';
-import {
-  readerSearchResultLimit,
-  searchReaderChapters,
-} from './core/ReaderSearch';
+import { createReaderSearchController } from './core/ReaderSearch';
 import { addReadingTime } from './core/ReaderStats';
 import {
   createReaderBookmark,
@@ -98,7 +94,8 @@ const showSearch = ref(false);
 const searchQuery = ref('');
 const searchResults = shallowRef<ReaderSearchResult[]>([]);
 const searchLoading = ref(false);
-let searchRequestId = 0;
+const searchTruncated = ref(false);
+let searchUiRequestId = 0;
 const showMobileTranslationNotice = ref(false);
 const controlsVisible = ref(true);
 const readerViewport = ref<HTMLElement | null>(null);
@@ -129,10 +126,14 @@ const gptWorkspace = useGptWorkspaceStore();
 const sakuraWorkspace = useSakuraWorkspaceStore();
 let settingsLoaded = false;
 let pendingChapterEdge: 'start' | 'end' | undefined;
+let loadUiRequestId = 0;
 
 const repositoryPromise = useLocalVolumeStore();
 const cachedAdapterPromise = repositoryPromise.then((repository) =>
   createCachedReaderContentAdapter(createLocalVolumeReaderAdapter(repository)),
+);
+const searchControllerPromise = cachedAdapterPromise.then(
+  createReaderSearchController,
 );
 const controllerPromise = cachedAdapterPromise.then(createReaderPageController);
 
@@ -260,42 +261,33 @@ const openSearch = () => {
 
 const runSearch = async () => {
   const query = searchQuery.value.trim();
-  const requestId = ++searchRequestId;
+  const requestId = ++searchUiRequestId;
   if (result.value?.kind !== 'ready' || query.length === 0) {
+    const controller = await searchControllerPromise;
+    controller.cancel();
     searchResults.value = [];
+    searchTruncated.value = false;
+    searchLoading.value = false;
     return;
   }
   searchLoading.value = true;
   try {
-    const adapter = await cachedAdapterPromise;
+    const controller = await searchControllerPromise;
     const bookId = result.value.book.id;
-    const found: ReaderSearchResult[] = [];
-    for (let index = 0; index < result.value.chapters.length; index += 12) {
-      const chapters: ReaderChapterContent[] = await Promise.all(
-        result.value.chapters.slice(index, index + 12).map((chapter) =>
-          adapter.getChapter({
-            bookId,
-            chapterId: chapter.id,
-          }),
-        ),
-      );
-      if (requestId !== searchRequestId) return;
-      found.push(
-        ...searchReaderChapters(
-          chapters,
-          query,
-          readerSearchResultLimit - found.length,
-        ),
-      );
-      if (found.length >= readerSearchResultLimit) break;
-    }
-    searchResults.value = found;
+    const response = await controller.search({
+      bookId,
+      chapters: result.value.chapters,
+      query,
+    });
+    if (response.kind === 'stale' || requestId !== searchUiRequestId) return;
+    searchResults.value = response.results;
+    searchTruncated.value = response.truncated;
   } catch (reason) {
-    if (requestId === searchRequestId) {
+    if (requestId === searchUiRequestId) {
       message.error('搜索失败：' + String(reason));
     }
   } finally {
-    if (requestId === searchRequestId) {
+    if (requestId === searchUiRequestId) {
       searchLoading.value = false;
     }
   }
@@ -705,7 +697,11 @@ const loadSettings = async () => {
 };
 
 const load = async () => {
+  const requestId = ++loadUiRequestId;
+  const targetBookId = bookId.value;
+  const targetChapterId = requestedChapterId.value;
   await recordReadingTime();
+  if (requestId !== loadUiRequestId) return;
   const chapterEdge = pendingChapterEdge;
   const preservesScrolledContent =
     chapterEdge !== undefined &&
@@ -717,13 +713,12 @@ const load = async () => {
     loading.value = true;
   }
   const controller = await controllerPromise;
-  const loaded = await controller.load(bookId.value, requestedChapterId.value);
-  if (
-    loaded.kind === 'ready' &&
-    requestedChapterId.value !== loaded.chapter.chapterId
-  ) {
+  if (requestId !== loadUiRequestId) return;
+  const loaded = await controller.load(targetBookId, targetChapterId);
+  if (requestId !== loadUiRequestId || loaded.kind === 'stale') return;
+  if (loaded.kind === 'ready' && targetChapterId !== loaded.chapter.chapterId) {
     void router.replace(
-      `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(loaded.chapter.chapterId)}`,
+      `/books/${encodeURIComponent(targetBookId)}/read/${encodeURIComponent(loaded.chapter.chapterId)}`,
     );
   }
   if (
@@ -736,6 +731,7 @@ const load = async () => {
       loadBookmarks(loaded.book.id),
       loadAnnotations(loaded.book.id),
     ]);
+    if (requestId !== loadUiRequestId) return;
     const targetSegment =
       chapterEdge === 'end'
         ? loaded.chapter.segments.at(-1)
@@ -749,19 +745,19 @@ const load = async () => {
     startReadingTime(loaded.book.id);
     return;
   }
-  if (loaded.kind !== 'stale') {
-    result.value = loaded;
-  }
-  loading.value = false;
-
   if (loaded.kind === 'ready') {
     await Promise.all([
-      restoreProgress(loaded),
       resolveMode(loaded),
       loadBookmarks(loaded.book.id),
       loadAnnotations(loaded.book.id),
     ]);
+    if (requestId !== loadUiRequestId) return;
+    result.value = loaded;
+    loading.value = false;
+    await restoreProgress(loaded);
+    if (requestId !== loadUiRequestId) return;
     await restorePendingBookmark(loaded);
+    if (requestId !== loadUiRequestId) return;
     pendingChapterEdge = undefined;
     if (chapterEdge !== undefined) {
       const targetSegment =
@@ -777,7 +773,10 @@ const load = async () => {
     await nextTick();
     updateViewportMetrics();
     startReadingTime(loaded.book.id);
+    return;
   }
+  result.value = loaded;
+  loading.value = false;
 };
 
 const resolveMode = async (
@@ -1333,15 +1332,26 @@ watch(
   () => [bookId.value, requestedChapterId.value],
   ([nextBookId], previous) => {
     if (previous !== undefined && nextBookId !== previous[0]) {
-      searchRequestId += 1;
+      searchUiRequestId += 1;
+      void searchControllerPromise.then((controller) => controller.cancel());
       searchQuery.value = '';
       searchResults.value = [];
+      searchTruncated.value = false;
       searchLoading.value = false;
     }
     void load();
   },
   { immediate: true },
 );
+watch(searchQuery, () => {
+  searchUiRequestId += 1;
+  searchResults.value = [];
+  searchTruncated.value = false;
+  if (searchLoading.value) {
+    searchLoading.value = false;
+    void searchControllerPromise.then((controller) => controller.cancel());
+  }
+});
 watch(completedTranslationTasks, (tasks, previousTasks) => {
   if (
     tasks.some(
@@ -1403,6 +1413,10 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
+  loadUiRequestId += 1;
+  searchUiRequestId += 1;
+  void controllerPromise.then((controller) => controller.cancel());
+  void searchControllerPromise.then((controller) => controller.cancel());
   window.removeEventListener('scroll', saveProgressThrottled);
   window.removeEventListener('resize', handleViewportResize);
   if (viewportResizeFrame !== undefined) {
@@ -1523,7 +1537,15 @@ onBeforeUnmount(() => {
       </template>
     </section>
 
-    <n-spin v-if="loading" size="large" class="book-reader__loading" />
+    <div
+      v-if="loading"
+      class="book-reader__loading"
+      role="status"
+      aria-live="polite"
+    >
+      <n-spin size="large" />
+      <span>正在加载阅读内容…</span>
+    </div>
 
     <n-result
       v-else-if="result?.kind === 'error'"
@@ -1532,7 +1554,10 @@ onBeforeUnmount(() => {
       :description="result.message"
     >
       <template #footer>
-        <n-button @click="backToBookshelf">返回书架</n-button>
+        <n-space justify="center">
+          <n-button type="primary" @click="load">重试</n-button>
+          <n-button @click="backToBookshelf">返回书架</n-button>
+        </n-space>
       </template>
     </n-result>
 
@@ -1573,7 +1598,7 @@ onBeforeUnmount(() => {
     </template>
 
     <nav
-      v-if="controlsVisible"
+      v-if="controlsVisible && result?.kind === 'ready' && !loading"
       class="book-reader__bottom-navigation"
       aria-label="阅读器导航"
     >
@@ -1726,10 +1751,23 @@ onBeforeUnmount(() => {
           placeholder="搜索原文和译文"
           @keyup.enter="runSearch"
         />
-        <n-button type="primary" :loading="searchLoading" @click="runSearch">
+        <n-button
+          type="primary"
+          :loading="searchLoading"
+          :disabled="searchQuery.trim().length === 0"
+          @click="runSearch"
+        >
           搜索
         </n-button>
       </n-input-group>
+      <n-alert
+        v-if="searchTruncated"
+        type="info"
+        role="status"
+        style="margin-top: 12px"
+      >
+        已达到搜索上限，仅显示前 200 条
+      </n-alert>
       <n-empty
         v-if="searchResults.length === 0 && !searchLoading"
         :description="
@@ -2165,7 +2203,9 @@ onBeforeUnmount(() => {
 .book-reader__loading {
   display: grid;
   min-height: calc(100dvh - 100px);
+  align-content: center;
   place-items: center;
+  gap: 12px;
 }
 
 .book-reader__content {

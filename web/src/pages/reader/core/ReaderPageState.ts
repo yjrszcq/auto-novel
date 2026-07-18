@@ -23,6 +23,10 @@ const errorMessage = (reason: unknown) =>
 export const createReaderPageController = (adapter: ReaderContentAdapter) => {
   let requestId = 0;
 
+  const cancel = () => {
+    requestId += 1;
+  };
+
   const load = async (
     bookId: string,
     requestedChapterId?: string,
@@ -83,5 +87,5 @@ export const createReaderPageController = (adapter: ReaderContentAdapter) => {
     }
   };
 
-  return { load };
+  return { load, cancel };
 };

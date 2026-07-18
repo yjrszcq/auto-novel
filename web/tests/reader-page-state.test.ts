@@ -98,4 +98,20 @@ describe('reader page controller', () => {
     });
     await expect(firstLoad).resolves.toEqual({ kind: 'stale' });
   });
+
+  it('cancels an in-flight load when the reader is disposed', async () => {
+    let resolveBook!: (value: ReaderBook) => void;
+    const pendingBook = new Promise<ReaderBook>((resolve) => {
+      resolveBook = resolve;
+    });
+    const controller = createReaderPageController(
+      createAdapter({ getBook: async () => pendingBook }),
+    );
+
+    const pending = controller.load('book');
+    controller.cancel();
+    resolveBook(book('book'));
+
+    await expect(pending).resolves.toEqual({ kind: 'stale' });
+  });
 });
