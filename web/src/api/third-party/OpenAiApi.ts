@@ -11,7 +11,7 @@ export const createOpenAiApi = (endpoint: string, key: string) => {
   }
 
   const client = ky.create({
-    prefixUrl: endpointUrl.href,
+    prefix: endpointUrl.href,
     headers: {
       Accept: 'application/json',
       Authorization: `Bearer ${key}`,
@@ -68,11 +68,7 @@ interface ChatCompletionChunk {
       content?: string | null;
     };
     finish_reason:
-      | 'stop'
-      | 'length'
-      | 'function_call'
-      | 'content_filter'
-      | null;
+      'stop' | 'length' | 'function_call' | 'content_filter' | null;
     index: number;
   }>;
 }
