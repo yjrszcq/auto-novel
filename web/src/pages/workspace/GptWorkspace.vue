@@ -292,6 +292,12 @@ onBeforeUnmount(() => {
     </bulletin>
 
     <section-header title="翻译器">
+      <template #title-action>
+        <workspace-metrics-panel
+          :cache-metrics="cacheMetrics"
+          :pipeline-metrics="pipelineSnapshot"
+        />
+      </template>
       <c-button
         label="添加翻译器"
         :icon="PlusOutlined"
@@ -316,22 +322,6 @@ onBeforeUnmount(() => {
         @action="stopAllWorkers"
       />
     </section-header>
-    <n-text v-if="cacheMetrics" depth="3">
-      缓存 {{ cacheMetrics.entryCount }} 条 /
-      {{ (cacheMetrics.totalSize / 1024 / 1024).toFixed(2) }} MiB；命中
-      {{ cacheMetrics.hit }} / 未命中 {{ cacheMetrics.miss }} / 并发复用
-      {{ cacheMetrics.deduplicated }} / 请求 {{ cacheMetrics.provider }} / 故障
-      {{ cacheMetrics.fault }}
-    </n-text>
-    <n-text depth="3" style="display: block; margin-top: 4px">
-      共享池 {{ pipelineSnapshot.workers.length }} 个工作者 · 活跃请求
-      {{ pipelineSnapshot.aggregateActive }}/{{
-        pipelineSnapshot.aggregateMaximum
-      }}
-      · 未完成 {{ pipelineSnapshot.outstanding }} · 排队
-      {{ pipelineSnapshot.queued }} · 背压等待
-      {{ pipelineSnapshot.waitingProducers }}
-    </n-text>
 
     <n-alert
       v-if="mixesWorkerConfigurations"

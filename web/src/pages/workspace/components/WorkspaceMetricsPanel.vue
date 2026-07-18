@@ -1,0 +1,347 @@
+<script lang="ts" setup>
+import { CloseOutlined, MoreHorizOutlined } from '@vicons/material';
+import { useEventListener } from '@vueuse/core';
+
+type CacheMetrics = {
+  entryCount: number;
+  totalSize: number;
+  hit: number;
+  miss: number;
+  deduplicated: number;
+  provider: number;
+  fault: number;
+};
+
+type PipelineMetrics = {
+  workers: unknown[];
+  aggregateActive: number;
+  aggregateMaximum: number;
+  outstanding: number;
+  queued: number;
+  waitingProducers: number;
+};
+
+defineProps<{
+  cacheMetrics?: CacheMetrics;
+  pipelineMetrics?: PipelineMetrics;
+}>();
+
+const panel = useTemplateRef('panel');
+const open = ref(false);
+const positioned = ref(false);
+const hasRememberedPosition = ref(false);
+const position = reactive({ x: 0, y: 0 });
+
+const clampPosition = (x: number, y: number) => {
+  const bounds = panel.value?.getBoundingClientRect();
+  if (bounds === undefined) return;
+  const edge = 8;
+  position.x = Math.round(
+    Math.min(
+      Math.max(edge, x),
+      Math.max(edge, window.innerWidth - bounds.width - edge),
+    ),
+  );
+  position.y = Math.round(
+    Math.min(
+      Math.max(edge, y),
+      Math.max(edge, window.innerHeight - bounds.height - edge),
+    ),
+  );
+};
+
+const placePanel = async () => {
+  await nextTick();
+  const bounds = panel.value?.getBoundingClientRect();
+  if (bounds === undefined) return;
+  if (hasRememberedPosition.value) {
+    clampPosition(position.x, position.y);
+  } else {
+    const mobile = window.innerWidth < 640;
+    const right = mobile ? 12 : 24;
+    position.x = window.innerWidth - bounds.width - right;
+    position.y = mobile ? 58 : 64;
+    hasRememberedPosition.value = true;
+  }
+  positioned.value = true;
+};
+
+const toggle = () => {
+  open.value = !open.value;
+  if (open.value) void placePanel();
+};
+
+const close = () => {
+  open.value = false;
+};
+
+let removeMoveListener: (() => void) | undefined;
+let removeUpListener: (() => void) | undefined;
+
+const finishDrag = () => {
+  removeMoveListener?.();
+  removeUpListener?.();
+  removeMoveListener = undefined;
+  removeUpListener = undefined;
+};
+
+const startDrag = (event: PointerEvent) => {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  const offsetX = event.clientX - position.x;
+  const offsetY = event.clientY - position.y;
+  finishDrag();
+  const onMove = (moveEvent: PointerEvent) => {
+    clampPosition(moveEvent.clientX - offsetX, moveEvent.clientY - offsetY);
+  };
+  removeMoveListener = useEventListener(window, 'pointermove', onMove);
+  removeUpListener = useEventListener(window, 'pointerup', finishDrag, {
+    once: true,
+  });
+};
+
+useEventListener(window, 'resize', () => {
+  if (open.value) void placePanel();
+});
+onBeforeUnmount(finishDrag);
+</script>
+
+<template>
+  <n-button
+    circle
+    size="small"
+    class="workspace-metrics-trigger"
+    aria-label="翻译器运行统计"
+    :type="open ? 'primary' : 'default'"
+    @click="toggle"
+  >
+    <n-icon :component="MoreHorizOutlined" />
+  </n-button>
+
+  <section
+    v-if="open"
+    ref="panel"
+    class="workspace-metrics-panel"
+    :class="{ 'workspace-metrics-panel--positioned': positioned }"
+    :style="{ left: `${position.x}px`, top: `${position.y}px` }"
+    role="dialog"
+    aria-label="翻译器运行统计"
+  >
+    <n-card
+      class="workspace-metrics-panel__surface"
+      size="small"
+      content-style="padding: 0"
+    >
+      <header class="workspace-metrics-panel__header" @pointerdown="startDrag">
+        <n-text strong>运行统计</n-text>
+        <n-button
+          quaternary
+          circle
+          size="small"
+          aria-label="关闭运行统计"
+          @pointerdown.stop
+          @click="close"
+        >
+          <n-icon :component="CloseOutlined" />
+        </n-button>
+      </header>
+
+      <div class="workspace-metrics-panel__body">
+        <section aria-label="翻译缓存统计">
+          <n-text depth="3" class="workspace-metrics-panel__section-title">
+            翻译缓存
+          </n-text>
+          <div v-if="cacheMetrics" class="workspace-metrics-panel__grid">
+            <div class="workspace-metrics-panel__metric">
+              <span>缓存</span>
+              <strong>{{ cacheMetrics.entryCount }} 条</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>占用</span>
+              <strong>
+                {{ (cacheMetrics.totalSize / 1024 / 1024).toFixed(2) }} MiB
+              </strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>命中</span>
+              <strong>{{ cacheMetrics.hit }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>未命中</span>
+              <strong>{{ cacheMetrics.miss }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>并发复用</span>
+              <strong>{{ cacheMetrics.deduplicated }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>请求</span>
+              <strong>{{ cacheMetrics.provider }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>故障</span>
+              <strong>{{ cacheMetrics.fault }}</strong>
+            </div>
+          </div>
+          <n-skeleton v-else text :repeat="2" />
+        </section>
+
+        <section v-if="pipelineMetrics" aria-label="共享池统计">
+          <n-divider />
+          <n-text depth="3" class="workspace-metrics-panel__section-title">
+            共享池
+          </n-text>
+          <div class="workspace-metrics-panel__grid">
+            <div class="workspace-metrics-panel__metric">
+              <span>工作者</span>
+              <strong>{{ pipelineMetrics.workers.length }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>活跃请求</span>
+              <strong>
+                {{ pipelineMetrics.aggregateActive }}/{{
+                  pipelineMetrics.aggregateMaximum
+                }}
+              </strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>未完成</span>
+              <strong>{{ pipelineMetrics.outstanding }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>排队</span>
+              <strong>{{ pipelineMetrics.queued }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>背压等待</span>
+              <strong>{{ pipelineMetrics.waitingProducers }}</strong>
+            </div>
+          </div>
+        </section>
+      </div>
+    </n-card>
+  </section>
+</template>
+
+<style scoped>
+.workspace-metrics-trigger {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  transform: translateY(4px);
+}
+
+.workspace-metrics-trigger :deep(.n-icon) {
+  font-size: 20px;
+}
+
+.workspace-metrics-panel {
+  position: fixed;
+  z-index: 1000;
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100vh - 72px);
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.workspace-metrics-panel--positioned {
+  visibility: visible;
+}
+
+.workspace-metrics-panel__surface {
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 24%);
+}
+
+.workspace-metrics-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 4px 8px 4px 16px;
+  border-bottom: 1px solid var(--n-border-color);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.workspace-metrics-panel__body {
+  max-height: calc(100vh - 116px);
+  overflow: auto;
+  padding: 16px;
+}
+
+.workspace-metrics-panel__section-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.workspace-metrics-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workspace-metrics-panel__metric {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--n-action-color);
+}
+
+.workspace-metrics-panel__metric span {
+  overflow: hidden;
+  color: var(--n-text-color-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-metrics-panel__metric strong {
+  overflow: hidden;
+  color: var(--n-text-color);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-metrics-panel :deep(.n-divider) {
+  margin: 14px 0;
+}
+
+@media (max-width: 639px) {
+  .workspace-metrics-trigger {
+    width: 28px;
+    height: 28px;
+  }
+
+  .workspace-metrics-trigger :deep(.n-icon) {
+    font-size: 18px;
+  }
+
+  .workspace-metrics-panel {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 66px);
+    border-radius: 10px;
+  }
+
+  .workspace-metrics-panel__body {
+    max-height: calc(100vh - 110px);
+    padding: 12px;
+  }
+
+  .workspace-metrics-panel__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-metrics-panel__metric {
+    padding: 8px 10px;
+  }
+}
+</style>

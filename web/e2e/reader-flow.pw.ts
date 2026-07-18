@@ -2251,7 +2251,14 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     await twoRequestsArrived;
     expect(server.activeRequests).toBe(2);
     expect(server.requests).toHaveLength(2);
-    await expect(page.getByText(/共享池 2 个工作者/)).toBeVisible();
+    await page.getByRole('button', { name: '翻译器运行统计' }).click();
+    const metricsPanel = page.getByRole('dialog', {
+      name: '翻译器运行统计',
+    });
+    const workerMetric = metricsPanel
+      .locator('.workspace-metrics-panel__metric')
+      .filter({ hasText: '工作者' });
+    await expect(workerMetric).toContainText('2');
     await expect(
       page.getByRole('alert').filter({ hasText: '正在混用不同模型或接口' }),
     ).toBeVisible();
@@ -2260,8 +2267,9 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     await firstWorker
       .getByRole('button', { name: '停止', exact: true })
       .click();
-    await expect(page.getByText(/共享池 1 个工作者/)).toBeVisible();
+    await expect(workerMetric).toContainText('1');
     await expect(firstWorker.getByText(/已停止 · 活跃 0\/1/)).toBeVisible();
+    await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
     releaseRequests();
 
     await expect
@@ -2294,9 +2302,39 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
       });
     expect(server.requests).toHaveLength(3);
     expect(server.maximumActiveRequests).toBe(2);
+    await page.getByRole('button', { name: '翻译器运行统计' }).click();
+    const completedMetricsPanel = page.getByRole('dialog', {
+      name: '翻译器运行统计',
+    });
     await expect(
-      page.getByText(/缓存 2 条 .*命中 0 .*未命中 0 .*请求 3 .*故障 0/),
-    ).toBeVisible();
+      completedMetricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '缓存' }),
+    ).toContainText('2 条');
+    await expect(
+      completedMetricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '命中' })
+        .first(),
+    ).toContainText('0');
+    await expect(
+      completedMetricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '未命中' }),
+    ).toContainText('0');
+    await expect(
+      completedMetricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ has: page.getByText('请求', { exact: true }) }),
+    ).toContainText('3');
+    await expect(
+      completedMetricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '故障' }),
+    ).toContainText('0');
+    await completedMetricsPanel
+      .getByRole('button', { name: '关闭运行统计' })
+      .click();
 
     const persisted = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -2546,6 +2584,96 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
   }
 });
 
+test('keeps workspace metrics draggable and local to the current page', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/workspace/gpt');
+
+  const trigger = page.getByRole('button', { name: '翻译器运行统计' });
+  const title = page.getByRole('heading', { name: '翻译器', exact: true });
+  const triggerBounds = await trigger.boundingBox();
+  const titleBounds = await title.boundingBox();
+  expect(triggerBounds).not.toBeNull();
+  expect(titleBounds).not.toBeNull();
+  expect(
+    Math.abs(
+      triggerBounds!.y +
+        triggerBounds!.height / 2 -
+        (titleBounds!.y + titleBounds!.height / 2),
+    ),
+  ).toBeLessThanOrEqual(2);
+
+  await trigger.click();
+  const panel = page.getByRole('dialog', { name: '翻译器运行统计' });
+  await expect(panel).toBeVisible();
+  const desktopBounds = await panel.boundingBox();
+  expect(desktopBounds).not.toBeNull();
+  expect(desktopBounds!.width).toBeGreaterThanOrEqual(500);
+  expect(desktopBounds!.width).toBeLessThanOrEqual(520);
+  expect(1280 - desktopBounds!.x - desktopBounds!.width).toBeCloseTo(24, 0);
+  expect(desktopBounds!.y).toBeCloseTo(64, 0);
+
+  await page.mouse.click(600, 700);
+  await expect(panel).toBeVisible();
+
+  const dragHandle = panel.locator('.workspace-metrics-panel__header');
+  const handleBounds = await dragHandle.boundingBox();
+  expect(handleBounds).not.toBeNull();
+  await page.mouse.move(
+    handleBounds!.x + handleBounds!.width / 2,
+    handleBounds!.y + handleBounds!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    handleBounds!.x + handleBounds!.width / 2 - 300,
+    handleBounds!.y + handleBounds!.height / 2 + 120,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+  const draggedBounds = await panel.boundingBox();
+  expect(draggedBounds).not.toBeNull();
+  expect(draggedBounds!.x).toBeCloseTo(desktopBounds!.x - 300, 0);
+  expect(draggedBounds!.y).toBeCloseTo(desktopBounds!.y + 120, 0);
+
+  await trigger.click();
+  await expect(panel).toHaveCount(0);
+  await trigger.click();
+  const rememberedBounds = await panel.boundingBox();
+  expect(rememberedBounds).not.toBeNull();
+  expect(rememberedBounds!.x).toBeCloseTo(draggedBounds!.x, 0);
+  expect(rememberedBounds!.y).toBeCloseTo(draggedBounds!.y, 0);
+  await panel.getByRole('button', { name: '关闭运行统计' }).click();
+  await expect(panel).toHaveCount(0);
+
+  await page.goto('/bookshelf');
+  await page.goto('/workspace/gpt');
+  await page.getByRole('button', { name: '翻译器运行统计' }).click();
+  const resetBounds = await page
+    .getByRole('dialog', { name: '翻译器运行统计' })
+    .boundingBox();
+  expect(resetBounds).not.toBeNull();
+  expect(1280 - resetBounds!.x - resetBounds!.width).toBeCloseTo(24, 0);
+  expect(resetBounds!.y).toBeCloseTo(64, 0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/workspace/sakura');
+  await page.getByRole('button', { name: '翻译器运行统计' }).click();
+  const sakuraPanel = page.getByRole('dialog', { name: '翻译器运行统计' });
+  await expect(sakuraPanel).toBeVisible();
+  const mobileBounds = await sakuraPanel.boundingBox();
+  expect(mobileBounds).not.toBeNull();
+  expect(mobileBounds!.width).toBeCloseTo(366, 0);
+  expect(390 - mobileBounds!.x - mobileBounds!.width).toBeCloseTo(12, 0);
+  expect(mobileBounds!.y).toBeCloseTo(58, 0);
+  await expect(
+    sakuraPanel.getByRole('region', { name: '翻译缓存统计' }),
+  ).toBeVisible();
+  await expect(
+    sakuraPanel.getByRole('region', { name: '共享池统计' }),
+  ).toHaveCount(0);
+});
+
 test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -2637,8 +2765,20 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: '启动全部', exact: true }).click();
-  await expect(page.getByText(/共享池 2 个工作者/)).toBeVisible();
-  await expect(page.getByText(/活跃请求 0\/3/)).toBeVisible();
+  await page.getByRole('button', { name: '翻译器运行统计' }).click();
+  const metricsPanel = page.getByRole('dialog', {
+    name: '翻译器运行统计',
+  });
+  await expect(
+    metricsPanel
+      .locator('.workspace-metrics-panel__metric')
+      .filter({ hasText: '工作者' }),
+  ).toContainText('2');
+  await expect(
+    metricsPanel
+      .locator('.workspace-metrics-panel__metric')
+      .filter({ hasText: '活跃请求' }),
+  ).toContainText('0/3');
   await expect(
     page.getByRole('alert').filter({ hasText: '正在混用不同模型或接口' }),
   ).toBeVisible();
@@ -2649,8 +2789,15 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     ),
   ).toBe(true);
 
+  await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
+  await expect(metricsPanel).toHaveCount(0);
   await page.getByRole('button', { name: '停止全部', exact: true }).click();
-  await expect(page.getByText(/共享池 0 个工作者/)).toBeVisible();
+  await page.getByRole('button', { name: '翻译器运行统计' }).click();
+  await expect(
+    metricsPanel
+      .locator('.workspace-metrics-panel__metric')
+      .filter({ hasText: '工作者' }),
+  ).toContainText('0');
 
   await page.goto('/workspace/sakura');
   await expect(
