@@ -5,7 +5,6 @@ export type ReaderFlow = 'auto' | 'paginated' | 'scrolled';
 
 export interface ReaderBookshelfState {
   bookId: string;
-  listed: boolean;
   pinned: boolean;
   addedAt: number;
   updatedAt: number;

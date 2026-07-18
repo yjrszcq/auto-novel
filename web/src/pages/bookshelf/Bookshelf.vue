@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { LibraryAddOutlined } from '@vicons/material';
 import { useRouter } from 'vue-router';
 
 import {
@@ -14,7 +13,6 @@ import {
 } from './BookshelfService';
 import BookCard from './components/BookCard.vue';
 
-import type { LocalVolumeMetadata } from '@/model/LocalVolume';
 import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { useLocalVolumeStore } from '@/stores';
 import { useRuntimePanel } from '@/util/useRuntimePanel';
@@ -38,14 +36,12 @@ const loading = ref(true);
 const error = ref<string>();
 const filter = ref<BookshelfFilter>('all');
 const sort = ref<BookshelfSort>('recent-read');
-const showLocalVolumes = ref(false);
-const unlistedBookIds = ref<string[]>([]);
-const addingLocalBooks = ref(false);
 const selectionMode = ref(false);
 const selectedBookIds = ref(new Set<string>());
 const batchUpdating = ref(false);
 const downloadingSelectedBooks = ref(false);
 const message = useMessage();
+const localVolumeManager = useLocalVolumeManager();
 const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
 
 const filterOptions: { label: string; value: BookshelfFilter }[] = [
@@ -91,31 +87,10 @@ const reload = async () => {
     const repository = await useLocalVolumeStore();
     const service = createBookshelfService(repository);
     books.value = await service.list();
-    unlistedBookIds.value = (await service.listUnlisted()).map(
-      (entry) => entry.volume.id,
-    );
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '无法加载书架';
   } finally {
     loading.value = false;
-  }
-};
-
-const addSelectedLocalBooks = async (volumes: LocalVolumeMetadata[]) => {
-  const ids = volumes.map((volume) => volume.id);
-  if (ids.length === 0) return;
-  addingLocalBooks.value = true;
-  try {
-    const repository = await useLocalVolumeStore();
-    const service = createBookshelfService(repository);
-    await Promise.all(ids.map((id) => service.setListed(id, true)));
-    message.success(`已将 ${ids.length} 本书加入书架`);
-    showLocalVolumes.value = false;
-    await reload();
-  } catch (reason) {
-    message.error(`加入书架失败：${String(reason)}`);
-  } finally {
-    addingLocalBooks.value = false;
   }
 };
 
@@ -172,33 +147,32 @@ const downloadSelectedBooks = async () => {
   }
 };
 
-const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'remove') => {
+const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'delete') => {
   const ids = [...selectedBookIds.value];
   if (ids.length === 0) return;
   batchUpdating.value = true;
   try {
-    const repository = await useLocalVolumeStore();
-    const service = createBookshelfService(repository);
-    await Promise.all(
-      ids.map((id) =>
-        action === 'remove'
-          ? service.setListed(id, false)
-          : service.setPinned(id, action === 'pin'),
-      ),
-    );
-    message.success(
-      action === 'pin'
-        ? `已置顶 ${ids.length} 本书`
-        : action === 'unpin'
-          ? `已取消置顶 ${ids.length} 本书`
-          : `已将 ${ids.length} 本书移出书架`,
-    );
+    if (action === 'delete') {
+      const { success, failed } = await localVolumeManager.deleteVolumes(ids);
+      message.info(`${success} 本书已删除，${failed} 本删除失败`);
+    } else {
+      const repository = await useLocalVolumeStore();
+      const service = createBookshelfService(repository);
+      await Promise.all(
+        ids.map((id) => service.setPinned(id, action === 'pin')),
+      );
+      message.success(
+        action === 'pin'
+          ? `已置顶 ${ids.length} 本书`
+          : `已取消置顶 ${ids.length} 本书`,
+      );
+    }
     selectionMode.value = false;
     selectedBookIds.value = new Set();
     await reload();
   } catch (reason) {
     message.error(
-      `${action === 'pin' ? '置顶' : action === 'unpin' ? '取消置顶' : '移出书架'}失败：${String(reason)}`,
+      `${action === 'pin' ? '置顶' : action === 'unpin' ? '取消置顶' : '删除书籍'}失败：${String(reason)}`,
     );
   } finally {
     batchUpdating.value = false;
@@ -230,7 +204,7 @@ onMounted(reload);
         >
           {{ selectionMode ? '取消选择' : '选择' }}
         </n-button>
-        <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
+        <local-volume-upload-button @done="reload" />
       </div>
       <bulletin
         v-if="!props.hideNotice && infoPanelHtml"
@@ -279,7 +253,7 @@ onMounted(reload);
         </n-button>
         <n-popconfirm
           :disabled="selectedBookIds.size === 0"
-          @positive-click="updateSelectedBooks('remove')"
+          @positive-click="updateSelectedBooks('delete')"
         >
           <template #trigger>
             <n-button
@@ -288,10 +262,10 @@ onMounted(reload);
               :disabled="selectedBookIds.size === 0"
               :loading="batchUpdating"
             >
-              移出书架
+              删除书籍
             </n-button>
           </template>
-          确定将所选书籍移出书架吗？
+          确定永久删除所选书籍及其阅读数据吗？此操作无法恢复。
         </n-popconfirm>
       </div>
 
@@ -320,11 +294,9 @@ onMounted(reload);
         />
       </div>
 
-      <n-empty v-if="books.length === 0" description="书架中还没有书籍">
+      <n-empty v-if="books.length === 0" description="还没有本地书籍">
         <template #extra>
-          <n-space>
-            <n-button @click="showLocalVolumes = true">从本地书架添加</n-button>
-          </n-space>
+          <local-volume-upload-button @done="reload" />
         </template>
       </n-empty>
 
@@ -348,29 +320,6 @@ onMounted(reload);
           @toggle-selection="toggleBookSelection"
         />
       </section>
-      <local-volume-list
-        v-model:show="showLocalVolumes"
-        :filter="(volume) => unlistedBookIds.includes(volume.id)"
-        :show-menu="false"
-        @volume-add="reload"
-      >
-        <template #selected-action="{ volumes }">
-          <c-button
-            label="加入书架"
-            aria-label="将选中的书加入书架"
-            :icon="LibraryAddOutlined"
-            :disabled="volumes.length === 0"
-            :icon-hidden="addingLocalBooks"
-            @action="addSelectedLocalBooks(volumes)"
-          />
-        </template>
-        <template #volume="volume">
-          <n-flex vertical :size="2">
-            <n-text>{{ volume.id }}</n-text>
-            <n-text depth="3">共 {{ volume.toc.length }} 章</n-text>
-          </n-flex>
-        </template>
-      </local-volume-list>
     </template>
   </main>
 </template>

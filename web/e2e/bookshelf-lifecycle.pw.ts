@@ -130,43 +130,20 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   page,
 }) => {
   test.setTimeout(60_000);
-  await page.goto('/bookshelf');
-  await expect(page.getByRole('heading', { name: '本地书架' })).toBeVisible();
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
   await uploadBooks(page);
-  await expect(page.getByText(alphaFilename, { exact: true })).toBeVisible();
-  await expect(page.getByText(betaFilename, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Alpha Upload' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Beta Upload' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: '阅读', exact: true }),
   ).toHaveCount(0);
-  const localShelfSearch = page.getByPlaceholder('搜索本地小说');
-  await localShelfSearch.fill('Beta');
-  await expect(page.getByText(betaFilename, { exact: true })).toBeVisible();
-  await expect(page.getByText(alphaFilename, { exact: true })).toHaveCount(0);
-  await localShelfSearch.clear();
-
-  const alphaLocalTitle = page.getByRole('button', {
-    name: `打开《${alphaFilename}》`,
-  });
-  await alphaLocalTitle.click();
-  const addToBookshelfDialog = page
-    .getByRole('dialog')
-    .filter({ hasText: '尚未加入书架' });
-  await expect(addToBookshelfDialog).toContainText(alphaFilename);
-  await addToBookshelfDialog
-    .getByRole('button', { name: '加入书架', exact: true })
-    .click();
-  await expect(addToBookshelfDialog).toHaveCount(0);
-  await expect(page.getByText('已加入书架', { exact: true })).toBeVisible();
-  await expect(page).toHaveURL('/bookshelf');
-
-  const existingBookPagePromise = page.waitForEvent('popup');
-  await page.getByRole('button', { name: `打开《${alphaFilename}》` }).click();
-  const existingBookPage = await existingBookPagePromise;
-  await expect(existingBookPage).toHaveURL(
-    new RegExp(`/books/${encodeURIComponent(alphaFilename)}/details$`),
-  );
-  await expect(page).toHaveURL('/bookshelf');
-  await existingBookPage.close();
 
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
@@ -231,14 +208,6 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   ).toBe(true);
   expect(imported.hasFile).toBe(true);
 
-  await page.goto('/');
-  await expect(
-    page.getByRole('heading', { name: 'Alpha Upload' }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name: 'Beta Upload' }),
-  ).toBeVisible();
-
   const search = page.getByPlaceholder('输入书名，搜索书架');
   await search.fill('beta');
   await expect(
@@ -274,6 +243,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     /\.zip$/i,
   );
   await page.getByRole('button', { name: '置顶', exact: true }).click();
+  await expect(page.getByText('已置顶 1 本书', { exact: true })).toBeVisible();
   await page.reload();
   const alphaCard = page
     .locator('.book-card')
@@ -317,8 +287,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .filter({ hasText: 'Alpha Upload' })
     .getByRole('button', { name: '取消选择', exact: true })
     .click();
-  await page.getByRole('button', { name: '移出书架', exact: true }).click();
+  await page.getByRole('button', { name: '删除书籍', exact: true }).click();
   await page.getByRole('button', { name: '确认', exact: true }).click();
+  await expect(page.getByText('1 本书已删除，0 本删除失败')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
     0,
   );
@@ -326,6 +297,17 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
     0,
   );
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: betaFilename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Beta line 1\nBeta line 2'),
+    });
+  await expect(
+    page.getByRole('heading', { name: 'Beta Upload' }),
+  ).toBeVisible();
 
   await page.evaluate(() => {
     const key = 'auto-novel:settings';
@@ -348,32 +330,6 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     localStorage.setItem(key, JSON.stringify(settings));
   });
   await page.reload();
-  await page.getByRole('button', { name: '从本地书架添加' }).click();
-  const localDrawer = page.locator('.n-drawer').filter({ hasText: '本地小说' });
-  await expect(
-    localDrawer.getByRole('button', { name: '添加', exact: true }),
-  ).toBeVisible();
-  await expect(
-    localDrawer.getByRole('button', { name: '更多本地小说操作' }),
-  ).toHaveCount(0);
-  const addSelectedButton = localDrawer.getByRole('button', {
-    name: '将选中的书加入书架',
-    exact: true,
-  });
-  await expect(addSelectedButton).toBeDisabled();
-  await expect(
-    localDrawer.getByRole('button', { name: '下载选中的书', exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    localDrawer.getByRole('button', { name: '加入书架', exact: true }),
-  ).toHaveCount(0);
-  await localDrawer
-    .getByRole('checkbox', { name: `选择 ${betaFilename}` })
-    .click();
-  await expect(
-    localDrawer.getByText('已选择 1 本', { exact: true }),
-  ).toBeVisible();
-  await expect(addSelectedButton).toBeEnabled();
 
   await page.goto('/workspace/gpt');
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
@@ -439,20 +395,6 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await page.keyboard.press('Escape');
 
   await page.goto('/');
-  await page.getByRole('button', { name: '从本地书架添加' }).click();
-  const addDrawer = page.locator('.n-drawer').filter({ hasText: '本地小说' });
-  await expect(
-    addDrawer.getByText(betaFilename, { exact: true }),
-  ).toBeVisible();
-  await addDrawer
-    .getByRole('checkbox', { name: `选择 ${betaFilename}` })
-    .click();
-  await addDrawer
-    .getByRole('button', { name: '将选中的书加入书架', exact: true })
-    .click();
-  await expect(
-    page.getByRole('heading', { name: 'Beta Upload' }),
-  ).toBeVisible();
 
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -523,7 +465,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
 
-  await page.goto('/bookshelf');
+  await page.goto('/');
   const uploadInput = page.locator('input[type="file"]').first();
   await uploadInput.setInputFiles({
     name: alphaFilename,
@@ -550,13 +492,15 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
       contentType: 'image/png',
     }),
   );
-  await page.goto('/bookshelf');
+  await page.goto('/');
   await page.locator('input[type="file"]').first().setInputFiles({
     name: epubFilename,
     mimeType: 'application/epub+zip',
     buffer: sourceEpub,
   });
-  await expect(page.getByText(epubFilename, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '原始 EPUB 标题' }),
+  ).toBeVisible();
 
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -788,7 +732,7 @@ test('permanent deletion removes exactly one complete book graph', async ({
   page,
 }) => {
   test.setTimeout(60_000);
-  await page.goto('/bookshelf');
+  await page.goto('/');
   await page
     .locator('input[type="file"]')
     .first()
@@ -797,7 +741,9 @@ test('permanent deletion removes exactly one complete book graph', async ({
       mimeType: 'text/plain',
       buffer: Buffer.from('delete me'),
     });
-  await expect(page.getByText(betaFilename, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Beta Upload' }),
+  ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('volumes', 5);
@@ -831,7 +777,6 @@ test('permanent deletion removes exactly one complete book graph', async ({
     for (const target of [bookId, 'other-book']) {
       transaction.objectStore('reader-bookshelf').put({
         bookId: target,
-        listed: true,
         pinned: false,
         addedAt: 1,
         updatedAt: 1,
@@ -891,27 +836,22 @@ test('permanent deletion removes exactly one complete book graph', async ({
     database.close();
   }, betaFilename);
 
+  await page.getByRole('button', { name: '查看《Beta Upload》详情' }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/books/${encodeURIComponent(betaFilename)}/details$`),
+  );
   const [rawDownload] = await Promise.all([
     page.waitForEvent('download'),
-    page
-      .locator('.n-list-item')
-      .filter({ hasText: betaFilename })
-      .getByRole('button', { name: '原文', exact: true })
-      .click(),
+    page.getByRole('button', { name: '下载原文', exact: true }).click(),
   ]);
   expect((await readDownload(rawDownload)).toString()).toBe('delete me');
 
-  const targetItem = page
-    .locator('.n-list-item')
-    .filter({ hasText: betaFilename });
-  await targetItem
-    .getByRole('button', {
-      name: `真的要删除《${betaFilename}》吗？`,
-      exact: true,
-    })
-    .click();
+  await page.getByRole('button', { name: '删除书籍', exact: true }).click();
   await page.getByRole('button', { name: '确认', exact: true }).click();
-  await expect(page.getByText(betaFilename, { exact: true })).toHaveCount(0);
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
+    0,
+  );
 
   const remaining = await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {

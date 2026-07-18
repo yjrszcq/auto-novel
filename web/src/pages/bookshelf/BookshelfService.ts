@@ -23,7 +23,6 @@ const createInitialState = (
   updatedAt: number,
 ): ReaderBookshelfState => ({
   bookId: volume.id,
-  listed: true,
   pinned: false,
   addedAt: volume.createAt,
   updatedAt,
@@ -66,34 +65,13 @@ export const createBookshelfService = (
   };
 
   const list = async () => {
-    const entries = (await ensureIndex()).filter((entry) => entry.state.listed);
+    const entries = await ensureIndex();
     return Promise.all(
       entries.map(async (entry) => ({
         ...entry,
         progress: await repository.getReaderProgress(entry.volume.id),
       })),
     );
-  };
-
-  const listUnlisted = async () =>
-    (await ensureIndex()).filter((entry) => !entry.state.listed);
-
-  const setListed = async (bookId: string, listed: boolean) => {
-    const volume = await ensureBook(bookId);
-    const current = await repository.getReaderBookshelf(bookId);
-    const updatedAt = now();
-    const state: ReaderBookshelfState = {
-      ...(current ?? createInitialState(volume, updatedAt)),
-      bookId,
-      listed,
-      addedAt:
-        listed && current?.listed === false
-          ? updatedAt
-          : current?.addedAt ?? volume.createAt,
-      updatedAt,
-    };
-    await repository.putReaderBookshelf(state);
-    return state;
   };
 
   const setPinned = async (bookId: string, pinned: boolean) => {
@@ -113,8 +91,6 @@ export const createBookshelfService = (
   return {
     ensureIndex,
     list,
-    listUnlisted,
-    setListed,
     setPinned,
   };
 };

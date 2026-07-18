@@ -40,7 +40,6 @@ const entry = (
   },
   state: {
     bookId: id,
-    listed: true,
     pinned,
     addedAt,
     updatedAt: addedAt,

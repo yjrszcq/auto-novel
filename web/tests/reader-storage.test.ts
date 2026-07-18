@@ -122,7 +122,6 @@ describe('reader storage', () => {
 
     await reopened.putReaderBookshelf({
       bookId: 'book',
-      listed: true,
       pinned: false,
       addedAt: 1,
       updatedAt: 1,

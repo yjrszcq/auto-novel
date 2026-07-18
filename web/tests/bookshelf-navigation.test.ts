@@ -11,8 +11,9 @@ const getPaths = (routes: readonly RouteRecordRaw[]): string[] =>
   ]);
 
 describe('bookshelf navigation', () => {
-  it('registers the bookshelf route', () => {
-    expect(getPaths(applicationRoutes)).toContain('/bookshelf');
+  it('uses the home route as the only bookshelf page', () => {
+    expect(getPaths(applicationRoutes)).toContain('/');
+    expect(getPaths(applicationRoutes)).not.toContain('/bookshelf');
   });
 
   it('registers only the current reader route', () => {
@@ -24,8 +25,7 @@ describe('bookshelf navigation', () => {
     );
   });
 
-  it('keeps the bookshelf and workspace sections highlighted', () => {
-    expect(getMainMenuKey('/bookshelf')).toBe('/bookshelf');
+  it('keeps the home and workspace sections highlighted', () => {
     expect(getMainMenuKey('/workspace/gpt/jobs')).toBe('/workspace/gpt');
     expect(getMainMenuKey('/')).toBe('/');
   });

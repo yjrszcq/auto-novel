@@ -48,6 +48,7 @@ const progress = shallowRef<ReaderProgress>();
 const readingStats = shallowRef<ReaderReadingStats>();
 const bookmarkCount = ref(0);
 const preferredMode = ref<'global' | SelectableReaderMode>('global');
+const deletingBook = ref(false);
 const repositoryPromise = useLocalVolumeStore();
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
@@ -156,7 +157,7 @@ const load = async () => {
   }
 };
 
-const returnToShelf = () => void router.push('/bookshelf');
+const returnHome = () => void router.push('/');
 const editBook = () =>
   void router.push('/books/' + encodeURIComponent(bookId.value) + '/edit');
 
@@ -288,16 +289,23 @@ const queueBook = (type: LocalTranslator) => {
 const queueGpt = () => queueBook('gpt');
 const queueSakura = () => queueBook('sakura');
 
-const toggleListed = async () => {
-  if (entry.value === undefined) {
-    return;
+const deleteBook = async () => {
+  deletingBook.value = true;
+  try {
+    const { success, failed } = await localVolumeManager.deleteVolumes([
+      bookId.value,
+    ]);
+    if (success === 1) {
+      message.success('书籍已删除');
+      await router.push('/');
+      return;
+    }
+    message.error(`删除书籍失败（${failed} 本失败）`);
+  } catch (reason) {
+    message.error(`删除书籍失败：${String(reason)}`);
+  } finally {
+    deletingBook.value = false;
   }
-  const repository = await repositoryPromise;
-  await createBookshelfService(repository).setListed(
-    bookId.value,
-    !entry.value.state.listed,
-  );
-  await load();
 };
 
 const togglePinned = async () => {
@@ -401,9 +409,14 @@ onMounted(() => void load());
               <n-button @click="togglePinned">
                 {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
               </n-button>
-              <n-button type="warning" @click="toggleListed">
-                {{ entry.state.listed ? '移出书架' : '加入书架' }}
-              </n-button>
+              <n-popconfirm @positive-click="deleteBook">
+                <template #trigger>
+                  <n-button type="error" :loading="deletingBook">
+                    删除书籍
+                  </n-button>
+                </template>
+                确定永久删除这本书及其阅读数据吗？此操作无法恢复。
+              </n-popconfirm>
             </n-flex>
           </div>
         </div>
@@ -417,11 +430,8 @@ onMounted(() => void load());
             </n-button>
             <n-button @click="showCatalog = true">打开目录</n-button>
           </n-flex>
-          <n-button
-            class="book-details__return-to-shelf"
-            @click="returnToShelf"
-          >
-            返回书架
+          <n-button class="book-details__return-to-shelf" @click="returnHome">
+            返回首页
           </n-button>
         </div>
 

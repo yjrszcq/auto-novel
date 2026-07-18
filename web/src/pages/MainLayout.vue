@@ -2,7 +2,6 @@
 import {
   DarkModeOutlined,
   HomeOutlined,
-  MenuBookOutlined,
   MenuOutlined,
   SettingsOutlined,
   WbSunnyOutlined,
@@ -82,11 +81,6 @@ const menuOptions = computed<MenuOption[]>(() => [
         key: '/workspace/interactive',
       },
     ],
-  },
-  {
-    label: renderLabel('书架', '/bookshelf'),
-    icon: renderIcon(MenuBookOutlined),
-    key: '/bookshelf',
   },
   {
     label: renderLabel('设置', '/setting'),

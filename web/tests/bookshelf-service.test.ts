@@ -45,11 +45,10 @@ const createRepository = (states: ReaderBookshelfState[]) => {
 };
 
 describe('bookshelf state service', () => {
-  it('indexes existing local volumes once without restoring books the user removed', async () => {
+  it('indexes and lists every local volume', async () => {
     const { repository, records, writes } = createRepository([
       {
         bookId: 'book-b.epub',
-        listed: false,
         pinned: false,
         addedAt: 21,
         updatedAt: 22,
@@ -62,13 +61,19 @@ describe('bookshelf state service', () => {
         volume: { id: 'book-a.epub' },
         state: {
           bookId: 'book-a.epub',
-          listed: true,
           addedAt: 10,
           updatedAt: 100,
         },
       },
+      {
+        volume: { id: 'book-b.epub' },
+        state: {
+          bookId: 'book-b.epub',
+          pinned: false,
+        },
+      },
     ]);
-    expect(records.get('book-b.epub')?.listed).toBe(false);
+    expect(records.get('book-b.epub')?.pinned).toBe(false);
     expect(writes).toHaveLength(1);
 
     await service.list();
@@ -76,29 +81,23 @@ describe('bookshelf state service', () => {
     expect(writes).toHaveLength(1);
   });
 
-  it('removes a book by changing only its bookshelf record and can add it again', async () => {
+  it('persists pinning without changing the local book collection', async () => {
     const { repository, records } = createRepository([]);
     let timestamp = 100;
     const service = createBookshelfService(repository, () => timestamp++);
 
     await service.ensureIndex();
-    await service.setListed('book-a.epub', false);
+    await service.setPinned('book-a.epub', true);
     expect(records.get('book-a.epub')).toMatchObject({
-      listed: false,
+      pinned: true,
       addedAt: 10,
     });
     expect(volumes.find((volume) => volume.id === 'book-a.epub')).toBeDefined();
-    await expect(service.listUnlisted()).resolves.toMatchObject([
-      {
-        volume: { id: 'book-a.epub' },
-        state: { listed: false },
-      },
-    ]);
 
-    await service.setListed('book-a.epub', true);
+    await service.setPinned('book-a.epub', false);
     expect(records.get('book-a.epub')).toMatchObject({
-      listed: true,
-      addedAt: 103,
+      pinned: false,
+      addedAt: 10,
     });
   });
 });

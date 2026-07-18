@@ -221,7 +221,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
     page.getByRole('button', { name: '开始阅读', exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: '移出书架', exact: true }),
+    page.getByRole('button', { name: '删除书籍', exact: true }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
@@ -335,7 +335,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page.getByRole('button', { name: '排队Sakura' })).toBeVisible();
   await expect(page.locator('.book-details__hero-shelf-actions')).toBeVisible();
   await expect(page.getByRole('button', { name: '置顶书籍' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '移出书架' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '删除书籍' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '返回首页', exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: '编辑书籍展示信息', exact: true })
     .click();
@@ -394,51 +397,8 @@ test('opens a local bookshelf book safely through the current reader route', asy
     .toBe('/books/reader-flow.txt/read/1');
 
   await page.goto('/books/reader-flow.txt/details');
-  await page.getByRole('button', { name: '移出书架', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: '加入书架', exact: true }),
-  ).toBeVisible();
-  await page.goto('/');
-  await expect(
-    page.getByText('书架中还没有书籍', { exact: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: '从本地书架添加' }).first().click();
-  const bookshelfLocalDrawer = page.getByRole('dialog').filter({
-    has: page.getByRole('heading', { name: /^本地小说/ }),
-  });
-  await expect(bookshelfLocalDrawer).toBeVisible();
-  await expect(
-    bookshelfLocalDrawer.getByRole('button', { name: '添加', exact: true }),
-  ).toBeVisible();
-  await expect(
-    bookshelfLocalDrawer.getByRole('button', {
-      name: '将选中的书加入书架',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    bookshelfLocalDrawer.getByRole('button', {
-      name: '下载选中的书',
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    bookshelfLocalDrawer.getByRole('button', {
-      name: '加入书架',
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    bookshelfLocalDrawer.getByRole('button', {
-      name: '更多本地小说操作',
-    }),
-  ).toHaveCount(0);
-  await bookshelfLocalDrawer
-    .getByRole('checkbox', { name: `选择 ${bookId}` })
-    .click();
-  await bookshelfLocalDrawer
-    .getByRole('button', { name: '将选中的书加入书架', exact: true })
-    .click();
+  await page.getByRole('button', { name: '返回首页', exact: true }).click();
+  await expect(page).toHaveURL('/');
   await expect(
     page.getByRole('heading', { name: 'reader-flow' }),
   ).toBeVisible();
@@ -1191,7 +1151,6 @@ test('persists keyboard pagination and every reading mode across responsive layo
     });
     transaction.objectStore('reader-bookshelf').put({
       bookId,
-      listed: true,
       pinned: false,
       addedAt: 1,
       updatedAt: 1,
@@ -2690,7 +2649,7 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   await panel.getByRole('button', { name: '关闭运行统计' }).click();
   await expect(panel).toHaveCount(0);
 
-  await page.goto('/bookshelf');
+  await page.goto('/');
   await page.goto('/workspace/gpt');
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   const resetBounds = await page

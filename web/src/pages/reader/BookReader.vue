@@ -786,27 +786,25 @@ const resolveMode = async (
     repositoryPromise,
     cachedAdapterPromise,
   ]);
-  const [preference, bookshelfState, capabilities] = await Promise.all([
+  const [preference, capabilities] = await Promise.all([
     repository.getReaderBookPreference(loaded.book.id),
-    repository.getReaderBookshelf(loaded.book.id),
     adapter.getCapabilities(loaded.book.id),
   ]);
-  const activePreference = bookshelfState?.listed ? preference : undefined;
   if (!loaded.book.requiresWholeChapterTranslation) {
     availableModes.value = ['original'];
     readingMode.value = 'original';
-    bookStyle.value = activePreference?.style;
+    bookStyle.value = preference?.style;
     showModePrompt.value = false;
     return;
   }
   availableModes.value = getAvailableReaderModes(capabilities);
   readingMode.value = resolveReaderMode({
     temporaryMode,
-    preference: activePreference,
+    preference,
     settings: normalizeReaderSettings(await repository.getReaderSettings()),
     capabilities,
   });
-  bookStyle.value = activePreference?.style;
+  bookStyle.value = preference?.style;
   showModePrompt.value = false;
 };
 
@@ -1264,7 +1262,7 @@ const navigate = (chapterId: string, edge?: 'start' | 'end') => {
   );
 };
 
-const backToBookshelf = () => void router.push('/bookshelf');
+const backHome = () => void router.push('/');
 const openDetails = () =>
   void router.push('/books/' + encodeURIComponent(bookId.value) + '/details');
 const backToWorkspace = () => void router.push('/workspace/toolbox');
@@ -1560,7 +1558,7 @@ onBeforeUnmount(() => {
       <template #footer>
         <n-space justify="center">
           <n-button type="primary" @click="load">重试</n-button>
-          <n-button @click="backToBookshelf">返回书架</n-button>
+          <n-button @click="backHome">返回首页</n-button>
         </n-space>
       </template>
     </n-result>

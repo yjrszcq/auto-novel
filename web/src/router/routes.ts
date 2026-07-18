@@ -50,12 +50,6 @@ export const applicationRoutes: RouteRecordRaw[] = [
         ],
       },
       {
-        path: '/bookshelf',
-        meta: { title: '书架' },
-        component: () => import('../pages/home/Home.vue'),
-        props: { localShelfOnly: true },
-      },
-      {
         path: '/books/:bookId/details',
         meta: { title: '书籍详情' },
         component: () => import('../pages/bookshelf/BookDetails.vue'),
