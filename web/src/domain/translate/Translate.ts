@@ -35,7 +35,7 @@ export const translate = async (
     );
   } catch (e: unknown) {
     taskCallback.log(`发生错误，无法创建翻译器：${e}`);
-    return;
+    return 'setup-error' as const;
   }
 
   return translateLocal(

@@ -94,27 +94,34 @@ const processTasks = async () => {
       job.resumeTask ?? job.task,
     );
 
-    const state = await translateTask.value!.startTask(
-      desc,
-      params,
-      translatorConfig.value,
-      {
-        onProgressUpdated: (progress) => {
-          job.resumeTask =
-            progress.remainingChapterIds.length === 0
-              ? undefined
-              : TranslateTaskDescriptor.local(desc.volumeId, {
-                  ...params,
-                  chapterIds: progress.remainingChapterIds,
-                });
-          emit('update:progress', job.task, {
-            state: 'processed',
-            ...progress,
-          });
+    let state: 'fail' | 'abort' | 'complete' | 'uncomplete';
+    try {
+      state = await translateTask.value!.startTask(
+        desc,
+        params,
+        translatorConfig.value,
+        {
+          onProgressUpdated: (progress) => {
+            job.resumeTask =
+              progress.remainingChapterIds.length === 0
+                ? undefined
+                : TranslateTaskDescriptor.local(desc.volumeId, {
+                    ...params,
+                    chapterIds: progress.remainingChapterIds,
+                  });
+            emit('update:progress', job.task, {
+              state: 'processed',
+              ...progress,
+            });
+          },
         },
-      },
-      signal,
-    );
+        signal,
+      );
+    } catch (error) {
+      message.error(`任务执行异常：${error}`);
+      emit('update:progress', job.task, { state: 'finish', abort: true });
+      break;
+    }
     emit('update:progress', job.task, {
       state: 'finish',
       abort: state === 'abort',

@@ -227,59 +227,71 @@ const startTask = async (
     });
   };
 
-  await requestKeepAlive();
+  try {
+    await requestKeepAlive();
+  } catch (error) {
+    cardRef.value!.pushLog({ message: `无法保持设备唤醒：${error}` });
+  }
   const concurrency = Math.max(1, props.concurrency ?? 1);
 
-  const state = await translate(
-    desc,
-    params,
-    {
-      onStart: (total, chapterIds) => {
-        chapterTotal.value = total;
-        remainingChapterIds = new Set(chapterIds);
-        onProgressUpdated();
-      },
-      onChapterSuccess: ({ chapterId, jp, zh }) => {
-        if (jp !== undefined) emit('update:jp', jp);
-        if (zh !== undefined) {
-          if (translatorDesc.id === 'baidu') {
-            emit('update:baidu', zh);
-          } else if (translatorDesc.id === 'youdao') {
-            emit('update:youdao', zh);
-          } else if (translatorDesc.id === 'gpt') {
-            emit('update:gpt', zh);
-          } else {
-            emit('update:sakura', zh);
+  let state: Awaited<ReturnType<typeof translate>> | 'unexpected-error';
+  try {
+    state = await translate(
+      desc,
+      params,
+      {
+        onStart: (total, chapterIds) => {
+          chapterTotal.value = total;
+          remainingChapterIds = new Set(chapterIds);
+          onProgressUpdated();
+        },
+        onChapterSuccess: ({ chapterId, jp, zh }) => {
+          if (jp !== undefined) emit('update:jp', jp);
+          if (zh !== undefined) {
+            if (translatorDesc.id === 'baidu') {
+              emit('update:baidu', zh);
+            } else if (translatorDesc.id === 'youdao') {
+              emit('update:youdao', zh);
+            } else if (translatorDesc.id === 'gpt') {
+              emit('update:gpt', zh);
+            } else {
+              emit('update:sakura', zh);
+            }
           }
-        }
-        remainingChapterIds.delete(chapterId);
-        chapterFinished.value += 1;
-        onProgressUpdated();
+          remainingChapterIds.delete(chapterId);
+          chapterFinished.value += 1;
+          onProgressUpdated();
+        },
+        onChapterFailure: () => {
+          chapterError.value += 1;
+          onProgressUpdated();
+        },
+        log: (message: string, detail?: string[]) => {
+          cardRef.value!.pushLog({ message, detail });
+        },
       },
-      onChapterFailure: () => {
-        chapterError.value += 1;
-        onProgressUpdated();
+      translatorDesc,
+      signal,
+      {
+        concurrency,
+        onSegmentProgress: handleSegmentProgress,
       },
-      log: (message: string, detail?: string[]) => {
-        cardRef.value!.pushLog({ message, detail });
-      },
-    },
-    translatorDesc,
-    signal,
-    {
-      concurrency,
-      onSegmentProgress: handleSegmentProgress,
-    },
-  );
-
-  onProgressUpdated();
-
-  cardRef.value!.pushLog({ message: '\n结束' });
-  running.value = false;
-  releaseKeepAlive();
+    );
+  } catch (error) {
+    state = 'unexpected-error';
+    cardRef.value!.pushLog({ message: `发生未预期错误：${error}` });
+  } finally {
+    onProgressUpdated();
+    cardRef.value!.pushLog({ message: '\n结束' });
+    running.value = false;
+    releaseKeepAlive();
+  }
 
   if (state === 'abort') {
     return 'abort';
+  }
+  if (state === 'setup-error' || state === 'unexpected-error') {
+    return 'uncomplete';
   }
   const processed = chapterFinished.value + chapterError.value;
   const total = chapterTotal.value ?? processed;
