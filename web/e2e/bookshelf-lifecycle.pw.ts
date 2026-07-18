@@ -466,6 +466,19 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     exact: true,
   });
   await expect(filterButton).toHaveAttribute('aria-pressed', 'false');
+  const filterTransitionDurations = await page
+    .locator('.bookshelf-toolbar__filter')
+    .evaluate((button) =>
+      [
+        button,
+        ...button.querySelectorAll(
+          '.n-button__border, .n-button__state-border',
+        ),
+      ].map((element) => getComputedStyle(element).transitionDuration),
+    );
+  expect(filterTransitionDurations.every((duration) => duration === '0s')).toBe(
+    true,
+  );
   await filterButton.click();
   const filterPanel = page.locator('.bookshelf-filter-panel');
   await expect(filterPanel).toBeVisible();
