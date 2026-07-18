@@ -2,6 +2,10 @@
 import type { FormInst, FormItemRule, FormRules } from 'naive-ui';
 
 import type { GptWorker } from '@/model/Translator';
+import {
+  normalizeTranslationConcurrency,
+  translationConcurrencyBounds,
+} from '@/model/Translator';
 import { useGptWorkspaceStore } from '@/stores';
 
 const props = defineProps<{
@@ -94,8 +98,10 @@ const formRules: FormRules = {
   concurrency: [
     {
       validator: (rule: FormItemRule, value: number) =>
-        Number.isFinite(value) && value >= 1,
-      message: '并发量至少为1',
+        Number.isFinite(value) &&
+        value >= translationConcurrencyBounds.minimum &&
+        value <= translationConcurrencyBounds.maximum,
+      message: '并发量必须在 1–16 之间',
       trigger: 'input',
     },
   ],
@@ -116,7 +122,7 @@ const submit = async () => {
     model: model.trim(),
     endpoint: endpoint.trim(),
     key: key.trim(),
-    concurrency: Math.max(1, Number(concurrency) || 1),
+    concurrency: normalizeTranslationConcurrency(concurrency),
   };
 
   if (props.worker === undefined) {
@@ -183,9 +189,14 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
         <n-input-number
           v-model:value="formValue.concurrency"
           :show-button="false"
-          :min="1"
+          :min="translationConcurrencyBounds.minimum"
+          :max="translationConcurrencyBounds.maximum"
         />
       </n-form-item-row>
+
+      <n-text depth="3" style="display: block; font-size: 12px">
+        并发量是该翻译器的全局请求上限；遇到限流时会自动降低实际吞吐并退避重试。
+      </n-text>
 
       <n-text depth="3" style="font-size: 12px">
         # 链接例子：https://api.deepseek.com

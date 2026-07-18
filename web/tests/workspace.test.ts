@@ -13,9 +13,24 @@ vi.hoisted(() => {
   );
 });
 
-import { TranslateTaskDescriptor } from '../src/model/Translator';
+import {
+  normalizeSakuraContextLength,
+  normalizeSakuraSegmentLength,
+  normalizeTranslationConcurrency,
+  TranslateTaskDescriptor,
+} from '../src/model/Translator';
 
 describe('workspace task descriptors', () => {
+  it('normalizes translation settings to documented safe bounds', () => {
+    expect(normalizeTranslationConcurrency(Number.POSITIVE_INFINITY)).toBe(1);
+    expect(normalizeTranslationConcurrency(0)).toBe(1);
+    expect(normalizeTranslationConcurrency(99)).toBe(16);
+    expect(normalizeSakuraSegmentLength(20)).toBe(100);
+    expect(normalizeSakuraSegmentLength(20_000)).toBe(8_000);
+    expect(normalizeSakuraContextLength(-1)).toBe(0);
+    expect(normalizeSakuraContextLength(20_000)).toBe(8_000);
+  });
+
   it('round-trips the current local task format', () => {
     const task = TranslateTaskDescriptor.local('book/a', {
       level: 'all',

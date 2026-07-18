@@ -5,6 +5,7 @@ import type {
   TranslateTaskDesc,
   TranslateTaskParams,
 } from '@/model/Translator';
+import { normalizeTranslationConcurrency } from '@/model/Translator';
 import { releaseKeepAlive, requestKeepAlive } from '@/util';
 
 import CTaskCard from './CTaskCard.vue';
@@ -232,7 +233,7 @@ const startTask = async (
   } catch (error) {
     cardRef.value!.pushLog({ message: `无法保持设备唤醒：${error}` });
   }
-  const concurrency = Math.max(1, props.concurrency ?? 1);
+  const concurrency = normalizeTranslationConcurrency(props.concurrency);
 
   let state: Awaited<ReturnType<typeof translate>> | 'unexpected-error';
   try {

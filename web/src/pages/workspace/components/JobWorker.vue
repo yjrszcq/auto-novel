@@ -13,7 +13,10 @@ import {
 import type { TranslatorConfig } from '@/domain/translate';
 import { Translator } from '@/domain/translate';
 import type { GptWorker, SakuraWorker, TranslateJob } from '@/model/Translator';
-import { TranslateTaskDescriptor } from '@/model/Translator';
+import {
+  normalizeTranslationConcurrency,
+  TranslateTaskDescriptor,
+} from '@/model/Translator';
 import { useWorkspaceStore } from '@/stores';
 
 const props = defineProps<{
@@ -71,7 +74,9 @@ const endpointPrefix = computed(() => {
 });
 
 const enableAutoMode = ref(true);
-const workerConcurrency = computed(() => props.worker.concurrency);
+const workerConcurrency = computed(() =>
+  normalizeTranslationConcurrency(props.worker.concurrency),
+);
 
 const translateTask = useTemplateRef('translateTask');
 const currentJob = ref<TranslateJob>();

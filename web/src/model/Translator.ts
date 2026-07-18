@@ -1,5 +1,28 @@
 export type TranslatorId = 'sakura' | 'baidu' | 'youdao' | 'gpt';
 
+export const translationConcurrencyBounds = { minimum: 1, maximum: 16 };
+export const sakuraSegmentLengthBounds = { minimum: 100, maximum: 8_000 };
+export const sakuraContextLengthBounds = { minimum: 0, maximum: 8_000 };
+
+const normalizeBoundedInteger = (
+  value: number | undefined,
+  fallback: number,
+  { minimum, maximum }: { minimum: number; maximum: number },
+) =>
+  Math.min(
+    maximum,
+    Math.max(minimum, Number.isFinite(value) ? Math.floor(value!) : fallback),
+  );
+
+export const normalizeTranslationConcurrency = (value?: number) =>
+  normalizeBoundedInteger(value, 1, translationConcurrencyBounds);
+
+export const normalizeSakuraSegmentLength = (value?: number) =>
+  normalizeBoundedInteger(value, 500, sakuraSegmentLengthBounds);
+
+export const normalizeSakuraContextLength = (value?: number) =>
+  normalizeBoundedInteger(value, 500, sakuraContextLengthBounds);
+
 export interface GptWorker {
   id: string;
   endpoint: string;

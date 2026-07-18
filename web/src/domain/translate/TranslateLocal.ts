@@ -8,6 +8,7 @@ import type {
   TranslateTaskCallback,
   TranslateTaskParams,
 } from '@/model/Translator';
+import { normalizeTranslationConcurrency } from '@/model/Translator';
 import { useLocalVolumeStore } from '@/stores';
 import { createConcurrencyLimiter, runWithConcurrency } from './Concurrency';
 import type { SegmentProgressInfo, Translator } from './Translator';
@@ -82,7 +83,7 @@ export const translateLocal = async (
   }
 
   const forceSeg = level === 'all';
-  const concurrency = Math.max(1, options?.concurrency ?? 1);
+  const concurrency = normalizeTranslationConcurrency(options?.concurrency);
   const requestLimiter = createConcurrencyLimiter(concurrency);
 
   const translateChapter = async (

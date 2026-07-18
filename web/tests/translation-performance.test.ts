@@ -37,7 +37,7 @@ const numberedAnswer = (lineCount: number, prefix = '译文') =>
 const promptLineCount = (prompt: string) =>
   prompt.split('\n').filter((line) => /^#\d+:/.test(line)).length;
 
-describe('translation optimization baselines', () => {
+describe('translation performance contracts', () => {
   it('records current length segmentation balance and oversized-line work', () => {
     const lines = [
       '甲'.repeat(6),
@@ -104,8 +104,8 @@ describe('translation optimization baselines', () => {
     const translator = await Translator.create({
       id: 'gpt',
       endpoint: server.endpoint,
-      key: 'retry-baseline-key',
-      model: 'retry-baseline-model',
+      key: 'retry-performance-key',
+      model: 'retry-performance-model',
     });
 
     await expect(
@@ -175,8 +175,8 @@ describe('translation optimization baselines', () => {
       {
         id: 'gpt',
         endpoint: server.endpoint,
-        key: 'cache-baseline-key',
-        model: 'cache-baseline-model',
+        key: 'cache-performance-key',
+        model: 'cache-performance-model',
       },
       true,
     );

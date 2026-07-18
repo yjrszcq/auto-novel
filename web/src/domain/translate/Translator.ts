@@ -1,5 +1,6 @@
 import type { Glossary } from '@/model/Glossary';
 import type { TranslatorId } from '@/model/Translator';
+import { normalizeTranslationConcurrency } from '@/model/Translator';
 
 import { BaiduTranslator } from './TranslatorBaidu';
 import { OpenAiTranslator } from './TranslatorOpenAi';
@@ -103,7 +104,7 @@ export class Translator {
         let sequentialContextLength = 0;
         const concurrency = usesSequentialContext
           ? 1
-          : Math.max(1, options?.concurrency ?? 1);
+          : normalizeTranslationConcurrency(options?.concurrency);
 
         options?.onSegmentProgress?.({
           chapter: options?.chapter,
@@ -237,10 +238,9 @@ export class Translator {
             return cachedSegOutput;
           }
         }
-      } catch (e) {
+      } catch {
         this.segCache.record?.('fault');
-        console.error('缓存读取失败');
-        console.error(e);
+        log('缓存读取失败，已继续使用在线翻译');
       }
     }
 
@@ -288,10 +288,9 @@ export class Translator {
     if (this.segCache && cacheKey !== undefined) {
       try {
         await this.segCache.save(cacheKey, segOutput);
-      } catch (e) {
+      } catch {
         this.segCache.record?.('fault');
-        console.error('缓存保存失败');
-        console.error(e);
+        log('缓存保存失败，在线译文仍已保留');
       }
     }
 

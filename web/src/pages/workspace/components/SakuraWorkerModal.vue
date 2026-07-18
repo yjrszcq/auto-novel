@@ -2,6 +2,14 @@
 import type { FormInst, FormItemRule, FormRules } from 'naive-ui';
 
 import type { SakuraWorker } from '@/model/Translator';
+import {
+  normalizeSakuraContextLength,
+  normalizeSakuraSegmentLength,
+  normalizeTranslationConcurrency,
+  sakuraContextLengthBounds,
+  sakuraSegmentLengthBounds,
+  translationConcurrencyBounds,
+} from '@/model/Translator';
 import { useSakuraWorkspaceStore } from '@/stores';
 
 const props = defineProps<{
@@ -67,11 +75,33 @@ const formRules: FormRules = {
       trigger: 'input',
     },
   ],
+  segLength: [
+    {
+      validator: (rule: FormItemRule, value: number) =>
+        Number.isFinite(value) &&
+        value >= sakuraSegmentLengthBounds.minimum &&
+        value <= sakuraSegmentLengthBounds.maximum,
+      message: '分段长度必须在 100–8000 之间',
+      trigger: 'input',
+    },
+  ],
+  prevSegLength: [
+    {
+      validator: (rule: FormItemRule, value: number) =>
+        Number.isFinite(value) &&
+        value >= sakuraContextLengthBounds.minimum &&
+        value <= sakuraContextLengthBounds.maximum,
+      message: '前文长度必须在 0–8000 之间',
+      trigger: 'input',
+    },
+  ],
   concurrency: [
     {
       validator: (rule: FormItemRule, value: number) =>
-        Number.isFinite(value) && value >= 1,
-      message: '并发量至少为1',
+        Number.isFinite(value) &&
+        value >= translationConcurrencyBounds.minimum &&
+        value <= translationConcurrencyBounds.maximum,
+      message: '并发量必须在 1–16 之间',
       trigger: 'input',
     },
   ],
@@ -89,7 +119,9 @@ const submit = async () => {
   const worker = { ...formValue.value };
   worker.id = worker.id.trim();
   worker.endpoint = worker.endpoint.trim();
-  worker.concurrency = Math.max(1, Number(worker.concurrency) || 1);
+  worker.segLength = normalizeSakuraSegmentLength(worker.segLength);
+  worker.prevSegLength = normalizeSakuraContextLength(worker.prevSegLength);
+  worker.concurrency = normalizeTranslationConcurrency(worker.concurrency);
 
   if (props.worker === undefined) {
     workspace.addWorker(worker);
@@ -139,7 +171,8 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
         <n-input-number
           v-model:value="formValue.segLength"
           :show-button="false"
-          :min="100"
+          :min="sakuraSegmentLengthBounds.minimum"
+          :max="sakuraSegmentLengthBounds.maximum"
         />
       </n-form-item-row>
 
@@ -147,7 +180,8 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
         <n-input-number
           v-model:value="formValue.prevSegLength"
           :show-button="false"
-          :min="0"
+          :min="sakuraContextLengthBounds.minimum"
+          :max="sakuraContextLengthBounds.maximum"
         />
       </n-form-item-row>
 
@@ -155,9 +189,15 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
         <n-input-number
           v-model:value="formValue.concurrency"
           :show-button="false"
-          :min="1"
+          :min="translationConcurrencyBounds.minimum"
+          :max="translationConcurrencyBounds.maximum"
         />
       </n-form-item-row>
+
+      <n-text depth="3" style="display: block; font-size: 12px">
+        分段和前文按加权字符预算计算；Sakura
+        段内保持顺序，并发量仅控制章节间的全局请求上限。
+      </n-text>
 
       <n-text depth="3" style="font-size: 12px">
         # 链接例子：http://127.0.0.1:8080

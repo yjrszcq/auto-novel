@@ -1,5 +1,9 @@
 import { createOpenAiApi } from '@/api';
 import type { Glossary } from '@/model/Glossary';
+import {
+  normalizeSakuraContextLength,
+  normalizeSakuraSegmentLength,
+} from '@/model/Translator';
 
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
 import { createBudgetSegmentor, estimateTranslationSize } from './Common';
@@ -24,13 +28,9 @@ export class SakuraTranslator implements SegmentTranslator {
     this.log = log;
     this.cacheIdentity = { endpoint, version: this.version };
     this.api = createOpenAiApi(endpoint, 'no-key');
-    if (segLength !== undefined) {
-      this.segmentor = createBudgetSegmentor(segLength);
-      this.segLength = segLength;
-    }
-    if (prevSegLength !== undefined) {
-      this.prevSegLength = prevSegLength;
-    }
+    this.segLength = normalizeSakuraSegmentLength(segLength);
+    this.segmentor = createBudgetSegmentor(this.segLength);
+    this.prevSegLength = normalizeSakuraContextLength(prevSegLength);
   }
 
   async init() {

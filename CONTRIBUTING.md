@@ -25,6 +25,7 @@ pnpm prepare                   # 设置Git钩子
 ```bash
 pnpm dev          # 启动开发服务器
 pnpm test         # 运行 Vitest
+pnpm test:performance # 运行翻译/阅读器性能契约
 pnpm run build    # 生产构建与类型检查
 pnpm run lint     # 检查源码、单元测试与端到端测试，要求零告警
 pnpm run test:e2e # 运行本地 IndexedDB 阅读器浏览器流程
@@ -32,6 +33,10 @@ pnpm run test:gate # 运行完整核心回归门禁
 pnpm audit --prod # 检查生产依赖漏洞
 pnpm outdated     # 检查直接依赖版本
 ```
+
+`test:performance` 是确定性工作量门禁，不以易波动的墙钟耗时为断言：它检查服务
+请求并发和数量、取消/恢复落库范围、缓存去重与容量、千章 IndexedDB 请求数以及
+长章节 DOM 窗口。修改翻译算法、调度、缓存或阅读器数据层时应至少运行该命令。
 
 首次运行浏览器流程前，请在 `web/` 目录执行一次
 `corepack pnpm exec playwright install chromium`；测试会自行启动 Vite 预览服务。
