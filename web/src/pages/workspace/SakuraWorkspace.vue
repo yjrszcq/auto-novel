@@ -25,6 +25,7 @@ const workspaceRef = workspace.ref;
 
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
+const showClearQueueConfirm = ref(false);
 const { html: infoPanelHtml } = useRuntimePanel('html/info-sakura.html');
 const cacheMetrics =
   ref<Awaited<ReturnType<typeof TranslationCacheRepo.metrics>>>();
@@ -105,6 +106,19 @@ const deleteAllJobs = () => {
   });
 };
 
+const queueControlOptions = computed(() => [
+  {
+    label: '清空队列',
+    key: 'clear',
+    disabled: workspaceRef.value.jobs.length === 0,
+  },
+]);
+
+const handleQueueControl = (key: string | number) => {
+  if (key !== 'clear') return;
+  showClearQueueConfirm.value = true;
+};
+
 const onProgressUpdated = (
   task: string,
   state:
@@ -169,16 +183,19 @@ const clearCache = async () => {
       <c-button
         label="添加翻译器"
         :icon="PlusOutlined"
+        compact-on-mobile
         @action="showCreateWorkerModal = true"
       />
       <c-button-confirm
         hint="真的要清空缓存吗？"
         label="清空缓存"
         :icon="DeleteOutlineOutlined"
+        compact-on-mobile
         @action="clearCache"
       />
       <n-dropdown
         trigger="click"
+        placement="bottom-end"
         :options="workerControlOptions"
         :keyboard="false"
         @select="handleWorkerControl"
@@ -215,26 +232,33 @@ const clearCache = async () => {
       <c-button
         label="本地书架"
         :icon="BookOutlined"
+        compact-on-mobile
         @action="showLocalVolumeDrawer = true"
       />
-      <c-button-confirm
-        hint="真的要清空队列吗？"
-        label="清空队列"
-        :icon="DeleteOutlineOutlined"
-        @action="deleteAllJobs"
-      />
-      <c-button
-        label="自动队列"
-        :icon="PlaylistPlayOutlined"
-        :type="automaticQueue ? 'primary' : 'default'"
-        :aria-pressed="automaticQueue"
-        :title="
-          automaticQueue
-            ? '自动处理后续任务：已开启'
-            : '自动处理后续任务：已关闭'
-        "
-        @action="automaticQueue = !automaticQueue"
-      />
+      <n-tooltip placement="top" trigger="hover">
+        <template #trigger>
+          <c-button
+            label="自动队列"
+            :icon="PlaylistPlayOutlined"
+            :type="automaticQueue ? 'primary' : 'default'"
+            :aria-pressed="automaticQueue"
+            compact-on-mobile
+            @action="automaticQueue = !automaticQueue"
+          />
+        </template>
+        自动处理后续任务：{{ automaticQueue ? '已开启' : '已关闭' }}
+      </n-tooltip>
+      <n-dropdown
+        trigger="click"
+        placement="bottom-end"
+        :options="queueControlOptions"
+        :keyboard="false"
+        @select="handleQueueControl"
+      >
+        <n-button circle aria-label="队列操作">
+          <n-icon :component="MoreVertOutlined" />
+        </n-button>
+      </n-dropdown>
     </section-header>
     <n-empty v-if="workspaceRef.jobs.length === 0" description="没有任务" />
     <n-list>
@@ -264,4 +288,15 @@ const clearCache = async () => {
   />
 
   <sakura-worker-modal v-model:show="showCreateWorkerModal" />
+
+  <n-modal
+    v-model:show="showClearQueueConfirm"
+    preset="dialog"
+    title="清空队列"
+    positive-text="清空"
+    negative-text="取消"
+    @positive-click="deleteAllJobs"
+  >
+    真的要清空队列吗？
+  </n-modal>
 </template>

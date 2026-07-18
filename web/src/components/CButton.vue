@@ -3,6 +3,7 @@ const props = defineProps<{
   label?: string;
   icon?: Component;
   iconHidden?: boolean;
+  compactOnMobile?: boolean;
   onAction?: (e: MouseEvent) => unknown;
 }>();
 
@@ -33,6 +34,8 @@ const onClick = async (e: MouseEvent) => {
   <n-button
     round
     class="c-button"
+    :class="{ 'c-button--compact-on-mobile': compactOnMobile }"
+    :aria-label="compactOnMobile ? label : undefined"
     :loading="!icon && running"
     @click="onClick"
     v-bind="$attrs"
@@ -46,7 +49,7 @@ const onClick = async (e: MouseEvent) => {
         <span v-if="running" class="c-button__spinner" aria-hidden="true" />
       </span>
     </template>
-    {{ label }}
+    <span v-if="label" class="c-button__label">{{ label }}</span>
     <template v-if="icon && !label">
       <span class="c-button__icon-wrapper c-button__icon-wrapper--solo">
         <n-icon
@@ -60,6 +63,17 @@ const onClick = async (e: MouseEvent) => {
 </template>
 
 <style scoped>
+@media (max-width: 639px) {
+  .c-button--compact-on-mobile {
+    width: var(--n-height);
+    padding: 0;
+  }
+
+  .c-button--compact-on-mobile .c-button__label {
+    display: none;
+  }
+}
+
 .c-button__icon-wrapper {
   position: relative;
   display: inline-flex;

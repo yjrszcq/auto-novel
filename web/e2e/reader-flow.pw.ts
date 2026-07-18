@@ -2521,13 +2521,12 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
 
     await page.getByRole('button', { name: '启动', exact: true }).click();
     await secondRequestStarted;
-    await page
-      .getByRole('button', { name: '停止当前任务', exact: true })
-      .click();
+    const queueActions = page.getByRole('button', { name: '队列操作' });
+    await queueActions.click();
+    await page.getByText('停止当前任务', { exact: true }).click();
     releaseSecondRequest();
-    await expect(
-      page.getByRole('button', { name: '继续队列', exact: true }),
-    ).toBeVisible();
+    await queueActions.click();
+    await expect(page.getByText('继续队列', { exact: true })).toBeVisible();
 
     await expect
       .poll(() =>
@@ -2545,7 +2544,7 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
       )
       .toEqual(['chapter-b']);
 
-    await page.getByRole('button', { name: '继续队列', exact: true }).click();
+    await page.getByText('继续队列', { exact: true }).click();
     await expect
       .poll(() =>
         page.evaluate(() => {
@@ -2725,17 +2724,44 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   const gptAutomaticQueue = page.getByRole('button', {
     name: '自动队列',
   });
-  const gptClearQueue = page.getByRole('button', {
-    name: '清空队列',
-  });
+  const gptQueueActions = page.getByRole('button', { name: '队列操作' });
   await expect(gptAutomaticQueue).toHaveAttribute('aria-pressed', 'true');
   await expect(gptAutomaticQueue).toHaveClass(/n-button--primary-type/);
-  expect((await gptAutomaticQueue.boundingBox())!.x).toBeGreaterThan(
-    (await gptClearQueue.boundingBox())!.x,
+  await expect(gptAutomaticQueue.locator('.c-button__label')).toBeHidden();
+  expect((await gptQueueActions.boundingBox())!.x).toBeGreaterThan(
+    (await gptAutomaticQueue.boundingBox())!.x,
   );
+  await expect(
+    page
+      .getByRole('button', { name: '添加翻译器' })
+      .locator('.c-button__label'),
+  ).toBeHidden();
+  await expect(
+    page
+      .getByRole('button', { name: '清空缓存' })
+      .locator('.c-button-confirm__label'),
+  ).toBeHidden();
+  await expect(
+    page
+      .getByRole('button', { name: '本地书架', exact: true })
+      .locator('.c-button__label'),
+  ).toBeHidden();
+  await gptAutomaticQueue.hover();
+  await expect(
+    page.getByText('自动处理后续任务：已开启', { exact: true }),
+  ).toBeVisible();
   await gptAutomaticQueue.click();
   await expect(gptAutomaticQueue).toHaveAttribute('aria-pressed', 'false');
   await gptAutomaticQueue.click();
+  await gptQueueActions.click();
+  const gptQueueMenu = page.locator('.n-dropdown-menu:visible');
+  await expect(page.getByText('清空队列', { exact: true })).toBeVisible();
+  const gptQueueMenuBounds = await gptQueueMenu.boundingBox();
+  expect(gptQueueMenuBounds).not.toBeNull();
+  expect(gptQueueMenuBounds!.x + gptQueueMenuBounds!.width).toBeLessThanOrEqual(
+    390,
+  );
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
   const gptLocalDrawer = page
@@ -2811,6 +2837,13 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     name: '批量控制翻译器',
   });
   await workerControl.click();
+  const workerMenuBounds = await page
+    .locator('.n-dropdown-menu:visible')
+    .boundingBox();
+  expect(workerMenuBounds).not.toBeNull();
+  expect(workerMenuBounds!.x + workerMenuBounds!.width).toBeLessThanOrEqual(
+    390,
+  );
   await page.getByText('启动全部', { exact: true }).click();
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   const metricsPanel = page.getByRole('dialog', {
@@ -2854,17 +2887,40 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   const sakuraAutomaticQueue = page.getByRole('button', {
     name: '自动队列',
   });
-  const sakuraClearQueue = page.getByRole('button', {
-    name: '清空队列',
-  });
+  const sakuraQueueActions = page.getByRole('button', { name: '队列操作' });
   await expect(sakuraAutomaticQueue).toHaveAttribute('aria-pressed', 'true');
   await expect(sakuraAutomaticQueue).toHaveClass(/n-button--primary-type/);
-  expect((await sakuraAutomaticQueue.boundingBox())!.x).toBeGreaterThan(
-    (await sakuraClearQueue.boundingBox())!.x,
+  await expect(sakuraAutomaticQueue.locator('.c-button__label')).toBeHidden();
+  expect((await sakuraQueueActions.boundingBox())!.x).toBeGreaterThan(
+    (await sakuraAutomaticQueue.boundingBox())!.x,
   );
+  await expect(
+    page
+      .getByRole('button', { name: '添加翻译器' })
+      .locator('.c-button__label'),
+  ).toBeHidden();
+  await expect(
+    page
+      .getByRole('button', { name: '清空缓存' })
+      .locator('.c-button-confirm__label'),
+  ).toBeHidden();
+  await expect(
+    page
+      .getByRole('button', { name: '本地书架', exact: true })
+      .locator('.c-button__label'),
+  ).toBeHidden();
   await sakuraAutomaticQueue.click();
   await expect(sakuraAutomaticQueue).toHaveAttribute('aria-pressed', 'false');
   await sakuraAutomaticQueue.click();
+  await sakuraQueueActions.click();
+  const sakuraQueueMenuBounds = await page
+    .locator('.n-dropdown-menu:visible')
+    .boundingBox();
+  expect(sakuraQueueMenuBounds).not.toBeNull();
+  expect(
+    sakuraQueueMenuBounds!.x + sakuraQueueMenuBounds!.width,
+  ).toBeLessThanOrEqual(390);
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
   const sakuraLocalDrawer = page
     .locator('.n-drawer')

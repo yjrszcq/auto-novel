@@ -3,10 +3,8 @@ import {
   BookOutlined,
   DeleteOutlineOutlined,
   MoreVertOutlined,
-  PlayArrowOutlined,
   PlaylistPlayOutlined,
   PlusOutlined,
-  StopOutlined,
 } from '@vicons/material';
 import { VueDraggable } from 'vue-draggable-plus';
 
@@ -32,6 +30,7 @@ const workspaceRef = workspace.ref;
 
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
+const showClearQueueConfirm = ref(false);
 const { html: infoPanelHtml } = useRuntimePanel('html/info-gpt.html');
 const cacheMetrics =
   ref<Awaited<ReturnType<typeof TranslationCacheRepo.metrics>>>();
@@ -285,6 +284,29 @@ const deleteAllJobs = () => {
   });
 };
 
+const queueControlOptions = computed(() => [
+  queueRunning.value
+    ? { label: '停止当前任务', key: 'stop' }
+    : {
+        label: '继续队列',
+        key: 'continue',
+        disabled:
+          workspaceRef.value.jobs.length === 0 ||
+          pipelineSnapshot.value.workers.length === 0,
+      },
+  {
+    label: '清空队列',
+    key: 'clear',
+    disabled: workspaceRef.value.jobs.length === 0,
+  },
+]);
+
+const handleQueueControl = (key: string | number) => {
+  if (key === 'stop') stopCurrentTask();
+  if (key === 'continue') void runQueuedJobs();
+  if (key === 'clear') showClearQueueConfirm.value = true;
+};
+
 const clearCache = async () => {
   await doAction(
     TranslationCacheRepo.clear('gpt-seg-cache'),
@@ -324,16 +346,19 @@ onBeforeUnmount(() => {
       <c-button
         label="添加翻译器"
         :icon="PlusOutlined"
+        compact-on-mobile
         @action="showCreateWorkerModal = true"
       />
       <c-button-confirm
         hint="真的要清空缓存吗？"
         label="清空缓存"
         :icon="DeleteOutlineOutlined"
+        compact-on-mobile
         @action="clearCache"
       />
       <n-dropdown
         trigger="click"
+        placement="bottom-end"
         :options="workerControlOptions"
         :keyboard="false"
         @select="handleWorkerControl"
@@ -392,39 +417,33 @@ onBeforeUnmount(() => {
       <c-button
         label="本地书架"
         :icon="BookOutlined"
+        compact-on-mobile
         @action="showLocalVolumeDrawer = true"
       />
-      <c-button
-        v-if="queueRunning"
-        label="停止当前任务"
-        :icon="StopOutlined"
-        @action="stopCurrentTask"
-      />
-      <c-button
-        v-else-if="workspaceRef.jobs.length > 0"
-        label="继续队列"
-        :icon="PlayArrowOutlined"
-        :disabled="pipelineSnapshot.workers.length === 0"
-        @action="runQueuedJobs"
-      />
-      <c-button-confirm
-        hint="真的要清空队列吗？"
-        label="清空队列"
-        :icon="DeleteOutlineOutlined"
-        @action="deleteAllJobs"
-      />
-      <c-button
-        label="自动队列"
-        :icon="PlaylistPlayOutlined"
-        :type="automaticQueue ? 'primary' : 'default'"
-        :aria-pressed="automaticQueue"
-        :title="
-          automaticQueue
-            ? '自动处理后续任务：已开启'
-            : '自动处理后续任务：已关闭'
-        "
-        @action="automaticQueue = !automaticQueue"
-      />
+      <n-tooltip placement="top" trigger="hover">
+        <template #trigger>
+          <c-button
+            label="自动队列"
+            :icon="PlaylistPlayOutlined"
+            :type="automaticQueue ? 'primary' : 'default'"
+            :aria-pressed="automaticQueue"
+            compact-on-mobile
+            @action="automaticQueue = !automaticQueue"
+          />
+        </template>
+        自动处理后续任务：{{ automaticQueue ? '已开启' : '已关闭' }}
+      </n-tooltip>
+      <n-dropdown
+        trigger="click"
+        placement="bottom-end"
+        :options="queueControlOptions"
+        :keyboard="false"
+        @select="handleQueueControl"
+      >
+        <n-button circle aria-label="队列操作">
+          <n-icon :component="MoreVertOutlined" />
+        </n-button>
+      </n-dropdown>
     </section-header>
     <n-empty v-if="workspaceRef.jobs.length === 0" description="没有任务" />
     <n-list>
@@ -456,4 +475,15 @@ onBeforeUnmount(() => {
   />
 
   <gpt-worker-modal v-model:show="showCreateWorkerModal" />
+
+  <n-modal
+    v-model:show="showClearQueueConfirm"
+    preset="dialog"
+    title="清空队列"
+    positive-text="清空"
+    negative-text="取消"
+    @positive-click="deleteAllJobs"
+  >
+    真的要清空队列吗？
+  </n-modal>
 </template>
