@@ -24,6 +24,12 @@ const workspaceRef = workspace.ref;
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
 const { html: infoPanelHtml } = useRuntimePanel('html/info-sakura.html');
+const cacheMetrics =
+  ref<Awaited<ReturnType<typeof TranslationCacheRepo.metrics>>>();
+const refreshCacheMetrics = async () => {
+  cacheMetrics.value = await TranslationCacheRepo.metrics('sakura-seg-cache');
+};
+onMounted(() => void refreshCacheMetrics());
 
 type ProcessedJob = TranslateJob & {
   progress?: {
@@ -78,6 +84,7 @@ const onProgressUpdated = (
         remainingChapterIds: string[];
       },
 ) => {
+  void refreshCacheMetrics();
   if (state.state === 'finish') {
     const job = processedJobs.value.get(task)!;
     processedJobs.value.delete(task);
@@ -97,8 +104,14 @@ const onProgressUpdated = (
   }
 };
 
-const clearCache = async () =>
-  doAction(TranslationCacheRepo.clear('sakura-seg-cache'), '缓存清除', message);
+const clearCache = async () => {
+  await doAction(
+    TranslationCacheRepo.clear('sakura-seg-cache'),
+    '缓存清除',
+    message,
+  );
+  await refreshCacheMetrics();
+};
 </script>
 
 <template>
@@ -123,6 +136,13 @@ const clearCache = async () =>
         @action="clearCache"
       />
     </section-header>
+    <n-text v-if="cacheMetrics" depth="3">
+      缓存 {{ cacheMetrics.entryCount }} 条 /
+      {{ (cacheMetrics.totalSize / 1024 / 1024).toFixed(2) }} MiB；命中
+      {{ cacheMetrics.hit }} / 未命中 {{ cacheMetrics.miss }} / 并发复用
+      {{ cacheMetrics.deduplicated }} / 请求 {{ cacheMetrics.provider }} / 故障
+      {{ cacheMetrics.fault }}
+    </n-text>
 
     <n-empty
       v-if="workspaceRef.workers.length === 0"

@@ -193,6 +193,12 @@ describe('translation optimization baselines', () => {
       ['共享译文'],
     ]);
     expect(server.requests).toHaveLength(1);
+    expect(await TranslationCacheRepo.metrics('gpt-seg-cache')).toMatchObject({
+      miss: 2,
+      deduplicated: 1,
+      provider: 1,
+      fault: 0,
+    });
   });
 
   it('keeps FIFO admission and the configured global request ceiling', async () => {

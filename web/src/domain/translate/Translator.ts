@@ -238,6 +238,7 @@ export class Translator {
           }
         }
       } catch (e) {
+        this.segCache.record?.('fault');
         console.error('缓存读取失败');
         console.error(e);
       }
@@ -275,9 +276,11 @@ export class Translator {
       );
       if (result.source === 'cache') log('从缓存恢复');
       if (result.source === 'deduplicated') log('复用进行中的相同翻译');
+      if (result.cacheFault) log('缓存访问失败，已继续使用在线翻译');
       return result.output;
     }
 
+    if (force) this.segCache?.record?.('provider');
     const segOutput = await translateAndNormalize();
 
     // 保存分段缓存
@@ -285,6 +288,7 @@ export class Translator {
       try {
         await this.segCache.save(cacheKey, segOutput);
       } catch (e) {
+        this.segCache.record?.('fault');
         console.error('缓存保存失败');
         console.error(e);
       }

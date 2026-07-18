@@ -2221,6 +2221,9 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
       });
     expect(server.requests).toHaveLength(2);
     expect(server.maximumActiveRequests).toBe(2);
+    await expect(
+      page.getByText(/缓存 2 条 .*命中 0 .*未命中 0 .*请求 2 .*故障 0/),
+    ).toBeVisible();
 
     const persisted = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {

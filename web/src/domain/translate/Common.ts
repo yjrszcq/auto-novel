@@ -2,6 +2,7 @@ import { MD5 } from 'crypto-es';
 import { customAlphabet } from 'nanoid';
 
 import { TranslationCacheRepo } from '@/repos';
+import type { TranslationCacheEvent } from '@/repos/useTranslationCache';
 import type { Glossary } from '@/model/Glossary';
 import type { TranslatorId } from '@/model/Translator';
 
@@ -230,7 +231,9 @@ export interface SegmentCache {
   ) => Promise<{
     output: string[];
     source: 'cache' | 'deduplicated' | 'provider';
+    cacheFault: boolean;
   }>;
+  record?: (event: TranslationCacheEvent) => void;
 }
 
 const cacheInFlight = {
@@ -257,25 +260,44 @@ export const createSegIndexedDbCache = async (
 
     get,
     save,
+    record: (event) => TranslationCacheRepo.record(storeName, event),
     getOrCreate: async (hash, producer) => {
       const generation = TranslationCacheRepo.generation(storeName);
-      const cached = await get(hash).catch(() => undefined);
-      if (cached !== undefined) return { output: cached, source: 'cache' };
+      let cacheFault = false;
+      const cached = await get(hash).catch(() => {
+        TranslationCacheRepo.record(storeName, 'fault');
+        cacheFault = true;
+        return undefined;
+      });
+      if (cached !== undefined) {
+        TranslationCacheRepo.record(storeName, 'hit');
+        return { output: cached, source: 'cache', cacheFault };
+      }
+      TranslationCacheRepo.record(storeName, 'miss');
 
       const active = cacheInFlight[storeName].get(hash);
       if (active?.generation === generation) {
-        return { output: await active.promise, source: 'deduplicated' };
+        TranslationCacheRepo.record(storeName, 'deduplicated');
+        return {
+          output: await active.promise,
+          source: 'deduplicated',
+          cacheFault,
+        };
       }
 
+      TranslationCacheRepo.record(storeName, 'provider');
       const pending = producer();
       const inFlight = { generation, promise: pending };
       cacheInFlight[storeName].set(hash, inFlight);
       try {
         const output = await pending;
         if (TranslationCacheRepo.generation(storeName) === generation) {
-          await save(hash, output).catch(() => {});
+          await save(hash, output).catch(() => {
+            TranslationCacheRepo.record(storeName, 'fault');
+            cacheFault = true;
+          });
         }
-        return { output, source: 'provider' };
+        return { output, source: 'provider', cacheFault };
       } finally {
         if (cacheInFlight[storeName].get(hash) === inFlight) {
           cacheInFlight[storeName].delete(hash);

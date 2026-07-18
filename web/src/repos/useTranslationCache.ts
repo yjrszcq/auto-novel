@@ -40,6 +40,23 @@ export type TranslationCacheLimits = {
   maximumSize: number;
 };
 
+export type TranslationCacheEvent =
+  'hit' | 'miss' | 'deduplicated' | 'provider' | 'fault';
+
+const diagnostics: Record<
+  TranslationCacheType,
+  Record<TranslationCacheEvent, number>
+> = {
+  'gpt-seg-cache': { hit: 0, miss: 0, deduplicated: 0, provider: 0, fault: 0 },
+  'sakura-seg-cache': {
+    hit: 0,
+    miss: 0,
+    deduplicated: 0,
+    provider: 0,
+    fault: 0,
+  },
+};
+
 const defaultLimits: TranslationCacheLimits = {
   maximumEntries: 5_000,
   maximumSize: 50 * 1024 * 1024,
@@ -83,6 +100,13 @@ const estimateSize = (hash: string, text: string[]) =>
 export const TranslationCacheRepo = {
   async clear(type: TranslationCacheType) {
     generations[type] += 1;
+    diagnostics[type] = {
+      hit: 0,
+      miss: 0,
+      deduplicated: 0,
+      provider: 0,
+      fault: 0,
+    };
     const db = await createDb();
     const tx = db.transaction([type, 'cache-meta'], 'readwrite');
     await Promise.all([
@@ -147,10 +171,17 @@ export const TranslationCacheRepo = {
 
   async metrics(type: TranslationCacheType) {
     const db = await createDb();
-    return (await db.get('cache-meta', type)) ?? emptyMetadata(type);
+    return {
+      ...((await db.get('cache-meta', type)) ?? emptyMetadata(type)),
+      ...diagnostics[type],
+    };
   },
 
   generation(type: TranslationCacheType) {
     return generations[type];
+  },
+
+  record(type: TranslationCacheType, event: TranslationCacheEvent) {
+    diagnostics[type][event] += 1;
   },
 };
