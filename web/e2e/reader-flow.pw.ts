@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 import { startOpenAiTestServer } from '../tests/helpers/openai-test-server';
 
@@ -6,6 +6,27 @@ const bookId = 'reader-flow.txt';
 const unsafeText = '<img src=x onerror="window.__readerXss=true">';
 const descriptionHtml =
   '<div><p><strong style="color:red" onclick="window.__descriptionXss=true">安全简介</strong></p><p>第二段</p><img src=x onerror="window.__descriptionXss=true"><svg><script>window.__descriptionXss=true</script></svg></div>';
+
+const expectButtonIconCentered = async (button: Locator) => {
+  const offset = await button.evaluate((element) => {
+    const icon = element.querySelector('.n-button__icon');
+    if (icon === null) return { x: Number.NaN, y: Number.NaN };
+    const buttonBounds = element.getBoundingClientRect();
+    const iconBounds = icon.getBoundingClientRect();
+    return {
+      x:
+        iconBounds.x +
+        iconBounds.width / 2 -
+        (buttonBounds.x + buttonBounds.width / 2),
+      y:
+        iconBounds.y +
+        iconBounds.height / 2 -
+        (buttonBounds.y + buttonBounds.height / 2),
+    };
+  });
+  expect(Math.abs(offset.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(offset.y)).toBeLessThanOrEqual(1);
+};
 
 test('keeps inherited reader themes opaque and responsive to system changes', async ({
   page,
@@ -2746,6 +2767,14 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
       .getByRole('button', { name: '本地书架', exact: true })
       .locator('.c-button__label'),
   ).toBeHidden();
+  for (const button of [
+    page.getByRole('button', { name: '添加翻译器' }),
+    page.getByRole('button', { name: '清空缓存' }),
+    page.getByRole('button', { name: '本地书架', exact: true }),
+    gptAutomaticQueue,
+  ]) {
+    await expectButtonIconCentered(button);
+  }
   await gptAutomaticQueue.hover();
   await expect(
     page.getByText('自动处理后续任务：已开启', { exact: true }),
@@ -2909,6 +2938,14 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
       .getByRole('button', { name: '本地书架', exact: true })
       .locator('.c-button__label'),
   ).toBeHidden();
+  for (const button of [
+    page.getByRole('button', { name: '添加翻译器' }),
+    page.getByRole('button', { name: '清空缓存' }),
+    page.getByRole('button', { name: '本地书架', exact: true }),
+    sakuraAutomaticQueue,
+  ]) {
+    await expectButtonIconCentered(button);
+  }
   await sakuraAutomaticQueue.click();
   await expect(sakuraAutomaticQueue).toHaveAttribute('aria-pressed', 'false');
   await sakuraAutomaticQueue.click();

@@ -72,6 +72,10 @@ const onClick = async (e: MouseEvent) => {
   .c-button--compact-on-mobile .c-button__label {
     display: none;
   }
+
+  .c-button--compact-on-mobile :deep(.n-button__icon) {
+    margin: 0;
+  }
 }
 
 .c-button__icon-wrapper {

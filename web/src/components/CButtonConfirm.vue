@@ -47,5 +47,9 @@ defineProps<{
   .c-button-confirm--compact-on-mobile .c-button-confirm__label {
     display: none;
   }
+
+  .c-button-confirm--compact-on-mobile :deep(.n-button__icon) {
+    margin: 0;
+  }
 }
 </style>
