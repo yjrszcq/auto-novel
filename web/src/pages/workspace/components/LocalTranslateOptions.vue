@@ -71,9 +71,22 @@ defineExpose({
         />
         <n-input-group-label size="small">次后再拆分</n-input-group-label>
       </n-input-group>
-      <n-text depth="3" class="local-translate-options__format-hint">
-        仅用于编号、行数或输出语言异常；首次请求不计入重试次数。
-      </n-text>
+      <n-tooltip placement="top" trigger="hover">
+        <template #trigger>
+          <button
+            type="button"
+            class="local-translate-options__info"
+            aria-label="格式异常重试说明"
+          >
+            <n-icon :component="InfoOutlined" size="16" />
+          </button>
+        </template>
+        <div
+          class="local-translate-options__hint local-translate-options__hint--format"
+        >
+          仅用于编号、行数或输出语言异常；首次请求不计入重试次数。
+        </div>
+      </n-tooltip>
     </c-action-wrapper>
     <c-action-wrapper title="范围">
       <n-flex style="text-align: center" class="local-translate-options__range">
@@ -135,17 +148,15 @@ defineExpose({
   color: #f5d676;
 }
 
-.local-translate-options__format-hint {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-}
-
 .local-translate-options__hint {
   font-size: 14px;
   line-height: 1.5;
   white-space: normal;
   word-break: break-word;
+}
+
+.local-translate-options__hint--format {
+  max-width: min(80vw, 240px);
 }
 
 .local-translate-options__hint--level {

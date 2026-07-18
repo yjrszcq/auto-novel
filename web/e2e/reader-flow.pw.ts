@@ -2550,6 +2550,9 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
 
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
   await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '格式异常重试说明' }),
+  ).toBeVisible();
   const formatRetryInput = page.getByRole('textbox', {
     name: '格式异常完整重试次数',
   });
