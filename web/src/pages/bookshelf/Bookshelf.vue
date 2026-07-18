@@ -64,6 +64,13 @@ const selectedBook = computed(() => {
   const [selectedBookId] = selectedBookIds.value;
   return books.value.find((book) => book.volume.id === selectedBookId);
 });
+const allVisibleBooksSelected = computed(
+  () =>
+    visibleBooks.value.length > 0 &&
+    visibleBooks.value.every((book) =>
+      selectedBookIds.value.has(book.volume.id),
+    ),
+);
 
 const reload = async () => {
   loading.value = true;
@@ -133,6 +140,11 @@ const invertVisibleSelection = () => {
     else selected.add(book.volume.id);
   });
   selectedBookIds.value = selected;
+};
+
+const toggleVisibleSelection = () => {
+  if (allVisibleBooksSelected.value) invertVisibleSelection();
+  else selectAllVisible();
 };
 
 const downloadSelectedBooks = async () => {
@@ -217,16 +229,6 @@ onMounted(reload);
     <template v-else>
       <div v-if="selectionMode" class="bookshelf-selection-toolbar">
         <n-text>已选择 {{ selectedBookIds.size }} 本</n-text>
-        <n-button size="small" @click="selectAllVisible">全选</n-button>
-        <n-button size="small" @click="invertVisibleSelection">反选</n-button>
-        <n-button
-          size="small"
-          :disabled="selectedBookIds.size === 0"
-          :loading="downloadingSelectedBooks"
-          @click="downloadSelectedBooks"
-        >
-          下载
-        </n-button>
         <n-button
           v-if="selectedBook && !selectedBook.state.pinned"
           size="small"
@@ -242,6 +244,17 @@ onMounted(reload);
           @click="updateSelectedBooks('unpin')"
         >
           取消置顶
+        </n-button>
+        <n-button size="small" @click="toggleVisibleSelection">
+          {{ allVisibleBooksSelected ? '反选' : '全选' }}
+        </n-button>
+        <n-button
+          size="small"
+          :disabled="selectedBookIds.size === 0"
+          :loading="downloadingSelectedBooks"
+          @click="downloadSelectedBooks"
+        >
+          下载
         </n-button>
         <n-popconfirm
           :disabled="selectedBookIds.size === 0"

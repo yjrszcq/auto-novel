@@ -268,6 +268,18 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(
     await listArchiveEntries(await readDownload(shelfArchive)),
   ).toHaveLength(2);
+  await selectionToolbar
+    .getByRole('button', { name: '反选', exact: true })
+    .click();
+  await expect(
+    selectionToolbar.getByText('已选择 0 本', { exact: true }),
+  ).toBeVisible();
+  await selectionToolbar
+    .getByRole('button', { name: '全选', exact: true })
+    .click();
+  await expect(
+    selectionToolbar.getByText('已选择 2 本', { exact: true }),
+  ).toBeVisible();
   await page
     .locator('.book-card')
     .filter({ hasText: 'Alpha Upload' })
