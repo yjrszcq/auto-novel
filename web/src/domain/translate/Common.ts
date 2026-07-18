@@ -228,6 +228,7 @@ export interface SegmentCache {
   getOrCreate?: (
     cacheKey: string,
     producer: () => Promise<string[]>,
+    validate: (output: string[]) => boolean,
   ) => Promise<{
     output: string[];
     source: 'cache' | 'deduplicated' | 'provider';
@@ -261,7 +262,7 @@ export const createSegIndexedDbCache = async (
     get,
     save,
     record: (event) => TranslationCacheRepo.record(storeName, event),
-    getOrCreate: async (hash, producer) => {
+    getOrCreate: async (hash, producer, validate) => {
       const generation = TranslationCacheRepo.generation(storeName);
       let cacheFault = false;
       const cached = await get(hash).catch(() => {
@@ -270,8 +271,12 @@ export const createSegIndexedDbCache = async (
         return undefined;
       });
       if (cached !== undefined) {
-        TranslationCacheRepo.record(storeName, 'hit');
-        return { output: cached, source: 'cache', cacheFault };
+        if (validate(cached)) {
+          TranslationCacheRepo.record(storeName, 'hit');
+          return { output: cached, source: 'cache', cacheFault };
+        }
+        TranslationCacheRepo.record(storeName, 'fault');
+        cacheFault = true;
       }
       TranslationCacheRepo.record(storeName, 'miss');
 

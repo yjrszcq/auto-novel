@@ -222,7 +222,7 @@ export class Translator {
     if (this.segCache) {
       try {
         const extra = {
-          glossary,
+          glossary: segGlossary,
           prevSegs:
             this.segTranslator instanceof SakuraTranslator
               ? this.segTranslator.selectPreviousContext(prevSegs)
@@ -273,6 +273,7 @@ export class Translator {
       const result = await this.segCache.getOrCreate(
         cacheKey,
         translateAndNormalize,
+        (output) => output.length === seg.length,
       );
       if (result.source === 'cache') log('从缓存恢复');
       if (result.source === 'deduplicated') log('复用进行中的相同翻译');

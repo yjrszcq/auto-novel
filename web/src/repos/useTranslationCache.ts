@@ -61,6 +61,7 @@ const defaultLimits: TranslationCacheLimits = {
   maximumEntries: 5_000,
   maximumSize: 50 * 1024 * 1024,
 };
+const touchIntervalMs = 60_000;
 
 const generations: Record<TranslationCacheType, number> = {
   'gpt-seg-cache': 0,
@@ -121,7 +122,7 @@ export const TranslationCacheRepo = {
     const tx = db.transaction(type, 'readwrite');
     const store = tx.objectStore(type);
     const entry = await store.get(hash);
-    if (entry !== undefined) {
+    if (entry !== undefined && now - entry.lastUsedAt >= touchIntervalMs) {
       entry.lastUsedAt = now;
       await store.put(entry);
     }

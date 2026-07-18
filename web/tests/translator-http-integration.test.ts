@@ -15,6 +15,7 @@ vi.hoisted(() => {
 import { Translator } from '../src/domain/translate/Translator';
 import {
   createBudgetSegmentor,
+  createSegIndexedDbCache,
   type SegmentCache,
 } from '../src/domain/translate/Common';
 import { createConcurrencyLimiter } from '../src/domain/translate/Concurrency';
@@ -353,6 +354,67 @@ describe('translator HTTP integration', () => {
       '失败后恢复译文',
     ]);
     expect(server.requests).toHaveLength(2);
+  });
+
+  it('keeps cache reuse independent of unrelated glossary changes', async () => {
+    const server = await startOpenAiTestServer({
+      onChat: (request) => ({ content: `术语译文${request.index + 1}` }),
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create(
+      {
+        id: 'gpt',
+        endpoint: server.endpoint,
+        key: 'glossary-cache-key',
+        model: 'glossary-cache-model',
+      },
+      true,
+    );
+
+    await expect(
+      translator.translate(['猫'], { glossary: { 犬: '狗' } }),
+    ).resolves.toEqual(['术语译文1']);
+    await expect(
+      translator.translate(['猫'], { glossary: { 鸟: '鸟' } }),
+    ).resolves.toEqual(['术语译文1']);
+    await expect(
+      translator.translate(['猫'], { glossary: { 猫: '猫咪' } }),
+    ).resolves.toEqual(['术语译文2']);
+    expect(server.requests).toHaveLength(2);
+  });
+
+  it('replaces cached output with an invalid line count', async () => {
+    const server = await startOpenAiTestServer({
+      onChat: () => ({ content: '有效译文' }),
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'invalid-cache-key',
+      model: 'invalid-cache-model',
+    });
+    const cache = await createSegIndexedDbCache('gpt-seg-cache');
+    translator.segCache = cache;
+    const hash = cache.cacheKey(['缓存原文'], {
+      glossary: {},
+      prevSegs: undefined,
+      translator: translator.segTranslator.cacheIdentity,
+    });
+    await TranslationCacheRepo.create('gpt-seg-cache', hash, [
+      '错误第一行',
+      '错误第二行',
+    ]);
+
+    await expect(translator.translate(['缓存原文'])).resolves.toEqual([
+      '有效译文',
+    ]);
+    expect(server.requests).toHaveLength(1);
+    expect(await TranslationCacheRepo.metrics('gpt-seg-cache')).toMatchObject({
+      fault: 1,
+      miss: 1,
+      provider: 1,
+    });
   });
 
   it('isolates GPT cache entries by endpoint and model identity', async () => {

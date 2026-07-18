@@ -42,21 +42,21 @@ describe('translation cache', () => {
       now: 2,
       limits,
     });
-    await TranslationCacheRepo.get('gpt-seg-cache', 'a', 3);
+    await TranslationCacheRepo.get('gpt-seg-cache', 'a', 60_003);
     await TranslationCacheRepo.create('gpt-seg-cache', 'c', ['丙'], {
-      now: 4,
+      now: 60_004,
       limits,
     });
 
-    expect(await TranslationCacheRepo.get('gpt-seg-cache', 'a', 5)).toEqual([
-      '甲',
-    ]);
     expect(
-      await TranslationCacheRepo.get('gpt-seg-cache', 'b', 5),
+      await TranslationCacheRepo.get('gpt-seg-cache', 'a', 60_005),
+    ).toEqual(['甲']);
+    expect(
+      await TranslationCacheRepo.get('gpt-seg-cache', 'b', 60_005),
     ).toBeUndefined();
-    expect(await TranslationCacheRepo.get('gpt-seg-cache', 'c', 5)).toEqual([
-      '丙',
-    ]);
+    expect(
+      await TranslationCacheRepo.get('gpt-seg-cache', 'c', 60_005),
+    ).toEqual(['丙']);
     expect(await TranslationCacheRepo.metrics('gpt-seg-cache')).toMatchObject({
       entryCount: 2,
       totalSize: expect.any(Number),
@@ -98,15 +98,23 @@ describe('translation cache', () => {
     const oldBarrier = new Promise<void>((resolve) => {
       releaseOld = resolve;
     });
-    const oldResult = cache.getOrCreate!('same', async () => {
-      await oldBarrier;
-      return ['旧结果'];
-    });
+    const oldResult = cache.getOrCreate!(
+      'same',
+      async () => {
+        await oldBarrier;
+        return ['旧结果'];
+      },
+      () => true,
+    );
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     await TranslationCacheRepo.clear('gpt-seg-cache');
     await expect(
-      cache.getOrCreate!('same', async () => ['新结果']),
+      cache.getOrCreate!(
+        'same',
+        async () => ['新结果'],
+        () => true,
+      ),
     ).resolves.toMatchObject({ output: ['新结果'], source: 'provider' });
     releaseOld();
     await expect(oldResult).resolves.toMatchObject({ output: ['旧结果'] });
