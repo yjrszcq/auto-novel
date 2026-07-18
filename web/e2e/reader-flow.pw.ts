@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { startOpenAiTestServer } from '../tests/helpers/openai-test-server';
+
 const bookId = 'reader-flow.txt';
 const unsafeText = '<img src=x onerror="window.__readerXss=true">';
 const descriptionHtml =
@@ -1563,6 +1565,227 @@ test('persists the global reading version selected in Settings', async ({
 
   await page.reload();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
+});
+
+test('completes, persists, exports, and reads a concurrent GPT job', async ({
+  page,
+}) => {
+  const volumeId = 'translated-flow.txt';
+  const task =
+    `local/${volumeId}` +
+    '?level=all&forceMetadata=false&startIndex=0&endIndex=65535';
+  let releaseRequests: () => void = () => {};
+  const requestBarrier = new Promise<void>((resolve) => {
+    releaseRequests = resolve;
+  });
+  let announceTwoRequests: () => void = () => {};
+  const twoRequestsArrived = new Promise<void>((resolve) => {
+    announceTwoRequests = resolve;
+  });
+  const server = await startOpenAiTestServer({
+    onChat: async (request) => {
+      if (request.index === 1) announceTwoRequests();
+      await requestBarrier;
+      return { content: '#1:译文第1行\n#2:译文第2行' };
+    },
+  });
+  try {
+    await page.goto('/workspace/gpt');
+    await expect(
+      page.getByRole('heading', { name: 'GPT工作区' }),
+    ).toBeVisible();
+    await page.evaluate(
+      async ({ endpoint, task, volumeId }) => {
+        localStorage.setItem(
+          'auto-novel:workspace:gpt',
+          JSON.stringify({
+            workers: [
+              {
+                id: 'integration-worker',
+                endpoint,
+                model: 'integration-model',
+                key: 'integration-key',
+                concurrency: 2,
+              },
+            ],
+            jobs: [
+              {
+                task,
+                description: volumeId,
+                createAt: 1,
+              },
+            ],
+            jobRecords: [],
+          }),
+        );
+
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 5);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction(
+          ['metadata', 'chapter', 'file'],
+          'readwrite',
+        );
+        transaction.objectStore('metadata').put({
+          id: volumeId,
+          createAt: 1,
+          toc: [
+            { chapterId: 'chapter-a', title: '第一章' },
+            { chapterId: 'chapter-b', title: '第二章' },
+          ],
+          sourceFormat: 'txt',
+          glossaryId: 'glossary',
+          glossary: {},
+          favoredId: 'default',
+          sourceBookMetadata: {
+            title: '完整翻译流程',
+            authors: ['测试作者'],
+            languages: ['ja'],
+          },
+        });
+        transaction.objectStore('chapter').put({
+          id: `${volumeId}/chapter-a`,
+          volumeId,
+          paragraphs: ['第一章原文一', '第一章原文二'],
+          segmentIds: ['chapter-a-1', 'chapter-a-2'],
+        });
+        transaction.objectStore('chapter').put({
+          id: `${volumeId}/chapter-b`,
+          volumeId,
+          paragraphs: ['第二章原文一', '第二章原文二'],
+          segmentIds: ['chapter-b-1', 'chapter-b-2'],
+        });
+        transaction.objectStore('file').put({
+          id: volumeId,
+          file: new File(
+            ['第一章原文一\n第一章原文二\n第二章原文一\n第二章原文二'],
+            volumeId,
+            { type: 'text/plain' },
+          ),
+        });
+        await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+      },
+      { endpoint: server.endpoint, task, volumeId },
+    );
+
+    await page.reload();
+    const worker = page
+      .locator('.n-list-item')
+      .filter({ hasText: 'integration-worker' });
+    await expect(worker).toBeVisible();
+    await worker.getByRole('button', { name: '启动', exact: true }).click();
+    await twoRequestsArrived;
+    expect(server.activeRequests).toBe(2);
+    expect(server.requests).toHaveLength(2);
+    releaseRequests();
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const workspace = JSON.parse(
+            localStorage.getItem('auto-novel:workspace:gpt') ?? '{}',
+          ) as {
+            jobs?: unknown[];
+            jobRecords?: Array<{
+              progress?: { finished: number; error: number; total: number };
+            }>;
+          };
+          return {
+            queued: workspace.jobs?.length,
+            records: workspace.jobRecords?.length,
+            progress: workspace.jobRecords?.[0]?.progress,
+          };
+        }),
+      )
+      .toEqual({
+        queued: 0,
+        records: 1,
+        progress: { finished: 2, error: 0, total: 2 },
+      });
+    expect(server.requests).toHaveLength(2);
+    expect(server.maximumActiveRequests).toBe(2);
+
+    const persisted = await page.evaluate(async (bookId) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes', 5);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter'],
+        'readonly',
+      );
+      const metadataRequest = transaction.objectStore('metadata').get(bookId);
+      const chapterARequest = transaction
+        .objectStore('chapter')
+        .get(`${bookId}/chapter-a`);
+      const chapterBRequest = transaction
+        .objectStore('chapter')
+        .get(`${bookId}/chapter-b`);
+      const result = await new Promise<{
+        toc: Array<{ gpt?: string }>;
+        chapters: Array<{ gpt?: { paragraphs: string[] } }>;
+      }>((resolve, reject) => {
+        transaction.oncomplete = () =>
+          resolve({
+            toc: metadataRequest.result.toc,
+            chapters: [chapterARequest.result, chapterBRequest.result],
+          });
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+      return result;
+    }, volumeId);
+    expect(persisted.toc.every((chapter) => chapter.gpt === 'glossary')).toBe(
+      true,
+    );
+    expect(
+      persisted.chapters.map((chapter) => chapter.gpt?.paragraphs),
+    ).toEqual([
+      ['译文第1行', '译文第2行'],
+      ['译文第1行', '译文第2行'],
+    ]);
+
+    await page.reload();
+    await expect(
+      page
+        .locator('.n-list-item')
+        .filter({ hasText: volumeId })
+        .getByText('已完成', { exact: true }),
+    ).toBeVisible();
+    await page.goto(`/books/${volumeId}/details`);
+    await expect(page.getByText('总计 2 / GPT 2 / Sakura 0')).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: '下载译文', exact: true }).click();
+    const download = await downloadPromise;
+    const downloadStream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of downloadStream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    expect(Buffer.concat(chunks).toString('utf8')).toBe(
+      ['译文第1行', '译文第2行', '译文第1行', '译文第2行'].join('\n'),
+    );
+
+    await page.getByRole('button', { name: '开始阅读', exact: true }).click();
+    await expect(page).toHaveURL(
+      /\/books\/translated-flow\.txt\/read\/chapter-a$/,
+    );
+    await expect(page.getByText('译文第1行', { exact: true })).toBeVisible();
+    await expect(page.getByText('第一章原文一', { exact: true })).toHaveCount(
+      0,
+    );
+  } finally {
+    releaseRequests();
+    await server.close();
+  }
 });
 
 test('loads only the current GPT workspace schema', async ({ page }) => {
