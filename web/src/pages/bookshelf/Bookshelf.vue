@@ -72,6 +72,9 @@ const hasActiveFilters = computed(
     translationFilter.value !== undefined ||
     translatorFilter.value !== undefined,
 );
+const filterButtonActive = computed(
+  () => showFilterPanel.value || hasActiveFilters.value,
+);
 const selectedBook = computed(() => {
   if (selectedBookIds.value.size !== 1) return undefined;
   const [selectedBookId] = selectedBookIds.value;
@@ -208,21 +211,20 @@ const resetFilters = () => {
 };
 
 const handleFilterButtonClick = () => {
-  if (hasActiveFilters.value) {
+  if (filterButtonActive.value) {
     clearStatusFilters();
     showFilterPanel.value = false;
     return;
   }
-  showFilterPanel.value = !showFilterPanel.value;
+  showFilterPanel.value = true;
 };
 
-const toggleReadingFilter = (value: BookshelfReadingFilter) => {
-  readingFilter.value = readingFilter.value === value ? undefined : value;
+const setReadingFilter = (value?: BookshelfReadingFilter) => {
+  readingFilter.value = value;
 };
 
-const toggleTranslationFilter = (value: BookshelfTranslationFilter) => {
-  translationFilter.value =
-    translationFilter.value === value ? undefined : value;
+const setTranslationFilter = (value?: BookshelfTranslationFilter) => {
+  translationFilter.value = value;
 };
 
 const setTranslatorFilter = (value?: BookshelfTranslatorFilter) => {
@@ -344,12 +346,12 @@ onMounted(reload);
         />
         <n-button
           class="bookshelf-toolbar__filter"
-          :type="hasActiveFilters ? 'primary' : 'default'"
+          :type="filterButtonActive ? 'primary' : 'default'"
           aria-label="书架筛选"
-          :aria-pressed="hasActiveFilters"
+          :aria-pressed="filterButtonActive"
           @click="handleFilterButtonClick"
         >
-          {{ hasActiveFilters ? '取消筛选' : '筛选' }}
+          {{ filterButtonActive ? '取消筛选' : '筛选' }}
         </n-button>
         <n-select
           v-model:value="sort"
@@ -362,35 +364,61 @@ onMounted(reload);
         <div class="bookshelf-filter-panel__group">
           <n-text depth="3">阅读状态</n-text>
           <n-space>
-            <n-checkbox
-              :checked="readingFilter === 'unread'"
-              @update:checked="toggleReadingFilter('unread')"
+            <n-button
+              text
+              :type="readingFilter === undefined ? 'primary' : 'default'"
+              :aria-pressed="readingFilter === undefined"
+              @click="setReadingFilter()"
+            >
+              全部
+            </n-button>
+            <n-button
+              text
+              :type="readingFilter === 'unread' ? 'primary' : 'default'"
+              :aria-pressed="readingFilter === 'unread'"
+              @click="setReadingFilter('unread')"
             >
               未开始
-            </n-checkbox>
-            <n-checkbox
-              :checked="readingFilter === 'reading'"
-              @update:checked="toggleReadingFilter('reading')"
+            </n-button>
+            <n-button
+              text
+              :type="readingFilter === 'reading' ? 'primary' : 'default'"
+              :aria-pressed="readingFilter === 'reading'"
+              @click="setReadingFilter('reading')"
             >
               阅读中
-            </n-checkbox>
+            </n-button>
           </n-space>
         </div>
         <div class="bookshelf-filter-panel__group">
           <n-text depth="3">翻译状态</n-text>
           <n-space>
-            <n-checkbox
-              :checked="translationFilter === 'translated'"
-              @update:checked="toggleTranslationFilter('translated')"
+            <n-button
+              text
+              :type="translationFilter === undefined ? 'primary' : 'default'"
+              :aria-pressed="translationFilter === undefined"
+              @click="setTranslationFilter()"
+            >
+              全部
+            </n-button>
+            <n-button
+              text
+              :type="translationFilter === 'translated' ? 'primary' : 'default'"
+              :aria-pressed="translationFilter === 'translated'"
+              @click="setTranslationFilter('translated')"
             >
               已译完
-            </n-checkbox>
-            <n-checkbox
-              :checked="translationFilter === 'untranslated'"
-              @update:checked="toggleTranslationFilter('untranslated')"
+            </n-button>
+            <n-button
+              text
+              :type="
+                translationFilter === 'untranslated' ? 'primary' : 'default'
+              "
+              :aria-pressed="translationFilter === 'untranslated'"
+              @click="setTranslationFilter('untranslated')"
             >
               未翻译
-            </n-checkbox>
+            </n-button>
           </n-space>
         </div>
         <div class="bookshelf-filter-panel__group">
@@ -399,6 +427,7 @@ onMounted(reload);
             <n-button
               text
               :type="translatorFilter === undefined ? 'primary' : 'default'"
+              :aria-pressed="translatorFilter === undefined"
               @click="setTranslatorFilter()"
             >
               全部
@@ -406,6 +435,7 @@ onMounted(reload);
             <n-button
               text
               :type="translatorFilter === 'gpt' ? 'primary' : 'default'"
+              :aria-pressed="translatorFilter === 'gpt'"
               @click="setTranslatorFilter('gpt')"
             >
               GPT
@@ -413,6 +443,7 @@ onMounted(reload);
             <n-button
               text
               :type="translatorFilter === 'sakura' ? 'primary' : 'default'"
+              :aria-pressed="translatorFilter === 'sakura'"
               @click="setTranslatorFilter('sakura')"
             >
               Sakura

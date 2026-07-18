@@ -469,6 +469,8 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await filterButton.click();
   const filterPanel = page.locator('.bookshelf-filter-panel');
   await expect(filterPanel).toBeVisible();
+  await expect(filterButton).toHaveText('取消筛选');
+  await expect(filterButton).toHaveAttribute('aria-pressed', 'true');
   const inlineFilterLayout = await page.evaluate(() => {
     const toolbar = document.querySelector<HTMLElement>('.bookshelf-toolbar');
     const panel = document.querySelector<HTMLElement>(
@@ -487,18 +489,33 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(inlineFilterLayout.panelTop).toBeGreaterThanOrEqual(
     inlineFilterLayout.toolbarBottom - 8,
   );
-  await filterPanel.getByRole('button', { name: 'GPT', exact: true }).click();
+  const readingFilters = filterPanel
+    .locator('.bookshelf-filter-panel__group')
+    .nth(0);
+  const translationStatusFilters = filterPanel
+    .locator('.bookshelf-filter-panel__group')
+    .nth(1);
+  const translatorFilters = filterPanel
+    .locator('.bookshelf-filter-panel__group')
+    .nth(2);
+  await translatorFilters
+    .getByRole('button', { name: 'GPT', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Alpha Upload' }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
     0,
   );
-  await filterPanel.getByRole('button', { name: '全部', exact: true }).click();
+  await translatorFilters
+    .getByRole('button', { name: '全部', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
-  await filterPanel.getByRole('checkbox', { name: '已译完' }).click();
+  await translationStatusFilters
+    .getByRole('button', { name: '已译完' })
+    .click();
   await expect(filterButton).toHaveAttribute('aria-pressed', 'true');
   await expect(
     page.getByRole('heading', { name: 'Alpha Upload' }),
@@ -506,21 +523,23 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
     0,
   );
-  await filterPanel.getByRole('checkbox', { name: '阅读中' }).click();
+  await readingFilters.getByRole('button', { name: '阅读中' }).click();
   await expect(
-    filterPanel.getByRole('checkbox', { name: '阅读中' }),
-  ).toBeChecked();
+    readingFilters.getByRole('button', { name: '阅读中' }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await expect(
-    filterPanel.getByRole('checkbox', { name: '已译完' }),
-  ).toBeChecked();
-  await filterPanel.getByRole('checkbox', { name: '未翻译' }).click();
+    translationStatusFilters.getByRole('button', { name: '已译完' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await translationStatusFilters
+    .getByRole('button', { name: '未翻译' })
+    .click();
   await expect(page.getByRole('heading', { name: 'Alpha Upload' })).toHaveCount(
     0,
   );
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
     0,
   );
-  await filterPanel.getByRole('checkbox', { name: '阅读中' }).click();
+  await readingFilters.getByRole('button', { name: '全部' }).click();
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
