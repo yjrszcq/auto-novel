@@ -4,6 +4,11 @@ defineProps<{
   icon?: Component;
   iconHidden?: boolean;
 }>();
+
+const attrs = useAttrs();
+const secondary = computed(
+  () => !('text' in attrs) && !('ghost' in attrs) && !('dashed' in attrs),
+);
 </script>
 
 <template>
@@ -14,7 +19,7 @@ defineProps<{
           size="tiny"
           :icon="icon"
           :icon-hidden="iconHidden"
-          secondary
+          :secondary="secondary"
           circle
           v-bind="$attrs"
         />
@@ -28,7 +33,7 @@ defineProps<{
     size="tiny"
     :icon="icon"
     :icon-hidden="iconHidden"
-    secondary
+    :secondary="secondary"
     circle
     v-bind="$attrs"
   />
