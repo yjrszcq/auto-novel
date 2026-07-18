@@ -4,6 +4,7 @@ import { delay, RegexUtil } from '@/util';
 
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
 import { createBudgetSegmentor } from './Common';
+import { ProviderBackoff } from './ProviderBackoff';
 
 type OpenAi = ReturnType<typeof createOpenAiApi>;
 
@@ -13,6 +14,7 @@ export class OpenAiTranslator implements SegmentTranslator {
   log: Logger;
   private api: OpenAi;
   private model: string;
+  private backoff = new ProviderBackoff();
 
   constructor(log: Logger, { model, endpoint, key }: OpenAiTranslator.Config) {
     this.log = log;
@@ -86,7 +88,8 @@ export class OpenAiTranslator implements SegmentTranslator {
         }
       } else {
         logSegInfo({ retry, lineNumber: [seg.length, NaN] });
-        await this.onError(result, signal, log);
+        if (retry >= 2 && result.retryable) throw Error('重试次数太多');
+        await this.onError(result, signal, log, retry);
       }
 
       retry += 1;
@@ -104,13 +107,12 @@ export class OpenAiTranslator implements SegmentTranslator {
       left: number,
       right: number,
     ): Promise<string[]> => {
-      const result = await this.translateLines(
-        seg.slice(left, right),
-        glossary,
-        signal,
-      );
-
-      if (typeof result === 'object') {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const result = await this.translateLines(
+          seg.slice(left, right),
+          glossary,
+          signal,
+        );
         if ('answer' in result) {
           const isChinese = detectChinese(result.answer.join(' '));
           logSegInfo({
@@ -120,18 +122,15 @@ export class OpenAiTranslator implements SegmentTranslator {
           if (right - left === result.answer.length && isChinese) {
             return result.answer;
           }
+          if (right - left !== result.answer.length) break;
         } else {
           logSegInfo({
             binaryRange: [left, right],
             lineNumber: [right - left, NaN],
           });
-          await this.onError(result, signal, log);
+          if (attempt >= 2 && result.retryable) throw Error('重试次数太多');
+          await this.onError(result, signal, log, attempt);
         }
-      } else {
-        logSegInfo({
-          binaryRange: [left, right],
-          lineNumber: [right - left, NaN],
-        });
       }
 
       if (right - left > 1) {
@@ -159,7 +158,8 @@ export class OpenAiTranslator implements SegmentTranslator {
     glossary: Glossary,
     signal?: AbortSignal,
   ): Promise<
-    { message: string; delaySeconds?: number } | { answer: string[] }
+    | { message: string; retryable: boolean; retryAfterMs?: number }
+    | { answer: string[] }
   > {
     const parseAnswer = (answer: string) => {
       const lines = answer
@@ -192,14 +192,26 @@ export class OpenAiTranslator implements SegmentTranslator {
       );
     };
 
+    await this.waitForProviderCooldown(signal);
     return askApi(this.api, this.model, buildMessages(lines, glossary), signal)
       .then((it) => ({ answer: parseAnswer(it.answer) }))
       .catch((e: unknown) => {
         if (e instanceof OpenAiError) {
-          if (e.code === 'rate_limit_exceeded') {
-            return { message: '触发GPT限速', delaySeconds: 21 };
+          if (e.code === 'rate_limit_exceeded' || e.status === 429) {
+            return {
+              message: '触发GPT限速',
+              retryable: true,
+              retryAfterMs: e.retryAfterMs,
+            };
           }
-          return { message: e.message };
+          return {
+            message: e.message,
+            retryable:
+              e.status === 408 ||
+              e.status === 409 ||
+              e.status === 425 ||
+              (e.status !== undefined && e.status >= 500),
+          };
         }
         throw e;
       });
@@ -208,30 +220,38 @@ export class OpenAiTranslator implements SegmentTranslator {
   private async onError(
     {
       message,
-      delaySeconds,
+      retryable,
+      retryAfterMs,
     }: {
       message: string;
-      delaySeconds?: number;
+      retryable: boolean;
+      retryAfterMs?: number;
     },
     signal: AbortSignal | undefined,
     log: Logger,
+    attempt: number,
   ) {
-    if (delaySeconds === undefined) {
-      log(`未知错误，请反馈给站长：${message}`);
-    } else if (delaySeconds > 0) {
-      if (delaySeconds > 60) {
-        log('发生错误：' + message + `，暂停${delaySeconds / 60}分钟`);
-      } else {
-        log('发生错误：' + message + `，暂停${delaySeconds}秒`);
-      }
-      await delay(delaySeconds * 1000, signal);
-      return;
-    } else {
-      log('发生错误：' + message + '，退出');
-      throw 'quit';
+    if (!retryable) {
+      log('发生不可重试错误：' + message);
+      throw new Error(message);
+    }
+    const delayMs = this.backoff.reserveRetry(attempt, retryAfterMs);
+    log(`发生可重试错误：${message}，暂停${formatDelay(delayMs)}`);
+    await delay(delayMs, signal);
+  }
+
+  private async waitForProviderCooldown(signal?: AbortSignal) {
+    while (this.backoff.remainingCooldown() > 0) {
+      await delay(this.backoff.remainingCooldown(), signal);
     }
   }
 }
+
+const formatDelay = (delayMs: number) => {
+  if (delayMs >= 60_000) return `${Math.round(delayMs / 60_000)}分钟`;
+  if (delayMs >= 1_000) return `${(delayMs / 1_000).toFixed(1)}秒`;
+  return `${delayMs}毫秒`;
+};
 
 export namespace OpenAiTranslator {
   export interface Config {

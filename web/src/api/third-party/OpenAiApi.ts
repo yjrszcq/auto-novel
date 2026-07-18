@@ -262,27 +262,44 @@ namespace ChatCompletion {
 export class OpenAiError extends Error {
   readonly status: number | undefined;
   readonly code: string | null | undefined;
+  readonly retryAfterMs: number | undefined;
 
   constructor(
     status: number | undefined,
     code: string | undefined,
     message: string | undefined,
+    retryAfterMs?: number,
   ) {
     super(`${status} ${code ?? 'unknown_code'} ${message}`);
     this.status = status;
     this.code = code;
+    this.retryAfterMs = retryAfterMs;
   }
 
   static async handle(e: unknown): Promise<never> {
     if (e instanceof HTTPError) {
-      const errText = await e.response.text().catch((err) => {
-        if (err instanceof Error) return err.message;
-        return `${err}`;
-      });
+      const errText =
+        typeof e.data === 'string'
+          ? e.data
+          : JSON.stringify(e.data ?? { error: { message: e.message } });
       const errJson = safeJson<{ error?: { code?: string } }>(errText);
-      throw new OpenAiError(e.response.status, errJson?.error?.code, errText);
+      throw new OpenAiError(
+        e.response.status,
+        errJson?.error?.code,
+        errText,
+        parseRetryAfter(e.response.headers.get('retry-after')),
+      );
     } else {
       throw e;
     }
   }
 }
+
+export const parseRetryAfter = (value: string | null, now = Date.now()) => {
+  if (value === null || value.trim() === '') return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+  const retryAt = Date.parse(value);
+  if (Number.isNaN(retryAt)) return undefined;
+  return Math.max(0, retryAt - now);
+};

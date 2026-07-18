@@ -44,16 +44,19 @@ export const safeJson = <T extends object>(text: string) => {
 
 export const delay = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    let timeout: number | null = null;
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
     const abortHandler = () => {
-      clearTimeout(timeout!);
-      reject(new DOMException('Aborted', 'AbortError'));
+      clearTimeout(timeout);
+      reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
     };
-    timeout = window.setTimeout(() => {
+    const timeout = globalThis.setTimeout(() => {
       resolve();
       signal?.removeEventListener('abort', abortHandler);
     }, ms);
-    signal?.addEventListener('abort', abortHandler);
+    signal?.addEventListener('abort', abortHandler, { once: true });
   });
 
 export function* parseEventStream<T>(text: string) {

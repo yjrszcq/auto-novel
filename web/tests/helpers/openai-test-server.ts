@@ -19,6 +19,7 @@ export type ChatResponse = {
   content: string;
   status?: number;
   errorCode?: string;
+  headers?: Record<string, string>;
 };
 
 type OpenAiTestServerOptions = {
@@ -122,6 +123,9 @@ export const startOpenAiTestServer = async (
 
       if (result.status !== undefined && result.status >= 400) {
         response.statusCode = result.status;
+        for (const [name, value] of Object.entries(result.headers ?? {})) {
+          response.setHeader(name, value);
+        }
         response.setHeader('Content-Type', 'application/json');
         response.end(
           JSON.stringify({

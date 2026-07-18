@@ -45,7 +45,6 @@ export const runWithConcurrency = async <T>(
 };
 
 type QueuedWork<T> = {
-  cancelled: boolean;
   run: () => Promise<T>;
   resolve: (value: T) => void;
   reject: (reason: unknown) => void;
@@ -54,17 +53,18 @@ type QueuedWork<T> = {
 };
 
 export const createConcurrencyLimiter = (limit: number) => {
-  const maximum = Math.max(1, limit);
-  const queue: QueuedWork<unknown>[] = [];
+  const maximum = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 1;
+  const queue = new Set<QueuedWork<unknown>>();
   let active = 0;
 
   const drain = () => {
-    while (active < maximum && queue.length > 0) {
-      const work = queue.shift()!;
+    while (active < maximum && queue.size > 0) {
+      const work = queue.values().next().value!;
+      queue.delete(work);
       if (work.onAbort) {
         work.signal?.removeEventListener('abort', work.onAbort);
       }
-      if (work.cancelled || work.signal?.aborted) {
+      if (work.signal?.aborted) {
         work.reject(
           work.signal?.reason ?? new DOMException('Aborted', 'AbortError'),
         );
@@ -72,8 +72,8 @@ export const createConcurrencyLimiter = (limit: number) => {
       }
 
       active += 1;
-      void work
-        .run()
+      void Promise.resolve()
+        .then(work.run)
         .then(work.resolve, work.reject)
         .finally(() => {
           active -= 1;
@@ -89,23 +89,30 @@ export const createConcurrencyLimiter = (limit: number) => {
         return;
       }
       const queuedWork: QueuedWork<T> = {
-        cancelled: false,
         run: work,
         resolve,
         reject,
         signal,
       };
       queuedWork.onAbort = () => {
-        queuedWork.cancelled = true;
+        if (!queue.delete(queuedWork as QueuedWork<unknown>)) return;
         reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
         drain();
       };
       signal?.addEventListener('abort', queuedWork.onAbort, { once: true });
-      queue.push(queuedWork as QueuedWork<unknown>);
+      queue.add(queuedWork as QueuedWork<unknown>);
       drain();
     });
 
-  return { run };
+  return {
+    run,
+    get activeCount() {
+      return active;
+    },
+    get queuedCount() {
+      return queue.size;
+    },
+  };
 };
 
 export type ConcurrencyLimiter = ReturnType<typeof createConcurrencyLimiter>;

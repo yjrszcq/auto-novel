@@ -210,7 +210,7 @@ describe('translator HTTP integration', () => {
     expect(server.maximumActiveRequests).toBe(2);
   });
 
-  it('retries OpenAI-compatible HTTP errors through the translator policy', async () => {
+  it('fails fast for non-retryable OpenAI-compatible HTTP errors', async () => {
     const server = await startOpenAiTestServer({
       onChat: () => ({
         content: 'invalid request',
@@ -227,9 +227,35 @@ describe('translator HTTP integration', () => {
     });
 
     await expect(translator.translate(['失败原文'])).rejects.toThrow(
-      '重试次数太多',
+      'invalid_request',
     );
-    expect(server.requests).toHaveLength(3);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('retries rate limits using provider Retry-After guidance', async () => {
+    const server = await startOpenAiTestServer({
+      onChat: (request) =>
+        request.index === 0
+          ? {
+              content: 'rate limited',
+              errorCode: 'rate_limit_exceeded',
+              status: 429,
+              headers: { 'Retry-After': '0' },
+            }
+          : { content: '限流恢复译文' },
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'rate-limit-key',
+      model: 'rate-limit-model',
+    });
+
+    await expect(translator.translate(['限流原文'])).resolves.toEqual([
+      '限流恢复译文',
+    ]);
+    expect(server.requests).toHaveLength(2);
   });
 
   it('aborts an in-flight HTTP translation', async () => {

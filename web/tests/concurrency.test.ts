@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { runWithConcurrency } from '../src/domain/translate/Concurrency';
+import {
+  createConcurrencyLimiter,
+  runWithConcurrency,
+} from '../src/domain/translate/Concurrency';
+import { ProviderBackoff } from '../src/domain/translate/ProviderBackoff';
 
 const deferred = () => {
   let resolve: () => void = () => {};
@@ -84,5 +88,68 @@ describe('translation concurrency scheduler', () => {
 
     await expect(execution).rejects.toMatchObject({ name: 'AbortError' });
     expect(started).toEqual([0]);
+  });
+
+  it('removes cancelled queued work immediately and preserves capacity', async () => {
+    const limiter = createConcurrencyLimiter(1);
+    const active = deferred();
+    const release = deferred();
+    const first = limiter.run(async () => {
+      active.resolve();
+      await release.promise;
+    });
+    await active.promise;
+
+    const controllers = Array.from(
+      { length: 100 },
+      () => new AbortController(),
+    );
+    const queued = controllers.map((controller) =>
+      limiter.run(async () => {}, controller.signal),
+    );
+    expect(limiter.queuedCount).toBe(100);
+    controllers.forEach((controller) => controller.abort());
+    expect(limiter.queuedCount).toBe(0);
+
+    release.resolve();
+    await first;
+    expect(
+      (await Promise.allSettled(queued)).every(
+        (it) => it.status === 'rejected',
+      ),
+    ).toBe(true);
+    await expect(limiter.run(async () => 'available')).resolves.toBe(
+      'available',
+    );
+    expect(limiter.activeCount).toBe(0);
+  });
+
+  it('releases limiter capacity after a synchronous worker failure', async () => {
+    const limiter = createConcurrencyLimiter(1);
+    await expect(
+      limiter.run(() => {
+        throw new Error('synchronous failure');
+      }),
+    ).rejects.toThrow('synchronous failure');
+    await expect(limiter.run(async () => 'next')).resolves.toBe('next');
+  });
+
+  it('reserves deterministic staggered retry slots under shared cooldown', () => {
+    let now = 1_000;
+    const backoff = new ProviderBackoff({
+      now: () => now,
+      random: () => 0,
+      baseDelayMs: 100,
+      maximumDelayMs: 1_000,
+      retrySpacingMs: 25,
+    });
+
+    expect(backoff.reserveRetry(0)).toBe(100);
+    expect(backoff.reserveRetry(0)).toBe(125);
+    expect(backoff.reserveRetry(1)).toBe(200);
+    expect(backoff.remainingCooldown()).toBe(200);
+    now += 200;
+    expect(backoff.remainingCooldown()).toBe(0);
+    expect(backoff.reserveRetry(0, 500)).toBe(500);
   });
 });
