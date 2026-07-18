@@ -782,8 +782,10 @@ const load = async () => {
 const resolveMode = async (
   loaded: Extract<ReaderPageLoadResult, { kind: 'ready' }>,
 ) => {
-  const repository = await repositoryPromise;
-  const adapter = createLocalVolumeReaderAdapter(repository);
+  const [repository, adapter] = await Promise.all([
+    repositoryPromise,
+    cachedAdapterPromise,
+  ]);
   const [preference, capabilities] = await Promise.all([
     repository.getReaderBookPreference(loaded.book.id),
     adapter.getCapabilities(loaded.book.id),

@@ -111,6 +111,12 @@ describe('LocalVolumeReaderAdapter', () => {
       chapters: { length: 1_000 },
       chapter: { chapterId: '500', segments: [{ original: '原文500' }] },
     });
+    await expect(
+      adapter.getCapabilities(largeVolume.id),
+    ).resolves.toMatchObject({
+      totalChapterCount: 1_000,
+      translatedChapterCount: 0,
+    });
     expect(getVolume).toHaveBeenCalledTimes(1);
     expect(listChapter).toHaveBeenCalledTimes(1);
 
