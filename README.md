@@ -80,6 +80,7 @@ corepack pnpm lint
 corepack pnpm test
 corepack pnpm run build
 corepack pnpm test:e2e
+corepack pnpm test:gate
 corepack pnpm audit --prod
 corepack pnpm outdated
 ```
@@ -88,6 +89,19 @@ corepack pnpm outdated
 `corepack pnpm exec playwright install chromium`。生产构建同时执行 Vite 构建和
 Vue TypeScript 检查；lint 覆盖应用源码、单元测试和端到端测试，并以零告警为
 通过标准。
+
+`test:gate` 会依次执行严格 lint、全部 Vitest、生产构建/类型检查和完整
+Playwright 核心流程，不需要商业翻译服务凭据。Playwright 默认自行启动 Vite；
+如需验证已经启动的本地或容器实例，可指定地址，例如：
+
+```bash
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:8011 corepack pnpm test:e2e
+corepack pnpm test:runtime-smoke http://127.0.0.1:8011 docker
+```
+
+`test:runtime-smoke` 的模式可选 `start-local`、`preview` 或 `docker`，会实际
+上传 TXT、打开书架/详情/阅读器深路由，并检查运行时配置、资源、上下栏透明度、
+控制台错误和失败请求。
 
 ## 部署
 

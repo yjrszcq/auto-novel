@@ -28,6 +28,7 @@ pnpm test         # 运行 Vitest
 pnpm run build    # 生产构建与类型检查
 pnpm run lint     # 检查源码、单元测试与端到端测试，要求零告警
 pnpm run test:e2e # 运行本地 IndexedDB 阅读器浏览器流程
+pnpm run test:gate # 运行完整核心回归门禁
 pnpm audit --prod # 检查生产依赖漏洞
 pnpm outdated     # 检查直接依赖版本
 ```
@@ -35,6 +36,10 @@ pnpm outdated     # 检查直接依赖版本
 首次运行浏览器流程前，请在 `web/` 目录执行一次
 `corepack pnpm exec playwright install chromium`；测试会自行启动 Vite 预览服务。
 Docker 变更可在仓库根目录使用 `docker build -t auto-novel:local web` 验证。
+对已经启动的实例，可在 `web/` 目录使用
+`PLAYWRIGHT_BASE_URL=http://127.0.0.1:8011 pnpm test:e2e` 复用完整浏览器套件，
+或使用 `pnpm test:runtime-smoke http://127.0.0.1:8011 docker` 快速检查上传、
+深路由、运行时资源、阅读器不透明主题栏和浏览器错误。
 
 ## 阅读器与隐私边界
 

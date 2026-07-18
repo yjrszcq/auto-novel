@@ -1699,21 +1699,29 @@ test('uses a configured default cover for a local book without one', async ({
   const configResponse = new Promise<void>((resolve) => {
     releaseConfig = resolve;
   });
-  let reportConfigRequest!: () => void;
-  const configRequested = new Promise<void>((resolve) => {
+  let reportConfigRequest!: (imagePrefix: string) => void;
+  const configRequested = new Promise<string>((resolve) => {
     reportConfigRequest = resolve;
   });
-  await page.route('**/config/config.json', async (route) => {
-    reportConfigRequest();
-    await configResponse;
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ defaultBookCoverImage: 'images/banner.webp' }),
-    });
-  });
+  await page.route(
+    /\/(?:config\/config\.json|api\/runtime-config)$/,
+    async (route) => {
+      const imagePrefix = new URL(route.request().url()).pathname.startsWith(
+        '/api/',
+      )
+        ? '/panel-content'
+        : '/config';
+      reportConfigRequest(imagePrefix);
+      await configResponse;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ defaultBookCoverImage: 'images/banner.webp' }),
+      });
+    },
+  );
 
   await page.reload();
-  await configRequested;
+  const configImagePrefix = await configRequested;
   await expect(
     page.getByRole('heading', { name: 'default-cover' }),
   ).toBeVisible();
@@ -1722,7 +1730,7 @@ test('uses a configured default cover for a local book without one', async ({
   const defaultCover = page.locator('img[alt="default-cover 封面"]');
   await expect(defaultCover).toHaveAttribute(
     'src',
-    '/config/images/banner.webp',
+    `${configImagePrefix}/images/banner.webp`,
   );
   await expect
     .poll(() =>
