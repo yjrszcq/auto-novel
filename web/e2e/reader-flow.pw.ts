@@ -2353,6 +2353,169 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
   }
 });
 
+test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
+  const volumeId = 'resume-shared-job.txt';
+  const task =
+    `local/${volumeId}` +
+    '?level=all&forceMetadata=false&startIndex=0&endIndex=65535';
+  let releaseSecondRequest: () => void = () => {};
+  const secondRequestBarrier = new Promise<void>((resolve) => {
+    releaseSecondRequest = resolve;
+  });
+  let announceSecondRequest: () => void = () => {};
+  const secondRequestStarted = new Promise<void>((resolve) => {
+    announceSecondRequest = resolve;
+  });
+  const server = await startOpenAiTestServer({
+    onChat: async (request) => {
+      if (request.index === 1) {
+        announceSecondRequest();
+        await secondRequestBarrier;
+      }
+      return {
+        content:
+          request.index === 0
+            ? '#1:已完成第一章'
+            : request.index === 1
+              ? '#1:不应写入的中止译文'
+              : '#1:恢复后的第二章',
+      };
+    },
+  });
+  try {
+    await page.goto('/workspace/gpt');
+    await expect(
+      page.getByRole('heading', { name: 'GPT工作区' }),
+    ).toBeVisible();
+    await page.evaluate(
+      async ({ endpoint, task, volumeId }) => {
+        localStorage.setItem(
+          'auto-novel:workspace:gpt',
+          JSON.stringify({
+            workers: [
+              {
+                id: 'resume-worker',
+                endpoint,
+                model: 'resume-model',
+                key: 'resume-key',
+                concurrency: 1,
+              },
+            ],
+            jobs: [{ task, description: volumeId, createAt: 1 }],
+            jobRecords: [],
+          }),
+        );
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 5);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction(
+          ['metadata', 'chapter'],
+          'readwrite',
+        );
+        transaction.objectStore('metadata').put({
+          id: volumeId,
+          createAt: 1,
+          toc: [
+            { chapterId: 'chapter-a', title: '第一章' },
+            { chapterId: 'chapter-b', title: '第二章' },
+          ],
+          sourceFormat: 'txt',
+          glossaryId: 'glossary',
+          glossary: {},
+          favoredId: 'default',
+          sourceBookMetadata: { title: volumeId, languages: ['ja'] },
+        });
+        transaction.objectStore('chapter').put({
+          id: `${volumeId}/chapter-a`,
+          volumeId,
+          paragraphs: ['第一章原文'],
+          segmentIds: ['chapter-a-1'],
+        });
+        transaction.objectStore('chapter').put({
+          id: `${volumeId}/chapter-b`,
+          volumeId,
+          paragraphs: ['第二章原文'],
+          segmentIds: ['chapter-b-1'],
+        });
+        await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+      },
+      { endpoint: server.endpoint, task, volumeId },
+    );
+    await page.reload();
+
+    await page.getByRole('button', { name: '启动', exact: true }).click();
+    await secondRequestStarted;
+    await page
+      .getByRole('button', { name: '停止当前任务', exact: true })
+      .click();
+    releaseSecondRequest();
+    await expect(
+      page.getByRole('button', { name: '继续队列', exact: true }),
+    ).toBeVisible();
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const workspace = JSON.parse(
+            localStorage.getItem('auto-novel:workspace:gpt') ?? '{}',
+          ) as { jobs?: Array<{ resumeTask?: string }> };
+          const resumeTask = workspace.jobs?.[0]?.resumeTask;
+          if (!resumeTask) return undefined;
+          const query = resumeTask.split('?')[1] ?? '';
+          return JSON.parse(
+            new URLSearchParams(query).get('chapterIds') ?? '[]',
+          ) as string[];
+        }),
+      )
+      .toEqual(['chapter-b']);
+
+    await page.getByRole('button', { name: '继续队列', exact: true }).click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const workspace = JSON.parse(
+            localStorage.getItem('auto-novel:workspace:gpt') ?? '{}',
+          ) as { jobs?: unknown[]; jobRecords?: unknown[] };
+          return [workspace.jobs?.length, workspace.jobRecords?.length];
+        }),
+      )
+      .toEqual([0, 1]);
+    expect(server.requests).toHaveLength(3);
+
+    const translated = await page.evaluate(async (bookId) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes', 5);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction('chapter', 'readonly');
+      const first = transaction
+        .objectStore('chapter')
+        .get(`${bookId}/chapter-a`);
+      const second = transaction
+        .objectStore('chapter')
+        .get(`${bookId}/chapter-b`);
+      const result = await new Promise<string[][]>((resolve, reject) => {
+        transaction.oncomplete = () =>
+          resolve([first.result.gpt.paragraphs, second.result.gpt.paragraphs]);
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+      return result;
+    }, volumeId);
+    expect(translated).toEqual([['已完成第一章'], ['恢复后的第二章']]);
+  } finally {
+    releaseSecondRequest();
+    await server.close();
+  }
+});
+
 test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
