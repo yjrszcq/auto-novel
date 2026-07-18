@@ -250,6 +250,11 @@ onMounted(reload);
     <header class="bookshelf-page__header">
       <h1 v-if="!props.embedded">书架</h1>
       <div class="bookshelf-page__header-actions">
+        <local-volume-upload-button
+          compact-on-mobile
+          :round="false"
+          @done="reload"
+        />
         <c-button
           :label="selectionMode ? '取消选择' : '选择'"
           :icon="selectionMode ? CloseOutlined : ChecklistOutlined"
@@ -257,11 +262,6 @@ onMounted(reload);
           compact-on-mobile
           :round="false"
           @action="toggleSelectionMode"
-        />
-        <local-volume-upload-button
-          compact-on-mobile
-          :round="false"
-          @done="reload"
         />
         <c-button
           label="刷新"
@@ -552,9 +552,9 @@ onMounted(reload);
 }
 
 .bookshelf-page--embedded .bookshelf-toolbar {
-  flex: 0 1 410px;
-  grid-template-columns: minmax(100px, 2fr) minmax(160px, 3fr);
-  margin: 0;
+  flex: 0 0 auto;
+  grid-template-columns: 96px 180px;
+  margin: 0 0 0 auto;
 }
 
 .bookshelf-toolbar__filter {

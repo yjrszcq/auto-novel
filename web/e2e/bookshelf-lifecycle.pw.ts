@@ -164,6 +164,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
       }),
     );
   expect(headerActionLayout).toHaveLength(3);
+  await expect(
+    page.locator('.bookshelf-page__header-actions button'),
+  ).toHaveText(['添加', '选择', '刷新']);
   expect(new Set(headerActionLayout.map(({ height }) => height)).size).toBe(1);
   expect(new Set(headerActionLayout.map(({ top }) => top)).size).toBe(1);
   expect(
@@ -188,6 +191,26 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     ];
   });
   expect(new Set(commandBarTops).size).toBe(1);
+  const rightAlignedToolbar = await page.evaluate(() => {
+    const header = document
+      .querySelector<HTMLElement>('.bookshelf-page__header')
+      ?.getBoundingClientRect();
+    const toolbar = document
+      .querySelector<HTMLElement>('.bookshelf-toolbar')
+      ?.getBoundingClientRect();
+    if (header === undefined || toolbar === undefined) {
+      throw new Error('缺少首页书架操作栏');
+    }
+    return {
+      headerRight: Math.round(header.right),
+      toolbarRight: Math.round(toolbar.right),
+      toolbarWidth: Math.round(toolbar.width),
+    };
+  });
+  expect(rightAlignedToolbar.toolbarRight).toBe(
+    rightAlignedToolbar.headerRight,
+  );
+  expect(rightAlignedToolbar.toolbarWidth).toBeLessThanOrEqual(286);
 
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
