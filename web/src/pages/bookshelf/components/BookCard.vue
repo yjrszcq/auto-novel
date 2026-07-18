@@ -11,15 +11,76 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  contextMenu: [book: BookshelfDisplayBook, position: { x: number; y: number }];
   details: [book: BookshelfDisplayBook];
   toggleSelection: [book: BookshelfDisplayBook];
 }>();
 const vars = useThemeVars();
+const longPressDuration = 1000;
+const longPressMoveTolerance = 10;
+let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+let longPressStart: { x: number; y: number } | undefined;
+let suppressCoverClickUntil = 0;
 
 const selectBook = () => {
   if (props.selectable) emit('toggleSelection', props.book);
   else emit('details', props.book);
 };
+
+const isCoverEvent = (event: Event) =>
+  event.target instanceof Element &&
+  event.target.closest('.book-cover') !== null;
+
+const cancelLongPress = () => {
+  if (longPressTimer !== undefined) {
+    clearTimeout(longPressTimer);
+    longPressTimer = undefined;
+  }
+  longPressStart = undefined;
+};
+
+const startLongPress = (event: PointerEvent) => {
+  if (event.pointerType !== 'touch' || !isCoverEvent(event)) return;
+  cancelLongPress();
+  longPressStart = { x: event.clientX, y: event.clientY };
+  longPressTimer = setTimeout(() => {
+    longPressTimer = undefined;
+    longPressStart = undefined;
+    suppressCoverClickUntil = Date.now() + 500;
+    emit('contextMenu', props.book, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }, longPressDuration);
+};
+
+const trackLongPress = (event: PointerEvent) => {
+  if (longPressStart === undefined) return;
+  if (
+    Math.hypot(
+      event.clientX - longPressStart.x,
+      event.clientY - longPressStart.y,
+    ) > longPressMoveTolerance
+  ) {
+    cancelLongPress();
+  }
+};
+
+const openMouseContextMenu = (event: MouseEvent) => {
+  if (!isCoverEvent(event)) return;
+  event.preventDefault();
+  if ((event as PointerEvent).pointerType === 'touch') return;
+  emit('contextMenu', props.book, { x: event.clientX, y: event.clientY });
+};
+
+const suppressLongPressClick = (event: MouseEvent) => {
+  if (!isCoverEvent(event) || Date.now() >= suppressCoverClickUntil) return;
+  suppressCoverClickUntil = 0;
+  event.preventDefault();
+  event.stopPropagation();
+};
+
+onBeforeUnmount(cancelLongPress);
 </script>
 
 <template>
@@ -29,6 +90,13 @@ const selectBook = () => {
       'book-card--selectable': props.selectable,
     }"
     :style="{ '--book-card-primary-color': vars.primaryColor }"
+    @click.capture="suppressLongPressClick"
+    @contextmenu="openMouseContextMenu"
+    @pointercancel="cancelLongPress"
+    @pointerdown="startLongPress"
+    @pointerleave="cancelLongPress"
+    @pointermove="trackLongPress"
+    @pointerup="cancelLongPress"
   >
     <BookCover
       :book-id="props.book.volume.id"
@@ -72,6 +140,11 @@ const selectBook = () => {
 
 .book-card--selectable {
   cursor: pointer;
+}
+
+.book-card :deep(.book-cover) {
+  -webkit-touch-callout: none;
+  user-select: none;
 }
 
 .book-card__pinned {

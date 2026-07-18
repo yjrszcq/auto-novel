@@ -4,7 +4,10 @@ import {
   FilterAltOutlined,
   RefreshOutlined,
 } from '@vicons/material';
+import type { DropdownMixedOption } from 'naive-ui';
 import { useRouter } from 'vue-router';
+
+import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
 
 import {
   filterAndSortBookshelf,
@@ -21,7 +24,8 @@ import {
 import BookCard from './components/BookCard.vue';
 
 import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
-import { useLocalVolumeStore } from '@/stores';
+import { useLocalVolumeStore, useSettingStore } from '@/stores';
+import { downloadFile } from '@/util';
 import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const props = withDefaults(
@@ -50,8 +54,18 @@ const selectionMode = ref(false);
 const selectedBookIds = ref(new Set<string>());
 const batchUpdating = ref(false);
 const downloadingSelectedBooks = ref(false);
+const contextMenuBook = shallowRef<BookshelfDisplayBook>();
+const contextMenuShown = ref(false);
+const contextMenuSession = ref(0);
+const contextMenuX = ref(0);
+const contextMenuY = ref(0);
+const contextDeleteBook = shallowRef<BookshelfDisplayBook>();
+const showContextDeleteConfirm = ref(false);
+const deletingContextBook = ref(false);
 const message = useMessage();
 const localVolumeManager = useLocalVolumeManager();
+const settingStore = useSettingStore();
+const { setting } = storeToRefs(settingStore);
 const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
 
 const sortOptions: { label: string; value: BookshelfSort }[] = [
@@ -92,6 +106,47 @@ const allVisibleBooksSelected = computed(
       selectedBookIds.value.has(book.volume.id),
     ),
 );
+
+const translatedChapterCount = (
+  book: BookshelfDisplayBook,
+  type: 'gpt' | 'sakura',
+) =>
+  book.volume.toc.filter((chapter) => chapter[type] === book.volume.glossaryId)
+    .length;
+
+const renderContextProgress = (label: string, type: 'gpt' | 'sakura') => {
+  const book = contextMenuBook.value;
+  const completed = book === undefined ? 0 : translatedChapterCount(book, type);
+  const total = book?.volume.toc.length ?? 0;
+  return h('div', { class: 'bookshelf-book-context-progress' }, [
+    h('span', label),
+    h('span', `${completed}/${total}`),
+  ]);
+};
+
+const contextMenuOptions = computed<DropdownMixedOption[]>(() => [
+  { label: '阅读书籍', key: 'read' },
+  { label: '排队 GPT', key: 'queue-gpt' },
+  { label: '排队 Sakura', key: 'queue-sakura' },
+  { label: '下载译文', key: 'download-translated' },
+  { label: '下载原文', key: 'download-original' },
+  { label: '删除书籍', key: 'delete' },
+  { type: 'divider', key: 'progress-divider' },
+  {
+    type: 'render',
+    key: 'gpt-progress',
+    render: () => renderContextProgress('GPT', 'gpt'),
+  },
+  {
+    type: 'render',
+    key: 'sakura-progress',
+    render: () => renderContextProgress('Sakura', 'sakura'),
+  },
+]);
+
+const contextMenuProps = () => ({
+  class: 'bookshelf-book-context-menu',
+});
 
 const reload = async () => {
   loading.value = true;
@@ -201,6 +256,127 @@ const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'delete') => {
     );
   } finally {
     batchUpdating.value = false;
+  }
+};
+
+const closeBookContextMenu = () => {
+  contextMenuShown.value = false;
+};
+
+const openBookContextMenu = async (
+  book: BookshelfDisplayBook,
+  position: { x: number; y: number },
+) => {
+  contextMenuShown.value = false;
+  await nextTick();
+  contextMenuBook.value = book;
+  contextMenuX.value = Math.min(Math.max(8, position.x), window.innerWidth - 8);
+  contextMenuY.value = Math.min(
+    Math.max(8, position.y),
+    window.innerHeight - 8,
+  );
+  contextMenuSession.value += 1;
+  contextMenuShown.value = true;
+};
+
+const readContextBook = (book: BookshelfDisplayBook) => {
+  const chapterId = book.progress?.chapterId ?? book.volume.toc[0]?.chapterId;
+  if (chapterId === undefined) {
+    message.warning('这本书还没有可阅读章节');
+    return;
+  }
+  const href = router.resolve(
+    '/books/' +
+      encodeURIComponent(book.volume.id) +
+      '/read/' +
+      encodeURIComponent(chapterId),
+  ).href;
+  window.open(href, '_blank', 'noopener');
+};
+
+const queueContextBook = (
+  book: BookshelfDisplayBook,
+  type: 'gpt' | 'sakura',
+) => {
+  const { success, failed } = localVolumeManager.queueJobsToWorkspace(
+    [book.volume.id],
+    {
+      level: 'all',
+      type,
+      shouldTop: false,
+    },
+  );
+  message.info(`${success}本小说已排队，${failed}本失败`);
+};
+
+const downloadContextTranslation = async (book: BookshelfDisplayBook) => {
+  const { success, failed } = await localVolumeManager.downloadVolumes([
+    book.volume.id,
+  ]);
+  message.info(`${success}本小说已下载，${failed}本失败`);
+};
+
+const downloadContextOriginal = async (book: BookshelfDisplayBook) => {
+  try {
+    const repository = await useLocalVolumeStore();
+    const file = await repository.getOriginalDownloadFile({
+      id: book.volume.id,
+      embedMetadata: shouldEmbedDownloadMetadata(
+        book.volume,
+        'original',
+        setting.value.embedMetadataInOriginalDownload,
+      ),
+    });
+    downloadFile(file.filename, file.blob);
+    message.success('已开始下载原文');
+  } catch (reason) {
+    message.error('下载失败：' + String(reason));
+  }
+};
+
+const handleBookContextAction = async (key: string | number) => {
+  const book = contextMenuBook.value;
+  closeBookContextMenu();
+  if (book === undefined) return;
+  switch (key) {
+    case 'read':
+      readContextBook(book);
+      break;
+    case 'queue-gpt':
+      queueContextBook(book, 'gpt');
+      break;
+    case 'queue-sakura':
+      queueContextBook(book, 'sakura');
+      break;
+    case 'download-translated':
+      await downloadContextTranslation(book);
+      break;
+    case 'download-original':
+      await downloadContextOriginal(book);
+      break;
+    case 'delete':
+      contextDeleteBook.value = book;
+      showContextDeleteConfirm.value = true;
+      break;
+  }
+};
+
+const deleteContextBook = async () => {
+  const book = contextDeleteBook.value;
+  if (book === undefined) return;
+  deletingContextBook.value = true;
+  try {
+    const { success, failed } = await localVolumeManager.deleteVolumes([
+      book.volume.id,
+    ]);
+    message.info(`${success} 本书已删除，${failed} 本删除失败`);
+    showContextDeleteConfirm.value = false;
+    contextDeleteBook.value = undefined;
+    await reload();
+  } catch (reason) {
+    message.error(`删除书籍失败：${String(reason)}`);
+  } finally {
+    deletingContextBook.value = false;
   }
 };
 
@@ -509,11 +685,45 @@ onMounted(reload);
           :book="book"
           :selectable="selectionMode"
           :selected="selectedBookIds.has(book.volume.id)"
+          @context-menu="openBookContextMenu"
           @details="toggleBookSelection"
           @toggle-selection="toggleBookSelection"
         />
       </section>
     </template>
+
+    <n-dropdown
+      :key="contextMenuSession"
+      trigger="manual"
+      placement="bottom-start"
+      :show="contextMenuShown"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :options="contextMenuOptions"
+      :menu-props="contextMenuProps"
+      @clickoutside="closeBookContextMenu"
+      @select="handleBookContextAction"
+      @update:show="contextMenuShown = $event"
+    />
+
+    <n-modal
+      v-model:show="showContextDeleteConfirm"
+      preset="dialog"
+      title="删除书籍"
+      positive-text="删除"
+      negative-text="取消"
+      :positive-button-props="{
+        loading: deletingContextBook,
+        type: 'error',
+      }"
+      style="width: min(420px, calc(100vw - 24px))"
+      @positive-click="deleteContextBook"
+      @after-leave="contextDeleteBook = undefined"
+    >
+      确定永久删除《{{
+        contextDeleteBook?.title
+      }}》及其阅读数据吗？此操作无法恢复。
+    </n-modal>
   </main>
 </template>
 
@@ -650,6 +860,21 @@ onMounted(reload);
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+:global(.bookshelf-book-context-menu) {
+  min-width: 190px;
+  max-width: calc(100vw - 16px);
+}
+
+:global(.bookshelf-book-context-progress) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  min-width: 150px;
+  padding: 6px 12px;
+  opacity: 0.85;
 }
 
 .book-grid {

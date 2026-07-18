@@ -282,6 +282,142 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   ).toBe(true);
   expect(imported.hasFile).toBe(true);
 
+  const contextAlphaCard = page
+    .locator('.book-card')
+    .filter({ hasText: 'Alpha Upload' });
+  const alphaCover = contextAlphaCard.getByRole('button', {
+    name: '查看《Alpha Upload》详情',
+    exact: true,
+  });
+  await alphaCover.click({ button: 'right' });
+  const bookContextMenu = page.locator('.bookshelf-book-context-menu');
+  await expect(bookContextMenu).toBeVisible();
+  for (const label of [
+    '阅读书籍',
+    '排队 GPT',
+    '排队 Sakura',
+    '下载译文',
+    '下载原文',
+    '删除书籍',
+  ]) {
+    await expect(
+      bookContextMenu.getByText(label, { exact: true }),
+    ).toBeVisible();
+  }
+  await expect(bookContextMenu.getByText('GPT', { exact: true })).toBeVisible();
+  await expect(bookContextMenu.getByText('0/2', { exact: true })).toHaveCount(
+    2,
+  );
+  await expect(
+    bookContextMenu.getByText('Sakura', { exact: true }),
+  ).toBeVisible();
+  const readerPopupPromise = page.waitForEvent('popup');
+  await bookContextMenu.getByText('阅读书籍', { exact: true }).click();
+  const readerPopup = await readerPopupPromise;
+  await expect(readerPopup).toHaveURL(
+    new RegExp(`/books/${encodeURIComponent(alphaFilename)}/read/0$`),
+  );
+  await readerPopup.close();
+
+  await alphaCover.click({ button: 'right' });
+  await expect(bookContextMenu).toBeVisible();
+  await bookContextMenu.getByText('删除书籍', { exact: true }).click();
+  const contextDeleteDialog = page
+    .getByRole('dialog')
+    .filter({ hasText: '删除书籍' });
+  await expect(contextDeleteDialog).toContainText('Alpha Upload');
+  await contextDeleteDialog
+    .getByRole('button', { name: '取消', exact: true })
+    .click();
+
+  await alphaCover.click({ button: 'right' });
+  const translatedContextDownload = page.waitForEvent('download');
+  await bookContextMenu.getByText('下载译文', { exact: true }).click();
+  expect((await translatedContextDownload).suggestedFilename()).not.toMatch(
+    /\.zip$/i,
+  );
+
+  await alphaCover.click({ button: 'right' });
+  const originalContextDownload = page.waitForEvent('download');
+  await bookContextMenu.getByText('下载原文', { exact: true }).click();
+  expect((await originalContextDownload).suggestedFilename()).toBe(
+    alphaFilename,
+  );
+
+  await alphaCover.click({ button: 'right' });
+  await bookContextMenu.getByText('排队 GPT', { exact: true }).click();
+  await expect(page.getByText('1本小说已排队，0本失败').last()).toBeVisible();
+  await alphaCover.click({ button: 'right' });
+  await bookContextMenu.getByText('排队 Sakura', { exact: true }).click();
+  await expect(page.getByText('1本小说已排队，0本失败').last()).toBeVisible();
+  const contextQueuedBooks = await page.evaluate(() => {
+    const readJobs = (key: string) =>
+      JSON.parse(localStorage.getItem(key) ?? '{"jobs":[]}').jobs as Array<{
+        description: string;
+      }>;
+    return {
+      gpt: readJobs('auto-novel:workspace:gpt'),
+      sakura: readJobs('auto-novel:workspace:sakura'),
+    };
+  });
+  expect(contextQueuedBooks.gpt[0]?.description).toBe(alphaFilename);
+  expect(contextQueuedBooks.sakura[0]?.description).toBe(alphaFilename);
+  await page.evaluate(() => {
+    for (const key of [
+      'auto-novel:workspace:gpt',
+      'auto-novel:workspace:sakura',
+    ]) {
+      const workspace = JSON.parse(
+        localStorage.getItem(key) ?? '{"jobs":[]}',
+      ) as { jobs: unknown[] };
+      workspace.jobs = [];
+      localStorage.setItem(key, JSON.stringify(workspace));
+    }
+  });
+  await page.reload();
+
+  const contextMenuDesktopViewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await alphaCover.scrollIntoViewIfNeeded();
+  const mobileAlphaCoverBounds = await alphaCover.boundingBox();
+  expect(mobileAlphaCoverBounds).not.toBeNull();
+  const longPressPosition = {
+    x: Math.round(
+      mobileAlphaCoverBounds!.x + mobileAlphaCoverBounds!.width / 2,
+    ),
+    y: Math.round(
+      mobileAlphaCoverBounds!.y + mobileAlphaCoverBounds!.height / 2,
+    ),
+  };
+  await alphaCover.dispatchEvent('pointerdown', {
+    ...longPressPosition,
+    pointerId: 1,
+    pointerType: 'touch',
+  });
+  await page.waitForTimeout(1050);
+  await expect(bookContextMenu).toBeVisible();
+  await alphaCover.dispatchEvent('pointerup', {
+    ...longPressPosition,
+    pointerId: 1,
+    pointerType: 'touch',
+  });
+  const mobileContextMenuBounds = await bookContextMenu.boundingBox();
+  expect(mobileContextMenuBounds).not.toBeNull();
+  expect(mobileContextMenuBounds!.x).toBeGreaterThanOrEqual(8);
+  expect(mobileContextMenuBounds!.y).toBeGreaterThanOrEqual(8);
+  expect(
+    mobileContextMenuBounds!.x + mobileContextMenuBounds!.width,
+  ).toBeLessThanOrEqual(382);
+  expect(
+    mobileContextMenuBounds!.y + mobileContextMenuBounds!.height,
+  ).toBeLessThanOrEqual(836);
+  await page.mouse.click(4, 4);
+  await expect(bookContextMenu).toBeHidden();
+  if (contextMenuDesktopViewport !== null) {
+    await page.setViewportSize(contextMenuDesktopViewport);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+
   const search = page.getByPlaceholder('输入书名，搜索书架');
   await search.fill('beta');
   await expect(
