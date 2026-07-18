@@ -144,6 +144,12 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     page.getByRole('button', { name: '阅读', exact: true }),
   ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '刷新', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.bookshelf-toolbar__filter')).toContainText(
+    '筛选',
+  );
 
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
@@ -221,7 +227,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await page.locator('.bookshelf-toolbar__sort .n-base-selection').click();
   await page
     .locator('.n-base-select-menu')
-    .getByText('标题', { exact: true })
+    .getByText('书籍标题', { exact: true })
     .click();
   await expect(page.locator('.book-card h2')).toHaveText([
     'Alpha Upload',

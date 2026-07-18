@@ -45,7 +45,7 @@ const localVolumeManager = useLocalVolumeManager();
 const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
 
 const filterOptions: { label: string; value: BookshelfFilter }[] = [
-  { label: '全部状态', value: 'all' },
+  { label: '筛选', value: 'all' },
   { label: '未开始', value: 'unread' },
   { label: '阅读中', value: 'reading' },
   { label: '已译完', value: 'translated' },
@@ -55,7 +55,7 @@ const filterOptions: { label: string; value: BookshelfFilter }[] = [
 const sortOptions: { label: string; value: BookshelfSort }[] = [
   { label: '最近阅读', value: 'recent-read' },
   { label: '最近添加', value: 'added' },
-  { label: '标题', value: 'title' },
+  { label: '书籍标题', value: 'title' },
   { label: '阅读进度', value: 'reading-progress' },
   { label: '翻译进度', value: 'translation-progress' },
 ];
@@ -205,6 +205,7 @@ onMounted(reload);
           {{ selectionMode ? '取消选择' : '选择' }}
         </n-button>
         <local-volume-upload-button @done="reload" />
+        <c-button label="刷新" @action="reload" />
       </div>
       <bulletin
         v-if="!props.hideNotice && infoPanelHtml"
