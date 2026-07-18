@@ -342,6 +342,23 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page.locator('.book-details__hero-shelf-actions')).toBeVisible();
   await expect(page.getByRole('button', { name: '置顶书籍' })).toBeVisible();
   await expect(page.getByRole('button', { name: '删除书籍' })).toBeVisible();
+  const desktopDetailsViewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '删除书籍' }).click();
+  const mobileDeleteConfirm = page.locator('.n-popconfirm');
+  await expect(mobileDeleteConfirm).toBeVisible();
+  const mobileDeleteConfirmBounds = await mobileDeleteConfirm.boundingBox();
+  expect(mobileDeleteConfirmBounds).not.toBeNull();
+  expect(mobileDeleteConfirmBounds!.x).toBeGreaterThanOrEqual(8);
+  expect(
+    mobileDeleteConfirmBounds!.x + mobileDeleteConfirmBounds!.width,
+  ).toBeLessThanOrEqual(382);
+  await mobileDeleteConfirm
+    .getByRole('button', { name: '取消', exact: true })
+    .click();
+  if (desktopDetailsViewport !== null) {
+    await page.setViewportSize(desktopDetailsViewport);
+  }
   await expect(
     page.getByRole('button', { name: '返回首页', exact: true }),
   ).toBeVisible();

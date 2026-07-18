@@ -414,7 +414,13 @@ onMounted(() => void load());
               <n-button @click="togglePinned">
                 {{ entry.state.pinned ? '取消置顶' : '置顶书籍' }}
               </n-button>
-              <n-popconfirm @positive-click="deleteBook">
+              <n-popconfirm
+                style="
+                  max-width: min(300px, calc(100vw - 16px));
+                  white-space: normal;
+                "
+                @positive-click="deleteBook"
+              >
                 <template #trigger>
                   <n-button type="error" :loading="deletingBook">
                     删除书籍
