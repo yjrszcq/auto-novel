@@ -15,6 +15,14 @@ const deferred = () => {
 };
 
 describe('translation concurrency scheduler', () => {
+  it('falls back to one worker for invalid concurrency without dropping work', async () => {
+    const visited: number[] = [];
+    await runWithConcurrency([0, 1, 2], Number.NaN, async (item) => {
+      visited.push(item);
+    });
+    expect(visited).toEqual([0, 1, 2]);
+  });
+
   it('aborts siblings and waits for active work before rejecting', async () => {
     const bothStarted = deferred();
     const failFirst = deferred();

@@ -6,7 +6,10 @@ export const runWithConcurrency = async <T>(
 ) => {
   if (items.length === 0) return;
 
-  const concurrency = Math.max(1, Math.min(limit, items.length));
+  const requestedConcurrency = Number.isFinite(limit)
+    ? Math.max(1, Math.floor(limit))
+    : 1;
+  const concurrency = Math.min(requestedConcurrency, items.length);
   const controller = new AbortController();
   const workerSignal = signal
     ? AbortSignal.any([signal, controller.signal])

@@ -118,13 +118,14 @@ export class SakuraTranslator implements SegmentTranslator {
   }
 
   selectPreviousContext(prevSegs: string[][]) {
+    if (this.prevSegLength <= 0) return [];
     const lines = prevSegs.flat();
     const selected: string[] = [];
     let size = 0;
     for (let index = lines.length - 1; index >= 0; index--) {
       const line = lines[index];
       const lineSize = estimateTranslationSize(line);
-      if (selected.length > 0 && size + lineSize > this.prevSegLength) break;
+      if (size + lineSize > this.prevSegLength) break;
       selected.push(line);
       size += lineSize;
     }

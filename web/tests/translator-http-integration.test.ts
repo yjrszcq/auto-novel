@@ -13,6 +13,7 @@ vi.hoisted(() => {
 });
 
 import { Translator } from '../src/domain/translate/Translator';
+import { SakuraTranslator } from '../src/domain/translate/TranslatorSakura';
 import {
   createBudgetSegmentor,
   createSegIndexedDbCache,
@@ -33,6 +34,25 @@ afterEach(async () => {
 });
 
 describe('translator HTTP integration', () => {
+  it('keeps Sakura translated context within its exact configured budget', () => {
+    const withoutContext = new SakuraTranslator(() => {}, {
+      endpoint: 'http://127.0.0.1:1',
+      prevSegLength: 0,
+    });
+    expect(withoutContext.selectPreviousContext([['前文']])).toEqual([]);
+
+    const boundedContext = new SakuraTranslator(() => {}, {
+      endpoint: 'http://127.0.0.1:1',
+      prevSegLength: 5,
+    });
+    expect(
+      boundedContext.selectPreviousContext([['旧'.repeat(6), '新'.repeat(4)]]),
+    ).toEqual(['新'.repeat(4)]);
+    expect(
+      boundedContext.selectPreviousContext([['旧'.repeat(4), '新'.repeat(6)]]),
+    ).toEqual([]);
+  });
+
   it('translates through an OpenAI-compatible streaming endpoint', async () => {
     const server = await startOpenAiTestServer();
     cleanupCallbacks.push(server.close);
@@ -513,7 +533,7 @@ describe('translator HTTP integration', () => {
         id: 'sakura',
         endpoint: server.endpoint,
         segLength: 1,
-        prevSegLength: 1,
+        prevSegLength: 100,
       },
       true,
     );
@@ -539,7 +559,7 @@ describe('translator HTTP integration', () => {
       id: 'sakura',
       endpoint: server.endpoint,
       segLength: 1,
-      prevSegLength: 1,
+      prevSegLength: 5,
     });
     translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
 
