@@ -135,6 +135,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await uploadBooks(page);
   await expect(page.getByText(alphaFilename, { exact: true })).toBeVisible();
   await expect(page.getByText(betaFilename, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '阅读', exact: true }),
+  ).toHaveCount(0);
 
   const alphaHomeTitle = page.getByRole('button', {
     name: `打开《${alphaFilename}》`,
@@ -144,19 +147,25 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .getByRole('dialog')
     .filter({ hasText: '尚未加入书架' });
   await expect(addToBookshelfDialog).toContainText(alphaFilename);
+  const addedBookPagePromise = page.waitForEvent('popup');
   await addToBookshelfDialog
     .getByRole('button', { name: '加入书架', exact: true })
     .click();
-  await expect(page).toHaveURL(
+  const addedBookPage = await addedBookPagePromise;
+  await expect(addedBookPage).toHaveURL(
     new RegExp(`/books/${encodeURIComponent(alphaFilename)}/details$`),
   );
+  await expect(page).toHaveURL('/');
+  await addedBookPage.close();
 
-  await page.goto('/');
+  const existingBookPagePromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: `打开《${alphaFilename}》` }).click();
-  await expect(page).toHaveURL(
+  const existingBookPage = await existingBookPagePromise;
+  await expect(existingBookPage).toHaveURL(
     new RegExp(`/books/${encodeURIComponent(alphaFilename)}/details$`),
   );
-  await page.goto('/');
+  await expect(page).toHaveURL('/');
+  await existingBookPage.close();
 
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
@@ -376,6 +385,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     'href',
     `/books/${encodeURIComponent(betaFilename)}/read/0`,
   );
+  await expect(
+    workspaceDrawer.getByRole('link', { name: betaFilename, exact: true }),
+  ).toHaveAttribute('target', '_blank');
   await expect(
     workspaceDrawer.getByRole('button', { name: '阅读', exact: true }),
   ).toHaveCount(0);

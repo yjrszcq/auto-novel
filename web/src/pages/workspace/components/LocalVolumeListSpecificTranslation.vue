@@ -161,6 +161,8 @@ const progressFilterFunc = computed(() => {
         <router-link
           class="local-volume-title-link"
           :to="`/books/${encodeURIComponent(volume.id)}/read/0`"
+          target="_blank"
+          rel="noopener noreferrer"
         >
           {{ volume.id }}
         </router-link>

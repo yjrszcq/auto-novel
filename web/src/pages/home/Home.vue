@@ -25,7 +25,6 @@ import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const bp = useBreakPoints();
 const showShortcut = bp.smaller('tablet');
-const router = useRouter();
 
 const vars = useThemeVars();
 
@@ -67,6 +66,7 @@ const localShelfLoading = ref(false);
 const showDeleteModal = ref(false);
 const showAddToBookshelfModal = ref(false);
 const pendingBookshelfVolume = shallowRef<LocalVolumeMetadata>();
+const listedBookIds = ref(new Set<string>());
 
 const progressFilter = ref<'all' | 'finished' | 'unfinished'>('all');
 const progressFilterOptions = [
@@ -144,7 +144,15 @@ const handleSearch = () => {
 const loadLocalShelf = async () => {
   localShelfLoading.value = true;
   try {
-    await localVolumeManager.loadVolumes();
+    const [, repository] = await Promise.all([
+      localVolumeManager.loadVolumes(),
+      ensureLocalRepo(),
+    ]);
+    listedBookIds.value = new Set(
+      (await repository.listReaderBookshelves())
+        .filter((state) => state.listed)
+        .map((state) => state.bookId),
+    );
   } catch (error) {
     message.error(`本地书架加载失败：${error}`);
   } finally {
@@ -375,32 +383,34 @@ const deleteLocalVolume = async (volumeId: string) => {
 const bookDetailsPath = (volumeId: string) =>
   `/books/${encodeURIComponent(volumeId)}/details`;
 
-const openLocalVolume = async (volume: LocalVolumeMetadata) => {
-  try {
-    const repository = await ensureLocalRepo();
-    const bookshelfState = await repository.getReaderBookshelf(volume.id);
-    if (bookshelfState?.listed) {
-      await router.push(bookDetailsPath(volume.id));
-      return;
-    }
-    pendingBookshelfVolume.value = volume;
-    showAddToBookshelfModal.value = true;
-  } catch (error) {
-    message.error(`无法打开书籍：${String(error)}`);
+const openLocalVolume = (volume: LocalVolumeMetadata) => {
+  if (listedBookIds.value.has(volume.id)) {
+    window.open(bookDetailsPath(volume.id), '_blank', 'noopener,noreferrer');
+    return;
   }
+  pendingBookshelfVolume.value = volume;
+  showAddToBookshelfModal.value = true;
 };
 
 const addPendingVolumeToBookshelf = async () => {
   const volume = pendingBookshelfVolume.value;
   if (volume === undefined) return;
+  const detailsWindow = window.open('about:blank', '_blank');
+  if (detailsWindow !== null) detailsWindow.opener = null;
   try {
     const repository = await ensureLocalRepo();
     await createBookshelfService(repository).setListed(volume.id, true);
+    listedBookIds.value = new Set([...listedBookIds.value, volume.id]);
     showAddToBookshelfModal.value = false;
     pendingBookshelfVolume.value = undefined;
     message.success('已加入书架');
-    await router.push(bookDetailsPath(volume.id));
+    if (detailsWindow !== null) {
+      detailsWindow.location.replace(bookDetailsPath(volume.id));
+    } else {
+      message.warning('浏览器阻止了新标签页，请再次点击书名');
+    }
   } catch (error) {
+    detailsWindow?.close();
     message.error(`加入书架失败：${String(error)}`);
   }
 };
@@ -559,14 +569,6 @@ const addPendingVolumeToBookshelf = async () => {
                   secondary
                   @action="queueVolumeToWorkspace(volume, 'sakura')"
                 />
-                <router-link
-                  v-if="!volume.id.endsWith('.epub')"
-                  :to="`/books/${encodeURIComponent(volume.id)}/read/0`"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <c-button label="阅读" size="tiny" secondary />
-                </router-link>
                 <c-button
                   label="下载"
                   size="tiny"
