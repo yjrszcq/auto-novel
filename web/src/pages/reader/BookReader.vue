@@ -14,6 +14,7 @@ import type {
   ReaderAnnotation,
   ReaderBookmark,
   ReaderBookStyleOverride,
+  ReaderChapterContent,
   ReaderChapterSummary,
   ReaderMode,
   ReaderSettingsRecord,
@@ -51,6 +52,8 @@ import { createReaderAnnotation } from './core/ReaderAnnotations';
 import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
 import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
 import { createBrowserSpeechController } from './core/ReaderSpeech';
+import type { ReaderSearchResult } from './core/ReaderSearch';
+import { searchReaderChapters } from './core/ReaderSearch';
 import { addReadingTime } from './core/ReaderStats';
 import {
   createReaderBookmark,
@@ -88,6 +91,11 @@ const showCatalog = ref(false);
 const showTools = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
+const showSearch = ref(false);
+const searchQuery = ref('');
+const searchResults = shallowRef<ReaderSearchResult[]>([]);
+const searchLoading = ref(false);
+let searchRequestId = 0;
 const showMobileTranslationNotice = ref(false);
 const controlsVisible = ref(true);
 const readerViewport = ref<HTMLElement | null>(null);
@@ -213,6 +221,7 @@ const hasOpenReaderPanel = () =>
   showTools.value ||
   showBookmarks.value ||
   showAnnotations.value ||
+  showSearch.value ||
   showModePrompt.value ||
   showMobileTranslationNotice.value;
 
@@ -222,6 +231,7 @@ const closeReaderPanels = () => {
   showTools.value = false;
   showBookmarks.value = false;
   showAnnotations.value = false;
+  showSearch.value = false;
   showModePrompt.value = false;
   showMobileTranslationNotice.value = false;
 };
@@ -238,6 +248,63 @@ const openCatalog = async () => {
 const openTools = () => {
   showMobileTranslationNotice.value = false;
   showTools.value = true;
+};
+
+const openSearch = () => {
+  showTools.value = false;
+  showSearch.value = true;
+};
+
+const runSearch = async () => {
+  const query = searchQuery.value.trim();
+  const requestId = ++searchRequestId;
+  if (result.value?.kind !== 'ready' || query.length === 0) {
+    searchResults.value = [];
+    return;
+  }
+  searchLoading.value = true;
+  try {
+    const adapter = await cachedAdapterPromise;
+    const bookId = result.value.book.id;
+    const chapters: ReaderChapterContent[] = [];
+    for (let index = 0; index < result.value.chapters.length; index += 12) {
+      chapters.push(
+        ...(await Promise.all(
+          result.value.chapters.slice(index, index + 12).map((chapter) =>
+            adapter.getChapter({
+              bookId,
+              chapterId: chapter.id,
+            }),
+          ),
+        )),
+      );
+      if (requestId !== searchRequestId) return;
+    }
+    searchResults.value = searchReaderChapters(chapters, query);
+  } catch (reason) {
+    if (requestId === searchRequestId) {
+      message.error('搜索失败：' + String(reason));
+    }
+  } finally {
+    if (requestId === searchRequestId) {
+      searchLoading.value = false;
+    }
+  }
+};
+
+const openSearchResult = (searchResult: ReaderSearchResult) => {
+  showSearch.value = false;
+  if (
+    result.value?.kind === 'ready' &&
+    result.value.chapter.chapterId === searchResult.chapterId
+  ) {
+    scrollToSegment(searchResult.segmentId);
+    return;
+  }
+  void router.push({
+    path: `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(searchResult.chapterId)}`,
+    query: { segment: searchResult.segmentId },
+  });
 };
 
 const updateViewportMetrics = () => {
@@ -1577,6 +1644,7 @@ onBeforeUnmount(() => {
 
     <ReaderBottomSheet v-model:show="showTools" title="阅读工具" wide>
       <div class="book-reader__tool-grid">
+        <n-button @click="openSearch">全文搜索</n-button>
         <n-button @click="toggleBookmark">添加书签</n-button>
         <n-button @click="addAnnotation">高亮选中</n-button>
         <n-button
@@ -1634,6 +1702,45 @@ onBeforeUnmount(() => {
           下一章
         </n-button>
       </div>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet v-model:show="showSearch" title="全文搜索" wide>
+      <n-input-group>
+        <n-input
+          v-model:value="searchQuery"
+          clearable
+          placeholder="搜索原文和译文"
+          @keyup.enter="runSearch"
+        />
+        <n-button type="primary" :loading="searchLoading" @click="runSearch">
+          搜索
+        </n-button>
+      </n-input-group>
+      <n-empty
+        v-if="searchResults.length === 0 && !searchLoading"
+        :description="
+          searchQuery.trim() ? '没有匹配内容' : '输入关键词开始搜索'
+        "
+        style="margin-top: 20px"
+      />
+      <n-list v-else hoverable clickable style="margin-top: 12px">
+        <n-list-item
+          v-for="searchResult in searchResults"
+          :key="`${searchResult.chapterId}/${searchResult.segmentId}/${searchResult.languageSide}`"
+          @click="openSearchResult(searchResult)"
+        >
+          <n-thing
+            :title="searchResult.chapterTitle"
+            :description="searchResult.excerpt"
+          >
+            <template #header-extra>
+              <n-tag size="small">
+                {{ searchResult.languageSide === 'original' ? '原文' : '译文' }}
+              </n-tag>
+            </template>
+          </n-thing>
+        </n-list-item>
+      </n-list>
     </ReaderBottomSheet>
 
     <ReaderBottomSheet v-model:show="showAnnotations" title="批注">

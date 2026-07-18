@@ -1313,6 +1313,256 @@ test('persists keyboard pagination and every reading mode across responsive layo
   expect(pageErrors).toEqual([]);
 });
 
+test('keeps reader search, annotations, bookmarks, speech, and handoffs on stable segments', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const toolsBookId = 'reader-tools.txt';
+  await page.addInitScript(() => {
+    const speechEvents: Array<{ type: string; text?: string; lang?: string }> =
+      [];
+    class FakeUtterance {
+      lang = '';
+      constructor(public text: string) {}
+    }
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      configurable: true,
+      value: FakeUtterance,
+    });
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel: () => speechEvents.push({ type: 'cancel' }),
+        speak: (utterance: FakeUtterance) =>
+          speechEvents.push({
+            type: 'speak',
+            text: utterance.text,
+            lang: utterance.lang,
+          }),
+      },
+    });
+    Object.assign(window, { __readerSpeechEvents: speechEvents });
+  });
+  await page.goto('/bookshelf');
+  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'chapter', 'reader-settings'],
+      'readwrite',
+    );
+    transaction.objectStore('metadata').put({
+      id: bookId,
+      createAt: 1,
+      toc: [
+        { chapterId: '0', title: '工具第一章' },
+        { chapterId: '1', title: '工具第二章', gpt: 'gpt-glossary' },
+      ],
+      sourceFormat: 'txt',
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceBookMetadata: {
+        title: '阅读工具测试',
+        authors: [],
+        languages: ['ja'],
+      },
+    });
+    transaction.objectStore('chapter').put({
+      id: `${bookId}/0`,
+      volumeId: bookId,
+      paragraphs: ['开头选择词语结尾', '第一章第二段'],
+      segmentIds: ['tools-segment-0', 'tools-segment-1'],
+    });
+    transaction.objectStore('chapter').put({
+      id: `${bookId}/1`,
+      volumeId: bookId,
+      paragraphs: ['第二章原文'],
+      segmentIds: ['tools-chapter-1-segment'],
+      gpt: {
+        glossaryId: 'gpt-glossary',
+        glossary: {},
+        paragraphs: ['唯一搜索译文'],
+      },
+    });
+    transaction.objectStore('reader-settings').put({
+      id: 'default',
+      defaultMode: 'original',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      fontSize: 18,
+      lineHeight: 1.9,
+      contentWidth: 840,
+      horizontalPadding: 24,
+      theme: 'light',
+      flow: 'scrolled',
+      updatedAt: 1,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, toolsBookId);
+
+  await page.goto(`/books/${toolsBookId}/read/0`);
+  const firstParagraph = page
+    .locator('[data-reader-segment-id="tools-segment-0"] p')
+    .first();
+  await expect(firstParagraph).toContainText('选择词语');
+  const selectQuery = async () => {
+    await firstParagraph.evaluate((paragraph) => {
+      const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      let start = -1;
+      while (node !== null) {
+        start = node.textContent?.indexOf('选择词语') ?? -1;
+        if (start >= 0) break;
+        node = walker.nextNode();
+      }
+      if (node === null || start < 0) throw new Error('找不到选择文本');
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + '选择词语'.length);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+  };
+
+  await selectQuery();
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: '高亮选中', exact: true }).click();
+  await expect(page.getByText('已添加高亮批注', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(
+    firstParagraph.locator('.reader-annotation--highlight'),
+  ).toHaveText('选择词语');
+
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: '添加书签', exact: true }).click();
+  await expect(page.getByText('已添加书签', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '朗读当前段', exact: true }).click();
+  await page.getByRole('button', { name: '停止朗读', exact: true }).click();
+  const speechEvents = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __readerSpeechEvents: Array<{
+            type: string;
+            text?: string;
+            lang?: string;
+          }>;
+        }
+      ).__readerSpeechEvents,
+  );
+  expect(speechEvents).toContainEqual({
+    type: 'speak',
+    text: '第一章第二段',
+    lang: 'ja-JP',
+  });
+  expect(speechEvents.filter((event) => event.type === 'cancel')).toHaveLength(
+    2,
+  );
+
+  await page.getByRole('button', { name: '全文搜索', exact: true }).click();
+  const searchDialog = page.getByRole('dialog', { name: '全文搜索' });
+  await searchDialog.getByPlaceholder('搜索原文和译文').fill('唯一搜索译文');
+  await searchDialog.getByRole('button', { name: '搜索', exact: true }).click();
+  await expect(
+    searchDialog.getByText('工具第二章', { exact: true }),
+  ).toBeVisible();
+  await expect(searchDialog.getByText('译文', { exact: true })).toBeVisible();
+  await searchDialog.getByText('工具第二章', { exact: true }).click();
+  await expect(page).toHaveURL(
+    /\/books\/reader-tools\.txt\/read\/1\?segment=tools-chapter-1-segment$/,
+  );
+  await expect(
+    page.locator('[data-reader-segment-id="tools-chapter-1-segment"]'),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: '书签 (1)', exact: true }).click();
+  const bookmarksDialog = page.getByRole('dialog', { name: '书签' });
+  await bookmarksDialog.getByText('工具第一章', { exact: true }).click();
+  await expect(page).toHaveURL(/\/books\/reader-tools\.txt\/read\/0$/);
+  await expect(firstParagraph).toBeVisible();
+
+  await selectQuery();
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
+  await expect(page).toHaveURL(/\/workspace\/interactive$/);
+  await expect(page.getByPlaceholder('输入需要翻译的文本')).toHaveValue(
+    '选择词语',
+  );
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem('interactive-reader-selection'),
+    ),
+  ).toBeNull();
+
+  await page.goto(`/books/${toolsBookId}/read/0`);
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: 'GPT 翻译本章', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Sakura 翻译本章', exact: true })
+    .click();
+  const queued = await page.evaluate(() => ({
+    gpt: JSON.parse(
+      localStorage.getItem('auto-novel:workspace:gpt') ?? '{"jobs":[]}',
+    ).jobs,
+    sakura: JSON.parse(
+      localStorage.getItem('auto-novel:workspace:sakura') ?? '{"jobs":[]}',
+    ).jobs,
+  }));
+  expect(queued.gpt).toHaveLength(1);
+  expect(queued.sakura).toHaveLength(1);
+  expect(queued.gpt[0].description).toBe(toolsBookId);
+  expect(queued.sakura[0].description).toBe(toolsBookId);
+
+  const persistedTools = await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['reader-bookmark', 'reader-annotation'],
+      'readonly',
+    );
+    const bookmarkRequest = transaction
+      .objectStore('reader-bookmark')
+      .index('byBookId')
+      .getAll(bookId);
+    const annotationRequest = transaction
+      .objectStore('reader-annotation')
+      .index('byBookId')
+      .getAll(bookId);
+    const result = await new Promise<{
+      bookmarks: Array<{ segmentId?: string }>;
+      annotations: Array<{ segmentId: string; quote: string }>;
+    }>((resolve, reject) => {
+      transaction.oncomplete = () =>
+        resolve({
+          bookmarks: bookmarkRequest.result,
+          annotations: annotationRequest.result,
+        });
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+    return result;
+  }, toolsBookId);
+  expect(persistedTools.bookmarks).toMatchObject([
+    { segmentId: 'tools-segment-1' },
+  ]);
+  expect(persistedTools.annotations).toMatchObject([
+    { segmentId: 'tools-segment-0', quote: '选择词语' },
+  ]);
+});
+
 test('continues paging backward after loading an earlier long-chapter window', async ({
   page,
 }) => {
