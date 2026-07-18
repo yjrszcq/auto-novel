@@ -57,6 +57,34 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
         setting.value.downloadFormat;
 
       const repo = await useLocalVolumeStore();
+      const getDownload = async (id: string) => {
+        const volume = await repo.getVolume(id);
+        if (volume === undefined) throw new Error('小说不存在');
+        return repo.getTranslationFile({
+          id,
+          mode,
+          translationsMode,
+          translations,
+          embedMetadata: shouldEmbedDownloadMetadata(
+            volume,
+            'translated',
+            setting.value.embedMetadataInTranslatedDownload,
+          ),
+        });
+      };
+
+      if (ids.length === 0) return { success: 0, failed: 0 };
+
+      if (ids.length === 1) {
+        try {
+          const { filename, blob } = await getDownload(ids[0]!);
+          downloadFile(filename, blob);
+          return { success: 1, failed: 0 };
+        } catch (error) {
+          console.error(`生成文件错误：${error}\n标题:${ids[0]}`);
+          return { success: 0, failed: 1 };
+        }
+      }
 
       const { BlobReader, BlobWriter, ZipWriter } =
         await import('@zip.js/zip.js');
@@ -67,19 +95,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       await Promise.all(
         ids.map(async (id: string) => {
           try {
-            const volume = await repo.getVolume(id);
-            if (volume === undefined) throw new Error('小说不存在');
-            const { filename, blob } = await repo.getTranslationFile({
-              id,
-              mode,
-              translationsMode,
-              translations,
-              embedMetadata: shouldEmbedDownloadMetadata(
-                volume,
-                'translated',
-                setting.value.embedMetadataInTranslatedDownload,
-              ),
-            });
+            const { filename, blob } = await getDownload(id);
             await writer.add(filename, new BlobReader(blob));
           } catch (error) {
             failed += 1;

@@ -386,7 +386,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
     bookshelfLocalDrawer.getByRole('button', { name: '添加', exact: true }),
   ).toBeVisible();
   await expect(
-    bookshelfLocalDrawer.getByRole('button', { name: '下载', exact: true }),
+    bookshelfLocalDrawer.getByRole('button', {
+      name: '下载选中的书',
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     bookshelfLocalDrawer.getByRole('button', {
@@ -2569,13 +2572,25 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     gptLocalDrawer.getByRole('button', { name: '添加', exact: true }),
   ).toBeVisible();
   await expect(
-    gptLocalDrawer.getByRole('button', { name: '下载', exact: true }),
+    gptLocalDrawer.getByRole('button', {
+      name: '下载选中的书',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    gptLocalDrawer.getByText('已选择 0 本', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    gptLocalDrawer.getByRole('button', { name: '全选', exact: true }),
+  ).toBeVisible();
+  await expect(
+    gptLocalDrawer.getByRole('button', { name: '反选', exact: true }),
   ).toBeVisible();
   await gptLocalDrawer
     .getByRole('button', { name: '更多本地小说操作' })
     .click();
-  await expect(page.getByText('全部排队', { exact: true })).toBeVisible();
-  await expect(page.getByText('批量删除', { exact: true })).toBeVisible();
+  await expect(page.getByText('排队', { exact: true })).toBeVisible();
+  await expect(page.getByText('删除', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
   const formatRetryInfo = page.getByRole('button', {
@@ -2635,13 +2650,25 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     sakuraLocalDrawer.getByRole('button', { name: '添加', exact: true }),
   ).toBeVisible();
   await expect(
-    sakuraLocalDrawer.getByRole('button', { name: '下载', exact: true }),
+    sakuraLocalDrawer.getByRole('button', {
+      name: '下载选中的书',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    sakuraLocalDrawer.getByText('已选择 0 本', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    sakuraLocalDrawer.getByRole('button', { name: '全选', exact: true }),
+  ).toBeVisible();
+  await expect(
+    sakuraLocalDrawer.getByRole('button', { name: '反选', exact: true }),
   ).toBeVisible();
   await sakuraLocalDrawer
     .getByRole('button', { name: '更多本地小说操作' })
     .click();
-  await expect(page.getByText('全部排队', { exact: true })).toBeVisible();
-  await expect(page.getByText('批量删除', { exact: true })).toBeVisible();
+  await expect(page.getByText('排队', { exact: true })).toBeVisible();
+  await expect(page.getByText('删除', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
   await expect(

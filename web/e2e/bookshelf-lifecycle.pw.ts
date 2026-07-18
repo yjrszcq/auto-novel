@@ -285,18 +285,81 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     localDrawer.getByRole('button', { name: '更多本地小说操作' }),
   ).toHaveCount(0);
+  const downloadButton = localDrawer.getByRole('button', {
+    name: '下载选中的书',
+    exact: true,
+  });
+  await expect(downloadButton).toBeDisabled();
+  await localDrawer
+    .getByRole('checkbox', { name: `选择 ${betaFilename}` })
+    .click();
+  await expect(
+    localDrawer.getByText('已选择 1 本', { exact: true }),
+  ).toBeVisible();
+  const singleDownload = page.waitForEvent('download');
+  await downloadButton.click();
+  const single = await singleDownload;
+  expect(single.suggestedFilename()).toBe('jp-zh.Bgs.Beta Upload.txt');
+  expect((await readDownload(single)).toString()).toContain('该分段翻译缺失');
+
+  await page.goto('/workspace/gpt');
+  await page.getByRole('button', { name: '本地书架', exact: true }).click();
+  const workspaceDrawer = page
+    .locator('.n-drawer')
+    .filter({ hasText: '本地小说' });
+  await workspaceDrawer
+    .getByRole('button', { name: '全选', exact: true })
+    .click();
+  await expect(
+    workspaceDrawer.getByText('已选择 2 本', { exact: true }),
+  ).toBeVisible();
   const archiveDownload = page.waitForEvent('download');
-  await localDrawer.getByRole('button', { name: '下载', exact: true }).click();
+  await workspaceDrawer
+    .getByRole('button', { name: '下载选中的书', exact: true })
+    .click();
   const archive = await archiveDownload;
   expect(archive.suggestedFilename()).toBe('批量下载[2].zip');
   expect(await listArchiveEntries(await readDownload(archive))).toEqual([
     'jp-zh.Bgs.Alpha Upload.txt',
     'jp-zh.Bgs.Beta Upload.txt',
   ]);
+  await workspaceDrawer
+    .getByRole('button', { name: '反选', exact: true })
+    .click();
   await expect(
-    localDrawer.getByText(betaFilename, { exact: true }),
+    workspaceDrawer.getByText('已选择 0 本', { exact: true }),
   ).toBeVisible();
-  await localDrawer
+  await workspaceDrawer
+    .getByRole('checkbox', { name: `选择 ${betaFilename}` })
+    .click();
+  await workspaceDrawer
+    .getByRole('button', { name: '更多本地小说操作' })
+    .click();
+  await page
+    .locator('.n-dropdown-menu')
+    .getByText('排队', { exact: true })
+    .click();
+  await expect(page.getByText('1本小说已排队，0本失败')).toBeVisible();
+  await workspaceDrawer
+    .getByRole('button', { name: '更多本地小说操作' })
+    .click();
+  await page
+    .locator('.n-dropdown-menu')
+    .getByText('删除', { exact: true })
+    .click();
+  const deleteDialog = page
+    .getByRole('dialog')
+    .filter({ hasText: '删除选中的书' });
+  await expect(deleteDialog).toContainText('这将删除选中的 1 本书');
+  await page.keyboard.press('Escape');
+
+  await page.goto('/bookshelf');
+  await page.getByRole('button', { name: '从本地书架添加' }).click();
+  const addDrawer = page.locator('.n-drawer').filter({ hasText: '本地小说' });
+  await expect(
+    addDrawer.getByText(betaFilename, { exact: true }),
+  ).toBeVisible();
+  await addDrawer
     .locator('.n-list-item')
     .filter({ hasText: betaFilename })
     .getByRole('button', { name: '加入书架', exact: true })

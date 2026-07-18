@@ -50,7 +50,7 @@ const calculateExpired = (volume: LocalVolumeMetadata) =>
     );
   }).length;
 
-const queueAllVolumes = (volumes: LocalVolumeMetadata[]) => {
+const queueVolumes = (volumes: LocalVolumeMetadata[]) => {
   const ids = volumes.map((it) => it.id);
   const { formatRetryCount } = translateOptions.value!.getTranslateTaskParams();
   const { success, failed } = store.queueJobsToWorkspace(ids, {
@@ -133,7 +133,7 @@ const progressFilterFunc = computed(() => {
 <template>
   <local-volume-list
     :filter="progressFilterFunc"
-    :options="{ 全部排队: queueAllVolumes }"
+    :options="{ 排队: queueVolumes }"
     @volume-add="queueVolume($event.name)"
   >
     <template #extra>

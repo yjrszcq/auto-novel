@@ -26,7 +26,6 @@ const filter = ref<BookshelfFilter>('all');
 const sort = ref<BookshelfSort>('recent-read');
 const showLocalVolumes = ref(false);
 const unlistedBookIds = ref<string[]>([]);
-const localSelectedBookIds = ref(new Set<string>());
 const addingLocalBooks = ref(false);
 const selectionMode = ref(false);
 const selectedBookIds = ref(new Set<string>());
@@ -87,28 +86,8 @@ const addLocalBook = async (bookId: string) => {
   await reload();
 };
 
-const toggleLocalBookSelection = (bookId: string) => {
-  const selected = new Set(localSelectedBookIds.value);
-  if (selected.has(bookId)) selected.delete(bookId);
-  else selected.add(bookId);
-  localSelectedBookIds.value = selected;
-};
-
-const selectAllLocalBooks = (volumes: LocalVolumeMetadata[]) => {
-  localSelectedBookIds.value = new Set(volumes.map((volume) => volume.id));
-};
-
-const invertLocalBookSelection = (volumes: LocalVolumeMetadata[]) => {
-  const selected = new Set(localSelectedBookIds.value);
-  volumes.forEach((volume) => {
-    if (selected.has(volume.id)) selected.delete(volume.id);
-    else selected.add(volume.id);
-  });
-  localSelectedBookIds.value = selected;
-};
-
-const addSelectedLocalBooks = async () => {
-  const ids = [...localSelectedBookIds.value];
+const addSelectedLocalBooks = async (volumes: LocalVolumeMetadata[]) => {
+  const ids = volumes.map((volume) => volume.id);
   if (ids.length === 0) return;
   addingLocalBooks.value = true;
   try {
@@ -116,7 +95,6 @@ const addSelectedLocalBooks = async () => {
     const service = createBookshelfService(repository);
     await Promise.all(ids.map((id) => service.setListed(id, true)));
     message.success(`已将 ${ids.length} 本书加入书架`);
-    localSelectedBookIds.value = new Set();
     showLocalVolumes.value = false;
     await reload();
   } catch (reason) {
@@ -199,9 +177,6 @@ const resetFilters = () => {
   filter.value = 'all';
 };
 
-watch(showLocalVolumes, (show) => {
-  if (!show) localSelectedBookIds.value = new Set();
-});
 onMounted(reload);
 </script>
 
@@ -322,38 +297,22 @@ onMounted(reload);
         :show-menu="false"
         @volume-add="reload"
       >
-        <template #extra="{ volumes }">
-          <n-flex align="center" :wrap="true">
-            <n-text>已选择 {{ localSelectedBookIds.size }} 本</n-text>
-            <n-button size="small" @click="selectAllLocalBooks(volumes)">
-              全选
-            </n-button>
-            <n-button size="small" @click="invertLocalBookSelection(volumes)">
-              反选
-            </n-button>
-            <n-button
-              size="small"
-              type="primary"
-              :disabled="localSelectedBookIds.size === 0"
-              :loading="addingLocalBooks"
-              @click="addSelectedLocalBooks"
-            >
-              加入书架
-            </n-button>
-          </n-flex>
+        <template #selection-action="{ volumes }">
+          <n-button
+            size="small"
+            type="primary"
+            :disabled="volumes.length === 0"
+            :loading="addingLocalBooks"
+            @click="addSelectedLocalBooks(volumes)"
+          >
+            加入书架
+          </n-button>
         </template>
         <template #volume="volume">
           <n-flex align="center" justify="space-between" :wrap="false">
-            <n-flex align="center" :wrap="false">
-              <n-checkbox
-                :checked="localSelectedBookIds.has(volume.id)"
-                :aria-label="`选择 ${volume.id}`"
-                @update:checked="toggleLocalBookSelection(volume.id)"
-              />
-              <n-flex vertical :size="2">
-                <n-text>{{ volume.id }}</n-text>
-                <n-text depth="3">共 {{ volume.toc.length }} 章</n-text>
-              </n-flex>
+            <n-flex vertical :size="2">
+              <n-text>{{ volume.id }}</n-text>
+              <n-text depth="3">共 {{ volume.toc.length }} 章</n-text>
             </n-flex>
             <n-button
               size="small"

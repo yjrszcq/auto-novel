@@ -12,13 +12,11 @@ const props = withDefaults(
   defineProps<{
     options?: { [key: string]: (volumes: LocalVolumeMetadata[]) => void };
     filter?: (volume: LocalVolumeMetadata) => boolean;
-    showManagement?: boolean;
     showMenu?: boolean;
   }>(),
   {
     options: undefined,
     filter: undefined,
-    showManagement: true,
     showMenu: true,
   },
 );
@@ -38,44 +36,37 @@ const { volumes } = storeToRefs(store);
 store.loadVolumes();
 
 const options = computed(() => {
-  return [...Object.keys(props.options ?? {}), '批量删除'].map((it) => ({
+  return [...Object.keys(props.options ?? {}), '删除'].map((it) => ({
     label: it,
     key: it,
+    disabled: selectedVolumes.value.length === 0,
   }));
 });
 const handleSelect = (key: string) => {
   switch (key) {
-    case '批量删除':
+    case '删除':
       openDeleteModal();
       break;
     default:
-      props.options?.[key]?.(volumes.value ?? []);
+      props.options?.[key]?.(selectedVolumes.value);
       break;
   }
 };
 
 const downloadVolumes = async () => {
-  if (volumes.value.length === 0) {
-    message.info('本地书库为空');
-    return;
-  }
-  const ids = volumes.value.map((it) => it.id);
+  const ids = selectedVolumes.value.map((it) => it.id);
   const { success, failed } = await store.downloadVolumes(ids);
-  message.info(`${success}本小说被打包，${failed}本失败`);
+  message.info(`${success}本小说已下载，${failed}本失败`);
 };
 
 const showDeleteModal = ref(false);
 
 const openDeleteModal = () => {
-  if (sortedVolumes.value.length === 0) {
-    message.info('没有选中小说');
-    return;
-  }
   showDeleteModal.value = true;
 };
 
-const deleteAllVolumes = async () => {
-  const ids = sortedVolumes.value.map((it) => it.id);
+const deleteSelectedVolumes = async () => {
+  const ids = selectedVolumes.value.map((it) => it.id);
   const { success, failed } = await store.deleteVolumes(ids);
   showDeleteModal.value = false;
   message.info(`${success}本小说被删除，${failed}本失败`);
@@ -96,23 +87,61 @@ const sortedVolumes = computed(() => {
     order: setting.value.localVolumeOrder,
   });
 });
+
+const selectedVolumeIds = ref(new Set<string>());
+const selectedVolumes = computed(() =>
+  sortedVolumes.value.filter((volume) =>
+    selectedVolumeIds.value.has(volume.id),
+  ),
+);
+
+watch(sortedVolumes, (currentVolumes) => {
+  const visibleIds = new Set(currentVolumes.map((volume) => volume.id));
+  selectedVolumeIds.value = new Set(
+    [...selectedVolumeIds.value].filter((id) => visibleIds.has(id)),
+  );
+});
+
+const toggleVolumeSelection = (volumeId: string) => {
+  const selected = new Set(selectedVolumeIds.value);
+  if (selected.has(volumeId)) selected.delete(volumeId);
+  else selected.add(volumeId);
+  selectedVolumeIds.value = selected;
+};
+
+const selectAllVolumes = () => {
+  selectedVolumeIds.value = new Set(
+    sortedVolumes.value.map((volume) => volume.id),
+  );
+};
+
+const invertVolumeSelection = () => {
+  const selected = new Set(selectedVolumeIds.value);
+  sortedVolumes.value.forEach((volume) => {
+    if (selected.has(volume.id)) selected.delete(volume.id);
+    else selected.add(volume.id);
+  });
+  selectedVolumeIds.value = selected;
+};
+
+const handleDrawerVisibility = (show: boolean) => {
+  if (!show) selectedVolumeIds.value = new Set();
+};
 </script>
 
 <template>
-  <c-drawer-right title="本地小说">
+  <c-drawer-right title="本地小说" @update:show="handleDrawerVisibility">
     <template #action>
-      <local-volume-upload-button
-        v-if="props.showManagement"
-        @done="emit('volumeAdd', $event)"
-      />
+      <local-volume-upload-button @done="emit('volumeAdd', $event)" />
       <c-button
-        v-if="props.showManagement"
         label="下载"
+        aria-label="下载选中的书"
         :icon="FileDownloadOutlined"
+        :disabled="selectedVolumes.length === 0"
         @action="downloadVolumes"
       />
       <n-dropdown
-        v-if="props.showManagement && props.showMenu"
+        v-if="props.showMenu"
         trigger="click"
         :options="options"
         :keyboard="false"
@@ -140,6 +169,12 @@ const sortedVolumes = computed(() => {
             :options="Setting.localVolumeOrderOptions"
           />
         </c-action-wrapper>
+        <n-flex align="center" :wrap="true">
+          <n-text>已选择 {{ selectedVolumes.length }} 本</n-text>
+          <n-button size="small" @click="selectAllVolumes">全选</n-button>
+          <n-button size="small" @click="invertVolumeSelection">反选</n-button>
+          <slot name="selection-action" :volumes="selectedVolumes" />
+        </n-flex>
         <slot name="extra" :volumes="sortedVolumes ?? []" />
       </n-flex>
 
@@ -156,19 +191,32 @@ const sortedVolumes = computed(() => {
       <n-scrollbar v-else trigger="none" :size="24" style="flex: auto">
         <n-list style="padding-bottom: 48px; padding-right: 12px">
           <n-list-item v-for="volume of sortedVolumes ?? []" :key="volume.id">
-            <slot name="volume" v-bind="volume" />
+            <n-flex align="center" :wrap="false">
+              <n-checkbox
+                :checked="selectedVolumeIds.has(volume.id)"
+                :aria-label="`选择 ${volume.id}`"
+                @update:checked="toggleVolumeSelection(volume.id)"
+              />
+              <div style="min-width: 0; flex: 1">
+                <slot name="volume" v-bind="volume" />
+              </div>
+            </n-flex>
           </n-list-item>
         </n-list>
       </n-scrollbar>
 
-      <c-modal title="清空所有文件" v-model:show="showDeleteModal">
+      <c-modal title="删除选中的书" v-model:show="showDeleteModal">
         <n-p>
-          这将清空你的浏览器里面保存的所有EPUB/TXT文件，包括已经翻译的章节和术语表，无法恢复。
-          你确定吗？
+          这将删除选中的 {{ selectedVolumes.length }}
+          本书，包括已经翻译的章节和术语表，无法恢复。 你确定吗？
         </n-p>
 
         <template #action>
-          <c-button label="确定" type="primary" @action="deleteAllVolumes" />
+          <c-button
+            label="确定"
+            type="primary"
+            @action="deleteSelectedVolumes"
+          />
         </template>
       </c-modal>
     </div>
