@@ -136,6 +136,7 @@ export const estimateTranslationSize = (text: string) => {
 };
 
 const splitLineByBudget = (line: string, budget: number) => {
+  if (line.length === 0) return [''];
   const characters = Array.from(line);
   const parts: string[] = [];
   let start = 0;
@@ -168,9 +169,15 @@ export const createBudgetSegmentor = (
   maxLine?: number,
   lineOverhead = 0,
 ): Segmentor => {
-  maxLine = maxLine ?? 65536;
-  const budget = Math.max(1, maxSize);
-  const contentBudget = Math.max(1, budget - lineOverhead);
+  const lineLimit =
+    maxLine === undefined || !Number.isFinite(maxLine)
+      ? 65_536
+      : Math.max(1, Math.floor(maxLine));
+  const budget = Number.isFinite(maxSize) ? Math.max(1, maxSize) : 1;
+  const normalizedLineOverhead = Number.isFinite(lineOverhead)
+    ? Math.min(Math.max(0, lineOverhead), Math.max(0, budget - 1))
+    : 0;
+  const contentBudget = Math.max(1, budget - normalizedLineOverhead);
 
   return (textJp: string[], textZh?: string[]) => {
     const segs: TranslationSegment[] = [];
@@ -196,8 +203,9 @@ export const createBudgetSegmentor = (
       const lineParts = splitLineByBudget(textJp[i], contentBudget);
       for (let partIndex = 0; partIndex < lineParts.length; partIndex++) {
         const lineJp = lineParts[partIndex];
-        const lineSize = estimateTranslationSize(lineJp) + lineOverhead;
-        if (segSize + lineSize > budget || segJp.length >= maxLine) flush();
+        const lineSize =
+          estimateTranslationSize(lineJp) + normalizedLineOverhead;
+        if (segSize + lineSize > budget || segJp.length >= lineLimit) flush();
 
         segJp.push(lineJp);
         sourceLineIndexes.push(i);

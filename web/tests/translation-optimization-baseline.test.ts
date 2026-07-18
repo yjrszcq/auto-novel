@@ -67,6 +67,29 @@ describe('translation optimization baselines', () => {
     ).toBeLessThanOrEqual(10);
   });
 
+  it('normalizes invalid limits without dropping empty-line identities', () => {
+    const lines = ['', '甲乙'];
+    const segments = createBudgetSegmentor(1, 0, 10)(lines);
+    const reconstructed = Array.from({ length: lines.length }, () => '');
+
+    expect(segments.every(([input]) => input.length === 1)).toBe(true);
+    expect(
+      segments.every(
+        ([input]) =>
+          input.reduce(
+            (size, line) => size + estimateTranslationSize(line),
+            0,
+          ) <= 1,
+      ),
+    ).toBe(true);
+    segments.forEach(([input, , sourceLineIndexes]) => {
+      input.forEach((part, index) => {
+        reconstructed[sourceLineIndexes[index]] += part;
+      });
+    });
+    expect(reconstructed).toEqual(lines);
+  });
+
   it('records whole-segment retry amplification before binary recovery', async () => {
     const server = await startOpenAiTestServer({
       onChat: (request) => {
