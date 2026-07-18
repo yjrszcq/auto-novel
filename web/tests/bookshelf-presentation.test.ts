@@ -113,4 +113,35 @@ describe('bookshelf presentation', () => {
       })[0].title,
     ).toBe('自定义书名');
   });
+
+  it('filters books by GPT and Sakura translation output', () => {
+    const gptBook = entry('gpt.epub', { translatedChapters: 1 });
+    gptBook.volume.toc[1].sakura = undefined;
+    const sakuraBook = entry('sakura.epub', { translatedChapters: 2 });
+    sakuraBook.volume.toc[0].gpt = undefined;
+    const untranslatedBook = entry('source.epub');
+
+    expect(
+      filterAndSortBookshelf([gptBook, sakuraBook, untranslatedBook], {
+        query: '',
+        translatorFilter: 'gpt',
+        sort: 'title',
+      }).map((book) => book.volume.id),
+    ).toEqual(['gpt.epub']);
+    expect(
+      filterAndSortBookshelf([gptBook, sakuraBook, untranslatedBook], {
+        query: '',
+        translatorFilter: 'sakura',
+        sort: 'title',
+      }).map((book) => book.volume.id),
+    ).toEqual(['sakura.epub']);
+    expect(
+      filterAndSortBookshelf([gptBook, sakuraBook, untranslatedBook], {
+        query: '',
+        translationFilter: 'untranslated',
+        translatorFilter: 'gpt',
+        sort: 'title',
+      }).map((book) => book.volume.id),
+    ).toEqual(['sakura.epub', 'source.epub']);
+  });
 });

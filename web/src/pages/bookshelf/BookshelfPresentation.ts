@@ -7,6 +7,7 @@ import type { BookshelfEntry } from './BookshelfService';
 
 export type BookshelfReadingFilter = 'unread' | 'reading';
 export type BookshelfTranslationFilter = 'translated' | 'untranslated';
+export type BookshelfTranslatorFilter = 'gpt' | 'sakura';
 
 export type BookshelfSort =
   | 'recent-read'
@@ -45,15 +46,23 @@ export const getReadingProgress = (entry: BookshelfEntry) => {
   return clamp(((chapterIndex + chapterRatio) / chapters.length) * 100);
 };
 
-export const getTranslationProgress = (volume: LocalVolumeMetadata) => {
+const getTranslationProgressFor = (
+  volume: LocalVolumeMetadata,
+  translator?: BookshelfTranslatorFilter,
+) => {
   if (volume.toc.length === 0) {
     return 0;
   }
   const translatedChapters = volume.toc.filter((chapter) =>
-    translationKeys.some((translator) => chapter[translator] !== undefined),
+    translator === undefined
+      ? translationKeys.some((key) => chapter[key] !== undefined)
+      : chapter[translator] !== undefined,
   ).length;
   return (translatedChapters / volume.toc.length) * 100;
 };
+
+export const getTranslationProgress = (volume: LocalVolumeMetadata) =>
+  getTranslationProgressFor(volume);
 
 const toBookshelfDisplayBook = (
   entry: BookshelfEntry,
@@ -73,16 +82,22 @@ export const filterAndSortBookshelf = (
     query,
     readingFilter,
     translationFilter,
+    translatorFilter,
     sort,
   }: {
     query: string;
     readingFilter?: BookshelfReadingFilter;
     translationFilter?: BookshelfTranslationFilter;
+    translatorFilter?: BookshelfTranslatorFilter;
     sort: BookshelfSort;
   },
 ): BookshelfDisplayBook[] => {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const books = entries.map(toBookshelfDisplayBook).filter((book) => {
+    const filteredTranslationProgress = getTranslationProgressFor(
+      book.volume,
+      translatorFilter,
+    );
     if (
       normalizedQuery.length > 0 &&
       !book.title.toLocaleLowerCase().includes(normalizedQuery)
@@ -97,13 +112,20 @@ export const filterAndSortBookshelf = (
     }
     if (
       translationFilter === 'translated' &&
-      book.translationProgress !== 100
+      filteredTranslationProgress !== 100
     ) {
       return false;
     }
     if (
       translationFilter === 'untranslated' &&
-      book.translationProgress !== 0
+      filteredTranslationProgress !== 0
+    ) {
+      return false;
+    }
+    if (
+      translatorFilter !== undefined &&
+      translationFilter !== 'untranslated' &&
+      filteredTranslationProgress === 0
     ) {
       return false;
     }

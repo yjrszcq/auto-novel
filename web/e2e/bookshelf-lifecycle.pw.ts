@@ -468,6 +468,36 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(filterButton).toHaveAttribute('aria-pressed', 'false');
   await filterButton.click();
   const filterPanel = page.locator('.bookshelf-filter-panel');
+  await expect(filterPanel).toBeVisible();
+  const inlineFilterLayout = await page.evaluate(() => {
+    const toolbar = document.querySelector<HTMLElement>('.bookshelf-toolbar');
+    const panel = document.querySelector<HTMLElement>(
+      '.bookshelf-filter-panel',
+    );
+    if (toolbar === null || panel === null) {
+      throw new Error('缺少书架筛选布局');
+    }
+    return {
+      panelParentClass: panel.parentElement?.className,
+      panelTop: Math.round(panel.getBoundingClientRect().top),
+      toolbarBottom: Math.round(toolbar.getBoundingClientRect().bottom),
+    };
+  });
+  expect(inlineFilterLayout.panelParentClass).toContain('bookshelf-page');
+  expect(inlineFilterLayout.panelTop).toBeGreaterThanOrEqual(
+    inlineFilterLayout.toolbarBottom - 8,
+  );
+  await filterPanel.getByRole('button', { name: 'GPT', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Alpha Upload' }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
+    0,
+  );
+  await filterPanel.getByRole('button', { name: '全部', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Beta Upload' }),
+  ).toBeVisible();
   await filterPanel.getByRole('checkbox', { name: '已译完' }).click();
   await expect(filterButton).toHaveAttribute('aria-pressed', 'true');
   await expect(
