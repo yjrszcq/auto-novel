@@ -155,7 +155,7 @@ const clearCache = async () => {
         handle=".drag-trigger"
       >
         <n-list-item v-for="worker of workspaceRef.workers" :key="worker.id">
-          <job-worker
+          <sakura-job-worker
             :worker="worker"
             :get-next-job="getNextJob"
             @update:progress="onProgressUpdated"
