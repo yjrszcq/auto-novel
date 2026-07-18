@@ -1065,6 +1065,254 @@ test('opens a local bookshelf book safely through the current reader route', asy
   );
 });
 
+test('persists keyboard pagination and every reading mode across responsive layout', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const modeBookId = 'reader-mode-progress.txt';
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/bookshelf');
+  await expect(page.getByRole('heading', { name: '书架' })).toBeVisible();
+  await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const paragraphs = Array.from(
+      { length: 80 },
+      (_, index) => `原文 ${index + 1} ${'分页稳定性内容'.repeat(10)}`,
+    );
+    const transaction = database.transaction(
+      ['metadata', 'chapter', 'reader-settings', 'reader-book-preference'],
+      'readwrite',
+    );
+    transaction.objectStore('metadata').put({
+      id: bookId,
+      createAt: 1,
+      toc: [{ chapterId: '0', title: '模式与进度', gpt: 'gpt-glossary' }],
+      sourceFormat: 'txt',
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceBookMetadata: {
+        title: '模式与进度',
+        authors: [],
+        languages: ['ja'],
+      },
+    });
+    transaction.objectStore('chapter').put({
+      id: `${bookId}/0`,
+      volumeId: bookId,
+      paragraphs,
+      segmentIds: paragraphs.map((_, index) => `mode-segment-${index}`),
+      gpt: {
+        glossaryId: 'gpt-glossary',
+        glossary: {},
+        paragraphs: paragraphs.map((_, index) => `译文 ${index + 1}`),
+      },
+    });
+    transaction.objectStore('reader-settings').put({
+      id: 'default',
+      defaultMode: 'original-translated',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      fontSize: 18,
+      lineHeight: 1.9,
+      contentWidth: 840,
+      horizontalPadding: 24,
+      theme: 'light',
+      flow: 'paginated',
+      updatedAt: 1,
+    });
+    transaction.objectStore('reader-book-preference').put({
+      bookId,
+      style: { theme: 'dark' },
+      updatedAt: 1,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, modeBookId);
+
+  await page.goto(`/books/${modeBookId}/read/0`);
+  const reader = page.locator('.book-reader');
+  const readerContent = page.locator('.book-reader__content');
+  const layout = readerContent.locator('.reader-segment-layout');
+  await expect(reader).toHaveClass(/book-reader--dark/);
+  await expect(page.locator('.book-reader__app-bar')).toHaveCSS(
+    'background-color',
+    'rgb(36, 36, 36)',
+  );
+  await expect(layout).toHaveClass(
+    /reader-segment-layout--original-translated/,
+  );
+
+  const chooseMode = async (label: string, expectedClass: RegExp) => {
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await page.getByRole('button', { name: '阅读版本', exact: true }).click();
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect(layout).toHaveClass(expectedClass);
+  };
+  await chooseMode('中文', /reader-segment-layout--translated$/);
+  await expect(
+    readerContent.locator('.reader-segment').first().locator('p'),
+  ).toHaveClass(/reader-segment__translated/);
+  await chooseMode('中日对照', /reader-segment-layout--translated-original/);
+  await expect(
+    readerContent.locator('.reader-segment').first().locator('p'),
+  ).toHaveClass([/reader-segment__translated/, /reader-segment__original/]);
+  await chooseMode('日中对照', /reader-segment-layout--original-translated/);
+  await expect(
+    readerContent.locator('.reader-segment').first().locator('p'),
+  ).toHaveClass([/reader-segment__original/, /reader-segment__translated/]);
+
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: '阅读版本', exact: true }).click();
+  const rememberMode = page.getByRole('checkbox', {
+    name: '记住本书选择',
+    exact: true,
+  });
+  await rememberMode.check();
+  await expect(rememberMode).toBeChecked();
+  await page.getByRole('button', { name: '原文（日文）', exact: true }).click();
+  await expect(layout).toHaveClass(/reader-segment-layout--original$/);
+  await expect(
+    readerContent.locator('.reader-segment').first().locator('p'),
+  ).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.evaluate(async (bookId) => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 5);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction(
+          'reader-book-preference',
+          'readonly',
+        );
+        const request = transaction
+          .objectStore('reader-book-preference')
+          .get(bookId);
+        const value = await new Promise<{ preferredMode?: string } | undefined>(
+          (resolve, reject) => {
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          },
+        );
+        database.close();
+        return value?.preferredMode;
+      }, modeBookId),
+    )
+    .toBe('original');
+
+  await readerContent.focus();
+  const initialScrollLeft = await readerContent.evaluate(
+    (element) => element.scrollLeft,
+  );
+  await page.keyboard.press('PageDown');
+  await expect
+    .poll(() => readerContent.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(initialScrollLeft);
+  await page.keyboard.press('ArrowRight');
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element) => {
+        const match = element
+          .getAttribute('aria-label')
+          ?.match(/第 (\d+) \/ (\d+) 页/);
+        return match === undefined ? 0 : Number(match[1]);
+      }),
+    )
+    .toBeGreaterThan(2);
+  const visibleSegmentId = await readerContent.evaluate((element) => {
+    const viewport = element.getBoundingClientRect();
+    return [
+      ...element.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
+    ]
+      .find((segment) =>
+        [...segment.getClientRects()].some(
+          (rect) => rect.right > viewport.left && rect.left < viewport.right,
+        ),
+      )
+      ?.getAttribute('data-reader-segment-id');
+  });
+  expect(visibleSegmentId).toBeTruthy();
+  await expect
+    .poll(() =>
+      page.evaluate(async (bookId) => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 5);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction('reader-progress', 'readonly');
+        const request = transaction.objectStore('reader-progress').get(bookId);
+        const value = await new Promise<
+          { segmentId?: string; scrollRatio?: number } | undefined
+        >((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        database.close();
+        return value;
+      }, modeBookId),
+    )
+    .toMatchObject({
+      segmentId: visibleSegmentId,
+      scrollRatio: expect.any(Number),
+    });
+
+  await page.reload();
+  await expect(layout).toHaveClass(/reader-segment-layout--original$/);
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element, segmentId) => {
+        const viewport = element.getBoundingClientRect();
+        const target = element.querySelector<HTMLElement>(
+          `[data-reader-segment-id="${segmentId}"]`,
+        );
+        return (
+          target !== null &&
+          [...target.getClientRects()].some(
+            (rect) => rect.right > viewport.left && rect.left < viewport.right,
+          )
+        );
+      }, visibleSegmentId),
+    )
+    .toBe(true);
+
+  await page.setViewportSize({ width: 800, height: 1100 });
+  await expect(readerContent).not.toHaveClass(
+    /book-reader__content--double-spread/,
+  );
+  await expect
+    .poll(() =>
+      readerContent.evaluate((element, segmentId) => {
+        const viewport = element.getBoundingClientRect();
+        const target = element.querySelector<HTMLElement>(
+          `[data-reader-segment-id="${segmentId}"]`,
+        );
+        return (
+          target !== null &&
+          [...target.getClientRects()].some(
+            (rect) => rect.right > viewport.left && rect.left < viewport.right,
+          )
+        );
+      }, visibleSegmentId),
+    )
+    .toBe(true);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(readerContent).toHaveClass(
+    /book-reader__content--double-spread/,
+  );
+  expect(pageErrors).toEqual([]);
+});
+
 test('continues paging backward after loading an earlier long-chapter window', async ({
   page,
 }) => {

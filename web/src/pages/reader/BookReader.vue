@@ -328,12 +328,16 @@ const scrollReaderPage = async (delta: number) => {
     positionReaderPage(viewport, pageIndex);
     await nextTick();
     paginatedAnchorSegmentId = getActiveSegmentId('paginated');
+    updateViewportMetrics();
+    await saveProgress();
     return;
   }
   if (turn.kind !== 'page') return;
   positionReaderPage(viewport, turn.pageIndex);
   await nextTick();
   paginatedAnchorSegmentId = getActiveSegmentId('paginated');
+  updateViewportMetrics();
+  await saveProgress();
 };
 
 let lastWheelPageAt = 0;
@@ -1139,12 +1143,7 @@ const saveProgress = async () => {
   if (result.value?.kind !== 'ready') {
     return;
   }
-  const elements = getSegmentElements();
-  const target =
-    [...elements]
-      .reverse()
-      .find((element) => element.getBoundingClientRect().top <= 120) ??
-    elements[0];
+  const segmentId = getActiveSegmentId();
   const scrollRatio =
     resolvedFlow.value === 'paginated' && readerViewport.value !== null
       ? getReaderPageMetrics(readerViewport.value).ratio
@@ -1158,7 +1157,7 @@ const saveProgress = async () => {
     createReaderProgress({
       bookId: result.value.book.id,
       chapterId: result.value.chapter.chapterId,
-      segmentId: target?.dataset.readerSegmentId,
+      segmentId,
       scrollRatio,
     }),
   );
