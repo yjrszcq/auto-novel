@@ -320,18 +320,18 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   const selectionToolbar = page.locator('.bookshelf-selection-toolbar');
   const selectionActionAlignment = await selectionToolbar.evaluate(
     (toolbar) => {
-      const selectAll = toolbar.querySelector<HTMLElement>(
-        '.bookshelf-selection-toolbar__select-all',
+      const selection = toolbar.querySelector<HTMLElement>(
+        '.bookshelf-selection-toolbar__selection',
       );
       const actions = toolbar.querySelector<HTMLElement>(
         '.bookshelf-selection-toolbar__actions',
       );
-      if (selectAll === null || actions === null) {
+      if (selection === null || actions === null) {
         throw new Error('缺少书架批量操作组');
       }
       return {
         actionsRight: Math.round(actions.getBoundingClientRect().right),
-        selectAllLeft: Math.round(selectAll.getBoundingClientRect().left),
+        selectionLeft: Math.round(selection.getBoundingClientRect().left),
         toolbarLeft: Math.round(toolbar.getBoundingClientRect().left),
         toolbarRight: Math.round(toolbar.getBoundingClientRect().right),
       };
@@ -342,7 +342,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
       selectionActionAlignment.actionsRight,
   ).toBeLessThanOrEqual(16);
   expect(
-    selectionActionAlignment.selectAllLeft -
+    selectionActionAlignment.selectionLeft -
       selectionActionAlignment.toolbarLeft,
   ).toBeLessThanOrEqual(16);
   const batchButtonStyles = await selectionToolbar
@@ -412,17 +412,13 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     .getByRole('button', { name: '反选', exact: true })
     .click();
   await expect(
-    page
-      .locator('.bookshelf-page__selection-summary')
-      .getByText('已选择 0 本', { exact: true }),
+    selectionToolbar.getByText('已选择 0 本', { exact: true }),
   ).toBeVisible();
   await selectionToolbar
     .getByRole('button', { name: '全选', exact: true })
     .click();
   await expect(
-    page
-      .locator('.bookshelf-page__selection-summary')
-      .getByText('已选择 2 本', { exact: true }),
+    selectionToolbar.getByText('已选择 2 本', { exact: true }),
   ).toBeVisible();
   await page
     .locator('.book-card')

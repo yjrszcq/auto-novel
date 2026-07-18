@@ -275,9 +275,6 @@ onMounted(reload);
           :round="false"
           @done="reload"
         />
-        <n-text v-if="selectionMode" class="bookshelf-page__selection-summary">
-          已选择 {{ selectedBookIds.size }} 本
-        </n-text>
       </div>
       <div
         class="bookshelf-toolbar"
@@ -323,12 +320,17 @@ onMounted(reload);
 
     <template v-else>
       <div v-if="selectionMode" class="bookshelf-selection-toolbar">
-        <n-button
-          class="bookshelf-selection-toolbar__select-all"
-          @click="toggleVisibleSelection"
-        >
-          {{ allVisibleBooksSelected ? '反选' : '全选' }}
-        </n-button>
+        <div class="bookshelf-selection-toolbar__selection">
+          <n-button
+            class="bookshelf-selection-toolbar__select-all"
+            @click="toggleVisibleSelection"
+          >
+            {{ allVisibleBooksSelected ? '反选' : '全选' }}
+          </n-button>
+          <n-text class="bookshelf-selection-toolbar__summary">
+            已选择 {{ selectedBookIds.size }} 本
+          </n-text>
+        </div>
         <div class="bookshelf-selection-toolbar__actions">
           <n-button
             v-if="selectedBook && !selectedBook.state.pinned"
@@ -539,13 +541,6 @@ onMounted(reload);
   width: auto;
 }
 
-.bookshelf-page__selection-summary {
-  flex: 0 0 auto;
-  margin-left: 4px;
-  white-space: nowrap;
-  font-weight: 500;
-}
-
 .bookshelf-page h1 {
   margin: 0;
 }
@@ -607,8 +602,16 @@ onMounted(reload);
   background: var(--n-card-color);
 }
 
-.bookshelf-selection-toolbar__select-all {
+.bookshelf-selection-toolbar__selection {
+  display: flex;
+  align-items: center;
   flex: 0 0 auto;
+  gap: 10px;
+}
+
+.bookshelf-selection-toolbar__summary {
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .bookshelf-selection-toolbar__actions {
