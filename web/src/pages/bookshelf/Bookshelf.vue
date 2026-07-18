@@ -126,6 +126,10 @@ const renderContextProgress = (label: string, type: 'gpt' | 'sakura') => {
 
 const contextMenuOptions = computed<DropdownMixedOption[]>(() => [
   { label: '阅读书籍', key: 'read' },
+  {
+    label: contextMenuBook.value?.state.pinned ? '取消置顶' : '置顶书籍',
+    key: 'toggle-pin',
+  },
   { label: '排队 GPT', key: 'queue-gpt' },
   { label: '排队 Sakura', key: 'queue-sakura' },
   { label: '下载译文', key: 'download-translated' },
@@ -309,6 +313,19 @@ const queueContextBook = (
   message.info(`${success}本小说已排队，${failed}本失败`);
 };
 
+const toggleContextBookPinned = async (book: BookshelfDisplayBook) => {
+  try {
+    const repository = await useLocalVolumeStore();
+    const service = createBookshelfService(repository);
+    const pinned = !book.state.pinned;
+    await service.setPinned(book.volume.id, pinned);
+    message.success(pinned ? '书籍已置顶' : '已取消置顶');
+    await reload();
+  } catch (reason) {
+    message.error(`置顶书籍失败：${String(reason)}`);
+  }
+};
+
 const downloadContextTranslation = async (book: BookshelfDisplayBook) => {
   const { success, failed } = await localVolumeManager.downloadVolumes([
     book.volume.id,
@@ -341,6 +358,9 @@ const handleBookContextAction = async (key: string | number) => {
   switch (key) {
     case 'read':
       readContextBook(book);
+      break;
+    case 'toggle-pin':
+      await toggleContextBookPinned(book);
       break;
     case 'queue-gpt':
       queueContextBook(book, 'gpt');

@@ -314,6 +314,25 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await expect(
     bookContextMenu.getByText('Sakura', { exact: true }),
   ).toBeVisible();
+  await expect(
+    bookContextMenu.getByText('置顶书籍', { exact: true }),
+  ).toBeVisible();
+  await bookContextMenu.getByText('置顶书籍', { exact: true }).click();
+  await expect(page.getByText('书籍已置顶', { exact: true })).toBeVisible();
+  await expect(contextAlphaCard.getByLabel('已置顶')).toBeVisible();
+
+  await alphaCover.click({ button: 'right' });
+  await expect(
+    bookContextMenu.getByText('取消置顶', { exact: true }),
+  ).toBeVisible();
+  await bookContextMenu.getByText('取消置顶', { exact: true }).click();
+  await expect(page.getByText('已取消置顶', { exact: true })).toBeVisible();
+  await expect(contextAlphaCard.getByLabel('已置顶')).toHaveCount(0);
+
+  await alphaCover.click({ button: 'right' });
+  await expect(
+    bookContextMenu.getByText('置顶书籍', { exact: true }),
+  ).toBeVisible();
   const readerPopupPromise = page.waitForEvent('popup');
   await bookContextMenu.getByText('阅读书籍', { exact: true }).click();
   const readerPopup = await readerPopupPromise;
