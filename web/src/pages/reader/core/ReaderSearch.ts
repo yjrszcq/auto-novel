@@ -7,6 +7,7 @@ export interface ReaderSearchResult {
   languageSide: 'original' | 'translated';
   excerpt: string;
 }
+export const readerSearchResultLimit = 200;
 
 const createExcerpt = (text: string, index: number, queryLength: number) => {
   const start = Math.max(0, index - 28);
@@ -21,13 +22,17 @@ const createExcerpt = (text: string, index: number, queryLength: number) => {
 export const searchReaderChapters = (
   chapters: ReaderChapterContent[],
   query: string,
+  maximumResults = readerSearchResultLimit,
 ): ReaderSearchResult[] => {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (normalizedQuery.length === 0) {
     return [];
   }
-  return chapters.flatMap((chapter) =>
-    chapter.segments.flatMap((segment) => {
+  const results: ReaderSearchResult[] = [];
+  const limit = Math.max(0, Math.floor(maximumResults));
+  if (limit === 0) return results;
+  for (const chapter of chapters) {
+    for (const segment of chapter.segments) {
       const candidates: {
         languageSide: 'original' | 'translated';
         text: string;
@@ -39,20 +44,19 @@ export const searchReaderChapters = (
               { languageSide: 'translated' as const, text: segment.translated },
             ]),
       ];
-      return candidates.flatMap(({ languageSide, text }) => {
+      for (const { languageSide, text } of candidates) {
         const index = text.toLocaleLowerCase().indexOf(normalizedQuery);
-        return index < 0
-          ? []
-          : [
-              {
-                chapterId: chapter.chapterId,
-                chapterTitle: chapter.title,
-                segmentId: segment.id,
-                languageSide,
-                excerpt: createExcerpt(text, index, normalizedQuery.length),
-              },
-            ];
-      });
-    }),
-  );
+        if (index < 0) continue;
+        results.push({
+          chapterId: chapter.chapterId,
+          chapterTitle: chapter.title,
+          segmentId: segment.id,
+          languageSide,
+          excerpt: createExcerpt(text, index, normalizedQuery.length),
+        });
+        if (results.length >= limit) return results;
+      }
+    }
+  }
+  return results;
 };

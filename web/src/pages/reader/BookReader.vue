@@ -53,7 +53,10 @@ import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
 import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
 import { createBrowserSpeechController } from './core/ReaderSpeech';
 import type { ReaderSearchResult } from './core/ReaderSearch';
-import { searchReaderChapters } from './core/ReaderSearch';
+import {
+  readerSearchResultLimit,
+  searchReaderChapters,
+} from './core/ReaderSearch';
 import { addReadingTime } from './core/ReaderStats';
 import {
   createReaderBookmark,
@@ -266,21 +269,27 @@ const runSearch = async () => {
   try {
     const adapter = await cachedAdapterPromise;
     const bookId = result.value.book.id;
-    const chapters: ReaderChapterContent[] = [];
+    const found: ReaderSearchResult[] = [];
     for (let index = 0; index < result.value.chapters.length; index += 12) {
-      chapters.push(
-        ...(await Promise.all(
-          result.value.chapters.slice(index, index + 12).map((chapter) =>
-            adapter.getChapter({
-              bookId,
-              chapterId: chapter.id,
-            }),
-          ),
-        )),
+      const chapters: ReaderChapterContent[] = await Promise.all(
+        result.value.chapters.slice(index, index + 12).map((chapter) =>
+          adapter.getChapter({
+            bookId,
+            chapterId: chapter.id,
+          }),
+        ),
       );
       if (requestId !== searchRequestId) return;
+      found.push(
+        ...searchReaderChapters(
+          chapters,
+          query,
+          readerSearchResultLimit - found.length,
+        ),
+      );
+      if (found.length >= readerSearchResultLimit) break;
     }
-    searchResults.value = searchReaderChapters(chapters, query);
+    searchResults.value = found;
   } catch (reason) {
     if (requestId === searchRequestId) {
       message.error('搜索失败：' + String(reason));
@@ -371,10 +380,7 @@ const scrollReaderPage = async (delta: number) => {
   }
   if (turn.kind === 'segments') {
     const anchorPage = metrics.pageIndex;
-    const anchorSegmentId =
-      turn.direction === 'previous'
-        ? getActiveSegmentId('paginated')
-        : undefined;
+    const anchorSegmentId = getActiveSegmentId('paginated');
     if (turn.direction === 'previous') {
       await readerSegments.value?.loadPreviousSegments();
     } else {
@@ -389,7 +395,7 @@ const scrollReaderPage = async (delta: number) => {
         expandedMetrics.pageCount - 1,
         turn.direction === 'previous'
           ? (expandedAnchorPage ?? anchorPage) - 1
-          : anchorPage + 1,
+          : (expandedAnchorPage ?? anchorPage) + 1,
       ),
     );
     positionReaderPage(viewport, pageIndex);

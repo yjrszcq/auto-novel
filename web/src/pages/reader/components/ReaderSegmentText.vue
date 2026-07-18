@@ -5,20 +5,11 @@ import { getAnnotationFragments } from '../core/ReaderAnnotations';
 
 const props = defineProps<{
   text: string;
-  segmentId: string;
-  languageSide: 'original' | 'translated';
   annotations: ReaderAnnotation[];
 }>();
 
 const fragments = computed(() =>
-  getAnnotationFragments(
-    props.text,
-    props.annotations.filter(
-      (annotation) =>
-        annotation.segmentId === props.segmentId &&
-        annotation.languageSide === props.languageSide,
-    ),
-  ),
+  getAnnotationFragments(props.text, props.annotations),
 );
 </script>
 

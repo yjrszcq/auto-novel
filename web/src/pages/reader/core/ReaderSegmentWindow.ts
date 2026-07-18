@@ -5,6 +5,7 @@ export interface ReaderSegmentRange {
 
 const longChapterThreshold = 1_000;
 export const readerSegmentBatchSize = 240;
+export const readerSegmentWindowSize = readerSegmentBatchSize * 2;
 
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(Math.max(value, minimum), maximum);
@@ -34,13 +35,11 @@ export const expandSegmentRange = (
   range: ReaderSegmentRange,
   total: number,
   direction: 'before' | 'after',
-): ReaderSegmentRange =>
-  direction === 'before'
-    ? {
-        start: Math.max(0, range.start - readerSegmentBatchSize),
-        end: range.end,
-      }
-    : {
-        start: range.start,
-        end: Math.min(total, range.end + readerSegmentBatchSize),
-      };
+): ReaderSegmentRange => {
+  if (direction === 'before') {
+    const start = Math.max(0, range.start - readerSegmentBatchSize);
+    return { start, end: Math.min(range.end, start + readerSegmentWindowSize) };
+  }
+  const end = Math.min(total, range.end + readerSegmentBatchSize);
+  return { start: Math.max(range.start, end - readerSegmentWindowSize), end };
+};

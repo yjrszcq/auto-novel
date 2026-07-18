@@ -4,6 +4,7 @@ import type { ReaderAnnotation, ReaderSegment } from '@/model/Reader';
 import type { RenderedReaderMode } from '../core/BilingualLayout';
 import type { ResolvedReaderFlow } from '../core/ReaderFlow';
 import { hasTranslation } from '../core/BilingualLayout';
+import { indexReaderAnnotations } from '../core/ReaderAnnotations';
 import {
   expandSegmentRange,
   getInitialSegmentRange,
@@ -37,6 +38,13 @@ const segmentRange = ref(getInitialRange());
 const renderedSegments = computed(() =>
   props.segments.slice(segmentRange.value.start, segmentRange.value.end),
 );
+const annotationIndex = computed(() =>
+  indexReaderAnnotations(props.annotations),
+);
+const getSegmentAnnotations = (
+  segmentId: string,
+  languageSide: 'original' | 'translated',
+) => annotationIndex.value.get(segmentId, languageSide);
 const hasPreviousSegments = computed(() => segmentRange.value.start > 0);
 const hasMoreSegments = computed(
   () => segmentRange.value.end < props.segments.length,
@@ -56,13 +64,18 @@ const loadPreviousSegments = async () => {
 };
 
 const loadMoreSegments = async () => {
+  const previousRange = segmentRange.value;
+  const anchorId = renderedSegments.value.at(-1)?.id;
   segmentRange.value = expandSegmentRange(
     segmentRange.value,
     props.segments.length,
     'after',
   );
   await nextTick();
-  emit('content-change');
+  emit(
+    'content-change',
+    segmentRange.value.start > previousRange.start ? anchorId : undefined,
+  );
 };
 
 const observeMoreSegments = () => {
@@ -136,10 +149,8 @@ onBeforeUnmount(() => loadMoreObserver?.disconnect());
         data-reader-language-side="original"
       >
         <ReaderSegmentText
-          :annotations="props.annotations"
-          :segment-id="segment.id"
+          :annotations="getSegmentAnnotations(segment.id, 'original')"
           :text="segment.original"
-          language-side="original"
         />
       </p>
 
@@ -150,10 +161,8 @@ onBeforeUnmount(() => loadMoreObserver?.disconnect());
           data-reader-language-side="translated"
         >
           <ReaderSegmentText
-            :annotations="props.annotations"
-            :segment-id="segment.id"
+            :annotations="getSegmentAnnotations(segment.id, 'translated')"
             :text="segment.translated!"
-            language-side="translated"
           />
         </p>
         <p v-else class="reader-segment__missing">未翻译</p>
@@ -165,10 +174,8 @@ onBeforeUnmount(() => loadMoreObserver?.disconnect());
           data-reader-language-side="translated"
         >
           <ReaderSegmentText
-            :annotations="props.annotations"
-            :segment-id="segment.id"
+            :annotations="getSegmentAnnotations(segment.id, 'translated')"
             :text="hasTranslation(segment) ? segment.translated! : '未翻译'"
-            language-side="translated"
           />
         </p>
         <p
@@ -176,10 +183,8 @@ onBeforeUnmount(() => loadMoreObserver?.disconnect());
           data-reader-language-side="original"
         >
           <ReaderSegmentText
-            :annotations="props.annotations"
-            :segment-id="segment.id"
+            :annotations="getSegmentAnnotations(segment.id, 'original')"
             :text="segment.original"
-            language-side="original"
           />
         </p>
       </template>
@@ -190,10 +195,8 @@ onBeforeUnmount(() => loadMoreObserver?.disconnect());
           data-reader-language-side="original"
         >
           <ReaderSegmentText
-            :annotations="props.annotations"
-            :segment-id="segment.id"
+            :annotations="getSegmentAnnotations(segment.id, 'original')"
             :text="segment.original"
-            language-side="original"
           />
         </p>
         <p
@@ -201,10 +204,8 @@ onBeforeUnmount(() => loadMoreObserver?.disconnect());
           data-reader-language-side="translated"
         >
           <ReaderSegmentText
-            :annotations="props.annotations"
-            :segment-id="segment.id"
+            :annotations="getSegmentAnnotations(segment.id, 'translated')"
             :text="hasTranslation(segment) ? segment.translated! : '未翻译'"
-            language-side="translated"
           />
         </p>
       </template>

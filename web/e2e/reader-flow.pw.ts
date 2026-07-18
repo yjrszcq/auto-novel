@@ -1631,6 +1631,9 @@ test('continues paging backward after loading an earlier long-chapter window', a
   await expect(
     readerContent.locator('[data-reader-segment-id="windowed-segment-761"]'),
   ).toBeAttached();
+  await expect(readerContent.locator('[data-reader-segment-id]')).toHaveCount(
+    240,
+  );
 
   await readerContent.evaluate((element) =>
     element.scrollTo({ left: 0, behavior: 'auto' }),
@@ -1641,6 +1644,9 @@ test('continues paging backward after loading an earlier long-chapter window', a
   await expect(
     readerContent.locator('[data-reader-segment-id="windowed-segment-521"]'),
   ).toBeAttached();
+  await expect(readerContent.locator('[data-reader-segment-id]')).toHaveCount(
+    480,
+  );
   const previousWindowPage = await readerContent.evaluate(
     (element) => element.scrollLeft,
   );

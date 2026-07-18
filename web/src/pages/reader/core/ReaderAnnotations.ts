@@ -43,6 +43,25 @@ export interface ReaderTextFragment {
   style?: ReaderAnnotation['style'];
 }
 
+const annotationKey = (
+  segmentId: string,
+  languageSide: ReaderAnnotation['languageSide'],
+) => `${segmentId}:${languageSide}`;
+
+export const indexReaderAnnotations = (annotations: ReaderAnnotation[]) => {
+  const index = new Map<string, ReaderAnnotation[]>();
+  for (const annotation of annotations) {
+    const key = annotationKey(annotation.segmentId, annotation.languageSide);
+    const values = index.get(key);
+    if (values === undefined) index.set(key, [annotation]);
+    else values.push(annotation);
+  }
+  return {
+    get: (segmentId: string, languageSide: ReaderAnnotation['languageSide']) =>
+      index.get(annotationKey(segmentId, languageSide)) ?? [],
+  };
+};
+
 export const getAnnotationFragments = (
   text: string,
   annotations: ReaderAnnotation[],

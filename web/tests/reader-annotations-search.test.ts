@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createReaderAnnotation,
   getAnnotationFragments,
+  indexReaderAnnotations,
   resolveAnnotationRange,
 } from '../src/pages/reader/core/ReaderAnnotations';
 import { searchReaderChapters } from '../src/pages/reader/core/ReaderSearch';
@@ -66,5 +67,40 @@ describe('local reader annotations and search', () => {
         excerpt: '你好世界',
       },
     ]);
+  });
+
+  it('bounds search output and indexes large annotation sets by stable segment', () => {
+    const chapters = Array.from({ length: 1_000 }, (_, index) => ({
+      bookId: 'book',
+      chapterId: `${index}`,
+      chapterIndex: index,
+      title: `章节${index}`,
+      segments: [
+        {
+          id: `segment-${index}`,
+          index: 0,
+          original: `命中${index}`,
+        },
+      ],
+    }));
+    expect(searchReaderChapters(chapters, '命中', 25)).toHaveLength(25);
+
+    const annotations = Array.from({ length: 20_000 }, (_, index) =>
+      createReaderAnnotation({
+        id: `${index}`,
+        now: index,
+        bookId: 'book',
+        chapterId: `${index}`,
+        segmentId: `segment-${index}`,
+        languageSide: index % 2 === 0 ? 'original' : 'translated',
+        startOffset: 0,
+        endOffset: 1,
+        quote: '命',
+        style: 'highlight',
+      }),
+    );
+    const index = indexReaderAnnotations(annotations);
+    expect(index.get('segment-10', 'original')).toEqual([annotations[10]]);
+    expect(index.get('segment-10', 'translated')).toEqual([]);
   });
 });

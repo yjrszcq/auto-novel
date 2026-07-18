@@ -4,6 +4,7 @@ import {
   expandSegmentRange,
   getInitialSegmentRange,
   readerSegmentBatchSize,
+  readerSegmentWindowSize,
 } from '../src/pages/reader/core/ReaderSegmentWindow';
 
 describe('reader segment window', () => {
@@ -25,5 +26,23 @@ describe('reader segment window', () => {
     expect(
       expandSegmentRange({ start: 760, end: 1_000 }, 1_000, 'after'),
     ).toEqual({ start: 760, end: 1_000 });
+  });
+
+  it('keeps repeated long-chapter navigation within a bounded sliding window', () => {
+    let range = getInitialSegmentRange(10_000);
+    for (let index = 0; index < 20; index++) {
+      range = expandSegmentRange(range, 10_000, 'after');
+      expect(range.end - range.start).toBeLessThanOrEqual(
+        readerSegmentWindowSize,
+      );
+    }
+    expect(range.start).toBeGreaterThan(0);
+    for (let index = 0; index < 20; index++) {
+      range = expandSegmentRange(range, 10_000, 'before');
+      expect(range.end - range.start).toBeLessThanOrEqual(
+        readerSegmentWindowSize,
+      );
+    }
+    expect(range.start).toBe(0);
   });
 });
