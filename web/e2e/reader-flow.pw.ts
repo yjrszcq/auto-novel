@@ -2550,9 +2550,27 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
 
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
   await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '格式异常重试说明' }),
-  ).toBeVisible();
+  const formatRetryInfo = page.getByRole('button', {
+    name: '格式异常重试说明',
+  });
+  await expect(formatRetryInfo).toBeVisible();
+  expect(
+    await formatRetryInfo.evaluate((button) => {
+      const group = button.parentElement?.querySelector('.n-input-group');
+      if (group === null || group === undefined) return Number.NaN;
+      return Math.round(
+        button.getBoundingClientRect().left -
+          group.getBoundingClientRect().right,
+      );
+    }),
+  ).toBeLessThanOrEqual(8);
+  const numberInputs = page.locator('.local-translate-options__number input');
+  await expect(numberInputs).toHaveCount(4);
+  expect(
+    await numberInputs.evaluateAll((inputs) =>
+      inputs.every((input) => getComputedStyle(input).textAlign === 'center'),
+    ),
+  ).toBe(true);
   const formatRetryInput = page.getByRole('textbox', {
     name: '格式异常完整重试次数',
   });

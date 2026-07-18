@@ -58,35 +58,38 @@ defineExpose({
       * 请确保你知道自己在干啥，不要随便使用危险功能
     </n-text>
     <c-action-wrapper v-if="type === 'gpt'" title="格式异常">
-      <n-input-group>
-        <n-input-group-label size="small">完整重试</n-input-group-label>
-        <n-input-number
-          v-model:value="gptFormatRetryCount"
-          size="small"
-          :show-button="false"
-          :min="gptFormatRetryBounds.minimum"
-          :max="gptFormatRetryBounds.maximum"
-          :input-props="{ 'aria-label': '格式异常完整重试次数' }"
-          style="width: 52px"
-        />
-        <n-input-group-label size="small">次后再拆分</n-input-group-label>
-      </n-input-group>
-      <n-tooltip placement="top" trigger="hover">
-        <template #trigger>
-          <button
-            type="button"
-            class="local-translate-options__info"
-            aria-label="格式异常重试说明"
+      <div class="local-translate-options__task-split">
+        <n-input-group>
+          <n-input-group-label size="small">完整重试</n-input-group-label>
+          <n-input-number
+            v-model:value="gptFormatRetryCount"
+            class="local-translate-options__number"
+            size="small"
+            :show-button="false"
+            :min="gptFormatRetryBounds.minimum"
+            :max="gptFormatRetryBounds.maximum"
+            :input-props="{ 'aria-label': '格式异常完整重试次数' }"
+            style="width: 52px"
+          />
+          <n-input-group-label size="small">次后再拆分</n-input-group-label>
+        </n-input-group>
+        <n-tooltip placement="top" trigger="hover">
+          <template #trigger>
+            <button
+              type="button"
+              class="local-translate-options__info"
+              aria-label="格式异常重试说明"
+            >
+              <n-icon :component="InfoOutlined" size="16" />
+            </button>
+          </template>
+          <div
+            class="local-translate-options__hint local-translate-options__hint--format"
           >
-            <n-icon :component="InfoOutlined" size="16" />
-          </button>
-        </template>
-        <div
-          class="local-translate-options__hint local-translate-options__hint--format"
-        >
-          仅用于编号、行数或输出语言异常；首次请求不计入重试次数。
-        </div>
-      </n-tooltip>
+            仅用于编号、行数或输出语言异常；首次请求不计入重试次数。
+          </div>
+        </n-tooltip>
+      </div>
     </c-action-wrapper>
     <c-action-wrapper title="范围">
       <n-flex style="text-align: center" class="local-translate-options__range">
@@ -96,6 +99,7 @@ defineExpose({
             <n-input-number
               size="small"
               v-model:value="startIndex"
+              class="local-translate-options__number"
               :show-button="false"
               :min="0"
               style="width: 60px"
@@ -104,6 +108,7 @@ defineExpose({
             <n-input-number
               size="small"
               v-model:value="endIndex"
+              class="local-translate-options__number"
               :show-button="false"
               :min="0"
               style="width: 60px"
@@ -116,6 +121,7 @@ defineExpose({
             <n-input-number
               size="small"
               v-model:value="taskNumber"
+              class="local-translate-options__number"
               :show-button="false"
               :min="1"
               style="width: 40px"
@@ -176,6 +182,10 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.local-translate-options__number :deep(.n-input__input-el) {
+  text-align: center;
 }
 
 .local-translate-options__info {
