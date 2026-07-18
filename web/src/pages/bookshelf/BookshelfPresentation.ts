@@ -5,12 +5,8 @@ import {
 
 import type { BookshelfEntry } from './BookshelfService';
 
-export type BookshelfFilter =
-  | 'all'
-  | 'unread'
-  | 'reading'
-  | 'translated'
-  | 'untranslated';
+export type BookshelfReadingFilter = 'unread' | 'reading';
+export type BookshelfTranslationFilter = 'translated' | 'untranslated';
 
 export type BookshelfSort =
   | 'recent-read'
@@ -75,11 +71,13 @@ export const filterAndSortBookshelf = (
   entries: BookshelfEntry[],
   {
     query,
-    filter,
+    readingFilter,
+    translationFilter,
     sort,
   }: {
     query: string;
-    filter: BookshelfFilter;
+    readingFilter?: BookshelfReadingFilter;
+    translationFilter?: BookshelfTranslationFilter;
     sort: BookshelfSort;
   },
 ): BookshelfDisplayBook[] => {
@@ -91,17 +89,23 @@ export const filterAndSortBookshelf = (
     ) {
       return false;
     }
-    if (filter === 'unread') {
-      return book.progress === undefined;
+    if (readingFilter === 'unread' && book.progress !== undefined) {
+      return false;
     }
-    if (filter === 'reading') {
-      return book.progress !== undefined;
+    if (readingFilter === 'reading' && book.progress === undefined) {
+      return false;
     }
-    if (filter === 'translated') {
-      return book.translationProgress === 100;
+    if (
+      translationFilter === 'translated' &&
+      book.translationProgress !== 100
+    ) {
+      return false;
     }
-    if (filter === 'untranslated') {
-      return book.translationProgress === 0;
+    if (
+      translationFilter === 'untranslated' &&
+      book.translationProgress !== 0
+    ) {
+      return false;
     }
     return true;
   });

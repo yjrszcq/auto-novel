@@ -409,7 +409,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
       request.onsuccess = () => resolve(request.result);
     });
     const transaction = database.transaction(
-      ['metadata', 'chapter'],
+      ['metadata', 'chapter', 'reader-progress'],
       'readwrite',
     );
     const metadataStore = transaction.objectStore('metadata');
@@ -434,6 +434,11 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
         chapterStore.put(chapter);
       };
     }
+    transaction.objectStore('reader-progress').put({
+      bookId,
+      chapterId: '0',
+      updatedAt: 1,
+    });
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
@@ -442,22 +447,36 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   }, alphaFilename);
   await page.reload();
 
-  await page.locator('.bookshelf-toolbar__filter .n-base-selection').click();
-  await page
-    .locator('.n-base-select-menu')
-    .getByText('已译完', { exact: true })
-    .click();
+  const filterButton = page.getByRole('button', {
+    name: '筛选',
+    exact: true,
+  });
+  await expect(filterButton).toHaveAttribute('aria-pressed', 'false');
+  await filterButton.click();
+  const filterPanel = page.locator('.bookshelf-filter-panel');
+  await filterPanel.getByRole('checkbox', { name: '已译完' }).click();
+  await expect(filterButton).toHaveAttribute('aria-pressed', 'true');
   await expect(
     page.getByRole('heading', { name: 'Alpha Upload' }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
     0,
   );
-  await page.locator('.bookshelf-toolbar__filter .n-base-selection').click();
-  await page
-    .locator('.n-base-select-menu')
-    .getByText('未翻译', { exact: true })
-    .click();
+  await filterPanel.getByRole('checkbox', { name: '阅读中' }).click();
+  await expect(
+    filterPanel.getByRole('checkbox', { name: '阅读中' }),
+  ).toBeChecked();
+  await expect(
+    filterPanel.getByRole('checkbox', { name: '已译完' }),
+  ).toBeChecked();
+  await filterPanel.getByRole('checkbox', { name: '未翻译' }).click();
+  await expect(page.getByRole('heading', { name: 'Alpha Upload' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('heading', { name: 'Beta Upload' })).toHaveCount(
+    0,
+  );
+  await filterPanel.getByRole('checkbox', { name: '阅读中' }).click();
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
@@ -467,6 +486,12 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByPlaceholder('输入书名，搜索书架')).toBeVisible();
+  const mobileFilterPanelBounds = await filterPanel.boundingBox();
+  expect(mobileFilterPanelBounds).not.toBeNull();
+  expect(mobileFilterPanelBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(
+    mobileFilterPanelBounds!.x + mobileFilterPanelBounds!.width,
+  ).toBeLessThanOrEqual(390);
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();

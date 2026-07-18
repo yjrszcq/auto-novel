@@ -82,21 +82,21 @@ describe('bookshelf presentation', () => {
     expect(
       filterAndSortBookshelf(books, {
         query: '',
-        filter: 'all',
         sort: 'title',
       }).map((book) => book.volume.id),
     ).toEqual(['alpha.epub', 'beta.epub', 'zeta.epub']);
     expect(
       filterAndSortBookshelf(books, {
         query: 'eta',
-        filter: 'reading',
+        readingFilter: 'reading',
         sort: 'recent-read',
       }).map((book) => book.volume.id),
     ).toEqual(['zeta.epub']);
     expect(
       filterAndSortBookshelf(books, {
         query: '',
-        filter: 'translated',
+        readingFilter: 'reading',
+        translationFilter: 'translated',
         sort: 'translation-progress',
       }).map((book) => book.volume.id),
     ).toEqual(['alpha.epub']);
@@ -109,7 +109,6 @@ describe('bookshelf presentation', () => {
     expect(
       filterAndSortBookshelf([book], {
         query: '自定义',
-        filter: 'all',
         sort: 'title',
       })[0].title,
     ).toBe('自定义书名');

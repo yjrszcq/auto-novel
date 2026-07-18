@@ -4,8 +4,9 @@ import { useRouter } from 'vue-router';
 import {
   filterAndSortBookshelf,
   type BookshelfDisplayBook,
-  type BookshelfFilter,
+  type BookshelfReadingFilter,
   type BookshelfSort,
+  type BookshelfTranslationFilter,
 } from './BookshelfPresentation';
 import {
   createBookshelfService,
@@ -34,7 +35,8 @@ const router = useRouter();
 const books = ref<BookshelfEntry[]>([]);
 const loading = ref(true);
 const error = ref<string>();
-const filter = ref<BookshelfFilter>('all');
+const readingFilter = ref<BookshelfReadingFilter>();
+const translationFilter = ref<BookshelfTranslationFilter>();
 const sort = ref<BookshelfSort>('recent-read');
 const selectionMode = ref(false);
 const selectedBookIds = ref(new Set<string>());
@@ -43,14 +45,6 @@ const downloadingSelectedBooks = ref(false);
 const message = useMessage();
 const localVolumeManager = useLocalVolumeManager();
 const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
-
-const filterOptions: { label: string; value: BookshelfFilter }[] = [
-  { label: '筛选', value: 'all' },
-  { label: '未开始', value: 'unread' },
-  { label: '阅读中', value: 'reading' },
-  { label: '已译完', value: 'translated' },
-  { label: '未翻译', value: 'untranslated' },
-];
 
 const sortOptions: { label: string; value: BookshelfSort }[] = [
   { label: '最近阅读', value: 'recent-read' },
@@ -63,9 +57,14 @@ const sortOptions: { label: string; value: BookshelfSort }[] = [
 const visibleBooks = computed(() =>
   filterAndSortBookshelf(books.value, {
     query: query.value,
-    filter: filter.value,
+    readingFilter: readingFilter.value,
+    translationFilter: translationFilter.value,
     sort: sort.value,
   }),
+);
+const hasActiveFilters = computed(
+  () =>
+    readingFilter.value !== undefined || translationFilter.value !== undefined,
 );
 const selectedBook = computed(() => {
   if (selectedBookIds.value.size !== 1) return undefined;
@@ -181,7 +180,17 @@ const updateSelectedBooks = async (action: 'pin' | 'unpin' | 'delete') => {
 
 const resetFilters = () => {
   query.value = '';
-  filter.value = 'all';
+  readingFilter.value = undefined;
+  translationFilter.value = undefined;
+};
+
+const toggleReadingFilter = (value: BookshelfReadingFilter) => {
+  readingFilter.value = readingFilter.value === value ? undefined : value;
+};
+
+const toggleTranslationFilter = (value: BookshelfTranslationFilter) => {
+  translationFilter.value =
+    translationFilter.value === value ? undefined : value;
 };
 
 onMounted(reload);
@@ -283,11 +292,53 @@ onMounted(reload);
           clearable
           placeholder="搜索书名"
         />
-        <n-select
-          v-model:value="filter"
-          class="bookshelf-toolbar__filter"
-          :options="filterOptions"
-        />
+        <n-popover trigger="click" placement="bottom-start">
+          <template #trigger>
+            <n-button
+              class="bookshelf-toolbar__filter"
+              :type="hasActiveFilters ? 'primary' : 'default'"
+              :aria-pressed="hasActiveFilters"
+            >
+              筛选
+            </n-button>
+          </template>
+          <div class="bookshelf-filter-panel">
+            <div class="bookshelf-filter-panel__group">
+              <n-text depth="3">阅读状态</n-text>
+              <n-space>
+                <n-checkbox
+                  :checked="readingFilter === 'unread'"
+                  @update:checked="toggleReadingFilter('unread')"
+                >
+                  未开始
+                </n-checkbox>
+                <n-checkbox
+                  :checked="readingFilter === 'reading'"
+                  @update:checked="toggleReadingFilter('reading')"
+                >
+                  阅读中
+                </n-checkbox>
+              </n-space>
+            </div>
+            <div class="bookshelf-filter-panel__group">
+              <n-text depth="3">翻译状态</n-text>
+              <n-space>
+                <n-checkbox
+                  :checked="translationFilter === 'translated'"
+                  @update:checked="toggleTranslationFilter('translated')"
+                >
+                  已译完
+                </n-checkbox>
+                <n-checkbox
+                  :checked="translationFilter === 'untranslated'"
+                  @update:checked="toggleTranslationFilter('untranslated')"
+                >
+                  未翻译
+                </n-checkbox>
+              </n-space>
+            </div>
+          </div>
+        </n-popover>
         <n-select
           v-model:value="sort"
           class="bookshelf-toolbar__sort"
@@ -373,6 +424,22 @@ onMounted(reload);
 
 .bookshelf-toolbar--without-search {
   grid-template-columns: repeat(2, minmax(132px, 220px));
+}
+
+.bookshelf-toolbar__filter {
+  width: 100%;
+}
+
+.bookshelf-filter-panel {
+  display: grid;
+  width: 260px;
+  max-width: calc(100vw - 48px);
+  gap: 14px;
+}
+
+.bookshelf-filter-panel__group {
+  display: grid;
+  gap: 8px;
 }
 
 .bookshelf-selection-toolbar {
