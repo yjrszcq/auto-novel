@@ -2082,6 +2082,16 @@ test('persists the global reading version selected in Settings', async ({
 test('completes, persists, exports, and reads a concurrent GPT job', async ({
   page,
 }) => {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  const failedRequests: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('requestfailed', (request) =>
+    failedRequests.push(`${request.method()} ${request.url()}`),
+  );
   const volumeId = 'translated-flow.txt';
   const task =
     `local/${volumeId}` +
@@ -2302,6 +2312,13 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     await expect(page.getByText('第一章原文一', { exact: true })).toHaveCount(
       0,
     );
+    await expect(page.locator('[data-reader-segment-id]')).toHaveCount(2);
+    await expect(
+      page.locator('[data-reader-segment-id="chapter-a-1"]'),
+    ).toContainText('译文第1行');
+    expect(pageErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
+    expect(failedRequests).toEqual([]);
   } finally {
     releaseRequests();
     await server.close();
