@@ -2594,6 +2594,16 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
 
   await page.getByRole('button', { name: '停止全部', exact: true }).click();
   await expect(page.getByText(/共享池 0 个工作者/)).toBeVisible();
+
+  await page.goto('/workspace/sakura');
+  await expect(
+    page.getByRole('heading', { name: 'Sakura工作区' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: '本地书架', exact: true }).click();
+  await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('textbox', { name: '格式异常完整重试次数' }),
+  ).toHaveValue('3');
   expect(pageErrors).toEqual([]);
 });
 

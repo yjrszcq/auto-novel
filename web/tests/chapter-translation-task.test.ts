@@ -55,7 +55,7 @@ describe('current chapter translation task', () => {
       endIndex: 4,
       taskNumber: 1,
       total: 10,
-      gptFormatRetryCount: 5,
+      formatRetryCount: 5,
     });
 
     expect(result).toEqual([true]);
@@ -67,7 +67,7 @@ describe('current chapter translation task', () => {
         forceMetadata: true,
         startIndex: 3,
         endIndex: 4,
-        gptFormatRetryCount: 5,
+        formatRetryCount: 5,
       },
     });
   });

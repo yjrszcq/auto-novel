@@ -28,7 +28,7 @@ export const translateLocal = async (
     startIndex,
     endIndex,
     chapterIds,
-    gptFormatRetryCount,
+    formatRetryCount,
   }: TranslateTaskParams,
   callback: TranslateTaskCallback,
   translator: Translator,
@@ -124,7 +124,7 @@ export const translateLocal = async (
           oldTextZh: chapter[translator.id]?.paragraphs,
           force: forceSeg,
           signal: workerSignal,
-          formatRetryCount: gptFormatRetryCount,
+          formatRetryCount,
         },
         {
           concurrency,

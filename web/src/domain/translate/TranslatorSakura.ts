@@ -1,6 +1,7 @@
 import { createOpenAiApi } from '@/api';
 import type { Glossary } from '@/model/Glossary';
 import {
+  normalizeFormatRetryCount,
   normalizeSakuraContextLength,
   normalizeSakuraSegmentLength,
 } from '@/model/Translator';
@@ -53,23 +54,26 @@ export class SakuraTranslator implements SegmentTranslator {
 
   async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, prevSegs, signal } = context;
+    const formatRetryCount = normalizeFormatRetryCount(
+      context.formatRetryCount,
+    );
     const log = context.logger ?? this.log;
     const concatedSeg = seg.join('\n');
     const concatedPrevSeg = this.selectPreviousContext(prevSegs).join('\n');
 
     // 正常翻译
-    let retry = 1;
-    while (retry < 3) {
+    let attempt = 0;
+    while (attempt <= formatRetryCount) {
       const { text, hasDegradation } = await this.createChatCompletions(
         concatedSeg,
         glossary,
         concatedPrevSeg,
         signal,
-        retry > 1,
+        attempt > 0,
       );
       const splitText = text.replaceAll('<|im_end|>', '').split('\n');
 
-      const parts: string[] = [`第${retry}次`];
+      const parts: string[] = [`第${attempt + 1}次`];
       const linesNotMatched = seg.length !== splitText.length;
       if (hasDegradation) {
         parts.push('退化');
@@ -84,7 +88,7 @@ export class SakuraTranslator implements SegmentTranslator {
       if (!hasDegradation && !linesNotMatched) {
         return splitText;
       } else {
-        retry += 1;
+        attempt += 1;
       }
     }
 

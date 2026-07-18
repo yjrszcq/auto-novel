@@ -106,7 +106,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
         endIndex,
         taskNumber,
         total,
-        gptFormatRetryCount = 3,
+        formatRetryCount = 3,
       }: {
         level: 'normal' | 'expire' | 'all';
         type: 'gpt' | 'sakura';
@@ -116,7 +116,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
         endIndex: number;
         taskNumber: number;
         total: number;
-        gptFormatRetryCount?: number;
+        formatRetryCount?: number;
       },
     ) {
       const workspace = useWorkspaceStore(type);
@@ -132,7 +132,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
               forceMetadata,
               startIndex: start,
               endIndex: end,
-              gptFormatRetryCount,
+              formatRetryCount,
             });
             tasks.push(task);
           }
@@ -143,7 +143,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
           forceMetadata,
           startIndex,
           endIndex,
-          gptFormatRetryCount,
+          formatRetryCount,
         });
         tasks.push(task);
       }
@@ -167,12 +167,12 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
         level,
         type,
         shouldTop,
-        gptFormatRetryCount = 3,
+        formatRetryCount = 3,
       }: {
         level: 'expire' | 'all';
         type: 'gpt' | 'sakura';
         shouldTop: boolean;
-        gptFormatRetryCount?: number;
+        formatRetryCount?: number;
       },
     ) {
       const workspace = useWorkspaceStore(type);
@@ -183,7 +183,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
           forceMetadata: false,
           startIndex: 0,
           endIndex: 65535,
-          gptFormatRetryCount,
+          formatRetryCount,
         });
         const job = {
           task,

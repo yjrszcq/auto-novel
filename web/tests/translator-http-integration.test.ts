@@ -97,6 +97,28 @@ describe('translator HTTP integration', () => {
     expect(server.requests[0].body.stream).toBeUndefined();
   });
 
+  it('uses the configured complete-segment retries for Sakura output errors', async () => {
+    const server = await startOpenAiTestServer({
+      model: 'sakura-1.0.gguf',
+      onChat: (request) => ({
+        content:
+          request.index < 2 ? '错误单行' : '恢复后的第一行\n恢复后的第二行',
+      }),
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'sakura',
+      endpoint: server.endpoint,
+      segLength: 500,
+      prevSegLength: 500,
+    });
+
+    await expect(
+      translator.translate(['原文一', '原文二'], { formatRetryCount: 2 }),
+    ).resolves.toEqual(['恢复后的第一行', '恢复后的第二行']);
+    expect(server.requests).toHaveLength(3);
+  });
+
   it('measures requests held behind an explicit concurrency barrier', async () => {
     let releaseRequests: () => void = () => {};
     const requestBarrier = new Promise<void>((resolve) => {

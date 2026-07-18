@@ -1,6 +1,6 @@
 import { createOpenAiApi, OpenAiError } from '@/api';
 import type { Glossary } from '@/model/Glossary';
-import { normalizeGptFormatRetryCount } from '@/model/Translator';
+import { normalizeFormatRetryCount } from '@/model/Translator';
 import { delay, RegexUtil } from '@/util';
 
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
@@ -33,7 +33,7 @@ export class OpenAiTranslator implements SegmentTranslator {
 
   async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, signal } = context;
-    const formatRetryCount = normalizeGptFormatRetryCount(
+    const formatRetryCount = normalizeFormatRetryCount(
       context.formatRetryCount,
     );
     const log = context.logger ?? this.log;

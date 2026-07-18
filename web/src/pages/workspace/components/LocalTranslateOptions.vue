@@ -1,18 +1,16 @@
 <script lang="ts" setup>
 import { InfoOutlined } from '@vicons/material';
 import {
-  gptFormatRetryBounds,
-  normalizeGptFormatRetryCount,
+  formatRetryBounds,
+  normalizeFormatRetryCount,
 } from '@/model/Translator';
-
-defineProps<{ type: 'gpt' | 'sakura' }>();
 
 const translateLevel = ref<'normal' | 'expire' | 'all'>('expire');
 const showRetranslateWarning = computed(() => translateLevel.value === 'all');
 const startIndex = ref<number | null>(0);
 const endIndex = ref<number | null>(65536);
 const taskNumber = ref<number | null>(1);
-const gptFormatRetryCount = ref<number | null>(3);
+const formatRetryCount = ref<number | null>(3);
 
 defineExpose({
   getTranslateTaskParams: () => ({
@@ -20,8 +18,8 @@ defineExpose({
     forceMetadata: false,
     startIndex: startIndex.value ?? 0,
     endIndex: endIndex.value ?? 65536,
-    gptFormatRetryCount: normalizeGptFormatRetryCount(
-      gptFormatRetryCount.value ?? undefined,
+    formatRetryCount: normalizeFormatRetryCount(
+      formatRetryCount.value ?? undefined,
     ),
   }),
   getTaskNumber: () => taskNumber.value ?? 1,
@@ -57,17 +55,17 @@ defineExpose({
     >
       * 请确保你知道自己在干啥，不要随便使用危险功能
     </n-text>
-    <c-action-wrapper v-if="type === 'gpt'" title="格式异常">
+    <c-action-wrapper title="格式异常">
       <div class="local-translate-options__task-split">
         <n-input-group>
           <n-input-group-label size="small">完整重试</n-input-group-label>
           <n-input-number
-            v-model:value="gptFormatRetryCount"
+            v-model:value="formatRetryCount"
             class="local-translate-options__number"
             size="small"
             :show-button="false"
-            :min="gptFormatRetryBounds.minimum"
-            :max="gptFormatRetryBounds.maximum"
+            :min="formatRetryBounds.minimum"
+            :max="formatRetryBounds.maximum"
             :input-props="{ 'aria-label': '格式异常完整重试次数' }"
             style="width: 52px"
           />
@@ -86,7 +84,7 @@ defineExpose({
           <div
             class="local-translate-options__hint local-translate-options__hint--format"
           >
-            仅用于编号、行数或输出语言异常；首次请求不计入重试次数。
+            用于编号、行数、输出语言或模型退化等异常；首次请求不计入重试次数。
           </div>
         </n-tooltip>
       </div>
