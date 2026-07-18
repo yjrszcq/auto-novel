@@ -10,7 +10,7 @@ import type { Logger, SegmentCache, SegmentTranslator } from './Common';
 import { createSegIndexedDbCache } from './Common';
 import { RegexUtil } from '@/util';
 import type { ConcurrencyLimiter } from './Concurrency';
-import { runWithConcurrency } from './Concurrency';
+import { normalizeConcurrencyLimit, runWithConcurrency } from './Concurrency';
 
 const glossariesEqual = (left: Glossary, right: Glossary) => {
   const leftEntries = Object.entries(left);
@@ -118,7 +118,9 @@ export class Translator {
         let sequentialContextLength = 0;
         const concurrency = usesSequentialContext
           ? 1
-          : normalizeTranslationConcurrency(options?.concurrency);
+          : options?.segmentDispatcher
+            ? normalizeConcurrencyLimit(options.concurrency)
+            : normalizeTranslationConcurrency(options?.concurrency);
 
         options?.onSegmentProgress?.({
           chapter: options?.chapter,

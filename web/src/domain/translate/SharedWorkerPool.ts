@@ -169,15 +169,16 @@ export class SharedWorkerPool<TWorker, TAssignment> {
         ({ work }) => work.assignment,
       ),
     }));
+    const configuredMaximum = workers.reduce(
+      (sum, worker) => sum + worker.maximum,
+      0,
+    );
     return {
       outstanding: this.outstanding,
       queued: this.queue.size,
       waitingProducers: this.capacityWaiters.size,
       aggregateActive: workers.reduce((sum, worker) => sum + worker.active, 0),
-      aggregateMaximum: workers.reduce(
-        (sum, worker) => sum + worker.maximum,
-        0,
-      ),
+      aggregateMaximum: Math.min(configuredMaximum, this.highWaterMark),
       workers,
     };
   }

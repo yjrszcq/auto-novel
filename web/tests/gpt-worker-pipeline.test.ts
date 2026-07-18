@@ -13,7 +13,10 @@ vi.hoisted(() => {
   );
 });
 
-import { createBudgetSegmentor } from '../src/domain/translate/Common';
+import {
+  createBudgetSegmentor,
+  type SegmentTranslator,
+} from '../src/domain/translate/Common';
 import { GptWorkerPipeline } from '../src/domain/translate/GptWorkerPipeline';
 import { Translator } from '../src/domain/translate/Translator';
 import type {
@@ -96,6 +99,59 @@ const createTranslator = (endpoint: string, model: string, cache = false) =>
   Translator.create({ id: 'gpt', endpoint, model, key: `${model}-key` }, cache);
 
 describe('GPT shared worker pipeline', () => {
+  it('uses aggregate capacity above the legacy per-worker ceiling', async () => {
+    const volumeId = 'aggregate-capacity-volume.epub';
+    await seedVolume(
+      volumeId,
+      Array.from({ length: 17 }, (_, index) => `并发原文${index}`),
+    );
+    const release = deferred();
+    const allStarted = deferred();
+    let active = 0;
+    let maximumActive = 0;
+    const createFakeTranslator = (label: string) =>
+      new Translator({
+        id: 'gpt',
+        cacheIdentity: { label },
+        segmentor: createBudgetSegmentor(100, 1),
+        log: () => {},
+        translate: async (segment) => {
+          active += 1;
+          maximumActive = Math.max(maximumActive, active);
+          if (active === 17) allStarted.resolve();
+          await release.promise;
+          active -= 1;
+          return segment.map((line) => `${label}译-${line}`);
+        },
+      } satisfies SegmentTranslator);
+    const pipeline = new GptWorkerPipeline({ highWaterMark: 20 });
+    pipeline.register({
+      id: 'wide',
+      translator: createFakeTranslator('甲'),
+      concurrency: 16,
+    });
+    pipeline.register({
+      id: 'extra',
+      translator: createFakeTranslator('乙'),
+      concurrency: 1,
+    });
+
+    const translation = pipeline.translateLocal(
+      { type: 'local', volumeId },
+      taskParams(),
+      createCallback().callback,
+    );
+    await allStarted.promise;
+    expect(pipeline.snapshot()).toMatchObject({
+      aggregateActive: 17,
+      aggregateMaximum: 17,
+    });
+    expect(maximumActive).toBe(17);
+    release.resolve();
+    await translation;
+    pipeline.close();
+  });
+
   it('combines worker capacity on one chapter and preserves source order', async () => {
     const volumeId = 'pooled-volume.epub';
     const paragraphs = Array.from({ length: 6 }, (_, index) => `原文${index}`);

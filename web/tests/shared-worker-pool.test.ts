@@ -104,6 +104,16 @@ describe('shared translation worker pool', () => {
     expect(new Set(assignments.map(([, worker]) => worker)).size).toBe(2);
   });
 
+  it('reports the high-water mark as the effective aggregate ceiling', () => {
+    const pool = new SharedWorkerPool<string, number>({ highWaterMark: 2 });
+    pool.register({ id: 'wide', worker: 'wide', concurrency: 3 });
+
+    expect(pool.snapshot()).toMatchObject({
+      aggregateMaximum: 2,
+      workers: [{ id: 'wide', maximum: 3 }],
+    });
+  });
+
   it('requeues an interrupted assignment when a worker is removed', async () => {
     const pool = new SharedWorkerPool<string, string>();
     const firstStarted = deferred();

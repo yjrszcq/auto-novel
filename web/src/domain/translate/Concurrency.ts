@@ -1,3 +1,8 @@
+export const normalizeConcurrencyLimit = (
+  value: number | undefined,
+  fallback = 1,
+) => (Number.isFinite(value) ? Math.max(1, Math.floor(value!)) : fallback);
+
 export const runWithConcurrency = async <T>(
   items: T[],
   limit: number,
@@ -6,9 +11,7 @@ export const runWithConcurrency = async <T>(
 ) => {
   if (items.length === 0) return;
 
-  const requestedConcurrency = Number.isFinite(limit)
-    ? Math.max(1, Math.floor(limit))
-    : 1;
+  const requestedConcurrency = normalizeConcurrencyLimit(limit);
   const concurrency = Math.min(requestedConcurrency, items.length);
   const controller = new AbortController();
   const workerSignal = signal
@@ -56,7 +59,7 @@ type QueuedWork<T> = {
 };
 
 export const createConcurrencyLimiter = (limit: number) => {
-  const maximum = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 1;
+  const maximum = normalizeConcurrencyLimit(limit);
   const queue = new Set<QueuedWork<unknown>>();
   let active = 0;
 

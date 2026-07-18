@@ -10,7 +10,11 @@ import type {
 } from '@/model/Translator';
 import { normalizeTranslationConcurrency } from '@/model/Translator';
 import { useLocalVolumeStore } from '@/stores';
-import { createConcurrencyLimiter, runWithConcurrency } from './Concurrency';
+import {
+  createConcurrencyLimiter,
+  normalizeConcurrencyLimit,
+  runWithConcurrency,
+} from './Concurrency';
 import type {
   SegmentDispatcher,
   SegmentProgressInfo,
@@ -88,7 +92,9 @@ export const translateLocal = async (
   }
 
   const forceSeg = level === 'all';
-  const concurrency = normalizeTranslationConcurrency(options?.concurrency);
+  const concurrency = options?.segmentDispatcher
+    ? normalizeConcurrencyLimit(options.concurrency)
+    : normalizeTranslationConcurrency(options?.concurrency);
   const requestLimiter = createConcurrencyLimiter(concurrency);
 
   const translateChapter = async (
