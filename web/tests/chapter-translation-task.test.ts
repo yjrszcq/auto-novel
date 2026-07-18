@@ -55,6 +55,7 @@ describe('current chapter translation task', () => {
       endIndex: 4,
       taskNumber: 1,
       total: 10,
+      gptFormatRetryCount: 5,
     });
 
     expect(result).toEqual([true]);
@@ -62,7 +63,12 @@ describe('current chapter translation task', () => {
       TranslateTaskDescriptor.parse(workspace.ref.value.jobs[0].task),
     ).toMatchObject({
       desc: { type: 'local', volumeId: 'book' },
-      params: { forceMetadata: true, startIndex: 3, endIndex: 4 },
+      params: {
+        forceMetadata: true,
+        startIndex: 3,
+        endIndex: 4,
+        gptFormatRetryCount: 5,
+      },
     });
   });
 

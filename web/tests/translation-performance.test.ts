@@ -90,7 +90,7 @@ describe('translation performance contracts', () => {
     expect(reconstructed).toEqual(lines);
   });
 
-  it('records whole-segment retry amplification before binary recovery', async () => {
+  it('retries the complete segment before binary recovery', async () => {
     const server = await startOpenAiTestServer({
       onChat: (request) => {
         if (request.index === 0) {
@@ -110,8 +110,66 @@ describe('translation performance contracts', () => {
 
     await expect(
       translator.translate(['甲', '乙', '丙', '丁']),
+    ).resolves.toEqual(['译文1', '译文2', '译文3', '译文4']);
+    expect(server.requests).toHaveLength(2);
+    expect(server.requests[1].body.messages.at(-1)?.content).toContain(
+      '上一次输出未通过格式校验',
+    );
+  });
+
+  it('uses the configured progressive retries before bounded binary recovery', async () => {
+    const server = await startOpenAiTestServer({
+      onChat: (request) => {
+        const prompt = request.body.messages.at(-1)?.content ?? '';
+        if (request.index < 3) return { content: '#1:行数错误' };
+        return { content: numberedAnswer(promptLineCount(prompt)) };
+      },
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'bounded-recovery-key',
+      model: 'bounded-recovery-model',
+    });
+
+    await expect(
+      translator.translate(['甲', '乙', '丙', '丁'], { formatRetryCount: 2 }),
     ).resolves.toEqual(['译文1', '译文2', '译文1', '译文2']);
-    expect(server.requests).toHaveLength(3);
+    expect(server.requests).toHaveLength(5);
+    expect(
+      server.requests.map((request) =>
+        promptLineCount(request.body.messages.at(-1)?.content ?? ''),
+      ),
+    ).toEqual([4, 4, 4, 2, 2]);
+    expect(server.requests[2].body.messages.at(-1)?.content).toContain(
+      '这是第2次纠错重试',
+    );
+  });
+
+  it('retries ambiguous duplicate numbering instead of accepting line positions', async () => {
+    const server = await startOpenAiTestServer({
+      onChat: (request) =>
+        request.index === 0
+          ? { content: '#1:第一行译文\n#1:第二行译文' }
+          : { content: '#2:第二行译文\n#1:第一行译文' },
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'duplicate-number-key',
+      model: 'duplicate-number-model',
+    });
+
+    await expect(translator.translate(['第一行', '第二行'])).resolves.toEqual([
+      '第一行译文',
+      '第二行译文',
+    ]);
+    expect(server.requests).toHaveLength(2);
+    expect(server.requests[1].body.messages.at(-1)?.content).toContain(
+      '编号不完整、重复或混有额外文本',
+    );
   });
 
   it('restores numbered output order from fenced model responses', async () => {

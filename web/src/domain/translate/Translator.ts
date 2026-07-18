@@ -96,6 +96,7 @@ export class Translator {
       oldGlossary?: Glossary;
       force?: boolean;
       signal?: AbortSignal;
+      formatRetryCount?: number;
     },
     options?: TranslateRuntimeOptions,
   ): Promise<string[]> {
@@ -156,6 +157,7 @@ export class Translator {
                       : [],
                   oldSegZh,
                   logger,
+                  formatRetryCount: context?.formatRetryCount,
                 },
                 logLabel,
               );
@@ -229,6 +231,7 @@ export class Translator {
       prevSegs,
       force,
       signal,
+      formatRetryCount,
     }: {
       logger: Logger;
       glossary?: Glossary;
@@ -237,6 +240,7 @@ export class Translator {
       prevSegs: string[][];
       force?: boolean;
       signal?: AbortSignal;
+      formatRetryCount?: number;
     },
     logLabel: string,
   ) {
@@ -287,6 +291,7 @@ export class Translator {
         glossary: segGlossary,
         prevSegs,
         signal,
+        formatRetryCount,
         logger: (msg, detail) => this.log(`${logLabel} ${msg}`, detail),
       });
       if (segOutput.length !== seg.length) {

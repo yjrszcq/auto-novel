@@ -23,7 +23,13 @@ import type {
 
 export const translateLocal = async (
   { volumeId }: LocalTranslateTaskDesc,
-  { level, startIndex, endIndex, chapterIds }: TranslateTaskParams,
+  {
+    level,
+    startIndex,
+    endIndex,
+    chapterIds,
+    gptFormatRetryCount,
+  }: TranslateTaskParams,
   callback: TranslateTaskCallback,
   translator: Translator,
   signal?: AbortSignal,
@@ -118,6 +124,7 @@ export const translateLocal = async (
           oldTextZh: chapter[translator.id]?.paragraphs,
           force: forceSeg,
           signal: workerSignal,
+          formatRetryCount: gptFormatRetryCount,
         },
         {
           concurrency,

@@ -1,6 +1,7 @@
 export type TranslatorId = 'sakura' | 'baidu' | 'youdao' | 'gpt';
 
 export const translationConcurrencyBounds = { minimum: 1, maximum: 16 };
+export const gptFormatRetryBounds = { minimum: 0, maximum: 10 };
 export const sakuraSegmentLengthBounds = { minimum: 100, maximum: 8_000 };
 export const sakuraContextLengthBounds = { minimum: 0, maximum: 8_000 };
 
@@ -16,6 +17,9 @@ const normalizeBoundedInteger = (
 
 export const normalizeTranslationConcurrency = (value?: number) =>
   normalizeBoundedInteger(value, 1, translationConcurrencyBounds);
+
+export const normalizeGptFormatRetryCount = (value?: number) =>
+  normalizeBoundedInteger(value, 3, gptFormatRetryBounds);
 
 export const normalizeSakuraSegmentLength = (value?: number) =>
   normalizeBoundedInteger(value, 500, sakuraSegmentLengthBounds);
@@ -73,6 +77,7 @@ export type TranslateTaskParams = {
   forceMetadata: boolean; // 强制重翻元数据
   startIndex: number;
   endIndex: number;
+  gptFormatRetryCount: number;
   chapterIds?: string[];
 };
 
@@ -95,6 +100,7 @@ export namespace TranslateTaskDescriptor {
     forceMetadata,
     startIndex,
     endIndex,
+    gptFormatRetryCount,
     chapterIds,
   }: TranslateTaskParams) => {
     const searchParamsInit: { [key: string]: string } = {
@@ -102,6 +108,8 @@ export namespace TranslateTaskDescriptor {
       forceMetadata: forceMetadata.toString(),
       startIndex: startIndex.toString(),
       endIndex: endIndex.toString(),
+      gptFormatRetryCount:
+        normalizeGptFormatRetryCount(gptFormatRetryCount).toString(),
     };
     if (chapterIds !== undefined) {
       searchParamsInit.chapterIds = JSON.stringify(chapterIds);
@@ -144,6 +152,9 @@ export namespace TranslateTaskDescriptor {
       forceMetadata: queryBoolean('forceMetadata'),
       startIndex: queryInt('startIndex', 0),
       endIndex: queryInt('endIndex', 65535),
+      gptFormatRetryCount: normalizeGptFormatRetryCount(
+        queryInt('gptFormatRetryCount', 3),
+      ),
     };
     const chapterIds = parseChapterIds(query.get('chapterIds'));
     if (chapterIds !== undefined) params.chapterIds = chapterIds;

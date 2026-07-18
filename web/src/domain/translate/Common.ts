@@ -24,6 +24,7 @@ export type SegmentContext = {
   prevSegs: string[][];
   signal?: AbortSignal;
   logger?: Logger;
+  formatRetryCount?: number;
 };
 
 export interface SegmentTranslator {

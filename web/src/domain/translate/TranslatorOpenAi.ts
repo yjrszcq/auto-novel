@@ -1,5 +1,6 @@
 import { createOpenAiApi, OpenAiError } from '@/api';
 import type { Glossary } from '@/model/Glossary';
+import { normalizeGptFormatRetryCount } from '@/model/Translator';
 import { delay, RegexUtil } from '@/util';
 
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
@@ -7,6 +8,7 @@ import { createBudgetSegmentor } from './Common';
 import { ProviderBackoff } from './ProviderBackoff';
 
 type OpenAi = ReturnType<typeof createOpenAiApi>;
+type FormatCorrection = { attempt: number; issue: string };
 
 export class OpenAiTranslator implements SegmentTranslator {
   id = <const>'gpt';
@@ -31,6 +33,9 @@ export class OpenAiTranslator implements SegmentTranslator {
 
   async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, signal } = context;
+    const formatRetryCount = normalizeGptFormatRetryCount(
+      context.formatRetryCount,
+    );
     const log = context.logger ?? this.log;
     const logSegInfo = ({
       retry,
@@ -65,79 +70,95 @@ export class OpenAiTranslator implements SegmentTranslator {
       log(parts.join('　'));
     };
 
-    let retry = 0;
-    let lineNumberMismatchCount = 0;
-    while (true) {
-      const result = await this.translateLines(seg, glossary, signal);
+    const requestBudget = {
+      remaining: 1 + formatRetryCount + Math.max(4, seg.length * 4),
+    };
+    const translateValidLines = async (
+      lines: string[],
+      formatRetries: number,
+      binaryRange?: [number, number],
+    ): Promise<string[] | undefined> => {
+      let correction: FormatCorrection | undefined;
+      let formatFailureCount = 0;
+      let providerFailureCount = 0;
+      while (true) {
+        if (requestBudget.remaining <= 0) {
+          throw new Error('格式恢复请求预算已耗尽');
+        }
+        requestBudget.remaining -= 1;
+        const result = await this.translateLines(
+          lines,
+          glossary,
+          signal,
+          correction,
+        );
 
-      if ('answer' in result) {
-        const isChinese = detectChinese(result.answer.join(' '));
-        logSegInfo({ retry, lineNumber: [seg.length, result.answer.length] });
-
-        if (seg.length !== result.answer.length) {
-          lineNumberMismatchCount += 1;
-          log('输出错误：输出行数不匹配');
-          if (seg.length > 1) {
-            log('直接拆分异常分段，避免重复请求相同内容');
-            break;
+        if (!('answer' in result)) {
+          logSegInfo({
+            retry: binaryRange ? undefined : formatFailureCount,
+            binaryRange,
+            lineNumber: [lines.length, NaN],
+          });
+          if (providerFailureCount >= 2 && result.retryable) {
+            throw Error('服务请求重试次数太多');
           }
-        } else if (!isChinese) {
-          log('输出错误：输出语言不是中文');
-        } else {
-          return result.answer;
+          await this.onError(result, signal, log, providerFailureCount);
+          providerFailureCount += 1;
+          continue;
         }
-      } else {
-        logSegInfo({ retry, lineNumber: [seg.length, NaN] });
-        if (retry >= 2 && result.retryable) throw Error('重试次数太多');
-        await this.onError(result, signal, log, retry);
-      }
 
-      retry += 1;
-      if (retry >= 3) {
-        if (lineNumberMismatchCount === 3 && seg.length > 1) {
-          log('连续三次行数不匹配，启动二分翻译');
-          break;
-        } else {
-          throw Error('重试次数太多');
-        }
-      }
-    }
+        providerFailureCount = 0;
+        logSegInfo({
+          retry: binaryRange ? undefined : formatFailureCount,
+          binaryRange,
+          lineNumber: [lines.length, result.answer.length],
+        });
+        const issue =
+          result.formatIssue ??
+          (lines.length !== result.answer.length
+            ? `输出行数不匹配，需要 ${lines.length} 行，实际 ${result.answer.length} 行`
+            : !detectChinese(result.answer.join(' '))
+              ? '输出语言不是中文'
+              : undefined);
+        if (issue === undefined) return result.answer;
 
+        log(`输出错误：${issue}`);
+        if (formatFailureCount >= formatRetries) return undefined;
+        formatFailureCount += 1;
+        correction = { attempt: formatFailureCount, issue };
+        log(
+          `保留完整分段进行第${formatFailureCount}次格式纠错重试（最多${formatRetries}次）`,
+        );
+      }
+    };
+
+    const completeResult = await translateValidLines(seg, formatRetryCount);
+    if (completeResult !== undefined) return completeResult;
+    if (seg.length === 1) throw Error('格式异常重试次数太多');
+    log(`完整分段已重试${formatRetryCount}次，启动自然行边界二分翻译`);
+
+    const binaryFormatRetries = Math.min(1, formatRetryCount);
+    const maximumBinaryDepth = Math.ceil(Math.log2(seg.length)) + 1;
     const binaryTranslateSegment = async (
       left: number,
       right: number,
+      depth: number,
     ): Promise<string[]> => {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const result = await this.translateLines(
-          seg.slice(left, right),
-          glossary,
-          signal,
-        );
-        if ('answer' in result) {
-          const isChinese = detectChinese(result.answer.join(' '));
-          logSegInfo({
-            binaryRange: [left, right],
-            lineNumber: [right - left, result.answer.length],
-          });
-          if (right - left === result.answer.length && isChinese) {
-            return result.answer;
-          }
-          if (right - left !== result.answer.length) break;
-        } else {
-          logSegInfo({
-            binaryRange: [left, right],
-            lineNumber: [right - left, NaN],
-          });
-          if (attempt >= 2 && result.retryable) throw Error('重试次数太多');
-          await this.onError(result, signal, log, attempt);
-        }
+      if (depth > maximumBinaryDepth) {
+        throw new Error('二分恢复深度超出安全上限');
       }
+      const result = await translateValidLines(
+        seg.slice(left, right),
+        binaryFormatRetries,
+        [left, right],
+      );
+      if (result !== undefined) return result;
 
       if (right - left > 1) {
         log('失败，继续二分');
         const mid = Math.floor((left + right) / 2);
-        const partLeft = await binaryTranslateSegment(left, mid);
-        const partRight = await binaryTranslateSegment(mid, right);
+        const partLeft = await binaryTranslateSegment(left, mid, depth + 1);
+        const partRight = await binaryTranslateSegment(mid, right, depth + 1);
         return partLeft.concat(partRight);
       } else {
         log('失败，无法继续，退出');
@@ -148,8 +169,8 @@ export class OpenAiTranslator implements SegmentTranslator {
     const left = 0;
     const right = seg.length;
     const mid = Math.floor((left + right) / 2);
-    const partLeft = await binaryTranslateSegment(left, mid);
-    const partRight = await binaryTranslateSegment(mid, right);
+    const partLeft = await binaryTranslateSegment(left, mid, 1);
+    const partRight = await binaryTranslateSegment(mid, right, 1);
     return partLeft.concat(partRight);
   }
 
@@ -157,9 +178,10 @@ export class OpenAiTranslator implements SegmentTranslator {
     lines: string[],
     glossary: Glossary,
     signal?: AbortSignal,
+    correction?: FormatCorrection,
   ): Promise<
     | { message: string; retryable: boolean; retryAfterMs?: number }
-    | { answer: string[] }
+    | { answer: string[]; formatIssue?: string }
   > {
     const parseAnswer = (answer: string) => {
       const lines = answer
@@ -169,32 +191,46 @@ export class OpenAiTranslator implements SegmentTranslator {
         .filter((line) => line.trim().length > 0);
       const numbered = new Map<number, string>();
       let duplicateNumber = false;
+      let numberedLineCount = 0;
       for (const line of lines) {
         const match = /^\s*#(\d+)\s*[:：]\s?(.*)$/u.exec(line);
         if (match === null) continue;
+        numberedLineCount += 1;
         const lineNumber = Number(match[1]);
         if (numbered.has(lineNumber)) duplicateNumber = true;
         numbered.set(lineNumber, match[2].trim());
       }
+      if (numberedLineCount === 0) return { answer: lines };
       if (
         !duplicateNumber &&
+        numberedLineCount === lines.length &&
         numbered.size === lines.length &&
         Array.from({ length: lines.length }, (_, index) => index + 1).every(
           (lineNumber) => numbered.has(lineNumber),
         )
       ) {
-        return Array.from({ length: lines.length }, (_, index) =>
-          numbered.get(index + 1)!,
-        );
+        return {
+          answer: Array.from({ length: lines.length }, (_, index) =>
+            numbered.get(index + 1)!,
+          ),
+        };
       }
-      return lines.map((line) =>
-        line.replace(/^\s*#\d+\s*[:：]\s?/u, '').trim(),
-      );
+      return {
+        answer: lines.map((line) =>
+          line.replace(/^\s*#\d+\s*[:：]\s?/u, '').trim(),
+        ),
+        formatIssue: `编号不完整、重复或混有额外文本，需要严格输出 #1 到 #${lines.length}`,
+      };
     };
 
     await this.waitForProviderCooldown(signal);
-    return askApi(this.api, this.model, buildMessages(lines, glossary), signal)
-      .then((it) => ({ answer: parseAnswer(it.answer) }))
+    return askApi(
+      this.api,
+      this.model,
+      buildMessages(lines, glossary, correction),
+      signal,
+    )
+      .then((it) => parseAnswer(it.answer))
       .catch((e: unknown) => {
         if (e instanceof OpenAiError) {
           if (e.code === 'rate_limit_exceeded' || e.status === 429) {
@@ -289,11 +325,19 @@ const askApi = (
 const buildMessages = (
   lines: string[],
   glossary: Glossary,
+  correction?: FormatCorrection,
 ): ['user' | 'assistant', string][] => {
   const buildPrompt = () => {
     const parts = [
       '请你作为一个轻小说翻译者，将下面的轻小说翻译成简体中文。要求翻译准确，译文流畅，尽量保持原文写作风格。要求人名和专有名词也要翻译成中文。既不要漏掉任何一句，也不要增加额外的说明。注意保持换行格式，译文的行数必须要和原文相等。',
     ];
+
+    if (correction !== undefined) {
+      parts.push(
+        `上一次输出未通过格式校验：${correction.issue}。这是第${correction.attempt}次纠错重试。`,
+        `只输出 #1 到 #${lines.length} 的译文，每个编号必须恰好出现一次并各占一行；禁止代码块、前言、解释或总结。`,
+      );
+    }
 
     const matchedWordPairs: [string, string][] = [];
     for (const jp in glossary) {

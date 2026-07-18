@@ -2548,6 +2548,16 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   });
   await page.reload();
 
+  await page.getByRole('button', { name: '本地书架', exact: true }).click();
+  await expect(page.getByText('格式异常', { exact: true })).toBeVisible();
+  const formatRetryInput = page.getByRole('textbox', {
+    name: '格式异常完整重试次数',
+  });
+  await expect(formatRetryInput).toHaveValue('3');
+  await formatRetryInput.fill('5');
+  await expect(formatRetryInput).toHaveValue('5');
+  await page.keyboard.press('Escape');
+
   await page.getByRole('button', { name: '启动全部', exact: true }).click();
   await expect(page.getByText(/共享池 2 个工作者/)).toBeVisible();
   await expect(page.getByText(/活跃请求 0\/3/)).toBeVisible();

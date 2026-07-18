@@ -14,6 +14,7 @@ vi.hoisted(() => {
 });
 
 import {
+  normalizeGptFormatRetryCount,
   normalizeSakuraContextLength,
   normalizeSakuraSegmentLength,
   normalizeTranslationConcurrency,
@@ -25,6 +26,9 @@ describe('workspace task descriptors', () => {
     expect(normalizeTranslationConcurrency(Number.POSITIVE_INFINITY)).toBe(1);
     expect(normalizeTranslationConcurrency(0)).toBe(1);
     expect(normalizeTranslationConcurrency(99)).toBe(16);
+    expect(normalizeGptFormatRetryCount(Number.POSITIVE_INFINITY)).toBe(3);
+    expect(normalizeGptFormatRetryCount(-1)).toBe(0);
+    expect(normalizeGptFormatRetryCount(99)).toBe(10);
     expect(normalizeSakuraSegmentLength(20)).toBe(100);
     expect(normalizeSakuraSegmentLength(20_000)).toBe(8_000);
     expect(normalizeSakuraContextLength(-1)).toBe(0);
@@ -37,6 +41,7 @@ describe('workspace task descriptors', () => {
       forceMetadata: true,
       startIndex: 2,
       endIndex: 8,
+      gptFormatRetryCount: 7,
     });
 
     expect(TranslateTaskDescriptor.parse(task)).toEqual({
@@ -46,6 +51,7 @@ describe('workspace task descriptors', () => {
         forceMetadata: true,
         startIndex: 2,
         endIndex: 8,
+        gptFormatRetryCount: 7,
       },
     });
   });

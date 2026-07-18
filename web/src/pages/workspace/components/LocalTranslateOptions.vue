@@ -1,11 +1,18 @@
 <script lang="ts" setup>
 import { InfoOutlined } from '@vicons/material';
+import {
+  gptFormatRetryBounds,
+  normalizeGptFormatRetryCount,
+} from '@/model/Translator';
+
+defineProps<{ type: 'gpt' | 'sakura' }>();
 
 const translateLevel = ref<'normal' | 'expire' | 'all'>('expire');
 const showRetranslateWarning = computed(() => translateLevel.value === 'all');
 const startIndex = ref<number | null>(0);
 const endIndex = ref<number | null>(65536);
 const taskNumber = ref<number | null>(1);
+const gptFormatRetryCount = ref<number | null>(3);
 
 defineExpose({
   getTranslateTaskParams: () => ({
@@ -13,6 +20,9 @@ defineExpose({
     forceMetadata: false,
     startIndex: startIndex.value ?? 0,
     endIndex: endIndex.value ?? 65536,
+    gptFormatRetryCount: normalizeGptFormatRetryCount(
+      gptFormatRetryCount.value ?? undefined,
+    ),
   }),
   getTaskNumber: () => taskNumber.value ?? 1,
 });
@@ -47,6 +57,24 @@ defineExpose({
     >
       * 请确保你知道自己在干啥，不要随便使用危险功能
     </n-text>
+    <c-action-wrapper v-if="type === 'gpt'" title="格式异常">
+      <n-input-group>
+        <n-input-group-label size="small">完整重试</n-input-group-label>
+        <n-input-number
+          v-model:value="gptFormatRetryCount"
+          size="small"
+          :show-button="false"
+          :min="gptFormatRetryBounds.minimum"
+          :max="gptFormatRetryBounds.maximum"
+          :input-props="{ 'aria-label': '格式异常完整重试次数' }"
+          style="width: 52px"
+        />
+        <n-input-group-label size="small">次后再拆分</n-input-group-label>
+      </n-input-group>
+      <n-text depth="3" class="local-translate-options__format-hint">
+        仅用于编号、行数或输出语言异常；首次请求不计入重试次数。
+      </n-text>
+    </c-action-wrapper>
     <c-action-wrapper title="范围">
       <n-flex style="text-align: center" class="local-translate-options__range">
         <div>
@@ -87,7 +115,9 @@ defineExpose({
                 <n-icon :component="InfoOutlined" size="16" />
               </button>
             </template>
-            <div class="local-translate-options__hint local-translate-options__hint--range">
+            <div
+              class="local-translate-options__hint local-translate-options__hint--range"
+            >
               章节序号看下面目录方括号里的数字。“从0到10”表示从第0章到第9章，不包含第10章。均分只对排队生效，最大为10。
             </div>
           </n-tooltip>
@@ -103,6 +133,12 @@ defineExpose({
   margin-top: 6px;
   font-size: 12px;
   color: #f5d676;
+}
+
+.local-translate-options__format-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 .local-translate-options__hint {

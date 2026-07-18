@@ -52,18 +52,20 @@ const calculateExpired = (volume: LocalVolumeMetadata) =>
 
 const queueAllVolumes = (volumes: LocalVolumeMetadata[]) => {
   const ids = volumes.map((it) => it.id);
+  const { gptFormatRetryCount } =
+    translateOptions.value!.getTranslateTaskParams();
   const { success, failed } = store.queueJobsToWorkspace(ids, {
     level: 'expire',
     type: props.type,
     shouldTop: shouldTopJob.value ?? false,
-    forceMetadata,
+    gptFormatRetryCount,
   });
   message.info(`${success}本小说已排队，${failed}本失败`);
 };
 
 const shouldTopJob = useKeyModifier('Control');
 const queueVolume = (volumeId: string, total: number = 65536) => {
-  const { startIndex, endIndex, level, forceMetadata } =
+  const { startIndex, endIndex, level, forceMetadata, gptFormatRetryCount } =
     translateOptions.value!.getTranslateTaskParams();
   const taskNumber = translateOptions.value!.getTaskNumber();
   const success = store.queueJobToWorkspace(volumeId, {
@@ -71,6 +73,7 @@ const queueVolume = (volumeId: string, total: number = 65536) => {
     type: props.type,
     shouldTop: shouldTopJob.value ?? false,
     forceMetadata,
+    gptFormatRetryCount,
     startIndex: startIndex,
     endIndex: endIndex,
     taskNumber: taskNumber,
@@ -135,7 +138,7 @@ const progressFilterFunc = computed(() => {
     @volume-add="queueVolume($event.name)"
   >
     <template #extra>
-      <local-translate-options ref="translateOptions" />
+      <local-translate-options ref="translateOptions" :type="type" />
       <n-divider style="margin: 12px 0" />
       <c-action-wrapper title="状态">
         <c-radio-group
