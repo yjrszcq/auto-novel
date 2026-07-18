@@ -172,11 +172,11 @@ const handleDrawerVisibility = (show: boolean) => {
         <slot name="extra" :volumes="sortedVolumes ?? []" />
         <c-action-wrapper title="选择" align="center">
           <n-flex align="center" :wrap="true">
-            <n-text>已选择 {{ selectedVolumes.length }} 本</n-text>
             <n-button size="small" @click="selectAllVolumes">全选</n-button>
             <n-button size="small" @click="invertVolumeSelection">
               反选
             </n-button>
+            <n-text>已选择 {{ selectedVolumes.length }} 本</n-text>
             <slot name="selection-action" :volumes="selectedVolumes" />
           </n-flex>
         </c-action-wrapper>
