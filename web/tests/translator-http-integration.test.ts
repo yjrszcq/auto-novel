@@ -13,7 +13,10 @@ vi.hoisted(() => {
 });
 
 import { Translator } from '../src/domain/translate/Translator';
-import { createLengthSegmentor } from '../src/domain/translate/Common';
+import {
+  createLengthSegmentor,
+  type SegmentCache,
+} from '../src/domain/translate/Common';
 import { createConcurrencyLimiter } from '../src/domain/translate/Concurrency';
 import { TranslationCacheRepo } from '../src/repos/useTranslationCache';
 import { startOpenAiTestServer } from './helpers/openai-test-server';
@@ -334,6 +337,41 @@ describe('translator HTTP integration', () => {
     ).resolves.toEqual(['端点乙译文']);
     expect(server.requests).toHaveLength(2);
     expect(otherServer.requests).toHaveLength(1);
+  });
+
+  it('keeps GPT cache identity independent of unused preceding context', async () => {
+    const server = await startOpenAiTestServer();
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'context-free-key',
+      model: 'context-free-model',
+    });
+    translator.segTranslator.segmentor = createLengthSegmentor(1);
+    const cacheValues = new Map<string, string[]>();
+    const cacheExtras: unknown[] = [];
+    const cache: SegmentCache = {
+      cacheKey: (segment, extra) => {
+        cacheExtras.push(extra);
+        return JSON.stringify({ segment, extra });
+      },
+      get: async (key) => cacheValues.get(key),
+      save: async (key, output) => {
+        cacheValues.set(key, output);
+      },
+    };
+    translator.segCache = cache;
+
+    await translator.translate(['缓存甲', '缓存乙', '缓存丙'], undefined, {
+      concurrency: 2,
+    });
+
+    expect(
+      cacheExtras.every(
+        (extra) => (extra as { prevSegs?: string[][] }).prevSegs === undefined,
+      ),
+    ).toBe(true);
   });
 
   it('isolates Sakura cache entries by translated preceding context', async () => {

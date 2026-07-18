@@ -198,7 +198,10 @@ export class Translator {
       try {
         const extra = {
           glossary,
-          prevSegs,
+          prevSegs:
+            this.segTranslator instanceof SakuraTranslator
+              ? prevSegs
+              : undefined,
           translator: this.segTranslator.cacheIdentity,
         };
         cacheKey = this.segCache.cacheKey(seg, extra);
