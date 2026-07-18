@@ -372,6 +372,8 @@ onMounted(reload);
             </n-button>
             <n-popconfirm
               :disabled="selectedBookIds.size === 0"
+              placement="top-end"
+              style="max-width: 300px"
               @positive-click="updateSelectedBooks('delete')"
             >
               <template #trigger>
@@ -670,6 +672,7 @@ onMounted(reload);
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: 6px;
+    margin-bottom: 4px;
   }
 
   .bookshelf-page__header-actions {
@@ -710,6 +713,9 @@ onMounted(reload);
   }
 
   .bookshelf-filter-panel {
+    gap: 8px;
+    margin: 0 0 8px;
+    padding-block: 8px;
     padding-inline: 12px;
   }
 
@@ -721,6 +727,8 @@ onMounted(reload);
     align-items: stretch;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
+    margin-bottom: 4px;
+    padding: 8px 10px;
   }
 
   .bookshelf-selection-toolbar__selection {

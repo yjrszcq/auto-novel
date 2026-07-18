@@ -420,6 +420,64 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   expect(mobileSelectionLayout.fileLeft).toBeGreaterThanOrEqual(
     mobileSelectionLayout.queueRight,
   );
+  const mobileFilterButton = page.getByRole('button', {
+    name: '书架筛选',
+    exact: true,
+  });
+  await mobileFilterButton.click();
+  const mobileFilterPanel = page.locator('.bookshelf-filter-panel');
+  await expect(mobileFilterPanel).toBeVisible();
+  const mobileVerticalGaps = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>(
+      '.bookshelf-page__header',
+    );
+    const selection = document.querySelector<HTMLElement>(
+      '.bookshelf-selection-toolbar',
+    );
+    const filter = document.querySelector<HTMLElement>(
+      '.bookshelf-filter-panel',
+    );
+    const firstBook = document.querySelector<HTMLElement>('.book-card');
+    if (
+      header === null ||
+      selection === null ||
+      filter === null ||
+      firstBook === null
+    ) {
+      throw new Error('缺少手机版书架纵向布局元素');
+    }
+    return {
+      filterToBooks:
+        firstBook.getBoundingClientRect().top -
+        filter.getBoundingClientRect().bottom,
+      headerToSelection:
+        selection.getBoundingClientRect().top -
+        header.getBoundingClientRect().bottom,
+      selectionToFilter:
+        filter.getBoundingClientRect().top -
+        selection.getBoundingClientRect().bottom,
+    };
+  });
+  expect(mobileVerticalGaps.headerToSelection).toBeLessThanOrEqual(4);
+  expect(mobileVerticalGaps.selectionToFilter).toBeLessThanOrEqual(4);
+  expect(mobileVerticalGaps.filterToBooks).toBeLessThanOrEqual(8);
+
+  await selectionToolbar
+    .getByRole('button', { name: '删除', exact: true })
+    .click();
+  const mobileDeleteConfirm = page.locator('.n-popconfirm');
+  await expect(mobileDeleteConfirm).toBeVisible();
+  const mobileDeleteConfirmBounds = await mobileDeleteConfirm.boundingBox();
+  expect(mobileDeleteConfirmBounds).not.toBeNull();
+  expect(mobileDeleteConfirmBounds!.x).toBeGreaterThanOrEqual(8);
+  expect(
+    mobileDeleteConfirmBounds!.x + mobileDeleteConfirmBounds!.width,
+  ).toBeLessThanOrEqual(382);
+  await mobileDeleteConfirm
+    .getByRole('button', { name: '取消', exact: true })
+    .click();
+  await mobileFilterButton.click();
+  await expect(mobileFilterPanel).toBeHidden();
   if (desktopViewport !== null) {
     await page.setViewportSize(desktopViewport);
   }
