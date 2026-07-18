@@ -1,8 +1,5 @@
 export type ReaderMode =
-  | 'translated'
-  | 'translated-original'
-  | 'original-translated'
-  | 'original';
+  'translated' | 'translated-original' | 'original-translated' | 'original';
 
 export type ReaderFlow = 'auto' | 'paginated' | 'scrolled';
 
@@ -171,5 +168,7 @@ export interface ReaderContentAdapter {
   getNavigation?(bookId: string): Promise<ReaderNavigationEntry[]>;
   getChapter(input: GetReaderChapterInput): Promise<ReaderChapterContent>;
   preloadChapter?(input: GetReaderChapterInput): void;
+  invalidateChapter?(input: GetReaderChapterInput): void;
+  invalidateBook?(bookId: string): void;
   getCapabilities(bookId: string): Promise<BookReadingCapabilities>;
 }

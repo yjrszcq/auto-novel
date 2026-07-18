@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type {
   LocalVolumeChapter,
@@ -8,6 +8,7 @@ import {
   createLocalVolumeReaderAdapter,
   type LocalVolumeReaderRepository,
 } from '../src/pages/reader/adapters/LocalVolumeReaderAdapter';
+import { createReaderPageController } from '../src/pages/reader/core/ReaderPageState';
 
 const volume: LocalVolumeMetadata = {
   id: 'sample.epub',
@@ -73,11 +74,68 @@ const chapters: Record<string, LocalVolumeChapter> = {
 
 const repository: LocalVolumeReaderRepository = {
   getVolume: async (bookId) => (bookId === volume.id ? volume : undefined),
-  getChapter: async (bookId, chapterId) =>
-    bookId === volume.id ? chapters[chapterId] : undefined,
+  listChapter: async (bookId) =>
+    bookId === volume.id ? Object.values(chapters) : [],
 };
 
 describe('LocalVolumeReaderAdapter', () => {
+  it('opens a 1,000-chapter book with one metadata and one indexed chapter read', async () => {
+    const largeVolume: LocalVolumeMetadata = {
+      ...volume,
+      id: 'large.epub',
+      toc: Array.from({ length: 1_000 }, (_, index) => ({
+        chapterId: `${index}`,
+        title: `章节${index}`,
+      })),
+      navigation: undefined,
+    };
+    let largeChapters: LocalVolumeChapter[] = largeVolume.toc.map(
+      ({ chapterId }) => ({
+        id: `${largeVolume.id}/${chapterId}`,
+        volumeId: largeVolume.id,
+        paragraphs: [`原文${chapterId}`],
+        segmentIds: [`segment-${chapterId}`],
+      }),
+    );
+    const getVolume = vi.fn(async () => largeVolume);
+    const listChapter = vi.fn(async () => largeChapters);
+    const adapter = createLocalVolumeReaderAdapter({
+      getVolume,
+      listChapter,
+    });
+
+    await expect(
+      createReaderPageController(adapter).load(largeVolume.id, '500'),
+    ).resolves.toMatchObject({
+      kind: 'ready',
+      chapters: { length: 1_000 },
+      chapter: { chapterId: '500', segments: [{ original: '原文500' }] },
+    });
+    expect(getVolume).toHaveBeenCalledTimes(1);
+    expect(listChapter).toHaveBeenCalledTimes(1);
+
+    largeChapters = largeChapters.map((chapter) =>
+      chapter.id.endsWith('/500')
+        ? {
+            ...chapter,
+            gpt: {
+              glossaryId: 'new',
+              glossary: {},
+              paragraphs: ['新译文500'],
+            },
+          }
+        : chapter,
+    );
+    adapter.invalidateChapter?.({ bookId: largeVolume.id, chapterId: '500' });
+    await expect(
+      adapter.getChapter({ bookId: largeVolume.id, chapterId: '500' }),
+    ).resolves.toMatchObject({
+      segments: [{ translated: '新译文500' }],
+    });
+    expect(getVolume).toHaveBeenCalledTimes(2);
+    expect(listChapter).toHaveBeenCalledTimes(2);
+  });
+
   it('maps LocalVolume content through stable IDs and configured translator priority', async () => {
     const adapter = createLocalVolumeReaderAdapter(repository, [
       'gpt',
@@ -175,7 +233,7 @@ describe('LocalVolumeReaderAdapter', () => {
     const adapter = createLocalVolumeReaderAdapter({
       getVolume: async (bookId) =>
         bookId === chineseVolume.id ? chineseVolume : undefined,
-      getChapter: async (_bookId, chapterId) => chapters[chapterId],
+      listChapter: async () => [],
     });
 
     await expect(adapter.getBook(chineseVolume.id)).resolves.toMatchObject({

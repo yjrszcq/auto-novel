@@ -144,6 +144,7 @@ export const createLocalVolumeStore = async () => {
     updateFavoredId,
     //
     getChapter: dao.getChapter,
+    listChapter: dao.listChapterByVolumeId,
     updateTranslation,
     // Reader
     getReaderSettings: dao.getReaderSettings,

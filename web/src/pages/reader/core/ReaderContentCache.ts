@@ -7,6 +7,7 @@ import type {
 export interface CachedReaderContentAdapter extends ReaderContentAdapter {
   preloadChapter(input: GetReaderChapterInput): void;
   invalidateChapter(input: GetReaderChapterInput): void;
+  invalidateBook(bookId: string): void;
 }
 
 const createKey = ({ bookId, chapterId }: GetReaderChapterInput) =>
@@ -59,6 +60,13 @@ export const createCachedReaderContentAdapter = (
     },
     invalidateChapter(input) {
       entries.delete(createKey(input));
+      adapter.invalidateChapter?.(input);
+    },
+    invalidateBook(bookId) {
+      for (const key of entries.keys()) {
+        if (key.startsWith(`${bookId}/`)) entries.delete(key);
+      }
+      adapter.invalidateBook?.(bookId);
     },
   };
 };

@@ -61,49 +61,73 @@ const getBook = (volume: LocalVolumeMetadata): ReaderBook => {
 
 export type LocalVolumeReaderRepository = Pick<
   Awaited<ReturnType<typeof useLocalVolumeStore>>,
-  'getVolume' | 'getChapter'
+  'getVolume' | 'listChapter'
 >;
 
 export const createLocalVolumeReaderAdapter = (
   repository: LocalVolumeReaderRepository,
   translationPriority: TranslatorId[] = defaultTranslationPriority,
 ): ReaderContentAdapter => {
+  const volumeCache = new Map<string, Promise<LocalVolumeMetadata>>();
+  const chapterCache = new Map<
+    string,
+    Promise<Map<string, LocalVolumeChapter>>
+  >();
   const getVolume = async (bookId: string) => {
-    const volume = await repository.getVolume(bookId);
-    if (volume === undefined) {
-      throw new Error('书籍不存在');
+    let pending = volumeCache.get(bookId);
+    if (pending === undefined) {
+      pending = repository.getVolume(bookId).then((volume) => {
+        if (volume === undefined) throw new Error('书籍不存在');
+        return volume;
+      });
+      volumeCache.set(bookId, pending);
+      pending.catch(() => volumeCache.delete(bookId));
     }
-    return volume;
+    return pending;
+  };
+
+  const getVolumeChapters = (bookId: string) => {
+    let pending = chapterCache.get(bookId);
+    if (pending === undefined) {
+      pending = repository
+        .listChapter(bookId)
+        .then(
+          (chapters) =>
+            new Map(chapters.map((chapter) => [chapter.id, chapter])),
+        );
+      chapterCache.set(bookId, pending);
+      pending.catch(() => chapterCache.delete(bookId));
+    }
+    return pending;
   };
 
   const getChapterSummaries = async (
     bookId: string,
     volume: LocalVolumeMetadata,
   ): Promise<ReaderChapterSummary[]> => {
-    return Promise.all(
-      volume.toc.map(async ({ chapterId, title }, index) => {
-        const chapter = await repository.getChapter(bookId, chapterId);
-        if (chapter === undefined) {
-          throw new Error('章节不存在');
-        }
-        const translation = selectTranslation(chapter, translationPriority);
-        const { status, translatedSegmentCount } = getTranslationStatus(
-          chapter.paragraphs,
-          translation?.paragraphs,
-        );
-        return {
-          id: chapterId,
-          bookId,
-          index,
-          title: getChapterTitle(bookId, chapterId, title),
-          hasOriginal: chapter.paragraphs.length > 0,
-          translationStatus: status,
-          translatedSegmentCount,
-          totalSegmentCount: chapter.paragraphs.length,
-          translationSources: getChapterSources(chapter),
-        };
-      }),
-    );
+    const chapters = await getVolumeChapters(bookId);
+    return volume.toc.map(({ chapterId, title }, index) => {
+      const chapter = chapters.get(`${bookId}/${chapterId}`);
+      if (chapter === undefined) {
+        throw new Error('章节不存在');
+      }
+      const translation = selectTranslation(chapter, translationPriority);
+      const { status, translatedSegmentCount } = getTranslationStatus(
+        chapter.paragraphs,
+        translation?.paragraphs,
+      );
+      return {
+        id: chapterId,
+        bookId,
+        index,
+        title: getChapterTitle(bookId, chapterId, title),
+        hasOriginal: chapter.paragraphs.length > 0,
+        translationStatus: status,
+        translatedSegmentCount,
+        totalSegmentCount: chapter.paragraphs.length,
+        translationSources: getChapterSources(chapter),
+      };
+    });
   };
 
   return {
@@ -147,7 +171,9 @@ export const createLocalVolumeReaderAdapter = (
 
     async getChapter({ bookId, chapterId }) {
       const volume = await getVolume(bookId);
-      const chapter = await repository.getChapter(bookId, chapterId);
+      const chapter = (await getVolumeChapters(bookId)).get(
+        `${bookId}/${chapterId}`,
+      );
       if (chapter === undefined) {
         throw new Error('章节不存在');
       }
@@ -180,6 +206,14 @@ export const createLocalVolumeReaderAdapter = (
     async getCapabilities(bookId) {
       const volume = await getVolume(bookId);
       return getReadingCapabilities(await getChapterSummaries(bookId, volume));
+    },
+    invalidateChapter({ bookId }) {
+      volumeCache.delete(bookId);
+      chapterCache.delete(bookId);
+    },
+    invalidateBook(bookId) {
+      volumeCache.delete(bookId);
+      chapterCache.delete(bookId);
     },
   };
 };
