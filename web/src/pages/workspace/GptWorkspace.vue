@@ -2,10 +2,9 @@
 import {
   BookOutlined,
   DeleteOutlineOutlined,
-  FontDownloadOffOutlined,
-  FontDownloadOutlined,
   MoreVertOutlined,
   PlayArrowOutlined,
+  PlaylistPlayOutlined,
   PlusOutlined,
   StopOutlined,
 } from '@vicons/material';
@@ -408,23 +407,23 @@ onBeforeUnmount(() => {
         :disabled="pipelineSnapshot.workers.length === 0"
         @action="runQueuedJobs"
       />
-      <c-icon-button
-        v-if="automaticQueue"
-        tooltip="自动处理后续任务：已开启"
-        :icon="FontDownloadOutlined"
-        @action="automaticQueue = false"
-      />
-      <c-icon-button
-        v-else
-        tooltip="自动处理后续任务：已关闭"
-        :icon="FontDownloadOffOutlined"
-        @action="automaticQueue = true"
-      />
       <c-button-confirm
         hint="真的要清空队列吗？"
         label="清空队列"
         :icon="DeleteOutlineOutlined"
         @action="deleteAllJobs"
+      />
+      <c-button
+        label="自动队列"
+        :icon="PlaylistPlayOutlined"
+        :type="automaticQueue ? 'primary' : 'default'"
+        :aria-pressed="automaticQueue"
+        :title="
+          automaticQueue
+            ? '自动处理后续任务：已开启'
+            : '自动处理后续任务：已关闭'
+        "
+        @action="automaticQueue = !automaticQueue"
       />
     </section-header>
     <n-empty v-if="workspaceRef.jobs.length === 0" description="没有任务" />

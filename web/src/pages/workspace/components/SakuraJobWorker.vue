@@ -3,8 +3,6 @@ import {
   DeleteOutlineOutlined,
   DragIndicatorOutlined,
   FlashOnOutlined,
-  FontDownloadOffOutlined,
-  FontDownloadOutlined,
   PlayArrowOutlined,
   SettingsOutlined,
   StopOutlined,
@@ -22,6 +20,7 @@ import { useSakuraWorkspaceStore } from '@/stores';
 const props = defineProps<{
   worker: SakuraWorker;
   getNextJob: () => TranslateJob | undefined;
+  automaticQueue: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -55,7 +54,6 @@ const translatorConfig = computed(
 
 const endpointPrefix = computed(() => `${props.worker.segLength}@`);
 
-const enableAutoMode = ref(true);
 const workerConcurrency = computed(() =>
   normalizeTranslationConcurrency(props.worker.concurrency),
 );
@@ -114,7 +112,7 @@ const processTasks = async () => {
       abort: state === 'abort',
     });
 
-    if (state !== 'complete' || !enableAutoMode.value) {
+    if (state !== 'complete' || !props.automaticQueue) {
       break;
     }
   }
@@ -224,19 +222,6 @@ const showEditWorkerModal = ref(false);
           tooltip="设置"
           :icon="SettingsOutlined"
           @action="showEditWorkerModal = !showEditWorkerModal"
-        />
-
-        <c-icon-button
-          v-if="enableAutoMode"
-          tooltip="自动翻译下个任务：已启动"
-          :icon="FontDownloadOutlined"
-          @action="enableAutoMode = false"
-        />
-        <c-icon-button
-          v-else
-          tooltip="自动翻译下个任务：已关闭"
-          :icon="FontDownloadOffOutlined"
-          @action="enableAutoMode = true"
         />
 
         <c-icon-button

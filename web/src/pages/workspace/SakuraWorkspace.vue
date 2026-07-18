@@ -3,6 +3,7 @@ import {
   BookOutlined,
   DeleteOutlineOutlined,
   MoreVertOutlined,
+  PlaylistPlayOutlined,
   PlusOutlined,
 } from '@vicons/material';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -42,6 +43,7 @@ type ProcessedJob = TranslateJob & {
 };
 
 const processedJobs = ref<Map<string, ProcessedJob>>(new Map());
+const automaticQueue = ref(true);
 type SakuraWorkerControl = {
   start: () => void;
   stop: () => void;
@@ -202,6 +204,7 @@ const clearCache = async () => {
             ref="workerControls"
             :worker="worker"
             :get-next-job="getNextJob"
+            :automatic-queue="automaticQueue"
             @update:progress="onProgressUpdated"
           />
         </n-list-item>
@@ -219,6 +222,18 @@ const clearCache = async () => {
         label="清空队列"
         :icon="DeleteOutlineOutlined"
         @action="deleteAllJobs"
+      />
+      <c-button
+        label="自动队列"
+        :icon="PlaylistPlayOutlined"
+        :type="automaticQueue ? 'primary' : 'default'"
+        :aria-pressed="automaticQueue"
+        :title="
+          automaticQueue
+            ? '自动处理后续任务：已开启'
+            : '自动处理后续任务：已关闭'
+        "
+        @action="automaticQueue = !automaticQueue"
       />
     </section-header>
     <n-empty v-if="workspaceRef.jobs.length === 0" description="没有任务" />

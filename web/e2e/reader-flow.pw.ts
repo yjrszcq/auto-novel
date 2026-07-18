@@ -2722,6 +2722,21 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   });
   await page.reload();
 
+  const gptAutomaticQueue = page.getByRole('button', {
+    name: '自动队列',
+  });
+  const gptClearQueue = page.getByRole('button', {
+    name: '清空队列',
+  });
+  await expect(gptAutomaticQueue).toHaveAttribute('aria-pressed', 'true');
+  await expect(gptAutomaticQueue).toHaveClass(/n-button--primary-type/);
+  expect((await gptAutomaticQueue.boundingBox())!.x).toBeGreaterThan(
+    (await gptClearQueue.boundingBox())!.x,
+  );
+  await gptAutomaticQueue.click();
+  await expect(gptAutomaticQueue).toHaveAttribute('aria-pressed', 'false');
+  await gptAutomaticQueue.click();
+
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
   const gptLocalDrawer = page
     .locator('.n-drawer')
@@ -2836,6 +2851,20 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Sakura工作区' }),
   ).toBeVisible();
+  const sakuraAutomaticQueue = page.getByRole('button', {
+    name: '自动队列',
+  });
+  const sakuraClearQueue = page.getByRole('button', {
+    name: '清空队列',
+  });
+  await expect(sakuraAutomaticQueue).toHaveAttribute('aria-pressed', 'true');
+  await expect(sakuraAutomaticQueue).toHaveClass(/n-button--primary-type/);
+  expect((await sakuraAutomaticQueue.boundingBox())!.x).toBeGreaterThan(
+    (await sakuraClearQueue.boundingBox())!.x,
+  );
+  await sakuraAutomaticQueue.click();
+  await expect(sakuraAutomaticQueue).toHaveAttribute('aria-pressed', 'false');
+  await sakuraAutomaticQueue.click();
   await page.getByRole('button', { name: '本地书架', exact: true }).click();
   const sakuraLocalDrawer = page
     .locator('.n-drawer')
