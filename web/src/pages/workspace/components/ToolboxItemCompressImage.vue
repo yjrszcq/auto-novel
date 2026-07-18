@@ -5,6 +5,7 @@ import { Humanize } from '@/util';
 import type { Epub, ParsedFile } from '@/util/file';
 
 import { Toolbox } from './Toolbox';
+import { assertEncodedImageType, resolveImageOutputType } from './ToolboxImage';
 
 const props = defineProps<{
   files: ParsedFile[];
@@ -25,26 +26,36 @@ const imageFormatOptions = [
 
 const compressImage = async (blob: Blob) => {
   const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
   const img = await createImageBitmap(blob);
+  try {
+    const ctx = canvas.getContext('2d');
+    if (ctx === null) throw new Error('浏览器无法创建图片处理画布');
+    const scaleRatioValue = Math.min(1, scaleRatio.value);
+    canvas.width = Math.max(1, Math.round(img.width * scaleRatioValue));
+    canvas.height = Math.max(1, Math.round(img.height * scaleRatioValue));
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  const scaleRatioValue = Math.min(1, scaleRatio.value);
-  canvas.width = img.width * scaleRatioValue;
-  canvas.height = img.height * scaleRatioValue;
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-  const imageFormatValue = imageFormat.value;
-  const qualityValue = quality.value;
-
-  return await new Promise<Blob | undefined>((resolve) => {
-    canvas.toBlob(
-      (newBlob) => {
-        resolve(newBlob ?? undefined);
-      },
-      imageFormatValue,
-      qualityValue,
+    const imageFormatValue = resolveImageOutputType(
+      blob.type,
+      imageFormat.value,
     );
-  });
+    const qualityValue = quality.value;
+    const encoded = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (newBlob) =>
+          newBlob === null
+            ? reject(new Error(`压缩 ${blob.type || '图片'} 失败`))
+            : resolve(newBlob),
+        imageFormatValue,
+        qualityValue,
+      );
+    });
+    return assertEncodedImageType(encoded, imageFormatValue);
+  } finally {
+    img.close();
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 };
 
 const compressImagesForEpub = async (epub: Epub) => {
@@ -81,44 +92,69 @@ interface EpubDetail {
 
 const getEpubDetailList = async () => {
   const detailList: EpubDetail[] = [];
-  for (const file of props.files) {
-    if (file.type === 'epub') {
-      const detail: EpubDetail = {
-        name: file.name,
-        images: [],
-        size: 0,
-        sizeCompressed: 0,
-        failed: 0,
-      };
-      for await (const item of file.iterImage()) {
-        const blobCompressed = await compressImage(item.blob);
-        detail.images.push({
-          id: item.id,
-          href: item.href,
-          blob: item.blob,
-          uri: URL.createObjectURL(item.blob),
-          blobCompressed,
-          uriCompressed: URL.createObjectURL(blobCompressed ?? item.blob),
-        });
-        detail.size += item.blob.size;
-        detail.sizeCompressed += (blobCompressed ?? item.blob).size;
-        if (!blobCompressed) detail.failed += 1;
+  try {
+    for (const file of props.files) {
+      if (file.type === 'epub') {
+        const detail: EpubDetail = {
+          name: file.name,
+          images: [],
+          size: 0,
+          sizeCompressed: 0,
+          failed: 0,
+        };
+        for await (const item of file.iterImage()) {
+          const blobCompressed = await compressImage(item.blob);
+          detail.images.push({
+            id: item.id,
+            href: item.href,
+            blob: item.blob,
+            uri: URL.createObjectURL(item.blob),
+            blobCompressed,
+            uriCompressed: URL.createObjectURL(blobCompressed ?? item.blob),
+          });
+          detail.size += item.blob.size;
+          detail.sizeCompressed += (blobCompressed ?? item.blob).size;
+          if (!blobCompressed) detail.failed += 1;
+        }
+        detailList.push(detail);
       }
-      detailList.push(detail);
     }
+    return detailList;
+  } catch (error) {
+    revokeDetailList(detailList);
+    throw error;
   }
-  return detailList;
 };
 
 const showDetail = ref(false);
 const detailList = ref<EpubDetail[]>([]);
+const revokeDetailList = (details: EpubDetail[]) => {
+  for (const detail of details) {
+    for (const image of detail.images) {
+      URL.revokeObjectURL(image.uri);
+      URL.revokeObjectURL(image.uriCompressed);
+    }
+  }
+};
+const clearDetailList = () => {
+  revokeDetailList(detailList.value);
+  detailList.value = [];
+  showCompare.value = false;
+  compareImages.value = { old: '', new: '' };
+};
 const toggleShowDetail = async () => {
   if (showDetail.value) {
     showDetail.value = false;
-    detailList.value = [];
+    clearDetailList();
   } else {
-    showDetail.value = true;
-    detailList.value = await getEpubDetailList();
+    try {
+      const details = await getEpubDetailList();
+      clearDetailList();
+      detailList.value = details;
+      showDetail.value = true;
+    } catch (error) {
+      message.error(`预览失败：${error}`);
+    }
   }
 };
 
@@ -129,6 +165,15 @@ const showPreview = (image: EpubImage) => {
   compareImages.value.old = image.uri;
   compareImages.value.new = image.uriCompressed;
 };
+
+watch(
+  () => props.files,
+  () => {
+    showDetail.value = false;
+    clearDetailList();
+  },
+);
+onBeforeUnmount(clearDetailList);
 </script>
 
 <template>
@@ -199,14 +244,26 @@ const showPreview = (image: EpubImage) => {
       </template>
     </template>
 
-    <c-modal v-model:show="showCompare" style="width: auto; max-width: 95%">
-      <img-comparison-slider>
-        <template #first>
-          <img style="width: 100%" :src="compareImages.old" />
-        </template>
-        <template #second>
-          <img style="width: 100%" :src="compareImages.new" />
-        </template>
+    <c-modal
+      v-model:show="showCompare"
+      style="width: auto; max-width: 95%"
+      :max-height-percentage="100"
+    >
+      <img-comparison-slider style="outline: none">
+        <!-- eslint-disable -->
+        <img
+          slot="first"
+          style="width: 100%; max-height: 85vh; object-fit: contain"
+          :src="compareImages.old"
+          alt="压缩前"
+        />
+        <img
+          slot="second"
+          style="width: 100%; max-height: 85vh; object-fit: contain"
+          :src="compareImages.new"
+          alt="压缩后"
+        />
+        <!-- eslint-enable -->
       </img-comparison-slider>
     </c-modal>
   </n-flex>
