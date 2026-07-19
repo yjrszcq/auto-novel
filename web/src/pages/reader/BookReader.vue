@@ -72,10 +72,7 @@ import {
   readerModes,
   resolveReaderMode,
 } from './core/ReaderMode';
-import {
-  getChapterTranslationParams,
-  getTranslationStatusLabel,
-} from './core/ReaderTranslationWorkflow';
+import { getTranslationStatusLabel } from './core/ReaderTranslationWorkflow';
 import {
   applyReaderStyleOverride,
   defaultReaderSettings,
@@ -88,7 +85,6 @@ import {
   useLocalVolumeStore,
   useSakuraWorkspaceStore,
 } from '@/stores';
-import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 
 const InteractiveTranslation = defineAsyncComponent(
   () => import('../workspace/Interactive.vue'),
@@ -133,6 +129,7 @@ let pendingBookmark: ReaderBookmark | undefined;
 const rememberModeChoice = ref(false);
 const readingMode = ref<ReaderMode>('original');
 const availableModes = ref<ReaderMode[]>(['original']);
+const visiblePageModes = ref<ReaderMode[]>(['original']);
 let readingStartedAt: number | undefined;
 let readingBookId: string | undefined;
 let readingStatsWrite = Promise.resolve();
@@ -140,7 +137,6 @@ let temporaryMode: ReaderMode | undefined;
 const bookStyle = ref<ReaderBookStyleOverride>();
 const settings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 const message = useMessage();
-const localVolumeManager = useLocalVolumeManager();
 const gptWorkspace = useGptWorkspaceStore();
 const sakuraWorkspace = useSakuraWorkspaceStore();
 let settingsLoaded = false;
@@ -263,29 +259,6 @@ const currentTranslationStatusLabel = computed(() =>
     ? ''
     : getTranslationStatusLabel(currentChapterSummary.value.translationStatus),
 );
-
-const queueChapterTranslation = (type: 'gpt' | 'sakura') => {
-  if (!requiresWholeChapterTranslation.value) {
-    return;
-  }
-  const chapter = currentChapterSummary.value;
-  if (chapter === undefined) {
-    return;
-  }
-  const results = localVolumeManager.queueJobToWorkspace(bookId.value, {
-    ...getChapterTranslationParams(chapter),
-    type,
-    shouldTop: true,
-    forceMetadata: false,
-    taskNumber: 1,
-    total: result.value?.kind === 'ready' ? result.value.chapters.length : 0,
-  });
-  if (results.some(Boolean)) {
-    message.success('已将本章翻译任务加入队列');
-  } else {
-    message.warning('该章节任务已在队列中');
-  }
-};
 
 const taskTargetsCurrentChapter = (task: string) => {
   try {
@@ -1584,6 +1557,30 @@ const getVisibleReaderSegments = (): VisibleReaderSegment[] => {
   });
 };
 
+const openVisiblePageModePrompt = () => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return;
+  const chapters = new Map(
+    [ready.chapter, ...continuousChapters.value].map((chapter) => [
+      chapter.chapterId,
+      chapter,
+    ]),
+  );
+  const hasVisibleTranslation = getVisibleReaderSegments().some((target) =>
+    chapters
+      .get(target.chapterId)
+      ?.segments.some(
+        (segment) =>
+          segment.id === target.segmentId &&
+          (segment.translated?.trim().length ?? 0) > 0,
+      ),
+  );
+  visiblePageModes.value = hasVisibleTranslation
+    ? [...readerModes]
+    : ['original'];
+  showModePrompt.value = true;
+};
+
 const createVisibleTranslationConfig = (
   type: 'gpt' | 'sakura',
   worker: GptWorker | SakuraWorker,
@@ -1679,6 +1676,7 @@ const translateVisiblePage = async (type: 'gpt' | 'sakura') => {
     restoreReaderPosition(anchor);
     updateViewportMetrics();
     showTools.value = false;
+    showMobileTranslationNotice.value = false;
     (document.activeElement as HTMLElement | null)?.blur();
     message.success('当前页面已临时翻译');
   } catch (reason) {
@@ -2401,17 +2399,32 @@ onBeforeUnmount(() => {
       <div v-else class="book-reader__app-bar-title">本地阅读器</div>
       <div v-if="hasIncompleteChapter" class="book-reader__app-bar-translation">
         <span>{{ currentTranslationStatusLabel }}</span>
-        <n-button size="tiny" secondary @click="queueChapterTranslation('gpt')">
-          GPT 翻译本章
+        <n-button
+          size="tiny"
+          secondary
+          :loading="translatingPage === 'gpt'"
+          :disabled="translatingPage !== undefined && translatingPage !== 'gpt'"
+          @click="translateVisiblePage('gpt')"
+        >
+          GPT 翻译本页
         </n-button>
         <n-button
           size="tiny"
           secondary
-          @click="queueChapterTranslation('sakura')"
+          :loading="translatingPage === 'sakura'"
+          :disabled="
+            translatingPage !== undefined && translatingPage !== 'sakura'
+          "
+          @click="translateVisiblePage('sakura')"
         >
-          Sakura 翻译本章
+          Sakura 翻译本页
         </n-button>
-        <n-button size="tiny" secondary @click="load">刷新本章</n-button>
+        <n-button size="tiny" secondary @click="openVisiblePageModePrompt">
+          阅读版本
+        </n-button>
+        <n-button size="tiny" secondary @click="refreshCurrentChapter">
+          刷新本页
+        </n-button>
       </div>
       <button
         v-if="hasIncompleteChapter"
@@ -2461,13 +2474,32 @@ onBeforeUnmount(() => {
         <div class="book-reader__translation-panel">
           <strong>{{ currentTranslationStatusLabel }}</strong>
           <div class="book-reader__translation-panel-actions">
-            <n-button size="small" @click="queueChapterTranslation('gpt')">
-              GPT 翻译本章
+            <n-button
+              size="small"
+              :loading="translatingPage === 'gpt'"
+              :disabled="
+                translatingPage !== undefined && translatingPage !== 'gpt'
+              "
+              @click="translateVisiblePage('gpt')"
+            >
+              GPT 翻译本页
             </n-button>
-            <n-button size="small" @click="queueChapterTranslation('sakura')">
-              Sakura 翻译本章
+            <n-button
+              size="small"
+              :loading="translatingPage === 'sakura'"
+              :disabled="
+                translatingPage !== undefined && translatingPage !== 'sakura'
+              "
+              @click="translateVisiblePage('sakura')"
+            >
+              Sakura 翻译本页
             </n-button>
-            <n-button size="small" @click="load">刷新本章</n-button>
+            <n-button size="small" @click="openVisiblePageModePrompt">
+              阅读版本
+            </n-button>
+            <n-button size="small" @click="refreshCurrentChapter">
+              刷新本页
+            </n-button>
           </div>
         </div>
       </n-alert>
@@ -2718,37 +2750,10 @@ onBeforeUnmount(() => {
           书签 ({{ bookmarks.length }})
         </n-button>
         <n-button
-          v-if="requiresWholeChapterTranslation"
-          @click="
-            showTools = false;
-            showModePrompt = true;
-          "
-        >
-          阅读版本
-        </n-button>
-        <n-button
           :type="isSpeaking ? 'primary' : 'default'"
           @click="toggleCurrentSegmentSpeech"
         >
           朗读当前段
-        </n-button>
-        <n-button
-          v-if="requiresWholeChapterTranslation"
-          :loading="translatingPage === 'gpt'"
-          :disabled="translatingPage !== undefined && translatingPage !== 'gpt'"
-          @click="translateVisiblePage('gpt')"
-        >
-          GPT 翻译本页
-        </n-button>
-        <n-button
-          v-if="requiresWholeChapterTranslation"
-          :loading="translatingPage === 'sakura'"
-          :disabled="
-            translatingPage !== undefined && translatingPage !== 'sakura'
-          "
-          @click="translateVisiblePage('sakura')"
-        >
-          Sakura 翻译本页
         </n-button>
         <n-button
           @click="
@@ -2893,7 +2898,7 @@ onBeforeUnmount(() => {
     <ReaderModeDialog
       v-model:show="showModePrompt"
       v-model:remember="rememberModeChoice"
-      :modes="availableModes"
+      :modes="visiblePageModes"
       :source-language="
         result?.kind === 'ready' ? result.book.sourceLanguage : undefined
       "
@@ -3021,10 +3026,10 @@ onBeforeUnmount(() => {
   --reader-background: #000;
   --reader-chrome-background: #050505;
   --reader-chrome-border: rgb(255 255 255 / 6%);
-  --reader-warning-background: #100d09;
-  --reader-warning-border: #3d2c18;
-  --reader-warning-button-border: #493925;
-  --reader-warning-text: #665744;
+  --reader-warning-background: #060504;
+  --reader-warning-border: #211a12;
+  --reader-warning-button-border: #282018;
+  --reader-warning-text: #40382f;
   --reader-scrollbar-track: #050505;
   --reader-scrollbar-thumb: #202020;
   --reader-scrollbar-thumb-hover: #2b2b2b;
@@ -3116,7 +3121,7 @@ onBeforeUnmount(() => {
   align-items: center;
   max-width: calc(100vw - 520px);
   overflow: hidden;
-  color: #f0a020;
+  color: var(--reader-warning-text);
   white-space: nowrap;
   transform: translate(-50%, -50%);
   gap: 8px;
@@ -3129,7 +3134,7 @@ onBeforeUnmount(() => {
 
 .book-reader__translation-toggle {
   display: none;
-  color: #f0a020;
+  color: var(--reader-warning-text);
 }
 
 .book-reader__chapter-status {
@@ -3195,10 +3200,6 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-}
-
-.book-reader__translation-panel-actions > :last-child {
-  grid-column: 1 / -1;
 }
 
 .book-reader__translation-panel-actions :deep(.n-button__content) {

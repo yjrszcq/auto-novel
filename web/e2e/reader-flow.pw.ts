@@ -781,15 +781,27 @@ test('opens a local bookshelf book safely through the current reader route', asy
     name: '展开未翻译操作',
   });
   await expect(translationToggle).toBeVisible();
-  await expect(page.getByRole('button', { name: 'GPT 翻译本章' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'GPT 翻译本页' })).toBeHidden();
   await translationToggle.click();
   await expect(
-    page.getByRole('button', { name: 'GPT 翻译本章' }),
+    page.getByRole('button', { name: 'GPT 翻译本页' }),
   ).toBeVisible();
   const translationLayer = page.locator(
     '.book-reader__translation-popover-layer',
   );
   const translationPopover = page.locator('.book-reader__translation-popover');
+  await translationPopover
+    .getByRole('button', { name: '阅读版本', exact: true })
+    .click();
+  const modeDialog = page.getByText('选择阅读方式', { exact: true });
+  await expect(modeDialog).toBeVisible();
+  await page.getByRole('button', { name: '关闭阅读版本' }).click();
+  await expect(modeDialog).toBeHidden();
+  await translationPopover
+    .getByRole('button', { name: '阅读版本', exact: true })
+    .click();
+  await page.locator('.n-modal-mask').click({ position: { x: 4, y: 4 } });
+  await expect(modeDialog).toBeHidden();
   await expect(translationLayer).toHaveCSS('position', 'fixed');
   await expect(translationPopover).toHaveCSS(
     'background-color',
@@ -806,12 +818,12 @@ test('opens a local bookshelf book safely through the current reader route', asy
   );
   await expect(
     translationPopover
-      .getByRole('button', { name: 'GPT 翻译本章' })
+      .getByRole('button', { name: 'GPT 翻译本页' })
       .locator('.n-button__content'),
   ).toHaveCSS('color', 'rgb(91, 67, 0)');
   await expect(
     translationPopover
-      .getByRole('button', { name: 'GPT 翻译本章' })
+      .getByRole('button', { name: 'GPT 翻译本页' })
       .locator('.n-button__border'),
   ).toHaveCSS('border-color', 'rgb(240, 160, 32)');
   const popoverTop = await translationPopover.evaluate((element) =>
@@ -830,7 +842,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await translationLayer.click({
     position: { x: 4, y: translationLayerBounds.height - 4 },
   });
-  await expect(page.getByRole('button', { name: 'GPT 翻译本章' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'GPT 翻译本页' })).toBeHidden();
   await page.getByRole('button', { name: '夜晚', exact: true }).click();
   await translationToggle.click();
   await expect(translationPopover).toHaveCSS(
@@ -839,7 +851,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   );
   await expect(
     translationPopover
-      .getByRole('button', { name: 'GPT 翻译本章' })
+      .getByRole('button', { name: 'GPT 翻译本页' })
       .locator('.n-button__border'),
   ).toHaveCSS('border-color', 'rgb(139, 120, 100)');
   await page.getByRole('button', { name: '收起未翻译操作' }).click();
@@ -1012,6 +1024,30 @@ test('opens a local bookshelf book safely through the current reader route', asy
     'background-color',
     'rgb(5, 5, 5)',
   );
+  await expect(page.locator('.book-reader__app-bar-translation')).toHaveCSS(
+    'color',
+    'rgb(64, 56, 47)',
+  );
+  expect(
+    await page.locator('.book-reader').evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        background: style
+          .getPropertyValue('--reader-warning-background')
+          .trim(),
+        border: style.getPropertyValue('--reader-warning-border').trim(),
+        buttonBorder: style
+          .getPropertyValue('--reader-warning-button-border')
+          .trim(),
+        text: style.getPropertyValue('--reader-warning-text').trim(),
+      };
+    }),
+  ).toEqual({
+    background: '#060504',
+    border: '#211a12',
+    buttonBorder: '#282018',
+    text: '#40382f',
+  });
   await expect(themeSetting.locator('.n-base-selection-label')).toHaveCSS(
     'background-color',
     'rgb(11, 11, 11)',
@@ -1255,7 +1291,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   );
 });
 
-test('persists keyboard pagination and every reading mode across responsive layout', async ({
+test('keeps keyboard pagination and every reading mode across responsive layout', async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -1375,64 +1411,35 @@ test('persists keyboard pagination and every reading mode across responsive layo
     /reader-segment-layout--original-translated/,
   );
 
-  const chooseMode = async (label: string, expectedClass: RegExp) => {
-    await page.getByRole('button', { name: '工具', exact: true }).click();
-    await page.getByRole('button', { name: '阅读版本', exact: true }).click();
-    await page.getByRole('button', { name: label, exact: true }).click();
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '阅读版本', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '关闭阅读工具' }).click();
+
+  const chooseMode = async (shortcut: string, expectedClass: RegExp) => {
+    await page.keyboard.press(shortcut);
     await expect(layout).toHaveClass(expectedClass);
   };
-  await chooseMode('中文', /reader-segment-layout--translated$/);
+  await chooseMode('1', /reader-segment-layout--translated$/);
   await expect(
     readerContent.locator('.reader-segment').first().locator('p'),
   ).toHaveClass(/reader-segment__translated/);
-  await chooseMode('中日对照', /reader-segment-layout--translated-original/);
+  await chooseMode('2', /reader-segment-layout--translated-original/);
   await expect(
     readerContent.locator('.reader-segment').first().locator('p'),
   ).toHaveClass([/reader-segment__translated/, /reader-segment__original/]);
-  await chooseMode('日中对照', /reader-segment-layout--original-translated/);
+  await chooseMode('3', /reader-segment-layout--original-translated/);
   await expect(
     readerContent.locator('.reader-segment').first().locator('p'),
   ).toHaveClass([/reader-segment__original/, /reader-segment__translated/]);
-
-  await page.getByRole('button', { name: '工具', exact: true }).click();
-  await page.getByRole('button', { name: '阅读版本', exact: true }).click();
-  const rememberMode = page.getByRole('checkbox', {
-    name: '记住本书选择',
-    exact: true,
-  });
-  await rememberMode.check();
-  await expect(rememberMode).toBeChecked();
-  await page.getByRole('button', { name: '原文（日文）', exact: true }).click();
+  await chooseMode('4', /reader-segment-layout--original$/);
   await expect(layout).toHaveClass(/reader-segment-layout--original$/);
   await expect(
     readerContent.locator('.reader-segment').first().locator('p'),
   ).toHaveCount(1);
-  await expect
-    .poll(() =>
-      page.evaluate(async (bookId) => {
-        const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes');
-          request.onerror = () => reject(request.error);
-          request.onsuccess = () => resolve(request.result);
-        });
-        const transaction = database.transaction(
-          'reader-book-preference',
-          'readonly',
-        );
-        const request = transaction
-          .objectStore('reader-book-preference')
-          .get(bookId);
-        const value = await new Promise<{ preferredMode?: string } | undefined>(
-          (resolve, reject) => {
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-          },
-        );
-        database.close();
-        return value?.preferredMode;
-      }, modeBookId),
-    )
-    .toBe('original');
 
   await readerContent.focus();
   const initialScrollLeft = await readerContent.evaluate(
@@ -1535,7 +1542,9 @@ test('persists keyboard pagination and every reading mode across responsive layo
     });
 
   await page.reload();
-  await expect(layout).toHaveClass(/reader-segment-layout--original$/);
+  await expect(layout).toHaveClass(
+    /reader-segment-layout--original-translated/,
+  );
   await expect
     .poll(() =>
       readerContent.evaluate((element, segmentId) => {
@@ -2004,14 +2013,33 @@ test('temporarily translates only the visible reader page without persisting it'
     );
     await expect(source).toContainText('临时原文第 1 段');
     await page.getByRole('button', { name: '工具', exact: true }).click();
+    const toolsDialog = page.getByRole('dialog', { name: '阅读工具' });
+    await expect(
+      toolsDialog.getByRole('button', { name: 'GPT 翻译本页', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      toolsDialog.getByRole('button', { name: 'Sakura 翻译本页', exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      toolsDialog.getByRole('button', { name: '阅读版本', exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: '关闭阅读工具' }).click();
     await page
+      .locator('.book-reader__app-bar-translation')
       .getByRole('button', { name: 'GPT 翻译本页', exact: true })
       .click();
     await expect(
       page.getByText('当前页面已临时翻译', { exact: true }),
     ).toBeVisible();
     await expect(source).toContainText('译文第1行');
-    await expect(page.getByRole('dialog', { name: '阅读工具' })).toBeHidden();
+    await page
+      .locator('.book-reader__app-bar-translation')
+      .getByRole('button', { name: '阅读版本', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: '中文', exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: '关闭阅读版本' }).click();
     await page.keyboard.press('4');
     await expect(source).toContainText('临时原文第 1 段');
     await page.keyboard.press('1');

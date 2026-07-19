@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { CloseOutlined } from '@vicons/material';
 import type { ReaderMode } from '@/model/Reader';
 import { getReaderModeLabel } from '../core/ReaderMode';
 
@@ -19,10 +20,22 @@ const emit = defineEmits<{
 <template>
   <n-modal
     :show="props.show"
-    :mask-closable="false"
+    :mask-closable="true"
     @update:show="emit('update:show', $event)"
   >
     <n-card title="选择阅读方式" style="width: min(92vw, 420px)">
+      <template #header-extra>
+        <n-button
+          quaternary
+          circle
+          aria-label="关闭阅读版本"
+          @click="emit('update:show', false)"
+        >
+          <template #icon>
+            <n-icon :component="CloseOutlined" />
+          </template>
+        </n-button>
+      </template>
       <n-space vertical>
         <n-button
           v-for="mode in props.modes"
