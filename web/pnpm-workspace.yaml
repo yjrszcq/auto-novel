@@ -1,5 +1,7 @@
 packages: []
 
+autoInstallPeers: false
+
 overrides:
   electron-to-chromium: 1.5.392
   nostics: 1.1.4
