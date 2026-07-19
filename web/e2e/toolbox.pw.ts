@@ -228,9 +228,7 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   await page.getByRole('button', { name: '清空选择', exact: true }).click();
   await expect(sourceSection).toContainText('已选择 0/1');
   await page.getByText('TXT：修复OCR换行', { exact: true }).click();
-  await page.getByRole('button', { name: '修复', exact: true }).click();
-  await expect(operation).toContainText('修复 OCR 换行');
-  await expect(operation).toContainText('没有符合当前工具要求的文件');
+  await expect(page.getByText('当前选择中没有 TXT 文件。')).toBeVisible();
 });
 
 test('releases completed image previews when a later image fails', async ({
@@ -291,4 +289,51 @@ test('releases completed image previews when a later image fails', async ({
     expect.arrayContaining(urlLifecycle.created),
   );
   await expect(page.locator('.n-image img')).toHaveCount(0);
+});
+
+test('reviews OCR changes before generating a result', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/workspace/toolbox');
+  let downloadCount = 0;
+  page.on('download', () => {
+    downloadCount += 1;
+  });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'ocr-review.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(
+      '第一行没有句号\n继续这一段\n最后结束。\n\n# 标题\n保留正文。',
+    ),
+  });
+  await page.getByText('TXT：修复OCR换行', { exact: true }).click();
+
+  const resultSection = page.locator('.toolbox-file-section').filter({
+    has: page.getByRole('heading', { name: '处理结果', exact: true }),
+  });
+  await expect(resultSection).toHaveCount(0);
+  await page.getByRole('button', { name: '分析变更', exact: true }).click();
+  await expect(
+    page.getByText('预计修改 1 处，涉及 1 个文件', { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('.ocr-change__before')).toContainText(
+    '第一行没有句号',
+  );
+  await expect(page.locator('.ocr-change__after')).toContainText(
+    '第一行没有句号继续这一段最后结束。',
+  );
+  const analysisBounds = await page.locator('.ocr-analysis').boundingBox();
+  expect(analysisBounds).not.toBeNull();
+  expect(analysisBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(analysisBounds!.x + analysisBounds!.width).toBeLessThanOrEqual(390);
+  expect(downloadCount).toBe(0);
+
+  await page.getByRole('button', { name: '确认生成', exact: true }).click();
+  await expect(resultSection).toBeVisible();
+  expect(downloadCount).toBe(0);
+  await resultSection
+    .getByRole('button', { name: '预览 ocr-review.txt' })
+    .click();
+  await expect(page.locator('.toolbox-file-card__preview')).toContainText(
+    '第一行没有句号继续这一段最后结束。',
+  );
 });
