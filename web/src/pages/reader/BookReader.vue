@@ -618,6 +618,7 @@ const resolvedFlow = computed(() =>
 const isDarkReaderTheme = computed(
   () =>
     activeSettings.value.theme === 'dark' ||
+    activeSettings.value.theme === 'ultra-dark' ||
     (activeSettings.value.theme === 'system' && systemPrefersDark.value),
 );
 
@@ -628,9 +629,11 @@ const readerNaiveTheme = computed(() =>
 const resolvedReaderTheme = computed(() =>
   activeSettings.value.theme === 'sepia'
     ? 'sepia'
-    : isDarkReaderTheme.value
-      ? 'dark'
-      : 'light',
+    : activeSettings.value.theme === 'ultra-dark'
+      ? 'ultra-dark'
+      : isDarkReaderTheme.value
+        ? 'dark'
+        : 'light',
 );
 
 const sepiaNaiveThemeOverrides: GlobalThemeOverrides = {
@@ -708,11 +711,94 @@ const sepiaNaiveThemeOverrides: GlobalThemeOverrides = {
   },
 };
 
+const ultraDarkNaiveThemeOverrides: GlobalThemeOverrides = {
+  common: {
+    baseColor: '#000000',
+    bodyColor: '#000000',
+    cardColor: '#050505',
+    modalColor: '#050505',
+    popoverColor: '#080808',
+    inputColor: '#0b0b0b',
+    actionColor: '#0d0d0d',
+    hoverColor: '#111111',
+    pressedColor: '#161616',
+    borderColor: '#202020',
+    dividerColor: '#181818',
+    railColor: '#181818',
+    primaryColor: '#356f5e',
+    primaryColorHover: '#427f6c',
+    primaryColorPressed: '#2c5d4f',
+    textColorBase: '#4b4b4b',
+    textColor1: '#555555',
+    textColor2: '#4b4b4b',
+    textColor3: '#3d3d3d',
+    placeholderColor: '#353535',
+    iconColor: '#4b4b4b',
+  },
+  Button: {
+    color: 'transparent',
+    colorHover: '#0d0d0d',
+    colorPressed: '#111111',
+    colorFocus: '#0d0d0d',
+    textColor: '#4b4b4b',
+    textColorHover: '#5a5a5a',
+    textColorPressed: '#5a5a5a',
+    textColorFocus: '#5a5a5a',
+    border: '1px solid #202020',
+    borderHover: '1px solid #2b2b2b',
+    borderPressed: '1px solid #2b2b2b',
+    borderFocus: '1px solid #2b2b2b',
+  },
+  Tag: {
+    color: '#090909',
+    colorBordered: '#090909',
+    border: '1px solid #202020',
+    textColor: '#4b4b4b',
+  },
+  Slider: {
+    railColor: '#181818',
+    railColorHover: '#202020',
+  },
+  Select: {
+    peers: {
+      InternalSelection: {
+        color: '#0b0b0b',
+        colorActive: '#0b0b0b',
+        textColor: '#4b4b4b',
+        arrowColor: '#4b4b4b',
+        border: '1px solid #202020',
+        borderHover: '1px solid #2b2b2b',
+        peers: {
+          Popover: {
+            color: '#080808',
+            textColor: '#4b4b4b',
+            dividerColor: '#181818',
+          },
+        },
+      },
+      InternalSelectMenu: {
+        color: '#080808',
+        optionTextColor: '#4b4b4b',
+        optionTextColorPressed: '#555555',
+        optionTextColorActive: '#427f6c',
+        optionColorPending: '#101010',
+        optionColorActive: '#0d1512',
+        optionColorActivePending: '#111c18',
+      },
+    },
+  },
+};
+
 const readerNaiveThemeOverrides = computed<GlobalThemeOverrides | undefined>(
-  () =>
-    activeSettings.value.theme === 'sepia'
-      ? sepiaNaiveThemeOverrides
-      : undefined,
+  () => {
+    if (activeSettings.value.theme === 'sepia') {
+      return sepiaNaiveThemeOverrides;
+    }
+    if (activeSettings.value.theme === 'ultra-dark') {
+      return ultraDarkNaiveThemeOverrides;
+    }
+    return undefined;
+  },
 );
 
 const toggleQuickTheme = () => {
@@ -2653,6 +2739,7 @@ onBeforeUnmount(() => {
                 { label: '跟随系统', value: 'system' },
                 { label: '浅色', value: 'light' },
                 { label: '深色', value: 'dark' },
+                { label: '超暗', value: 'ultra-dark' },
                 { label: '护眼', value: 'sepia' },
               ]"
             />
@@ -2718,6 +2805,21 @@ onBeforeUnmount(() => {
   --reader-scrollbar-track: #242424;
   --reader-scrollbar-thumb: #626262;
   --reader-scrollbar-thumb-hover: #7a7a7a;
+}
+
+.book-reader--ultra-dark {
+  --reader-text-color: #4b4b4b;
+  --reader-muted-color: #3d3d3d;
+  --reader-background: #000;
+  --reader-chrome-background: #050505;
+  --reader-chrome-border: rgb(255 255 255 / 6%);
+  --reader-warning-background: #100d09;
+  --reader-warning-border: #3d2c18;
+  --reader-warning-button-border: #493925;
+  --reader-warning-text: #665744;
+  --reader-scrollbar-track: #050505;
+  --reader-scrollbar-thumb: #202020;
+  --reader-scrollbar-thumb-hover: #2b2b2b;
 }
 
 .book-reader--sepia {
@@ -2911,6 +3013,11 @@ onBeforeUnmount(() => {
 
 .book-reader--sepia .book-reader__catalog-item--active {
   color: #2faf86 !important;
+}
+
+.book-reader--ultra-dark .book-reader__catalog-item--active {
+  color: #356f5e !important;
+  background: rgb(53 111 94 / 10%) !important;
 }
 
 .book-reader__catalog-summary {

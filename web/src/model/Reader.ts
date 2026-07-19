@@ -18,7 +18,7 @@ export interface ReaderSettingsRecord {
   lineHeight: number;
   contentWidth: number;
   horizontalPadding: number;
-  theme: 'light' | 'dark' | 'sepia' | 'system';
+  theme: 'light' | 'dark' | 'ultra-dark' | 'sepia' | 'system';
   flow: ReaderFlow;
   updatedAt: number;
 }

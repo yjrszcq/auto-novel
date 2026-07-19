@@ -73,5 +73,8 @@ describe('reader settings', () => {
     expect(applyReaderStyleOverride(settings, { theme: 'dark' }).theme).toBe(
       'dark',
     );
+    expect(
+      applyReaderStyleOverride(settings, { theme: 'ultra-dark' }).theme,
+    ).toBe('ultra-dark');
   });
 });

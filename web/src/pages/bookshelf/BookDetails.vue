@@ -104,6 +104,7 @@ const bookThemeOptions = [
   { label: '跟随全局设置', value: 'global' },
   { label: '浅色', value: 'light' },
   { label: '深色', value: 'dark' },
+  { label: '超暗', value: 'ultra-dark' },
   { label: '护眼', value: 'sepia' },
   { label: '跟随系统', value: 'system' },
 ];

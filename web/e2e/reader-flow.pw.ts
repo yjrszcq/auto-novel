@@ -1017,6 +1017,24 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await themeSetting.locator('.n-base-selection').click();
+  await page.locator('.n-base-select-menu').getByText('超暗').click();
+  await expect(page.locator('.book-reader')).toHaveClass(
+    /book-reader--ultra-dark/,
+  );
+  await expect(page.locator('.book-reader')).toHaveCSS(
+    'background-color',
+    'rgb(0, 0, 0)',
+  );
+  await expect(readerContent).toHaveCSS('color', 'rgb(75, 75, 75)');
+  await expect(page.locator('.book-reader__app-bar')).toHaveCSS(
+    'background-color',
+    'rgb(5, 5, 5)',
+  );
+  await expect(themeSetting.locator('.n-base-selection-label')).toHaveCSS(
+    'background-color',
+    'rgb(11, 11, 11)',
+  );
+  await themeSetting.locator('.n-base-selection').click();
   await page.locator('.n-base-select-menu').getByText('浅色').click();
   const flowSetting = page
     .locator('.book-reader__settings-theme')
