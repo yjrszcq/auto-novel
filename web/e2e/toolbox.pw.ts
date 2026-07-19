@@ -23,20 +23,40 @@ const createToolboxEpub = async (cover: Buffer) => {
     <dc:identifier id="book-id">toolbox-image</dc:identifier>
     <dc:title>工具箱图片测试</dc:title>
     <dc:language>ja</dc:language>
+    <dc:description>用于转换预览的书籍简介</dc:description>
   </metadata>
   <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+    <item id="empty" href="empty.xhtml" media-type="application/xhtml+xml"/>
     <item id="cover" href="cover.png" media-type="image/png" properties="cover-image"/>
     <item id="illustration" href="illustration.png" media-type="image/png"/>
   </manifest>
-  <spine><itemref idref="chapter"/></spine>
+  <spine><itemref idref="chapter"/><itemref idref="empty"/></spine>
 </package>`),
+  );
+  await writer.add(
+    'OEBPS/nav.xhtml',
+    new TextReader(`<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <head><title>目录</title></head><body><nav epub:type="toc"><ol>
+    <li><span>第一卷</span><ol>
+      <li><a href="chapter.xhtml">第一章</a></li>
+      <li><a href="empty.xhtml">空章节</a></li>
+    </ol></li>
+  </ol></nav></body>
+</html>`),
   );
   await writer.add(
     'OEBPS/chapter.xhtml',
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title></head>
 <body><h1>第一章</h1><p>工具箱正文</p></body></html>`),
+  );
+  await writer.add(
+    'OEBPS/empty.xhtml',
+    new TextReader(`<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>空章节</title></head><body></body></html>`),
   );
   await writer.add(
     'OEBPS/cover.png',
@@ -459,4 +479,68 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '下载术语表', exact: true }).click();
   expect((await download).suggestedFilename()).toBe('工具箱术语表.txt');
+});
+
+test('previews EPUB conversion options before generating TXT', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/workspace/toolbox');
+  const cover = await createPngCover(page);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'toolbox-image.epub',
+    mimeType: 'application/epub+zip',
+    buffer: await createToolboxEpub(cover),
+  });
+  await page.getByText('EPUB：转换成TXT', { exact: true }).click();
+  let downloadCount = 0;
+  page.on('download', () => {
+    downloadCount += 1;
+  });
+
+  const resultSection = page.locator('.toolbox-file-section').filter({
+    has: page.getByRole('heading', { name: '处理结果', exact: true }),
+  });
+  await expect(resultSection).toHaveCount(0);
+  await page.getByRole('button', { name: '预览转换', exact: true }).click();
+  const conversionPreview = page.locator('.conversion-preview');
+  await expect(conversionPreview).toContainText('空章节：空章节');
+  await expect(page.locator('.conversion-preview__text')).toContainText(
+    '# 第一卷',
+  );
+  await expect(page.locator('.conversion-preview__text')).toContainText(
+    '## 第一章',
+  );
+  await expect(page.locator('.conversion-preview__text')).not.toContainText(
+    '用于转换预览的书籍简介',
+  );
+
+  await page.getByRole('checkbox', { name: '书籍简介' }).check();
+  await expect(conversionPreview).toHaveCount(0);
+  await page.getByRole('checkbox', { name: '章节标题' }).uncheck();
+  await page.getByRole('button', { name: '预览转换', exact: true }).click();
+  await expect(page.locator('.conversion-preview__text')).toContainText(
+    '用于转换预览的书籍简介',
+  );
+  await expect(page.locator('.conversion-preview__text')).not.toContainText(
+    '## 第一章',
+  );
+  const previewBounds = await conversionPreview.boundingBox();
+  expect(previewBounds).not.toBeNull();
+  expect(previewBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(previewBounds!.x + previewBounds!.width).toBeLessThanOrEqual(390);
+  expect(downloadCount).toBe(0);
+
+  await page.getByRole('button', { name: '确认生成', exact: true }).click();
+  await expect(resultSection).toContainText('toolbox-image.txt');
+  expect(downloadCount).toBe(0);
+  await resultSection
+    .getByRole('button', { name: '预览 toolbox-image.txt' })
+    .click();
+  await expect(page.locator('.toolbox-file-card__preview')).toContainText(
+    '用于转换预览的书籍简介',
+  );
+  await expect(page.locator('.toolbox-file-card__preview')).not.toContainText(
+    '## 第一章',
+  );
 });

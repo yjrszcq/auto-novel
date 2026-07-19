@@ -4,6 +4,7 @@ import { Txt } from './txt';
 import { StandardNovel } from './standard';
 
 export { Epub, Srt, Txt, StandardNovel };
+export type { StandardChapter, StandardTxtOptions } from './standard';
 export type ParsedFile = Epub | Srt | Txt;
 
 export const parseFile = async (

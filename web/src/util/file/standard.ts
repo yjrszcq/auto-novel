@@ -82,16 +82,25 @@ namespace NovelMark {
   };
 }
 
-interface StandardChapter {
+export interface StandardChapter {
   id: string;
   title: string;
+  volumeTitles: string[];
   content: string;
 }
 
 export interface StandardNovel {
   id: string;
   title: string;
+  description?: string;
   chapters: StandardChapter[];
+  warnings: string[];
+}
+
+export interface StandardTxtOptions {
+  includeChapterTitles: boolean;
+  includeVolumeTitles: boolean;
+  includeDescription: boolean;
 }
 
 export namespace StandardNovel {
@@ -102,58 +111,150 @@ export namespace StandardNovel {
     return str;
   };
 
+  const contentPath = (href: string) => href.split('#', 1)[0] ?? href;
+
+  export const validateNavigationOrder = (
+    chapterPaths: string[],
+    spinePaths: string[],
+  ) => {
+    const warnings: string[] = [];
+    const spineIndexes = new Map(
+      spinePaths.map((path, index) => [contentPath(path), index]),
+    );
+    let previousIndex = -1;
+    for (const path of chapterPaths) {
+      const index = spineIndexes.get(contentPath(path));
+      if (index === undefined) {
+        warnings.push(`目录条目未出现在正文顺序中：${path}`);
+      } else if (index < previousIndex) {
+        warnings.push(`目录顺序与正文顺序不一致：${path}`);
+      } else {
+        previousIndex = index;
+      }
+    }
+    return warnings;
+  };
+
   export const fromEpub = (epub: Epub): StandardNovel => {
     const chapters: StandardChapter[] = [];
+    const warnings: string[] = [];
+    const chapterPaths = new Set<string>();
 
-    const traverseToc = (navItems: typeof epub.navItems) => {
+    const traverseToc = (
+      navItems: typeof epub.navItems,
+      volumeTitles: string[] = [],
+    ) => {
       for (const item of navItems) {
+        if (item.children.length === 0 && item.href) {
+          const id = contentPath(item.href);
+          if (chapterPaths.has(id)) {
+            warnings.push(`目录包含重复正文条目：${item.href}`);
+          } else {
+            chapterPaths.add(id);
+            chapters.push({
+              id,
+              title: item.text,
+              volumeTitles,
+              content: '',
+            });
+          }
+        }
         if (item.children.length > 0) {
-          traverseToc(item.children);
-        } else if (
-          item.href &&
-          chapters.find((it) => it.id === item.href) === undefined
-        ) {
-          chapters.push({
-            id: item.href,
-            title: item.text,
-            content: '',
-          });
+          traverseToc(item.children, [...volumeTitles, item.text]);
+        } else if (!item.href) {
+          warnings.push(`目录条目缺少正文链接：${item.text}`);
         }
       }
     };
     traverseToc(epub.navItems);
 
-    let index = -1;
-    for (const item of epub.iterDocInSpine()) {
-      if (
-        index + 1 < chapters.length &&
-        epub.getCanonicalHref(item.href) === chapters[index + 1].id
-      ) {
-        index += 1;
-      }
-      if (index >= 0) {
-        chapters[index].content += NovelMark.fromXhtml(item.doc.body);
+    const spineDocs = epub.iterDocInSpine();
+    const spinePaths = spineDocs.map((item) =>
+      contentPath(epub.getCanonicalHref(item.href)),
+    );
+    warnings.push(
+      ...validateNavigationOrder(
+        chapters.map(({ id }) => id),
+        spinePaths,
+      ),
+    );
+
+    const chapterIndexes = new Map(
+      chapters.map(({ id }, index) => [contentPath(id), index]),
+    );
+    let chapterIndex = -1;
+    for (const item of spineDocs) {
+      const matchedIndex = chapterIndexes.get(
+        contentPath(epub.getCanonicalHref(item.href)),
+      );
+      if (matchedIndex !== undefined) chapterIndex = matchedIndex;
+      if (chapterIndex >= 0) {
+        const chapter = chapters[chapterIndex];
+        if (chapter !== undefined) {
+          chapter.content += NovelMark.fromXhtml(item.doc.body);
+        }
       }
     }
 
+    if (chapters.length === 0) warnings.push('EPUB 目录中没有可转换的章节');
+    for (const chapter of chapters) {
+      if (NovelMark.toText(chapter.content).trim().length === 0) {
+        warnings.push(`空章节：${chapter.title}`);
+      }
+    }
+
+    const metadata = epub.getBookMetadata();
     return {
       id: epub.name,
-      title: removeExt(epub.name, '.epub'),
+      title: metadata.title || removeExt(epub.name, '.epub'),
+      description: metadata.description,
       chapters,
+      warnings,
     };
   };
 
-  export const toTxt = async (novel: StandardNovel): Promise<Txt> => {
-    const buf: string[] = [];
-    buf.push(`${novel.title}\n\n\n`);
-
-    for (const chapter of novel.chapters) {
-      buf.push(`# ${chapter.title}\n`);
-      buf.push(NovelMark.toText(chapter.content));
+  export const toText = (
+    novel: StandardNovel,
+    options: StandardTxtOptions = {
+      includeChapterTitles: true,
+      includeVolumeTitles: true,
+      includeDescription: false,
+    },
+  ) => {
+    const lines: string[] = [novel.title, ''];
+    if (options.includeDescription && novel.description?.trim()) {
+      lines.push(novel.description.trim(), '');
     }
+
+    let previousVolumes: string[] = [];
+    for (const chapter of novel.chapters) {
+      if (options.includeVolumeTitles) {
+        const sharedLength = previousVolumes.findIndex(
+          (title, index) => title !== chapter.volumeTitles[index],
+        );
+        const start = sharedLength < 0 ? previousVolumes.length : sharedLength;
+        chapter.volumeTitles.slice(start).forEach((title) => {
+          lines.push(`# ${title}`, '');
+        });
+        previousVolumes = chapter.volumeTitles;
+      }
+      if (options.includeChapterTitles) {
+        lines.push(
+          `${options.includeVolumeTitles && chapter.volumeTitles.length > 0 ? '##' : '#'} ${chapter.title}`,
+        );
+      }
+      lines.push(NovelMark.toText(chapter.content).trimEnd(), '');
+    }
+    return lines.join('\n').trimEnd() + '\n';
+  };
+
+  export const toTxt = async (
+    novel: StandardNovel,
+    options?: StandardTxtOptions,
+  ): Promise<Txt> => {
     return Txt.fromText(
-      removeExt(novel.title, '.epub') + '.txt',
-      buf.join('\n'),
+      removeExt(novel.id, '.epub') + '.txt',
+      toText(novel, options),
     );
   };
 }

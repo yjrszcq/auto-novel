@@ -8,10 +8,7 @@ export interface ToolboxPreview {
   truncated: boolean;
 }
 
-export const getToolboxPreview = async (
-  file: ParsedFile,
-): Promise<ToolboxPreview> => {
-  const content = file.type === 'txt' ? file.text : await file.getText();
+export const truncateToolboxPreview = (content: string): ToolboxPreview => {
   const lines = content.split('\n');
   const lineLimited = lines.slice(0, toolboxPreviewLineLimit).join('\n');
   const text = lineLimited.slice(0, toolboxPreviewCharacterLimit);
@@ -21,4 +18,11 @@ export const getToolboxPreview = async (
       lines.length > toolboxPreviewLineLimit ||
       lineLimited.length > toolboxPreviewCharacterLimit,
   };
+};
+
+export const getToolboxPreview = async (
+  file: ParsedFile,
+): Promise<ToolboxPreview> => {
+  const content = file.type === 'txt' ? file.text : await file.getText();
+  return truncateToolboxPreview(content);
 };
