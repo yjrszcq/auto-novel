@@ -535,8 +535,22 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   const translatorConfigModal = page.getByRole('dialog');
   await expect(translatorConfigModal).toBeVisible();
   const translatorConfigBounds = await translatorConfigModal.boundingBox();
+  const desktopGptSelectBounds = await translatorConfigModal
+    .locator('.glossary-translator-selector .n-select')
+    .first()
+    .boundingBox();
   expect(translatorConfigBounds).not.toBeNull();
+  expect(desktopGptSelectBounds).not.toBeNull();
   expect(translatorConfigBounds!.width).toBeLessThanOrEqual(440);
+  const desktopSelectLeftMargin =
+    desktopGptSelectBounds!.x - translatorConfigBounds!.x;
+  const desktopSelectRightMargin =
+    translatorConfigBounds!.x +
+    translatorConfigBounds!.width -
+    (desktopGptSelectBounds!.x + desktopGptSelectBounds!.width);
+  expect(
+    Math.abs(desktopSelectLeftMargin - desktopSelectRightMargin),
+  ).toBeLessThanOrEqual(20);
   await translatorConfigModal.getByRole('button', { name: 'close' }).click();
   await expect(translatorConfigModal).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });

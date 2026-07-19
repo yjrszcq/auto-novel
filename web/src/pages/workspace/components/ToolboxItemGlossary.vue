@@ -663,7 +663,7 @@ onBeforeUnmount(() => {
 
 .glossary-translator-selector {
   display: flex;
-  width: min(300px, 100%);
+  width: 100%;
   flex-direction: column;
   gap: 6px;
 }
