@@ -44,6 +44,7 @@ export class SakuraWorkerPipeline {
     TranslationSegmentAssignment
   >;
   private activeProfile?: SakuraTranslator.Profile;
+  private activeTasks = 0;
 
   constructor(options?: {
     highWaterMark?: number;
@@ -93,9 +94,7 @@ export class SakuraWorkerPipeline {
   unregister(workerId: string) {
     this.pool.unregister(workerId);
     this.workers.delete(workerId);
-    if (this.workers.size === 0 && this.pool.snapshot().outstanding === 0) {
-      this.activeProfile = undefined;
-    }
+    this.resetProfileWhenIdle();
   }
 
   profile() {
@@ -119,11 +118,17 @@ export class SakuraWorkerPipeline {
     if (planner === undefined) {
       throw new Error('没有正在运行的 Sakura 翻译器');
     }
-    return translateLocal(desc, params, callback, planner, signal, {
-      concurrency: this.producerConcurrency,
-      segmentDispatcher: this.dispatchSegment,
-      onSegmentProgress: options?.onSegmentProgress,
-    });
+    this.activeTasks += 1;
+    try {
+      return await translateLocal(desc, params, callback, planner, signal, {
+        concurrency: this.producerConcurrency,
+        segmentDispatcher: this.dispatchSegment,
+        onSegmentProgress: options?.onSegmentProgress,
+      });
+    } finally {
+      this.activeTasks -= 1;
+      this.resetProfileWhenIdle();
+    }
   }
 
   close(reason?: unknown) {
@@ -143,4 +148,14 @@ export class SakuraWorkerPipeline {
     );
     return handle.result;
   };
+
+  private resetProfileWhenIdle() {
+    if (
+      this.workers.size === 0 &&
+      this.activeTasks === 0 &&
+      this.pool.snapshot().outstanding === 0
+    ) {
+      this.activeProfile = undefined;
+    }
+  }
 }

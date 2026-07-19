@@ -234,6 +234,69 @@ describe('Sakura shared worker pipeline', () => {
     pipeline.close();
   });
 
+  it('keeps the task profile locked between chapters', async () => {
+    const volumeId = 'sakura-profile-lock.epub';
+    await seedVolume(volumeId, [['第一章'], ['第二章']]);
+    const createFakeTranslator = (
+      endpoint: string,
+      segLength: number,
+      label: string,
+    ) => {
+      const segmentTranslator = new SakuraTranslator(() => {}, {
+        endpoint,
+        segLength,
+        prevSegLength: 100,
+      });
+      segmentTranslator.model = { id: 'sakura-1.0' };
+      segmentTranslator.version = '1.0';
+      segmentTranslator.segmentor = createBudgetSegmentor(100, 1);
+      segmentTranslator.translate = async (segment) =>
+        segment.map((line) => `${label}-${line}`);
+      return new Translator(segmentTranslator);
+    };
+    const first = createFakeTranslator('http://127.0.0.1:4', 100, '甲');
+    const replacement = createFakeTranslator('http://127.0.0.1:5', 100, '乙');
+    const incompatible = createFakeTranslator('http://127.0.0.1:6', 200, '异');
+    const pipeline = new SakuraWorkerPipeline({ highWaterMark: 1 });
+    pipeline.register({ id: 'first', translator: first, concurrency: 1 });
+    let completed = 0;
+    const callback: TranslateTaskCallback = {
+      onStart: () => {},
+      onChapterSuccess: () => {
+        completed += 1;
+        if (completed !== 1) return;
+        pipeline.unregister('first');
+        expect(pipeline.profile()).toEqual(first.sakuraProfile());
+        expect(() =>
+          pipeline.register({
+            id: 'incompatible',
+            translator: incompatible,
+            concurrency: 1,
+          }),
+        ).toThrow('配置不兼容');
+        pipeline.register({
+          id: 'replacement',
+          translator: replacement,
+          concurrency: 1,
+        });
+      },
+      onChapterFailure: () => {},
+      log: () => {},
+    };
+
+    await pipeline.translateLocal(
+      { type: 'local', volumeId },
+      taskParams(),
+      callback,
+    );
+
+    expect(completed).toBe(2);
+    expect(pipeline.snapshot().workers.map(({ id }) => id)).toEqual([
+      'replacement',
+    ]);
+    pipeline.close();
+  });
+
   it('requeues an interrupted segment on another compatible deployment', async () => {
     const volumeId = 'sakura-worker-stop.epub';
     const [chapterId] = await seedVolume(volumeId, [['待转交原文']]);
