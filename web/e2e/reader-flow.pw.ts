@@ -3078,9 +3078,15 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   const gptLocalDrawer = page
     .locator('.n-drawer')
     .filter({ hasText: '本地小说' });
+  const gptLocalAdd = gptLocalDrawer.getByRole('button', {
+    name: '添加',
+    exact: true,
+  });
+  await expect(gptLocalAdd).toBeVisible();
+  await gptLocalAdd.hover();
   await expect(
-    gptLocalDrawer.getByRole('button', { name: '添加', exact: true }),
-  ).toBeVisible();
+    page.getByText('支持拖拽上传 EPUB/TXT/SRT 文件', { exact: true }),
+  ).toBeHidden();
   await expect(
     gptLocalDrawer.getByRole('button', {
       name: '下载选中的书',

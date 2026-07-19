@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { PlusOutlined } from '@vicons/material';
+import { useMediaQuery } from '@vueuse/core';
 import type { UploadCustomRequestOptions, UploadFileInfo } from 'naive-ui';
 
 import { useLocalVolumeManager } from '../LocalVolumeManager';
@@ -24,6 +25,7 @@ const emit = defineEmits<{
 
 const message = useMessage();
 const store = useLocalVolumeManager();
+const isMobile = useMediaQuery('(max-width: 639px)');
 
 const handleFinish = ({ file }: { file: UploadFileInfo }) => {
   if (file.file) {
@@ -73,7 +75,7 @@ const customRequest = ({
     @before-upload="beforeUpload"
     @finish="handleFinish"
   >
-    <n-tooltip trigger="hover">
+    <n-tooltip trigger="hover" :disabled="isMobile">
       <template #trigger>
         <c-button
           label="添加"
