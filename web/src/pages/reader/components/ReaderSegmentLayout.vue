@@ -18,6 +18,7 @@ const props = defineProps<{
   initialSegmentId?: string;
   flow: ResolvedReaderFlow;
   scrollRoot?: HTMLElement;
+  continuous?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -49,18 +50,64 @@ const hasPreviousSegments = computed(() => segmentRange.value.start > 0);
 const hasMoreSegments = computed(
   () => segmentRange.value.end < props.segments.length,
 );
+const layout = ref<HTMLElement>();
+const beforeSentinel = ref<HTMLElement>();
 const afterSentinel = ref<HTMLElement>();
+let loadPreviousObserver: IntersectionObserver | undefined;
 let loadMoreObserver: IntersectionObserver | undefined;
 
 const loadPreviousSegments = async () => {
   const anchorId = renderedSegments.value[0]?.id;
+  const previousTop =
+    props.continuous && anchorId !== undefined
+      ? layout.value
+          ?.querySelector<HTMLElement>(
+            `[data-reader-segment-id="${CSS.escape(anchorId)}"]`,
+          )
+          ?.getBoundingClientRect().top
+      : undefined;
   segmentRange.value = expandSegmentRange(
     segmentRange.value,
     props.segments.length,
     'before',
   );
   await nextTick();
+  if (previousTop !== undefined && anchorId !== undefined) {
+    const nextTop = layout.value
+      ?.querySelector<HTMLElement>(
+        `[data-reader-segment-id="${CSS.escape(anchorId)}"]`,
+      )
+      ?.getBoundingClientRect().top;
+    if (nextTop !== undefined) {
+      window.scrollBy({ top: nextTop - previousTop, behavior: 'auto' });
+    }
+    emit('content-change');
+    return;
+  }
   emit('content-change', anchorId);
+};
+
+const observePreviousSegments = () => {
+  loadPreviousObserver?.disconnect();
+  loadPreviousObserver = undefined;
+  if (
+    !props.continuous ||
+    !hasPreviousSegments.value ||
+    beforeSentinel.value === undefined ||
+    typeof IntersectionObserver === 'undefined'
+  ) {
+    return;
+  }
+  loadPreviousObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        loadPreviousObserver?.disconnect();
+        void loadPreviousSegments();
+      }
+    },
+    { root: null, rootMargin: '640px 0px' },
+  );
+  loadPreviousObserver.observe(beforeSentinel.value);
 };
 
 const loadMoreSegments = async () => {
@@ -115,23 +162,44 @@ watch(
   () => [props.segments, props.initialSegmentId],
   () => {
     segmentRange.value = getInitialRange();
-    void nextTick().then(observeMoreSegments);
+    void nextTick().then(() => {
+      observePreviousSegments();
+      observeMoreSegments();
+    });
   },
   { immediate: true },
 );
 watch(
-  () => [segmentRange.value.end, props.flow, props.scrollRoot],
-  () => void nextTick().then(observeMoreSegments),
+  () => [
+    segmentRange.value.start,
+    segmentRange.value.end,
+    props.flow,
+    props.scrollRoot,
+    props.continuous,
+  ],
+  () =>
+    void nextTick().then(() => {
+      observePreviousSegments();
+      observeMoreSegments();
+    }),
 );
-onBeforeUnmount(() => loadMoreObserver?.disconnect());
+onBeforeUnmount(() => {
+  loadPreviousObserver?.disconnect();
+  loadMoreObserver?.disconnect();
+});
 </script>
 
 <template>
   <section
+    ref="layout"
     class="reader-segment-layout"
     :class="`reader-segment-layout--${props.mode}`"
   >
-    <div v-if="hasPreviousSegments" class="reader-segment-layout__control">
+    <div
+      v-if="hasPreviousSegments"
+      ref="beforeSentinel"
+      class="reader-segment-layout__control"
+    >
       <n-button size="small" @click="loadPreviousSegments">
         加载前面的段落
       </n-button>

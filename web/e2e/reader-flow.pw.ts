@@ -428,11 +428,12 @@ test('opens a local bookshelf book safely through the current reader route', asy
 
   await page.getByRole('button', { name: '查看《reader-flow》详情' }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/details$/);
-  const startReadingButton = page.getByRole('button', { name: '开始阅读' });
+  const startReadingButton = page.getByRole('button', { name: /阅读$/ });
   await startReadingButton.focus();
   await expect(startReadingButton).toBeFocused();
   await startReadingButton.click();
-  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/[01]$/);
+  await page.goto('/books/reader-flow.txt/read/0');
   await expect(page.getByText(unsafeText, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__readerXss)).toBeUndefined();
   const readerContent = page.locator('.book-reader__content');
@@ -831,15 +832,46 @@ test('opens a local bookshelf book safely through the current reader route', asy
       ),
     )
     .toBeLessThanOrEqual(1);
-  await readerContent.dispatchEvent('touchstart', {
-    touches: [{ identifier: 0, clientX: 180, clientY: 500 }],
-  });
-  await readerContent.dispatchEvent('touchend', {
-    changedTouches: [{ identifier: 0, clientX: 180, clientY: 420 }],
-  });
   await expect(page.locator('.book-reader__loading')).toHaveCount(0);
+  await expect(
+    readerContent.locator('.book-reader__continuous-chapter'),
+  ).toHaveCount(2);
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(3);
+  const expectContinuousChapterSeam = async () => {
+    await expect
+      .poll(() =>
+        readerContent.evaluate((element) => {
+          const chapters = [
+            ...element.querySelectorAll<HTMLElement>(
+              '.book-reader__continuous-chapter',
+            ),
+          ];
+          const previous = chapters[0]?.getBoundingClientRect();
+          const next = chapters[1]?.getBoundingClientRect();
+          return (
+            previous !== undefined &&
+            next !== undefined &&
+            previous.bottom > 0 &&
+            next.top < window.innerHeight
+          );
+        }),
+      )
+      .toBe(true);
+  };
+  const secondChapter = readerContent.locator('[data-reader-chapter-id="1"]');
+  await page.evaluate(() => window.scrollBy(0, -10));
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await expectContinuousChapterSeam();
+  await secondChapter.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
   await expect
     .poll(() =>
       readerTop.evaluate((element) =>
@@ -962,10 +994,17 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.evaluate(() =>
     window.scrollTo(0, document.documentElement.scrollHeight),
   );
-  await readerContent.dispatchEvent('wheel', { deltaY: 120 });
   await expect(page.locator('.book-reader__loading')).toHaveCount(0);
+  await expect(
+    readerContent.locator('.book-reader__continuous-chapter'),
+  ).toHaveCount(2);
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(3);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '设置', exact: true }).click();
