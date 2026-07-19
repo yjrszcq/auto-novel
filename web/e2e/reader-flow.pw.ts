@@ -2792,13 +2792,8 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
     );
     await page.reload();
 
-    for (const workerId of ['sakura-worker-a', 'sakura-worker-b']) {
-      await page
-        .locator('.n-list-item')
-        .filter({ hasText: workerId })
-        .getByRole('button', { name: '启动', exact: true })
-        .click();
-    }
+    await page.getByRole('button', { name: '批量控制翻译器' }).click();
+    await page.getByText('启动全部', { exact: true }).click();
     await twoRequestsArrived;
     expect(server.maximumActiveRequests).toBe(2);
     await expect(page.getByText(/章节 \d\/2 · 分段 1\/1/)).toHaveCount(2);

@@ -242,8 +242,11 @@ const deleteWorker = (workerId: string) => {
   workspace.deleteWorker(workerId);
 };
 
-const startAllWorkers = () =>
-  Promise.all(workspaceRef.value.workers.map((worker) => startWorker(worker)));
+const startAllWorkers = async () => {
+  for (const worker of workspaceRef.value.workers) {
+    await startWorker(worker);
+  }
+};
 
 const stopAllWorkers = () => {
   for (const worker of [...pipelineSnapshot.value.workers]) {
