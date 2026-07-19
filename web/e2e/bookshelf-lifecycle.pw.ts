@@ -63,6 +63,7 @@ const createMinimalEpub = async () => {
   <manifest>
     <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
     <item id="cover" href="images/cover.png" media-type="image/png" properties="cover-image"/>
+    <item id="style" href="styles/book.css" media-type="text/css"/>
   </manifest>
   <spine><itemref idref="chapter"/></spine>
 </package>`),
@@ -70,8 +71,13 @@ const createMinimalEpub = async () => {
   await writer.add(
     'OEBPS/chapter.xhtml',
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title></head>
-<body><h1>第一章</h1><p>原文段落</p></body></html>`),
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title>
+<link rel="stylesheet" href="styles/book.css"/></head>
+<body><h1>第一章</h1><img src="images/cover.png" alt="章节插图"/><p>原文段落</p></body></html>`),
+  );
+  await writer.add(
+    'OEBPS/styles/book.css',
+    new TextReader('body { writing-mode: vertical-rl; color: navy; }'),
   );
   await writer.add(
     'OEBPS/images/cover.png',
@@ -116,9 +122,13 @@ const inspectEpub = async (buffer: Buffer) => {
     const cover = await entries.get('OEBPS/images/cover.png')!.getData!(
       new BlobWriter(),
     );
+    const style = await entries.get('OEBPS/styles/book.css')!.getData!(
+      new TextWriter(),
+    );
     return {
       packageXml,
       chapterXml,
+      style,
       cover: Buffer.from(await cover.arrayBuffer()),
     };
   } finally {
@@ -292,7 +302,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   const imported = await page.evaluate(
     async ({ alphaId, betaId }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -940,7 +950,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
 
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1190,7 +1200,7 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
 
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1271,7 +1281,7 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
 
   const storedAfterEdit = await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1344,6 +1354,8 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
   const translated = await inspectEpub(await readDownload(translatedDownload));
   expect(translated.packageXml).toContain('原始 EPUB 标题');
   expect(translated.chapterXml).toContain('真实译文');
+  expect(translated.chapterXml).toContain('alt="章节插图"');
+  expect(translated.style).toContain('writing-mode: vertical-rl');
   expect(translated.cover).toEqual(Buffer.from(sourceCover));
 
   await page.goto(`/books/${encodeURIComponent(epubFilename)}/edit`);
@@ -1380,7 +1392,7 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
 
   const restoredMetadata = await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1411,7 +1423,7 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
     .poll(() =>
       page.evaluate(async (bookId) => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -1448,7 +1460,7 @@ test('permanent deletion removes exactly one complete book graph', async ({
   ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1557,7 +1569,7 @@ test('permanent deletion removes exactly one complete book graph', async ({
 
   const remaining = await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });

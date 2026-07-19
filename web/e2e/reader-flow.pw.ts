@@ -39,7 +39,7 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
   await expect(page.locator('.n-skeleton')).toHaveCount(0);
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -149,7 +149,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.evaluate(
     async ({ bookId, descriptionHtml, unsafeText }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -1122,7 +1122,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.evaluate(
     async ({ bookId }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -1191,7 +1191,7 @@ test('persists keyboard pagination and every reading mode across responsive layo
   ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1333,7 +1333,7 @@ test('persists keyboard pagination and every reading mode across responsive layo
     .poll(() =>
       page.evaluate(async (bookId) => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -1435,7 +1435,7 @@ test('persists keyboard pagination and every reading mode across responsive layo
     .poll(() =>
       page.evaluate(async (bookId) => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -1506,7 +1506,7 @@ test('persists keyboard pagination and every reading mode across responsive layo
   );
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1639,7 +1639,7 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
   ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1817,7 +1817,7 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
 
   const persistedTools = await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -1867,7 +1867,7 @@ test('continues paging backward after loading an earlier long-chapter window', a
   await page.evaluate(
     async ({ bookId }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -1964,7 +1964,7 @@ test('uses a configured default cover for a local book without one', async ({
 
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -2253,7 +2253,7 @@ test('restores the complete source book presentation', async ({ page }) => {
   ).toBeVisible();
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -2326,7 +2326,7 @@ test('restores the complete source book presentation', async ({ page }) => {
     .poll(() =>
       page.evaluate(async (bookId) => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -2403,7 +2403,7 @@ test('persists the global reading version selected in Settings', async ({
     .poll(() =>
       page.evaluate(async () => {
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -2497,7 +2497,7 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
         );
 
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -2670,7 +2670,7 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
 
     const persisted = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -2817,7 +2817,7 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
         );
 
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -2914,7 +2914,7 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
 
     const translated = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -2997,7 +2997,7 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
           }),
         );
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('volumes', 5);
+          const request = indexedDB.open('volumes');
           request.onerror = () => reject(request.error);
           request.onsuccess = () => resolve(request.result);
         });
@@ -3080,7 +3080,7 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
 
     const translated = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });

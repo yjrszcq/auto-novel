@@ -148,7 +148,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
 
   const imported = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -207,7 +207,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
 
   const richProjection = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
@@ -282,7 +282,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   await page.evaluate(
     async ({ chapterId, translations }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('volumes', 5);
+        const request = indexedDB.open('volumes');
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
@@ -522,4 +522,8 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
         document.documentElement.clientWidth,
     ),
   ).toBe(true);
+  await page.reload();
+  await expect(
+    page.locator('[data-reader-epub-host]').filter({ hasText: '固定版式页面' }),
+  ).toBeVisible();
 });

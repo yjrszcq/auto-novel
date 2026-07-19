@@ -67,7 +67,7 @@ test('imports EPUB 2 HTML and NCX through manifest fallbacks', async ({
   ).toBeVisible();
   const imported = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('volumes', 5);
+      const request = indexedDB.open('volumes');
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });

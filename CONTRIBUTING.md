@@ -69,6 +69,9 @@ Docker 变更可在仓库根目录使用 `docker build -t auto-novel:local web` 
 EPUB 导入必须优先使用 EPUB3 nav 或 EPUB2 NCX，并保持目录标题、层级、锚点和
 spine 顺序。无目录时只能回退到 spine，不能重新遍历整个 manifest。修改章节
 切分时必须同时验证当前格式的导入、阅读、译文导出和稳定段落定位。
+富 EPUB 内容必须留在已清理的隔离 DOM 中；不得执行书内脚本、加载远程出版物
+资源或把翻译服务输出当作 HTML。新增媒体类型或回退规则时同步更新
+`docs/epub-support.md` 与真实 ZIP 浏览器夹具。
 
 本地书籍的原始 EPUB、原始元信息与展示覆盖必须保持分离。元信息和封面只在
 用户启用下载嵌入时写入临时下载副本，不得替换 IndexedDB 保存的原文件；展示

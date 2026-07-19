@@ -76,12 +76,6 @@ export const getTranslationFile = async (
     }
     myFile.text = buffer.join('\n');
   } else if (myFile.type === 'epub') {
-    // 防止部分阅读器使用竖排
-    myFile.packageDoc
-      .getElementsByTagName('spine')
-      .item(0)
-      ?.removeAttribute('page-progression-direction');
-
     const nativeChapters = [];
     for (const tocItem of metadata.toc) {
       const chapter = await dao.getChapter(id, tocItem.chapterId);
@@ -105,9 +99,6 @@ export const getTranslationFile = async (
         injectEpubParagraphTranslations(item.doc, mode, translations);
       }
     }
-
-    // 清除css格式
-    myFile.cleanStyle();
     if (embedMetadata) {
       await embedEpubDownloadMetadata(dao, myFile, metadata);
     }

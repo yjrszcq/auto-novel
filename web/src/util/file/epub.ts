@@ -960,12 +960,6 @@ export class Epub extends BaseFile {
     item.blob = blob;
   }
 
-  cleanStyle() {
-    for (const item of this.iterBlob(EPUB_MIME.CSS)) {
-      item.blob = new Blob([''], { type: item.mediaType });
-    }
-  }
-
   getText() {
     const contents: string[] = [];
     for (const item of this.iterDocInSpine()) {

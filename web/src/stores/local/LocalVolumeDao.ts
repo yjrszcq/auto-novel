@@ -77,36 +77,44 @@ interface VolumesDBSchema extends DBSchema {
   };
 }
 
+export const LOCAL_VOLUME_DATABASE_VERSION = 6;
+
 export const createLocalVolumeDao = async (databaseName = 'volumes') => {
-  const db = await openDB<VolumesDBSchema>(databaseName, 5, {
-    upgrade(db) {
-      for (const storeName of db.objectStoreNames) {
-        db.deleteObjectStore(storeName);
-      }
-      db.createObjectStore('metadata', { keyPath: 'id' });
-      db.createObjectStore('file', { keyPath: 'id' });
-      const chapterStore = db.createObjectStore('chapter', { keyPath: 'id' });
-      chapterStore.createIndex('byVolumeId', 'volumeId');
-      db.createObjectStore('reader-settings', { keyPath: 'id' });
-      db.createObjectStore('reader-bookshelf', { keyPath: 'bookId' });
-      db.createObjectStore('reader-book-preference', { keyPath: 'bookId' });
-      db.createObjectStore('reader-progress', { keyPath: 'bookId' });
-      const bookmarkStore = db.createObjectStore('reader-bookmark', {
-        keyPath: 'id',
-      });
-      bookmarkStore.createIndex('byBookId', 'bookId');
-      const annotationStore = db.createObjectStore('reader-annotation', {
-        keyPath: 'id',
-      });
-      annotationStore.createIndex('byBookId', 'bookId');
-      db.createObjectStore('reader-cover', { keyPath: 'bookId' });
-      const cacheStore = db.createObjectStore('reader-chapter-cache', {
-        keyPath: 'key',
-      });
-      cacheStore.createIndex('byBookId', 'bookId');
-      db.createObjectStore('reader-reading-stats', { keyPath: 'bookId' });
+  const db = await openDB<VolumesDBSchema>(
+    databaseName,
+    LOCAL_VOLUME_DATABASE_VERSION,
+    {
+      upgrade(db) {
+        for (const storeName of db.objectStoreNames) {
+          db.deleteObjectStore(storeName);
+        }
+        db.createObjectStore('metadata', { keyPath: 'id' });
+        db.createObjectStore('file', { keyPath: 'id' });
+        const chapterStore = db.createObjectStore('chapter', {
+          keyPath: 'id',
+        });
+        chapterStore.createIndex('byVolumeId', 'volumeId');
+        db.createObjectStore('reader-settings', { keyPath: 'id' });
+        db.createObjectStore('reader-bookshelf', { keyPath: 'bookId' });
+        db.createObjectStore('reader-book-preference', { keyPath: 'bookId' });
+        db.createObjectStore('reader-progress', { keyPath: 'bookId' });
+        const bookmarkStore = db.createObjectStore('reader-bookmark', {
+          keyPath: 'id',
+        });
+        bookmarkStore.createIndex('byBookId', 'bookId');
+        const annotationStore = db.createObjectStore('reader-annotation', {
+          keyPath: 'id',
+        });
+        annotationStore.createIndex('byBookId', 'bookId');
+        db.createObjectStore('reader-cover', { keyPath: 'bookId' });
+        const cacheStore = db.createObjectStore('reader-chapter-cache', {
+          keyPath: 'key',
+        });
+        cacheStore.createIndex('byBookId', 'bookId');
+        db.createObjectStore('reader-reading-stats', { keyPath: 'bookId' });
+      },
     },
-  });
+  );
   //Metadata
   const listMetadata = () => db.getAll('metadata');
   const getMetadata = (id: string) => db.get('metadata', id);

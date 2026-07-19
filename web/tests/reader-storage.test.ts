@@ -3,7 +3,10 @@ import 'fake-indexeddb/auto';
 import { deleteDB, openDB } from 'idb';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createLocalVolumeDao } from '../src/stores/local/LocalVolumeDao';
+import {
+  LOCAL_VOLUME_DATABASE_VERSION,
+  createLocalVolumeDao,
+} from '../src/stores/local/LocalVolumeDao';
 
 const databaseName = 'reader-storage-test';
 
@@ -12,11 +15,36 @@ afterEach(async () => {
 });
 
 describe('reader storage', () => {
+  it('resets incompatible application data on the current database version', async () => {
+    const legacy = await openDB(
+      databaseName,
+      LOCAL_VOLUME_DATABASE_VERSION - 1,
+      {
+        upgrade(db) {
+          db.createObjectStore('legacy', { keyPath: 'id' }).put({
+            id: 'old-book',
+          });
+        },
+      },
+    );
+    legacy.close();
+
+    const dao = await createLocalVolumeDao(databaseName);
+    expect(await dao.listMetadata()).toEqual([]);
+    dao.close();
+
+    const current = await openDB(databaseName);
+    expect(current.version).toBe(LOCAL_VOLUME_DATABASE_VERSION);
+    expect(current.objectStoreNames.contains('legacy')).toBe(false);
+    expect(current.objectStoreNames.contains('metadata')).toBe(true);
+    current.close();
+  });
+
   it('creates book indexes for reader-owned records', async () => {
     const dao = await createLocalVolumeDao(databaseName);
     dao.close();
 
-    const db = await openDB(databaseName, 5);
+    const db = await openDB(databaseName);
     const tx = db.transaction(
       ['reader-bookmark', 'reader-annotation', 'reader-chapter-cache'],
       'readonly',
