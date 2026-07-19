@@ -39,6 +39,7 @@ const sakuraWorkerOptions = computed(() =>
     value: id,
   })),
 );
+const translatorConfigExpanded = ref(false);
 const sourceCounts = shallowRef(new Map<string, number>());
 const extractionLoading = ref(false);
 const extractionError = ref('');
@@ -388,6 +389,14 @@ onBeforeUnmount(() => {
         :round="false"
         @action="undoDelete"
       />
+      <c-button
+        label="翻译器配置"
+        :type="translatorConfigExpanded ? 'primary' : 'default'"
+        :aria-expanded="translatorConfigExpanded"
+        size="small"
+        :round="false"
+        @action="translatorConfigExpanded = !translatorConfigExpanded"
+      />
       <n-text v-if="lastDeletedHint" depth="3">
         最近删除：{{ lastDeletedHint }}
       </n-text>
@@ -431,7 +440,12 @@ onBeforeUnmount(() => {
       />
     </n-flex>
 
-    <n-flex align="center" class="glossary-translator-selectors">
+    <n-flex
+      v-if="translatorConfigExpanded"
+      align="center"
+      class="glossary-translator-selectors"
+      aria-label="翻译器配置"
+    >
       <label class="glossary-translator-selector">
         <n-text depth="3">GPT 翻译器</n-text>
         <n-select
@@ -603,6 +617,15 @@ onBeforeUnmount(() => {
   width: min(300px, 100%);
   flex-direction: column;
   gap: 6px;
+}
+
+.glossary-translator-selectors {
+  box-sizing: border-box;
+  width: min(640px, 100%);
+  padding: 12px;
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  background: var(--n-color);
 }
 
 .glossary-translator-selector :deep(.n-select) {

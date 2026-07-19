@@ -445,8 +445,27 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'Sakura 翻译', exact: true }),
   ).toBeVisible();
+  const translatorConfigButton = page.getByRole('button', {
+    name: '翻译器配置',
+    exact: true,
+  });
+  await expect(translatorConfigButton).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await expect(page.getByText('GPT 翻译器', { exact: true })).toHaveCount(0);
+  await translatorConfigButton.click();
+  await expect(translatorConfigButton).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByText('GPT 翻译器', { exact: true })).toBeVisible();
   await expect(page.getByText('Sakura 翻译器', { exact: true })).toBeVisible();
+  const translatorConfigBounds = await page
+    .getByLabel('翻译器配置')
+    .boundingBox();
+  expect(translatorConfigBounds).not.toBeNull();
+  expect(translatorConfigBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(
+    translatorConfigBounds!.x + translatorConfigBounds!.width,
+  ).toBeLessThanOrEqual(390);
 
   const corsHeaders = {
     'access-control-allow-origin': 'http://127.0.0.1:4173',
