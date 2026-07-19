@@ -1582,18 +1582,22 @@ const handleVisibilityChange = () => {
   }
 };
 
-const navigate = (chapterId: string, edge?: 'start' | 'end') => {
+const navigate = (
+  chapterId: string,
+  edge?: 'start' | 'end',
+  preservePanels = false,
+) => {
   pendingChapterEdge = edge;
   void saveProgress();
   void recordReadingTime();
   stopSpeaking();
-  closeReaderPanels();
+  if (!preservePanels) closeReaderPanels();
   void router.push(
     `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(chapterId)}`,
   );
 };
 
-const navigateToEpubHref = (href: string) => {
+const navigateToEpubHref = (href: string, preservePanels = false) => {
   if (result.value?.kind !== 'ready') return;
   const key = normalizeEpubHrefKey(href);
   const target = result.value.chapter.epub?.linkTargets.find(
@@ -1607,7 +1611,7 @@ const navigateToEpubHref = (href: string) => {
   void saveProgress();
   void recordReadingTime();
   stopSpeaking();
-  closeReaderPanels();
+  if (!preservePanels) closeReaderPanels();
   void router.push({
     path: `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(target.chapterId)}`,
     query: { epub: href },
@@ -1630,11 +1634,13 @@ const chapterSummaryById = computed(() => {
 });
 
 const navigateFromCatalog = (entry: ReaderNavigationEntry) => {
-  showCatalog.value = false;
+  if (catalogParentIds.value.has(entry.id)) {
+    toggleCatalogEntry(entry.id);
+  }
   if (entry.href !== undefined && result.value?.chapter.epub !== undefined) {
-    navigateToEpubHref(entry.href);
+    navigateToEpubHref(entry.href, true);
   } else if (entry.chapterId !== undefined) {
-    navigate(entry.chapterId);
+    navigate(entry.chapterId, undefined, true);
   }
 };
 
@@ -1882,11 +1888,15 @@ const refreshCurrentChapter = async () => {
   await load();
 };
 
+let initializedCatalogBookId: string | undefined;
 watch(
   result,
   (loaded) => {
+    if (loaded?.kind !== 'ready') return;
+    if (initializedCatalogBookId === loaded.book.id) return;
+    initializedCatalogBookId = loaded.book.id;
     collapsedCatalogEntryIds.value =
-      loaded?.kind === 'ready' && loaded.book.sourceFormat === 'epub'
+      loaded.book.sourceFormat === 'epub'
         ? new Set(
             loaded.navigation.flatMap(({ parentId }) =>
               parentId === undefined ? [] : [parentId],
@@ -2366,23 +2376,6 @@ onBeforeUnmount(() => {
             role="listitem"
           >
             <button
-              v-if="catalogParentIds.has(entry.id)"
-              type="button"
-              class="book-reader__catalog-toggle"
-              :class="{
-                'book-reader__catalog-toggle--expanded':
-                  !collapsedCatalogEntryIds.has(entry.id),
-              }"
-              :aria-label="`${
-                collapsedCatalogEntryIds.has(entry.id) ? '展开' : '折叠'
-              } ${entry.title}`"
-              :aria-expanded="!collapsedCatalogEntryIds.has(entry.id)"
-              @click="toggleCatalogEntry(entry.id)"
-            >
-              <n-icon :component="ChevronRightOutlined" />
-            </button>
-            <span v-else class="book-reader__catalog-toggle-spacer" />
-            <button
               type="button"
               class="book-reader__catalog-item"
               :class="{
@@ -2391,9 +2384,30 @@ onBeforeUnmount(() => {
                 'book-reader__catalog-item--structural':
                   entry.chapterId === undefined,
               }"
-              :disabled="entry.chapterId === undefined"
+              :disabled="
+                entry.chapterId === undefined && !catalogParentIds.has(entry.id)
+              "
+              :aria-expanded="
+                catalogParentIds.has(entry.id)
+                  ? !collapsedCatalogEntryIds.has(entry.id)
+                  : undefined
+              "
               @click="navigateFromCatalog(entry)"
             >
+              <span
+                class="book-reader__catalog-indicator"
+                :class="{
+                  'book-reader__catalog-indicator--expanded':
+                    catalogParentIds.has(entry.id) &&
+                    !collapsedCatalogEntryIds.has(entry.id),
+                }"
+                aria-hidden="true"
+              >
+                <n-icon
+                  v-if="catalogParentIds.has(entry.id)"
+                  :component="ChevronRightOutlined"
+                />
+              </span>
               <span class="book-reader__catalog-title">{{ entry.title }}</span>
               <n-tag
                 v-if="
@@ -2906,7 +2920,7 @@ onBeforeUnmount(() => {
 
 .book-reader__catalog-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
   width: 100%;
   min-height: 48px;
@@ -2922,9 +2936,6 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__catalog-row {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  align-items: stretch;
   padding-left: var(--catalog-indent);
   border-bottom: 1px solid var(--reader-chrome-border);
 }
@@ -2933,34 +2944,19 @@ onBeforeUnmount(() => {
   border-bottom: 0;
 }
 
-.book-reader__catalog-toggle,
-.book-reader__catalog-toggle-spacer {
-  width: 28px;
-}
-
-.book-reader__catalog-toggle {
+.book-reader__catalog-indicator {
   display: grid;
+  width: 28px;
   place-items: center;
-  padding: 0;
   color: var(--reader-muted-color);
-  cursor: pointer;
-  background: transparent;
-  border: 0;
 }
 
-.book-reader__catalog-toggle :deep(.n-icon) {
+.book-reader__catalog-indicator :deep(.n-icon) {
   transition: transform 160ms ease;
 }
 
-.book-reader__catalog-toggle--expanded :deep(.n-icon) {
+.book-reader__catalog-indicator--expanded :deep(.n-icon) {
   transform: rotate(90deg);
-}
-
-.book-reader__catalog-toggle:hover,
-.book-reader__catalog-toggle:focus-visible {
-  color: inherit;
-  background: rgb(127 127 127 / 12%);
-  outline: none;
 }
 
 .book-reader__catalog-item:hover,
@@ -2973,8 +2969,11 @@ onBeforeUnmount(() => {
   min-height: 38px;
   color: var(--reader-muted-color);
   font-weight: 700;
-  cursor: default;
   opacity: 1;
+}
+
+.book-reader__catalog-item:disabled {
+  cursor: default;
 }
 
 .book-reader__catalog-title {
