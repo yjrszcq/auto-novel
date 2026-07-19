@@ -2680,6 +2680,152 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
   }
 });
 
+test('shares one Sakura job across compatible workers', async ({ page }) => {
+  const volumeId = 'shared-sakura-job.txt';
+  const task =
+    `local/${volumeId}` +
+    '?level=all&forceMetadata=false&startIndex=0&endIndex=65535';
+  let releaseRequests: () => void = () => {};
+  const requestBarrier = new Promise<void>((resolve) => {
+    releaseRequests = resolve;
+  });
+  let announceTwoRequests: () => void = () => {};
+  const twoRequestsArrived = new Promise<void>((resolve) => {
+    announceTwoRequests = resolve;
+  });
+  const server = await startOpenAiTestServer({
+    model: 'sakura-1.0.gguf',
+    onChat: async (request) => {
+      if (request.index === 1) announceTwoRequests();
+      await requestBarrier;
+      return { content: `Sakura译文${request.index + 1}` };
+    },
+  });
+
+  try {
+    await page.goto('/');
+    await expect(page.locator('.n-skeleton')).toHaveCount(0);
+    await expect(page.getByText('还没有本地书籍')).toBeVisible();
+    await page.goto('/workspace/sakura');
+    await page.evaluate(
+      async ({ endpoint, task, volumeId }) => {
+        localStorage.setItem(
+          'auto-novel:workspace:sakura',
+          JSON.stringify({
+            workers: [
+              {
+                id: 'sakura-worker-a',
+                endpoint,
+                segLength: 500,
+                prevSegLength: 500,
+                concurrency: 1,
+              },
+              {
+                id: 'sakura-worker-b',
+                endpoint,
+                segLength: 500,
+                prevSegLength: 500,
+                concurrency: 1,
+              },
+            ],
+            jobs: [{ task, description: volumeId, createAt: 1 }],
+            jobRecords: [],
+          }),
+        );
+
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes', 5);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction(
+          ['metadata', 'chapter'],
+          'readwrite',
+        );
+        transaction.objectStore('metadata').put({
+          id: volumeId,
+          createAt: 1,
+          toc: [
+            { chapterId: 'chapter-a', title: '第一章' },
+            { chapterId: 'chapter-b', title: '第二章' },
+          ],
+          sourceFormat: 'txt',
+          glossaryId: 'glossary',
+          glossary: {},
+          favoredId: 'default',
+          sourceBookMetadata: { title: volumeId, languages: ['ja'] },
+        });
+        transaction.objectStore('chapter').put({
+          id: `${volumeId}/chapter-a`,
+          volumeId,
+          paragraphs: ['第一章原文'],
+          segmentIds: ['chapter-a-1'],
+        });
+        transaction.objectStore('chapter').put({
+          id: `${volumeId}/chapter-b`,
+          volumeId,
+          paragraphs: ['第二章原文'],
+          segmentIds: ['chapter-b-1'],
+        });
+        await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+      },
+      { endpoint: server.endpoint, task, volumeId },
+    );
+    await page.reload();
+
+    await page.getByRole('button', { name: '批量控制翻译器' }).click();
+    await page.getByText('启动全部', { exact: true }).click();
+    await twoRequestsArrived;
+    expect(server.maximumActiveRequests).toBe(2);
+    await expect(page.getByText(/章节 \d\/2 · 分段 1\/1/)).toHaveCount(2);
+
+    releaseRequests();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const workspace = JSON.parse(
+            localStorage.getItem('auto-novel:workspace:sakura') ?? '{}',
+          ) as { jobs?: unknown[]; jobRecords?: unknown[] };
+          return [workspace.jobs?.length, workspace.jobRecords?.length];
+        }),
+      )
+      .toEqual([0, 1]);
+
+    const translated = await page.evaluate(async (bookId) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes', 5);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction('chapter', 'readonly');
+      const first = transaction
+        .objectStore('chapter')
+        .get(`${bookId}/chapter-a`);
+      const second = transaction
+        .objectStore('chapter')
+        .get(`${bookId}/chapter-b`);
+      const result = await new Promise<string[][]>((resolve, reject) => {
+        transaction.oncomplete = () =>
+          resolve([
+            first.result.sakura.paragraphs,
+            second.result.sakura.paragraphs,
+          ]);
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+      return result;
+    }, volumeId);
+    expect(translated.flat().sort()).toEqual(['Sakura译文1', 'Sakura译文2']);
+  } finally {
+    releaseRequests();
+    await server.close();
+  }
+});
+
 test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
   const volumeId = 'resume-shared-job.txt';
   const task =
@@ -3198,6 +3344,9 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   const metricsPanel = page.getByRole('dialog', {
     name: '翻译器运行统计',
   });
+  await metricsPanel
+    .getByRole('button', { name: '翻译器总览', exact: true })
+    .click();
   await expect(
     metricsPanel
       .locator('.workspace-metrics-panel__metric')

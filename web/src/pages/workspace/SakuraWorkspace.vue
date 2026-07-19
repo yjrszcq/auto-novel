@@ -8,8 +8,14 @@ import {
 } from '@vicons/material';
 import { VueDraggable } from 'vue-draggable-plus';
 
+import {
+  SakuraWorkerPipeline,
+  type SakuraWorkerPipelineSnapshot,
+  Translator,
+} from '@/domain/translate';
 import { TranslationCacheRepo } from '@/repos';
-import type { TranslateJob } from '@/model/Translator';
+import type { SakuraWorker, TranslateJob } from '@/model/Translator';
+import { TranslateTaskDescriptor } from '@/model/Translator';
 import { doAction } from '@/pages/util';
 import SoundAllTaskCompleted from '@/sound/all_task_completed.mp3';
 import { useSakuraWorkspaceStore, useSettingStore } from '@/stores';
@@ -43,20 +49,173 @@ type ProcessedJob = TranslateJob & {
   };
 };
 
-const processedJobs = ref<Map<string, ProcessedJob>>(new Map());
-const automaticQueue = ref(true);
-type SakuraWorkerControl = {
-  start: () => void;
-  stop: () => void;
+const emptySnapshot: SakuraWorkerPipelineSnapshot = {
+  outstanding: 0,
+  queued: 0,
+  waitingProducers: 0,
+  aggregateActive: 0,
+  aggregateMaximum: 0,
+  workers: [],
 };
-const workerControls = useTemplateRef<SakuraWorkerControl[]>('workerControls');
+const pipelineSnapshot = shallowRef(emptySnapshot);
+const pipeline = new SakuraWorkerPipeline({
+  onSnapshot: (snapshot) => {
+    pipelineSnapshot.value = snapshot;
+  },
+});
+pipelineSnapshot.value = pipeline.snapshot();
 
-const startAllWorkers = () => {
-  for (const worker of workerControls.value ?? []) worker.start();
+const translateTask = useTemplateRef('translateTask');
+const currentJob = ref<ProcessedJob>();
+const queueRunning = ref(false);
+const automaticQueue = ref(true);
+const startingWorkerIds = ref(new Set<string>());
+let taskController: AbortController | undefined;
+
+const workerIsActive = (workerId: string) =>
+  pipelineSnapshot.value.workers.some((worker) => worker.id === workerId);
+const workerIsStarting = (workerId: string) =>
+  startingWorkerIds.value.has(workerId);
+const workerActivity = (workerId: string) =>
+  pipelineSnapshot.value.workers.find((worker) => worker.id === workerId);
+const setWorkerStarting = (workerId: string, starting: boolean) => {
+  const next = new Set(startingWorkerIds.value);
+  if (starting) next.add(workerId);
+  else next.delete(workerId);
+  startingWorkerIds.value = next;
 };
+
+const workerConfig = (worker: SakuraWorker) =>
+  <const>{
+    id: 'sakura',
+    endpoint: worker.endpoint,
+    segLength: worker.segLength,
+    prevSegLength: worker.prevSegLength,
+  };
+
+const runQueuedJobs = async () => {
+  if (queueRunning.value || pipelineSnapshot.value.workers.length === 0) return;
+  queueRunning.value = true;
+  let processedAny = false;
+  try {
+    while (pipelineSnapshot.value.workers.length > 0) {
+      const job = workspaceRef.value.jobs[0] as ProcessedJob | undefined;
+      if (job === undefined) break;
+      currentJob.value = job;
+      processedAny = true;
+
+      let parsed: ReturnType<typeof TranslateTaskDescriptor.parse>;
+      try {
+        parsed = TranslateTaskDescriptor.parse(job.resumeTask ?? job.task);
+      } catch (error) {
+        message.error(`任务格式错误，已移到记录：${error}`);
+        job.progress = {
+          finished: 0,
+          error: 1,
+          total: 1,
+          elapsedMs: 0,
+        };
+        job.finishAt = Date.now();
+        workspace.addJobRecord(job);
+        workspace.deleteJob(job.task);
+        currentJob.value = undefined;
+        continue;
+      }
+
+      const { desc, params } = parsed;
+      taskController = new AbortController();
+      const state = await translateTask.value!.startSakuraPipelineTask(
+        desc,
+        params,
+        pipeline,
+        {
+          onProgressUpdated: (progress) => {
+            job.resumeTask =
+              progress.remainingChapterIds.length === 0
+                ? undefined
+                : TranslateTaskDescriptor.local(desc.volumeId, {
+                    ...params,
+                    chapterIds: progress.remainingChapterIds,
+                  });
+            job.progress = {
+              finished: progress.finished,
+              error: progress.error,
+              total: progress.total,
+              elapsedMs: progress.elapsedMs,
+            };
+            void refreshCacheMetrics();
+          },
+        },
+        taskController.signal,
+      );
+      taskController = undefined;
+      currentJob.value = undefined;
+
+      if (state === 'abort' || state === 'fail') break;
+      job.finishAt = Date.now();
+      workspace.addJobRecord(job);
+      workspace.deleteJob(job.task);
+      if (state !== 'complete' || !automaticQueue.value) break;
+    }
+  } finally {
+    taskController = undefined;
+    currentJob.value = undefined;
+    queueRunning.value = false;
+    void refreshCacheMetrics();
+  }
+
+  if (
+    processedAny &&
+    workspaceRef.value.jobs.length === 0 &&
+    setting.value.workspaceSound
+  ) {
+    void new Audio(SoundAllTaskCompleted).play();
+  }
+};
+
+const startWorker = async (worker: SakuraWorker) => {
+  if (workerIsActive(worker.id) || workerIsStarting(worker.id)) return;
+  setWorkerStarting(worker.id, true);
+  try {
+    const translator = await Translator.create(
+      workerConfig(worker),
+      true,
+      (logMessage, detail) =>
+        translateTask.value?.pushLog({
+          message: `[${worker.id}] ${logMessage}`,
+          detail,
+        }),
+    );
+    if (!workspaceRef.value.workers.some(({ id }) => id === worker.id)) return;
+    pipeline.register({
+      id: worker.id,
+      translator,
+      concurrency: worker.concurrency,
+    });
+    void runQueuedJobs();
+  } catch (error) {
+    message.error(`无法启动 ${worker.id}：${error}`);
+  } finally {
+    setWorkerStarting(worker.id, false);
+  }
+};
+
+const stopWorker = (workerId: string) => {
+  pipeline.unregister(workerId);
+};
+
+const deleteWorker = (workerId: string) => {
+  stopWorker(workerId);
+  workspace.deleteWorker(workerId);
+};
+
+const startAllWorkers = () =>
+  Promise.all(workspaceRef.value.workers.map((worker) => startWorker(worker)));
 
 const stopAllWorkers = () => {
-  for (const worker of workerControls.value ?? []) worker.stop();
+  for (const worker of [...pipelineSnapshot.value.workers]) {
+    stopWorker(worker.id);
+  }
 };
 
 const workerControlOptions = computed(() => [
@@ -68,45 +227,56 @@ const workerControlOptions = computed(() => [
   {
     label: '停止全部',
     key: 'stop',
-    disabled: processedJobs.value.size === 0,
+    disabled: pipelineSnapshot.value.workers.length === 0,
   },
 ]);
 
 const handleWorkerControl = (key: string | number) => {
-  if (key === 'start') startAllWorkers();
+  if (key === 'start') void startAllWorkers();
   if (key === 'stop') stopAllWorkers();
 };
 
-const getNextJob = () => {
-  const job = workspaceRef.value.jobs.find(
-    (it) => !processedJobs.value.has(it.task),
-  );
-  if (job !== undefined) {
-    processedJobs.value.set(job.task, job);
-  } else if (processedJobs.value.size === 0 && setting.value.workspaceSound) {
-    // 全部任务都已经完成
-    new Audio(SoundAllTaskCompleted).play();
-  }
-  return job;
+const stopCurrentTask = () => {
+  taskController?.abort();
 };
 
+watch(
+  () => workspaceRef.value.jobs.length,
+  (jobCount, previousJobCount) => {
+    if (
+      jobCount > previousJobCount &&
+      automaticQueue.value &&
+      pipelineSnapshot.value.workers.length > 0
+    ) {
+      void runQueuedJobs();
+    }
+  },
+);
+
 const deleteJob = (task: string) => {
-  if (processedJobs.value.has(task)) {
-    message.error('任务被翻译器占用');
+  if (currentJob.value?.task === task) {
+    message.error('任务正在由共享池处理');
     return;
   }
   workspace.deleteJob(task);
 };
 const deleteAllJobs = () => {
   workspaceRef.value.jobs.forEach((job) => {
-    if (processedJobs.value.has(job.task)) {
-      return;
-    }
+    if (currentJob.value?.task === job.task) return;
     workspace.deleteJob(job.task);
   });
 };
 
 const queueControlOptions = computed(() => [
+  queueRunning.value
+    ? { label: '停止当前任务', key: 'stop' }
+    : {
+        label: '继续队列',
+        key: 'continue',
+        disabled:
+          workspaceRef.value.jobs.length === 0 ||
+          pipelineSnapshot.value.workers.length === 0,
+      },
   {
     label: '清空队列',
     key: 'clear',
@@ -115,41 +285,9 @@ const queueControlOptions = computed(() => [
 ]);
 
 const handleQueueControl = (key: string | number) => {
-  if (key !== 'clear') return;
-  showClearQueueConfirm.value = true;
-};
-
-const onProgressUpdated = (
-  task: string,
-  state:
-    | { state: 'finish'; abort: boolean }
-    | {
-        state: 'processed';
-        finished: number;
-        error: number;
-        total: number;
-        elapsedMs: number;
-        remainingChapterIds: string[];
-      },
-) => {
-  void refreshCacheMetrics();
-  if (state.state === 'finish') {
-    const job = processedJobs.value.get(task)!;
-    processedJobs.value.delete(task);
-    if (!state.abort) {
-      job.finishAt = Date.now();
-      workspace.addJobRecord(job);
-      workspace.deleteJob(task);
-    }
-  } else {
-    const job = processedJobs.value.get(task)!;
-    job.progress = {
-      finished: state.finished,
-      error: state.error,
-      total: state.total,
-      elapsedMs: state.elapsedMs,
-    };
-  }
+  if (key === 'stop') stopCurrentTask();
+  if (key === 'continue') void runQueuedJobs();
+  if (key === 'clear') showClearQueueConfirm.value = true;
 };
 
 const clearCache = async () => {
@@ -160,6 +298,11 @@ const clearCache = async () => {
   );
   await refreshCacheMetrics();
 };
+
+onBeforeUnmount(() => {
+  taskController?.abort();
+  pipeline.close();
+});
 </script>
 
 <template>
@@ -217,16 +360,29 @@ const clearCache = async () => {
         handle=".drag-trigger"
       >
         <n-list-item v-for="worker of workspaceRef.workers" :key="worker.id">
-          <sakura-job-worker
-            ref="workerControls"
+          <sakura-pool-worker
             :worker="worker"
-            :get-next-job="getNextJob"
-            :automatic-queue="automaticQueue"
-            @update:progress="onProgressUpdated"
+            :active="workerIsActive(worker.id)"
+            :starting="workerIsStarting(worker.id)"
+            :activity="workerActivity(worker.id)"
+            @start="startWorker"
+            @stop="stopWorker"
+            @delete="deleteWorker"
           />
         </n-list-item>
       </vue-draggable>
     </n-list>
+
+    <n-alert
+      v-if="queueRunning && pipelineSnapshot.workers.length === 0"
+      type="warning"
+      title="任务正在等待工作者"
+      style="margin-top: 12px"
+    >
+      启动兼容的 Sakura 翻译器后会从当前未完成分段继续。
+    </n-alert>
+
+    <TranslateTask ref="translateTask" style="margin-top: 20px" />
 
     <section-header title="任务队列">
       <c-button
@@ -270,7 +426,9 @@ const clearCache = async () => {
         <n-list-item v-for="job of workspaceRef.jobs" :key="job.task">
           <job-queue
             :job="job"
-            :progress="processedJobs.get(job.task)?.progress"
+            :progress="
+              currentJob?.task === job.task ? currentJob.progress : undefined
+            "
             @top-job="workspace.topJob(job)"
             @bottom-job="workspace.bottomJob(job)"
             @delete-job="deleteJob(job.task)"

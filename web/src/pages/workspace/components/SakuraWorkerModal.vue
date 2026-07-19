@@ -195,8 +195,7 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
       </n-form-item-row>
 
       <n-text depth="3" style="display: block; font-size: 12px">
-        分段和前文按加权字符预算计算；Sakura
-        段内保持顺序，并发量仅控制章节间的全局请求上限。
+        分段和前文按加权字符预算计算；同一章节保持顺序。并发量是该部署同时处理的独立章节请求上限，共享池总上限为已启动部署之和。
       </n-text>
 
       <n-text depth="3" style="font-size: 12px">
