@@ -2,11 +2,12 @@
 import {
   ArrowBackOutlined,
   AutoAwesomeOutlined,
+  BookmarkBorderOutlined,
+  BookmarkOutlined,
   BuildOutlined,
   ChevronRightOutlined,
   DarkModeOutlined,
   MenuBookOutlined,
-  MoreVertOutlined,
   SettingsOutlined,
   WarningAmberOutlined,
   WbSunnyOutlined,
@@ -94,7 +95,6 @@ const showModePrompt = ref(false);
 const showCatalog = ref(false);
 const collapsedCatalogEntryIds = ref(new Set<string>());
 const showTools = ref(false);
-const showBookInfo = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
 const showSearch = ref(false);
@@ -117,6 +117,8 @@ const usesDoublePageSpread = useMediaQuery('(min-width: 916px)');
 const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)');
 const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
+const viewportChapterId = ref<string>();
+const viewportSegmentId = ref<string>();
 let pendingBookmark: ReaderBookmark | undefined;
 const rememberModeChoice = ref(false);
 const readingMode = ref<ReaderMode>('original');
@@ -277,7 +279,6 @@ const hasOpenReaderPanel = () =>
   showCatalog.value ||
   showSettings.value ||
   showTools.value ||
-  showBookInfo.value ||
   showBookmarks.value ||
   showAnnotations.value ||
   showSearch.value ||
@@ -288,7 +289,6 @@ const closeReaderPanels = () => {
   showCatalog.value = false;
   showSettings.value = false;
   showTools.value = false;
-  showBookInfo.value = false;
   showBookmarks.value = false;
   showAnnotations.value = false;
   showSearch.value = false;
@@ -374,6 +374,14 @@ const openSearchResult = (searchResult: ReaderSearchResult) => {
 };
 
 const updateViewportMetrics = () => {
+  viewportSegmentId.value = getActiveSegmentId();
+  viewportChapterId.value =
+    (resolvedFlow.value === 'scrolled'
+      ? getActiveContinuousChapterElement()?.dataset.readerChapterId
+      : undefined) ??
+    (result.value?.kind === 'ready'
+      ? result.value.chapter.chapterId
+      : undefined);
   if (resolvedFlow.value === 'paginated' && readerViewport.value !== null) {
     const metrics = getReaderPageMetrics(readerViewport.value);
     readerPageCount.value = metrics.pageCount;
@@ -986,6 +994,7 @@ const getSegmentElements = (root: ParentNode = document) => {
 };
 
 type ReaderPositionAnchor = {
+  chapterId: string;
   segmentId: string;
   languageSide?: 'original' | 'translated';
   offsetRatio: number;
@@ -1092,9 +1101,17 @@ const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
   const first = visible[0];
   const segmentId = first?.segment.dataset.readerSegmentId;
   if (first === undefined || segmentId === undefined) return undefined;
+  const chapterId =
+    first.segment.closest<HTMLElement>('[data-reader-chapter-id]')?.dataset
+      .readerChapterId ??
+    (result.value?.kind === 'ready'
+      ? result.value.chapter.chapterId
+      : undefined);
+  if (chapterId === undefined) return undefined;
   const textLength = first.paragraph.textContent?.length ?? 0;
   const languageSide = first.paragraph.dataset.readerLanguageSide;
   return {
+    chapterId,
     segmentId,
     languageSide:
       languageSide === 'original' || languageSide === 'translated'
@@ -1462,6 +1479,16 @@ const loadBookmarks = async (targetBookId = bookId.value) => {
   }
 };
 
+const activeViewportBookmark = computed(() =>
+  viewportChapterId.value === undefined || viewportSegmentId.value === undefined
+    ? undefined
+    : findBookmarkAtSegment(
+        bookmarks.value,
+        viewportChapterId.value,
+        viewportSegmentId.value,
+      ),
+);
+
 const loadAnnotations = async (targetBookId = bookId.value) => {
   const repository = await repositoryPromise;
   const values = await repository.listReaderAnnotations(targetBookId);
@@ -1537,16 +1564,16 @@ const toggleBookmark = async () => {
   if (result.value?.kind !== 'ready') {
     return;
   }
-  const segmentId = getActiveSegmentId();
-  if (segmentId === undefined) {
+  const anchor = captureReaderPosition();
+  if (anchor === undefined) {
     message.warning('当前章节没有可书签定位的段落');
     return;
   }
   const repository = await repositoryPromise;
   const existing = findBookmarkAtSegment(
     bookmarks.value,
-    result.value.chapter.chapterId,
-    segmentId,
+    anchor.chapterId,
+    anchor.segmentId,
   );
   if (existing !== undefined) {
     await repository.deleteReaderBookmark(existing.id);
@@ -1555,14 +1582,21 @@ const toggleBookmark = async () => {
     await repository.putReaderBookmark(
       createReaderBookmark({
         bookId: result.value.book.id,
-        chapterId: result.value.chapter.chapterId,
-        segmentId,
-        label: result.value.chapter.title,
+        chapterId: anchor.chapterId,
+        segmentId: anchor.segmentId,
+        languageSide: anchor.languageSide,
+        offsetRatio: anchor.offsetRatio,
+        viewportTopOffset: anchor.viewportTopOffset,
+        label:
+          result.value.chapters.find(({ id }) => id === anchor.chapterId)
+            ?.title ?? result.value.chapter.title,
       }),
     );
     message.success('已添加书签');
   }
   await loadBookmarks(result.value.book.id);
+  viewportChapterId.value = anchor.chapterId;
+  viewportSegmentId.value = anchor.segmentId;
 };
 
 const openBookmark = (bookmark: ReaderBookmark) => {
@@ -1572,7 +1606,16 @@ const openBookmark = (bookmark: ReaderBookmark) => {
     result.value?.kind === 'ready' &&
     result.value.chapter.chapterId === target.chapterId
   ) {
-    scrollToSegment(target.segmentId);
+    if (target.segmentId === undefined || target.offsetRatio === undefined)
+      scrollToSegment(target.segmentId);
+    else
+      restoreReaderPosition({
+        chapterId: target.chapterId,
+        segmentId: target.segmentId,
+        languageSide: target.languageSide,
+        offsetRatio: target.offsetRatio,
+        viewportTopOffset: target.viewportTopOffset ?? 0,
+      });
     return;
   }
   pendingBookmark = bookmark;
@@ -1594,7 +1637,17 @@ const restorePendingBookmark = async (
   }
   pendingBookmark = undefined;
   await nextTick();
-  scrollToSegment(bookmark.segmentId);
+  const target = getBookmarkTarget(bookmark);
+  if (target.segmentId === undefined || target.offsetRatio === undefined)
+    scrollToSegment(target.segmentId);
+  else
+    restoreReaderPosition({
+      chapterId: target.chapterId,
+      segmentId: target.segmentId,
+      languageSide: target.languageSide,
+      offsetRatio: target.offsetRatio,
+      viewportTopOffset: target.viewportTopOffset ?? 0,
+    });
 };
 
 const restoreProgress = async (
@@ -2220,59 +2273,25 @@ onBeforeUnmount(() => {
       >
         <n-icon :component="WarningAmberOutlined" />
       </button>
-      <n-popover
-        v-model:show="showBookInfo"
-        trigger="click"
-        placement="bottom-end"
-        :show-arrow="false"
-        :content-style="{
-          width: 'min(320px, calc(100vw - 24px))',
-          maxHeight: 'min(60dvh, 480px)',
-          overflow: 'auto',
-          padding: '0',
-        }"
+      <button
+        class="book-reader__app-bar-action"
+        type="button"
+        :aria-label="
+          activeViewportBookmark === undefined
+            ? '添加当前位置书签'
+            : '取消当前位置书签'
+        "
+        :aria-pressed="activeViewportBookmark !== undefined"
+        @click="toggleBookmark"
       >
-        <template #trigger>
-          <button
-            class="book-reader__app-bar-action"
-            type="button"
-            aria-label="书籍信息"
-            :aria-expanded="showBookInfo"
-            @click="showMobileTranslationNotice = false"
-          >
-            <n-icon :component="MoreVertOutlined" />
-          </button>
-        </template>
-        <section
-          v-if="result?.kind === 'ready'"
-          class="book-reader__book-info"
-          aria-label="书籍信息"
-        >
-          <h2>书籍信息</h2>
-          <dl>
-            <div>
-              <dt>书名</dt>
-              <dd>{{ result.book.title }}</dd>
-            </div>
-            <div>
-              <dt>作者</dt>
-              <dd>{{ result.book.author || '—' }}</dd>
-            </div>
-            <div>
-              <dt>章节</dt>
-              <dd>{{ result.book.chapterCount }} 章</dd>
-            </div>
-            <div>
-              <dt>当前章节</dt>
-              <dd>{{ result.chapter.title }}</dd>
-            </div>
-            <div>
-              <dt>阅读进度</dt>
-              <dd>{{ Math.round(chapterProgressPercent) }}%</dd>
-            </div>
-          </dl>
-        </section>
-      </n-popover>
+        <n-icon
+          :component="
+            activeViewportBookmark === undefined
+              ? BookmarkBorderOutlined
+              : BookmarkOutlined
+          "
+        />
+      </button>
     </header>
 
     <div
@@ -3109,38 +3128,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.book-reader__book-info {
-  padding: 14px 16px 16px;
-  color: inherit;
-}
-
-.book-reader__book-info h2 {
-  margin: 0 0 10px;
-  font-size: 17px;
-}
-
-.book-reader__book-info dl {
-  display: grid;
-  margin: 0;
-  gap: 8px;
-}
-
-.book-reader__book-info dl > div {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 10px;
-}
-
-.book-reader__book-info dt {
-  opacity: 0.68;
-}
-
-.book-reader__book-info dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
 }
 
 .book-reader__tool-grid {

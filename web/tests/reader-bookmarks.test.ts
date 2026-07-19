@@ -15,6 +15,9 @@ describe('reader bookmarks', () => {
       bookId: 'book',
       chapterId: 'chapter',
       segmentId: 'segment',
+      languageSide: 'translated',
+      offsetRatio: 0.25,
+      viewportTopOffset: 12,
       label: '第一章',
     });
 
@@ -23,6 +26,9 @@ describe('reader bookmarks', () => {
       bookId: 'book',
       chapterId: 'chapter',
       segmentId: 'segment',
+      languageSide: 'translated',
+      offsetRatio: 0.25,
+      viewportTopOffset: 12,
       label: '第一章',
       createdAt: 10,
     });
@@ -54,6 +60,9 @@ describe('reader bookmarks', () => {
     expect(getBookmarkTarget(newer)).toEqual({
       chapterId: 'two',
       segmentId: 'second',
+      languageSide: undefined,
+      offsetRatio: undefined,
+      viewportTopOffset: undefined,
     });
   });
 });

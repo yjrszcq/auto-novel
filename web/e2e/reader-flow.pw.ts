@@ -526,38 +526,20 @@ test('opens a local bookshelf book safely through the current reader route', asy
 
   const readerTop = page.locator('.book-reader__app-bar');
   await expect(readerTop).toBeVisible();
-  const bookInfoButton = readerTop.getByRole('button', {
-    name: '书籍信息',
+  const bookmarkButton = readerTop.getByRole('button', {
+    name: '添加当前位置书签',
   });
-  const expectBookInfoInsideViewport = async () => {
-    const bookInfo = page.locator('.book-reader__book-info');
-    await expect(bookInfo).toBeVisible();
-    await expect(bookInfo.locator('dd')).toHaveText([
-      'reader-flow',
-      '—',
-      '2 章',
-      'reader-flow - 0',
-      '0%',
-    ]);
-    const bounds = await bookInfo.boundingBox();
-    if (bounds === null) throw new Error('缺少阅读器书籍信息弹窗');
-    const viewport = page.viewportSize();
-    if (viewport === null) throw new Error('缺少阅读器视口');
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.y).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
-  };
-  await bookInfoButton.click();
-  await expectBookInfoInsideViewport();
-  await bookInfoButton.click();
-  await expect(page.locator('.book-reader__book-info')).toHaveCount(0);
-
+  await expect(bookmarkButton).toHaveAttribute('aria-pressed', 'false');
+  await bookmarkButton.click();
+  await expect(page.getByText('已添加书签', { exact: true })).toBeVisible();
+  const removeBookmarkButton = readerTop.getByRole('button', {
+    name: '取消当前位置书签',
+  });
+  await expect(removeBookmarkButton).toHaveAttribute('aria-pressed', 'true');
+  await removeBookmarkButton.click();
+  await expect(page.getByText('已移除书签', { exact: true })).toBeVisible();
+  await expect(bookmarkButton).toHaveAttribute('aria-pressed', 'false');
   await page.setViewportSize({ width: 900, height: 800 });
-  await bookInfoButton.click();
-  await expectBookInfoInsideViewport();
-  await page.keyboard.press('Escape');
-  await expect(page.locator('.book-reader__book-info')).toHaveCount(0);
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
   await expect(readerContent).not.toHaveClass(
     /book-reader__content--double-spread/,
@@ -1247,20 +1229,25 @@ test('opens a local bookshelf book safely through the current reader route', asy
     page.getByRole('button', { name: '展开未翻译操作' }),
   ).toHaveCount(0);
   const completeChapterHeader = page.locator('.book-reader__app-bar');
-  const completeChapterMoreButton = completeChapterHeader.getByRole('button', {
-    name: '书籍信息',
-  });
+  const completeChapterBookmarkButton = completeChapterHeader.getByRole(
+    'button',
+    {
+      name: '添加当前位置书签',
+    },
+  );
   const completeChapterHeaderBounds = await completeChapterHeader.boundingBox();
-  const completeChapterMoreBounds =
-    await completeChapterMoreButton.boundingBox();
+  const completeChapterBookmarkBounds =
+    await completeChapterBookmarkButton.boundingBox();
   if (
     completeChapterHeaderBounds === null ||
-    completeChapterMoreBounds === null
+    completeChapterBookmarkBounds === null
   ) {
     throw new Error('缺少完整译文章节的手机顶栏');
   }
   expect(
-    Math.round(completeChapterMoreBounds.x + completeChapterMoreBounds.width),
+    Math.round(
+      completeChapterBookmarkBounds.x + completeChapterBookmarkBounds.width,
+    ),
   ).toBe(
     Math.round(
       completeChapterHeaderBounds.x + completeChapterHeaderBounds.width,
@@ -1925,7 +1912,7 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
       .index('byBookId')
       .getAll(bookId);
     const result = await new Promise<{
-      bookmarks: Array<{ segmentId?: string }>;
+      bookmarks: Array<{ segmentId?: string; offsetRatio?: number }>;
       annotations: Array<{ segmentId: string; quote: string }>;
     }>((resolve, reject) => {
       transaction.oncomplete = () =>
@@ -1939,7 +1926,7 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
     return result;
   }, toolsBookId);
   expect(persistedTools.bookmarks).toMatchObject([
-    { segmentId: 'tools-segment-1' },
+    { segmentId: 'tools-segment-0', offsetRatio: 0 },
   ]);
   expect(persistedTools.annotations).toMatchObject([
     { segmentId: 'tools-segment-0', quote: '选择词语' },

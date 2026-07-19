@@ -59,6 +59,9 @@ export interface ReaderBookmark {
   bookId: string;
   chapterId: string;
   segmentId?: string;
+  languageSide?: 'original' | 'translated';
+  offsetRatio?: number;
+  viewportTopOffset?: number;
   label?: string;
   createdAt: number;
 }
