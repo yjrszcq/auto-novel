@@ -27,7 +27,9 @@ try {
   );
 
   await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: '本地书架' }).waitFor();
+  await page
+    .getByRole('heading', { name: '轻小说机翻机器人', exact: true })
+    .waitFor();
 
   let configStatus = 'preview-fallback';
   if (mode !== 'preview') {
@@ -61,14 +63,15 @@ try {
       mimeType: 'text/plain',
       buffer: Buffer.from('第一章\n启动正文第一段\n启动正文第二段'),
     });
-  await page.getByText(filename, { exact: true }).waitFor();
-  await page.goto(`${baseUrl}/bookshelf`, { waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: title }).waitFor();
-  await page.goto(`${baseUrl}/books/${encodeURIComponent(filename)}/details`, {
-    waitUntil: 'networkidle',
-  });
+  await page.getByRole('heading', { name: title, exact: true }).waitFor();
+  await page
+    .getByRole('button', { name: `查看《${title}》详情`, exact: true })
+    .click();
+  await page.waitForURL(/\/books\/[^/]+\/details$/);
   await page.getByText(title, { exact: true }).first().waitFor();
-  await page.goto(`${baseUrl}/books/${encodeURIComponent(filename)}/read/0`, {
+  const bookId = new URL(page.url()).pathname.split('/')[2];
+  if (!bookId) throw new Error('详情页地址中缺少书籍 ID');
+  await page.goto(`${baseUrl}/books/${bookId}/read/0`, {
     waitUntil: 'networkidle',
   });
   await page.getByText('启动正文第一段', { exact: true }).waitFor();
