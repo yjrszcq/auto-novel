@@ -85,7 +85,7 @@ onBeforeUnmount(() => returnFocus?.focus());
 <style scoped>
 .reader-sheet {
   position: fixed;
-  inset: 0;
+  inset: 0 0 var(--reader-bottom-navigation-height, 52px);
   z-index: 2000;
   display: flex;
   align-items: flex-end;
@@ -150,7 +150,7 @@ onBeforeUnmount(() => returnFocus?.focus());
 
 .reader-sheet__content {
   max-height: calc(min(72dvh, 680px) - 55px);
-  padding: 14px 20px max(20px, env(safe-area-inset-bottom));
+  padding: 14px 20px 20px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--reader-scrollbar-thumb, #626262)
@@ -183,7 +183,7 @@ onBeforeUnmount(() => returnFocus?.focus());
 
   .reader-sheet__content {
     max-height: calc(76dvh - 55px);
-    padding: 10px 12px max(14px, env(safe-area-inset-bottom));
+    padding: 10px 12px 14px;
   }
 }
 

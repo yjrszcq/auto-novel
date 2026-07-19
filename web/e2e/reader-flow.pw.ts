@@ -28,6 +28,21 @@ const expectButtonIconCentered = async (button: Locator) => {
   expect(Math.abs(offset.y)).toBeLessThanOrEqual(1);
 };
 
+const expectSheetAboveBottomNavigation = async (
+  sheet: Locator,
+  bottomNavigation: Locator,
+) => {
+  const [sheetBounds, navigationBounds] = await Promise.all([
+    sheet.boundingBox(),
+    bottomNavigation.boundingBox(),
+  ]);
+  expect(sheetBounds).not.toBeNull();
+  expect(navigationBounds).not.toBeNull();
+  expect(
+    Math.abs(sheetBounds!.y + sheetBounds!.height - navigationBounds!.y),
+  ).toBeLessThanOrEqual(1);
+};
+
 test('keeps inherited reader themes opaque and responsive to system changes', async ({
   page,
 }) => {
@@ -98,6 +113,14 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
     'rgb(36, 36, 36)',
   );
   await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expectSheetAboveBottomNavigation(
+    page.locator('.reader-sheet'),
+    bottomNavigation,
+  );
+  await expectSheetAboveBottomNavigation(
+    page.locator('.reader-sheet__panel'),
+    bottomNavigation,
+  );
   await expect(page.locator('.reader-sheet__content')).toHaveCSS(
     'scrollbar-color',
     'rgb(98, 98, 98) rgb(36, 36, 36)',
@@ -129,6 +152,15 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
   await expect(bottomNavigation).toHaveCSS(
     'background-color',
     'rgb(241, 241, 241)',
+  );
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expectSheetAboveBottomNavigation(
+    page.locator('.reader-sheet'),
+    bottomNavigation,
+  );
+  await expectSheetAboveBottomNavigation(
+    page.locator('.reader-sheet__panel'),
+    bottomNavigation,
   );
 });
 
