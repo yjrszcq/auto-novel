@@ -133,5 +133,20 @@ export const createEpubRichChapter = (
     if (slice !== undefined) documents.push(slice);
     segmentOffset += sourceRange.end - sourceRange.start;
   });
-  return documents.length > 0 ? { documents } : undefined;
+  return documents.length > 0
+    ? {
+        documents,
+        resources: Array.from(epub.items.values()).flatMap((resource) =>
+          'blob' in resource
+            ? [
+                {
+                  path: resource.path,
+                  mediaType: resource.mediaType,
+                  blob: resource.blob,
+                },
+              ]
+            : [],
+        ),
+      }
+    : undefined;
 };

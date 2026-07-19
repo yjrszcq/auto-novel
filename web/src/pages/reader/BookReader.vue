@@ -26,6 +26,7 @@ import type { GlobalThemeOverrides } from 'naive-ui';
 import { useRouter } from 'vue-router';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
+import ReaderEpubLayout from './components/ReaderEpubLayout.vue';
 import ReaderModeDialog from './components/ReaderModeDialog.vue';
 import ReaderSegmentLayout from './components/ReaderSegmentLayout.vue';
 import { createLocalVolumeReaderAdapter } from './adapters/LocalVolumeReaderAdapter';
@@ -824,9 +825,23 @@ const chooseMode = async (mode: ReaderMode) => {
   }
 };
 
-const getSegmentElements = () => [
-  ...document.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
-];
+const getSegmentElements = (root: ParentNode = document) => {
+  const elements = [
+    ...root.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
+  ];
+  root
+    .querySelectorAll<HTMLElement>('[data-reader-epub-host]')
+    .forEach((host) => {
+      if (host.shadowRoot !== null) {
+        elements.push(
+          ...host.shadowRoot.querySelectorAll<HTMLElement>(
+            '[data-reader-segment-id]',
+          ),
+        );
+      }
+    });
+  return elements;
+};
 
 type ReaderPositionAnchor = {
   segmentId: string;
@@ -878,6 +893,11 @@ const getParagraphCharacterPositions = (paragraph: HTMLElement) => {
   return positions;
 };
 
+const getSegmentLanguageElements = (segment: HTMLElement) => [
+  ...(segment.matches('[data-reader-language-side]') ? [segment] : []),
+  ...segment.querySelectorAll<HTMLElement>('[data-reader-language-side]'),
+];
+
 const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
   const viewport = readerViewport.value;
   const paginated = resolvedFlow.value === 'paginated' && viewport !== null;
@@ -895,7 +915,7 @@ const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
     rect.bottom > bounds.top + 1 &&
     rect.top < bounds.bottom - 1;
   const candidates = getSegmentElements().flatMap((segment) =>
-    [...segment.querySelectorAll<HTMLElement>('[data-reader-language-side]')]
+    getSegmentLanguageElements(segment)
       .filter((paragraph) =>
         [...paragraph.getClientRects()].some(intersectsViewport),
       )
@@ -952,9 +972,7 @@ const restoreReaderPosition = (anchor: ReaderPositionAnchor | undefined) => {
     scrollToSegment(anchor.segmentId);
     return;
   }
-  const paragraphs = [
-    ...segment.querySelectorAll<HTMLElement>('[data-reader-language-side]'),
-  ];
+  const paragraphs = getSegmentLanguageElements(segment);
   const paragraph =
     paragraphs.find(
       (item) => item.dataset.readerLanguageSide === anchor.languageSide,
@@ -1002,11 +1020,10 @@ const restoreReaderPosition = (anchor: ReaderPositionAnchor | undefined) => {
 const getActiveSegmentId = (flow = resolvedFlow.value) => {
   const elements =
     flow === 'scrolled'
-      ? [
-          ...(getActiveContinuousChapterElement()?.querySelectorAll<HTMLElement>(
-            '[data-reader-segment-id]',
-          ) ?? []),
-        ]
+      ? (() => {
+          const chapter = getActiveContinuousChapterElement();
+          return chapter === undefined ? [] : getSegmentElements(chapter);
+        })()
       : getSegmentElements();
   if (flow === 'paginated' && readerViewport.value !== null) {
     const viewportRect = readerViewport.value.getBoundingClientRect();
@@ -2082,7 +2099,16 @@ onBeforeUnmount(() => {
             >
               {{ chapter.title }}
             </h2>
+            <ReaderEpubLayout
+              v-if="
+                chapter.epub !== undefined &&
+                getChapterRenderedMode(chapter) === 'original'
+              "
+              :epub="chapter.epub"
+              @content-change="handleSegmentContentChange"
+            />
             <ReaderSegmentLayout
+              v-else
               :segments="chapter.segments"
               :mode="getChapterRenderedMode(chapter)"
               :annotations="annotations"
@@ -2095,6 +2121,13 @@ onBeforeUnmount(() => {
             />
           </section>
         </template>
+        <ReaderEpubLayout
+          v-else-if="
+            result.chapter.epub !== undefined && renderedMode === 'original'
+          "
+          :epub="result.chapter.epub"
+          @content-change="handleSegmentContentChange"
+        />
         <ReaderSegmentLayout
           v-else
           ref="readerSegments"

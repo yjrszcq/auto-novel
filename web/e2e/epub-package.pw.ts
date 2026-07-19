@@ -73,7 +73,8 @@ const createStandardsFixture = async () => {
 <ul><li>第一项</li><li>第二项 <ruby>字<rt>じ</rt></ruby></li></ul>
 <table><tbody><tr><td>单元格</td></tr></tbody></table>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>
-<math xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math><audio src="../Media/sample.mp3" controls="controls"/></section>
+<math xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math><audio src="../Media/sample.mp3" controls="controls"/>
+<img src="https://example.com/tracker.png" alt="应被阻止"/><script>window.epubScriptExecuted = true</script></section>
 </body></html>`),
   );
   await writer.add(
@@ -108,6 +109,12 @@ body { font-family: Fixture; }`),
 test('imports a canonical EPUB 3 package and preserves its nested navigation', async ({
   page,
 }) => {
+  const remotePublicationRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().startsWith('https://example.com/')) {
+      remotePublicationRequests.push(request.url());
+    }
+  });
   await page.goto('/');
   await page
     .locator('input[type="file"]')
@@ -233,4 +240,42 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   }
   expect(chapter?.rich?.documents[0]?.content).toContain('<ul');
   expect(chapter?.rich?.documents[0]?.content).toContain('<table');
+
+  await page.goto('/books/rich%20fixture.epub/details');
+  await page.getByRole('button', { name: '开始阅读' }).click();
+  await expect(page.locator('[data-reader-epub-host]')).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-reader-epub-host]')
+        .evaluate((host) =>
+          host.shadowRoot?.querySelector('img')?.getAttribute('src'),
+        ),
+    )
+    .toMatch(/^blob:/);
+
+  await page.keyboard.press('ArrowRight');
+  await expect
+    .poll(() =>
+      page.locator('[data-reader-epub-host]').evaluate((host) => ({
+        title: host.shadowRoot?.querySelector('h1')?.textContent,
+        list: host.shadowRoot?.querySelector('li')?.textContent,
+        table: host.shadowRoot?.querySelector('td')?.textContent,
+        remoteSource: host.shadowRoot
+          ?.querySelector('img[alt="应被阻止"]')
+          ?.getAttribute('src'),
+        fontFamily: getComputedStyle(
+          host.shadowRoot!.querySelector('.epub-document')!,
+        ).fontFamily,
+      })),
+    )
+    .toMatchObject({
+      title: '第一章',
+      list: '第一项',
+      table: '单元格',
+      remoteSource: null,
+      fontFamily: 'Fixture',
+    });
+  expect(remotePublicationRequests).toEqual([]);
+  expect(await page.evaluate(() => 'epubScriptExecuted' in window)).toBe(false);
 });

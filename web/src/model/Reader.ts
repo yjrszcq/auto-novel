@@ -147,8 +147,15 @@ export interface ReaderEpubDocumentSlice {
   bodyAttributes: Record<string, string>;
 }
 
+export interface ReaderEpubResource {
+  path: string;
+  mediaType: string;
+  blob: Blob;
+}
+
 export interface ReaderEpubChapterContent {
   documents: ReaderEpubDocumentSlice[];
+  resources: ReaderEpubResource[];
 }
 
 export interface ReaderChapterContent {
