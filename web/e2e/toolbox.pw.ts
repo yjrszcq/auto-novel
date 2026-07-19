@@ -399,6 +399,21 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     buffer: Buffer.from('カタカナ ｶﾀｶﾅ ベータ ベータ ガンマ ガンマ アルファ'),
   });
 
+  const emptyState = page.locator('.glossary-empty-state');
+  await expect(emptyState).toBeVisible();
+  const emptyIconBounds = await emptyState
+    .locator('.n-empty__icon')
+    .boundingBox();
+  const translatorActionsBounds = await page
+    .locator('.glossary-translator-actions')
+    .boundingBox();
+  expect(emptyIconBounds).not.toBeNull();
+  expect(translatorActionsBounds).not.toBeNull();
+  expect(
+    emptyIconBounds!.y -
+      (translatorActionsBounds!.y + translatorActionsBounds!.height),
+  ).toBeGreaterThanOrEqual(40);
+
   const threshold = page.locator('.n-input-number input');
   await threshold.fill('2');
   await threshold.press('Enter');
@@ -458,14 +473,16 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(translatorConfigButton).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByText('GPT 翻译器', { exact: true })).toBeVisible();
   await expect(page.getByText('Sakura 翻译器', { exact: true })).toBeVisible();
-  const translatorConfigBounds = await page
-    .getByLabel('翻译器配置')
-    .boundingBox();
+  const translatorConfigModal = page.getByRole('dialog');
+  await expect(translatorConfigModal).toBeVisible();
+  const translatorConfigBounds = await translatorConfigModal.boundingBox();
   expect(translatorConfigBounds).not.toBeNull();
   expect(translatorConfigBounds!.x).toBeGreaterThanOrEqual(0);
   expect(
     translatorConfigBounds!.x + translatorConfigBounds!.width,
   ).toBeLessThanOrEqual(390);
+  await translatorConfigModal.getByRole('button', { name: 'close' }).click();
+  await expect(translatorConfigModal).toHaveCount(0);
 
   const corsHeaders = {
     'access-control-allow-origin': 'http://127.0.0.1:4173',

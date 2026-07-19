@@ -39,7 +39,7 @@ const sakuraWorkerOptions = computed(() =>
     value: id,
   })),
 );
-const translatorConfigExpanded = ref(false);
+const showTranslatorConfigModal = ref(false);
 const sourceCounts = shallowRef(new Map<string, number>());
 const extractionLoading = ref(false);
 const extractionError = ref('');
@@ -391,11 +391,12 @@ onBeforeUnmount(() => {
       />
       <c-button
         label="翻译器配置"
-        :type="translatorConfigExpanded ? 'primary' : 'default'"
-        :aria-expanded="translatorConfigExpanded"
+        :type="showTranslatorConfigModal ? 'primary' : 'default'"
+        :aria-expanded="showTranslatorConfigModal"
+        aria-haspopup="dialog"
         size="small"
         :round="false"
-        @action="translatorConfigExpanded = !translatorConfigExpanded"
+        @action="showTranslatorConfigModal = true"
       />
       <n-text v-if="lastDeletedHint" depth="3">
         最近删除：{{ lastDeletedHint }}
@@ -438,36 +439,6 @@ onBeforeUnmount(() => {
         :round="false"
         @action="cancelTranslation"
       />
-    </n-flex>
-
-    <n-flex
-      v-if="translatorConfigExpanded"
-      align="center"
-      class="glossary-translator-selectors"
-      aria-label="翻译器配置"
-    >
-      <label class="glossary-translator-selector">
-        <n-text depth="3">GPT 翻译器</n-text>
-        <n-select
-          v-model:value="selectedGptWorkerId"
-          :options="gptWorkerOptions"
-          :disabled="translating"
-          placeholder="未配置 GPT 翻译器"
-          aria-label="选择 GPT 翻译器"
-          size="small"
-        />
-      </label>
-      <label class="glossary-translator-selector">
-        <n-text depth="3">Sakura 翻译器</n-text>
-        <n-select
-          v-model:value="selectedSakuraWorkerId"
-          :options="sakuraWorkerOptions"
-          :disabled="translating"
-          placeholder="未配置 Sakura 翻译器"
-          aria-label="选择 Sakura 翻译器"
-          size="small"
-        />
-      </label>
     </n-flex>
 
     <n-flex align="center">
@@ -597,9 +568,41 @@ onBeforeUnmount(() => {
 
     <n-empty
       v-else-if="!extractionLoading && !extractionError"
+      class="glossary-empty-state"
       description="没有符合当前条件的候选词"
     />
   </n-flex>
+
+  <c-modal
+    v-model:show="showTranslatorConfigModal"
+    title="翻译器配置"
+    style="width: min(680px, calc(100vw - 16px))"
+  >
+    <n-flex align="center" class="glossary-translator-selectors">
+      <label class="glossary-translator-selector">
+        <n-text depth="3">GPT 翻译器</n-text>
+        <n-select
+          v-model:value="selectedGptWorkerId"
+          :options="gptWorkerOptions"
+          :disabled="translating"
+          placeholder="未配置 GPT 翻译器"
+          aria-label="选择 GPT 翻译器"
+          size="small"
+        />
+      </label>
+      <label class="glossary-translator-selector">
+        <n-text depth="3">Sakura 翻译器</n-text>
+        <n-select
+          v-model:value="selectedSakuraWorkerId"
+          :options="sakuraWorkerOptions"
+          :disabled="translating"
+          placeholder="未配置 Sakura 翻译器"
+          aria-label="选择 Sakura 翻译器"
+          size="small"
+        />
+      </label>
+    </n-flex>
+  </c-modal>
 </template>
 
 <style scoped>
@@ -621,11 +624,11 @@ onBeforeUnmount(() => {
 
 .glossary-translator-selectors {
   box-sizing: border-box;
-  width: min(640px, 100%);
-  padding: 12px;
-  border: 1px solid var(--n-border-color);
-  border-radius: 8px;
-  background: var(--n-color);
+  width: 100%;
+}
+
+.glossary-empty-state {
+  padding-top: clamp(48px, 8vh, 80px);
 }
 
 .glossary-translator-selector :deep(.n-select) {
