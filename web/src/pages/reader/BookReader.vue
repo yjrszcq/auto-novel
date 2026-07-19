@@ -968,9 +968,13 @@ const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
 
 const restoreReaderPosition = (anchor: ReaderPositionAnchor | undefined) => {
   if (anchor === undefined) return;
-  const segment = getSegmentElements().find(
+  const matchingSegments = getSegmentElements().filter(
     (item) => item.dataset.readerSegmentId === anchor.segmentId,
   );
+  const segment =
+    matchingSegments.find(
+      (item) => item.dataset.readerLanguageSide === anchor.languageSide,
+    ) ?? matchingSegments[0];
   if (segment === undefined) {
     scrollToSegment(anchor.segmentId);
     return;
@@ -1327,11 +1331,11 @@ const loadAnnotations = async (targetBookId = bookId.value) => {
   }
 };
 
-const getSelectedParagraph = (node: Node) =>
+const getSelectedReaderBlock = (node: Node) =>
   (node.nodeType === Node.ELEMENT_NODE
     ? (node as Element)
     : node.parentElement
-  )?.closest<HTMLElement>('p[data-reader-language-side]');
+  )?.closest<HTMLElement>('[data-reader-language-side]');
 
 const addAnnotation = async () => {
   if (result.value?.kind !== 'ready') {
@@ -1343,10 +1347,10 @@ const addAnnotation = async () => {
     return;
   }
   const range = selection.getRangeAt(0);
-  const paragraph = getSelectedParagraph(range.startContainer);
+  const paragraph = getSelectedReaderBlock(range.startContainer);
   if (
     paragraph == null ||
-    paragraph !== getSelectedParagraph(range.endContainer)
+    paragraph !== getSelectedReaderBlock(range.endContainer)
   ) {
     message.warning('批注暂时只能标记同一段文字');
     return;
@@ -2207,11 +2211,11 @@ onBeforeUnmount(() => {
               {{ chapter.title }}
             </h2>
             <ReaderEpubLayout
-              v-if="
-                chapter.epub !== undefined &&
-                getChapterRenderedMode(chapter) === 'original'
-              "
+              v-if="chapter.epub !== undefined"
               :epub="chapter.epub"
+              :segments="chapter.segments"
+              :mode="getChapterRenderedMode(chapter)"
+              :annotations="annotations"
               @content-change="handleSegmentContentChange"
               @link-activate="navigateToEpubHref"
             />
@@ -2230,10 +2234,11 @@ onBeforeUnmount(() => {
           </section>
         </template>
         <ReaderEpubLayout
-          v-else-if="
-            result.chapter.epub !== undefined && renderedMode === 'original'
-          "
+          v-else-if="result.chapter.epub !== undefined"
           :epub="result.chapter.epub"
+          :segments="result.chapter.segments"
+          :mode="renderedMode"
+          :annotations="annotations"
           @content-change="handleSegmentContentChange"
           @link-activate="navigateToEpubHref"
         />

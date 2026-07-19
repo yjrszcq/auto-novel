@@ -70,6 +70,22 @@ const serializeFragment = (fragment: DocumentFragment) => {
     .join('');
 };
 
+const getDocumentViewport = (doc: Document) => {
+  const content = Array.from(doc.head.querySelectorAll('meta[name]'))
+    .find((meta) => meta.getAttribute('name')?.toLowerCase() === 'viewport')
+    ?.getAttribute('content');
+  if (!content) return undefined;
+  const values = Object.fromEntries(
+    content.split(',').flatMap((entry) => {
+      const [key, value] = entry.split('=').map((part) => part.trim());
+      return key && value ? [[key.toLowerCase(), Number(value)]] : [];
+    }),
+  );
+  return Number.isFinite(values.width) && Number.isFinite(values.height)
+    ? { width: values.width, height: values.height }
+    : undefined;
+};
+
 const getAnchorBlockIndex = (anchor: Element, blocks: readonly Element[]) => {
   const containing = blocks.findIndex(
     (block) => block === anchor || block.contains(anchor),
@@ -164,6 +180,7 @@ const createDocumentSlice = (
     sourceRange.startFragment,
   );
   setRangeEnd(selection, doc, blocks, sourceRange.end, sourceRange.endFragment);
+  const viewport = getDocumentViewport(doc);
 
   return {
     sourcePath: resource.path,
@@ -183,6 +200,8 @@ const createDocumentSlice = (
       .filter(Boolean),
     documentAttributes: attributesToRecord(doc.documentElement),
     bodyAttributes: attributesToRecord(doc.body),
+    layout: epub.getRenditionLayout(resource.path),
+    ...(viewport === undefined ? {} : { viewport }),
   };
 };
 

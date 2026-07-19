@@ -175,6 +175,7 @@ export class Epub extends BaseFile {
   items = new Map<string, EpubResource>();
   itemrefs: EpubItemref[] = [];
   navItems: EpubNavigationItem[] = [];
+  renditionLayout: 'reflowable' | 'pre-paginated' = 'reflowable';
   private epub2CoverId: string | undefined;
 
   private resolve(root: string, rpath: string) {
@@ -187,6 +188,19 @@ export class Epub extends BaseFile {
 
   getCanonicalHref(href: string) {
     return this.resolve(this.packagePath, href);
+  }
+
+  getRenditionLayout(path: string) {
+    const spineItem = this.iterSpine().find(
+      (item) => item.resource.path === path,
+    );
+    if (spineItem?.properties.includes('rendition:layout-pre-paginated')) {
+      return 'pre-paginated' as const;
+    }
+    if (spineItem?.properties.includes('rendition:layout-reflowable')) {
+      return 'reflowable' as const;
+    }
+    return this.renditionLayout;
   }
 
   // ==============================
@@ -215,6 +229,15 @@ export class Epub extends BaseFile {
     if (!spine) throw new Error('Package does not have spine');
 
     this.packageDoc = doc;
+    const renditionLayout = Array.from(metadata.getElementsByTagName('meta'))
+      .find(
+        (meta) =>
+          meta.getAttribute('property')?.toLowerCase() === 'rendition:layout',
+      )
+      ?.textContent?.trim()
+      .toLowerCase();
+    this.renditionLayout =
+      renditionLayout === 'pre-paginated' ? 'pre-paginated' : 'reflowable';
     this.epub2CoverId =
       Array.from(metadata.getElementsByTagName('meta'))
         .find((meta) => meta.getAttribute('name')?.toLowerCase() === 'cover')

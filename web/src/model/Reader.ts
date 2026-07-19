@@ -146,6 +146,8 @@ export interface ReaderEpubDocumentSlice {
   stylesheetHrefs: string[];
   documentAttributes: Record<string, string>;
   bodyAttributes: Record<string, string>;
+  layout: 'reflowable' | 'pre-paginated';
+  viewport?: { width: number; height: number };
 }
 
 export interface ReaderEpubResource {

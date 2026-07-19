@@ -31,6 +31,7 @@ const createStandardsFixture = async () => {
     <item id="nav" href="nav/toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="cover-page" href="Text/cover.xhtml" media-type="application/xhtml+xml"/>
     <item id="chapter" href="Text/chapter%20one.xhtml" media-type="application/xhtml+xml"/>
+    <item id="fixed" href="Text/fixed.xhtml" media-type="application/xhtml+xml"/>
     <item id="notes" href="Text/notes.xhtml" media-type="application/xhtml+xml"/>
     <item id="style" href="Styles/book.css" media-type="text/css"/>
     <item id="cover" href="Images/cover%20art.svg" media-type="image/svg+xml" properties="cover-image"/>
@@ -40,6 +41,7 @@ const createStandardsFixture = async () => {
   <spine>
     <itemref idref="cover-page" linear="no"/>
     <itemref idref="chapter"/>
+    <itemref idref="fixed" properties="rendition:layout-pre-paginated"/>
   </spine>
 </package>`),
   );
@@ -53,9 +55,19 @@ const createStandardsFixture = async () => {
   <li><span>第一卷</span><ol>
     <li><a href="../Text/chapter%20one.xhtml#start">第一章</a></li>
   </ol></li>
+  <li><a href="../Text/fixed.xhtml">固定版式</a></li>
   <li><a href="../Text/notes.xhtml#note-1">附录</a></li>
 </ol></nav>
 </body></html>`),
+  );
+  await writer.add(
+    'OPS/Text/fixed.xhtml',
+    new TextReader(`<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>固定版式</title>
+<meta name="viewport" content="width=600,height=800"/></head>
+<body><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
+<rect width="600" height="800" fill="#173f5f"/><text x="50" y="100" fill="white">固定版式页面</text>
+</svg></body></html>`),
   );
   await writer.add(
     'OPS/Text/cover.xhtml',
@@ -169,6 +181,11 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       href: 'OPS/Text/chapter one.xhtml#start',
     }),
     expect.objectContaining({
+      title: '固定版式',
+      level: 0,
+      href: 'OPS/Text/fixed.xhtml',
+    }),
+    expect.objectContaining({
       title: '附录',
       level: 0,
       href: 'OPS/Text/notes.xhtml#note-1',
@@ -241,6 +258,45 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   }
   expect(chapter?.rich?.documents[0]?.content).toContain('<ul');
   expect(chapter?.rich?.documents[0]?.content).toContain('<table');
+  const fixed = richProjection.find((item) =>
+    item.id.endsWith('/Text/fixed.xhtml'),
+  );
+  expect(fixed?.rich?.documents[0]).toMatchObject({
+    layout: 'pre-paginated',
+    viewport: { width: 600, height: 800 },
+  });
+
+  await page.evaluate(
+    async ({ chapterId, translations }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes', 5);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(['chapter'], 'readwrite');
+      const chapterStore = transaction.objectStore('chapter');
+      const chapterRequest = chapterStore.get(chapterId);
+      const storedChapter = await new Promise<Record<string, unknown>>(
+        (resolve, reject) => {
+          chapterRequest.onerror = () => reject(chapterRequest.error);
+          chapterRequest.onsuccess = () => resolve(chapterRequest.result);
+        },
+      );
+      chapterStore.put({
+        ...storedChapter,
+        gpt: { glossaryId: 'fixture', glossary: {}, paragraphs: translations },
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    {
+      chapterId: chapter!.id,
+      translations: chapter!.paragraphs.map((text) => `译文 ${text}`),
+    },
+  );
 
   await page.goto('/books/rich%20fixture.epub/details');
   await page.getByRole('button', { name: '开始阅读' }).click();
@@ -279,6 +335,79 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
     });
   expect(remotePublicationRequests).toEqual([]);
   expect(await page.evaluate(() => 'epubScriptExecuted' in window)).toBe(false);
+  const firstSegmentId = chapter!.segmentIds[0];
+  const richHost = page.locator('[data-reader-epub-host]');
+  await richHost.evaluate((host, segmentId) => {
+    const target = host.shadowRoot?.querySelector(
+      `[data-reader-segment-id="${segmentId}"]`,
+    );
+    const text = target?.firstChild;
+    if (!(text instanceof Text)) throw new Error('找不到 EPUB 批注文本');
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, 3);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }, firstSegmentId);
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: '高亮选中', exact: true }).click();
+  await expect(page.getByText('已添加高亮批注', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await expect
+    .poll(() =>
+      richHost.evaluate(
+        (host, segmentId) =>
+          host.shadowRoot?.querySelector(
+            `[data-reader-segment-id="${segmentId}"] mark`,
+          )?.textContent,
+        firstSegmentId,
+      ),
+    )
+    .toBe('第一章');
+
+  const getLanguageOrder = () =>
+    richHost.evaluate(
+      (host, segmentId) =>
+        Array.from(
+          host.shadowRoot?.querySelectorAll(
+            `[data-reader-segment-id="${segmentId}"]`,
+          ) ?? [],
+        )
+          .filter((element) => getComputedStyle(element).display !== 'none')
+          .map((element) => ({
+            language: (element as HTMLElement).dataset.readerLanguageSide,
+            text: element.textContent?.trim(),
+          })),
+      firstSegmentId,
+    );
+  await page.keyboard.press('1');
+  await expect
+    .poll(getLanguageOrder)
+    .toEqual([
+      expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
+    ]);
+  await page.keyboard.press('2');
+  await expect
+    .poll(getLanguageOrder)
+    .toEqual([
+      expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
+      expect.objectContaining({ language: 'original', text: '第一章' }),
+    ]);
+  await page.keyboard.press('3');
+  await expect
+    .poll(getLanguageOrder)
+    .toEqual([
+      expect.objectContaining({ language: 'original', text: '第一章' }),
+      expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
+    ]);
+  await page.keyboard.press('4');
+  await expect
+    .poll(getLanguageOrder)
+    .toEqual([
+      expect.objectContaining({ language: 'original', text: '第一章' }),
+    ]);
 
   const externalLink = page.getByRole('link', { name: '外部网站' });
   await expect(externalLink).toHaveAttribute('target', '_blank');
@@ -308,6 +437,24 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       'OPS/Text/notes.xhtml#note-1',
   );
   await expect(page.getByText('附录内容')).toBeVisible();
+  await page.getByRole('button', { name: '目录' }).click();
+  await page.getByRole('button', { name: /固定版式/ }).click();
+  const fixedHost = page
+    .locator('[data-reader-epub-host]')
+    .filter({ hasText: '固定版式页面' });
+  await expect
+    .poll(() =>
+      fixedHost.evaluate((host) => ({
+        height: Number.parseFloat(host.style.height),
+        transform: (
+          host.shadowRoot?.querySelector('.epub-document') as HTMLElement | null
+        )?.style.transform,
+      })),
+    )
+    .toMatchObject({
+      height: expect.any(Number),
+      transform: expect.stringMatching(/^scale\(/),
+    });
   expect(
     await page.evaluate(
       () =>
