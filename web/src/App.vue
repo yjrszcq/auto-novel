@@ -57,6 +57,7 @@ if (RegexUtil.isSafari(navigator.userAgent)) {
             <component :is="Component" />
           </keep-alive>
         </router-view>
+        <PwaUpdatePrompt />
       </n-loading-bar-provider>
     </n-message-provider>
   </n-config-provider>
