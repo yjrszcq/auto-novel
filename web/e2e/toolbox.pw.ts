@@ -116,6 +116,13 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   await expect(
     page.getByRole('heading', { name: '小说工具箱', exact: true }),
   ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const tabWidths = await page.locator('.n-tabs-rail').evaluate((rail) => ({
+    client: rail.clientWidth,
+    scroll: rail.scrollWidth,
+  }));
+  expect(tabWidths.scroll).toBeLessThanOrEqual(tabWidths.client);
+  await page.setViewportSize({ width: 1280, height: 800 });
   const cover = await createPngCover(page);
   await page.locator('input[type="file"]').setInputFiles({
     name: 'toolbox-image.epub',
@@ -138,7 +145,7 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   await expect(page.getByText('工具箱正文')).toBeVisible();
   await page.keyboard.press('Escape');
 
-  await page.getByText('EPUB：压缩图片', { exact: true }).click();
+  await page.getByText('图片压缩', { exact: true }).click();
   await page.getByText('PNG', { exact: true }).click();
   await expect(
     page.getByRole('radio', { name: 'PNG', exact: true }),
@@ -284,7 +291,7 @@ test('previews compressed EPUB images without leaving the viewport', async ({
 
   await page.getByRole('button', { name: '清空选择', exact: true }).click();
   await expect(sourceSection).toContainText('已选择 0/1');
-  await page.getByText('TXT：修复OCR换行', { exact: true }).click();
+  await page.getByText('OCR修复', { exact: true }).click();
   await expect(page.getByText('当前选择中没有 TXT 文件。')).toBeVisible();
 });
 
@@ -298,7 +305,7 @@ test('retains no partial image previews when a later image fails', async ({
     mimeType: 'application/epub+zip',
     buffer: await createToolboxEpub(cover, Buffer.from('invalid image')),
   });
-  await page.getByText('EPUB：压缩图片', { exact: true }).click();
+  await page.getByText('图片压缩', { exact: true }).click();
   await page.getByText('PNG', { exact: true }).click();
   await page.evaluate(() => {
     const created: string[] = [];
@@ -350,7 +357,7 @@ test('reviews OCR changes before generating a result', async ({ page }) => {
       '第一行没有句号\n继续这一段\n最后结束。\n\n# 标题\n保留正文。',
     ),
   });
-  await page.getByText('TXT：修复OCR换行', { exact: true }).click();
+  await page.getByText('OCR修复', { exact: true }).click();
 
   const resultSection = page.locator('.toolbox-file-section').filter({
     has: page.getByRole('heading', { name: '处理结果', exact: true }),
@@ -517,7 +524,7 @@ test('previews EPUB conversion options before generating TXT', async ({
     mimeType: 'application/epub+zip',
     buffer: await createToolboxEpub(cover),
   });
-  await page.getByText('EPUB：转换成TXT', { exact: true }).click();
+  await page.getByText('EPUB转TXT', { exact: true }).click();
   let downloadCount = 0;
   page.on('download', () => {
     downloadCount += 1;

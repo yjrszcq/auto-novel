@@ -381,13 +381,13 @@ const showListModal = ref(false);
       <n-tab-pane name="0" tab="术语表">
         <toolbox-item-glossary :files="selectedFiles" />
       </n-tab-pane>
-      <n-tab-pane name="1" tab="EPUB：压缩图片">
+      <n-tab-pane name="1" tab="图片压缩">
         <toolbox-item-compress-image :files="selectedFiles" />
       </n-tab-pane>
-      <n-tab-pane name="2" tab="TXT：修复OCR换行">
+      <n-tab-pane name="2" tab="OCR修复">
         <toolbox-item-fix-ocr :files="selectedFiles" />
       </n-tab-pane>
-      <n-tab-pane name="3" tab="EPUB：转换成TXT">
+      <n-tab-pane name="3" tab="EPUB转TXT">
         <toolbox-item-convert :files="selectedFiles" />
       </n-tab-pane>
     </n-tabs>
