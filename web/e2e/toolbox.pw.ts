@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { BlobReader, BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
+import {
+  BlobReader,
+  BlobWriter,
+  TextReader,
+  TextWriter,
+  ZipReader,
+  ZipWriter,
+} from '@zip.js/zip.js';
+import { readFile } from 'node:fs/promises';
 
 const createToolboxEpub = async (
   cover: Buffer,
@@ -54,7 +62,7 @@ const createToolboxEpub = async (
     'OEBPS/chapter.xhtml',
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title></head>
-<body><h1>第一章</h1><p>工具箱正文</p></body></html>`),
+<body><h1>第一章</h1><p>工具箱正文<ruby>漢<rt>かん</rt></ruby></p></body></html>`),
   );
   await writer.add(
     'OEBPS/empty.xhtml',
@@ -156,7 +164,7 @@ test('previews compressed EPUB images without leaving the viewport', async ({
     ).toolboxObjectUrls = { created, revoked };
   });
   await page.getByRole('button', { name: '预览效果', exact: true }).click();
-  const thumbnail = page.locator('.n-image img').first();
+  const thumbnail = page.getByRole('button', { name: '对比 cover.png' });
   const previewError = page.locator('.n-message');
   if (await previewError.isVisible()) {
     throw new Error(await previewError.innerText());
@@ -230,10 +238,22 @@ test('previews compressed EPUB images without leaving the viewport', async ({
 
   const explicitDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: '下载所选', exact: true }).click();
-  expect((await explicitDownload).suggestedFilename()).toBe(
-    'toolbox-image.epub',
-  );
+  const downloadedEpub = await explicitDownload;
+  expect(downloadedEpub.suggestedFilename()).toBe('toolbox-image.epub');
   expect(downloadCount).toBe(1);
+  const downloadPath = await downloadedEpub.path();
+  expect(downloadPath).not.toBeNull();
+  const archiveReader = new ZipReader(
+    new BlobReader(new Blob([await readFile(downloadPath!)])),
+  );
+  const chapterEntry = (await archiveReader.getEntries()).find(
+    ({ filename }) => filename === 'OEBPS/chapter.xhtml',
+  );
+  expect(chapterEntry).toBeDefined();
+  expect(await chapterEntry!.getData!(new TextWriter())).toContain(
+    '<rt>かん</rt>',
+  );
+  await archiveReader.close();
   await expect
     .poll(() =>
       page.evaluate(() => {

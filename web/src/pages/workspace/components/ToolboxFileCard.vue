@@ -37,8 +37,8 @@ let fileRequest = 0;
 let previewRequest = 0;
 
 watch(
-  () => props.file,
-  async (file) => {
+  () => [props.file, props.kind] as const,
+  async ([file, kind]) => {
     const request = ++fileRequest;
     previewRequest += 1;
     showPreviewModal.value = false;
@@ -46,6 +46,10 @@ watch(
     previewTruncated.value = false;
     previewError.value = '';
     fileSize.value = undefined;
+    if (kind === 'source' && file.sourceSize !== undefined) {
+      fileSize.value = file.sourceSize;
+      return;
+    }
     try {
       const size = (await file.toBlob()).size;
       if (request === fileRequest) fileSize.value = size;

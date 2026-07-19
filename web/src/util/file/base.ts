@@ -6,4 +6,8 @@ export class BaseFile {
     this.name = name;
     if (rawFile) this.rawFile = rawFile;
   }
+
+  get sourceSize() {
+    return this.rawFile?.size;
+  }
 }

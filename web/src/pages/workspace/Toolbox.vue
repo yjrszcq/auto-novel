@@ -176,6 +176,10 @@ const loadFile = async (file: File) => {
   }
   try {
     const toolboxFile = await parseFile(file, ['txt', 'epub']);
+    if (files.value.some(({ name }) => name === toolboxFile.name)) {
+      message.warning('文件已经载入');
+      return;
+    }
     files.value.push(toolboxFile);
     files.value = [...files.value];
     setFileSelected(toolboxFile.name, true);

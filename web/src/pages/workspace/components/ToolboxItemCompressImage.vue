@@ -281,16 +281,22 @@ onBeforeUnmount(() => {
         <c-x-scrollbar style="margin-top: 16px">
           <n-image-group show-toolbar-tooltip>
             <n-flex :size="4" :wrap="false" style="margin-bottom: 16px">
-              <n-image
+              <button
                 v-for="image of detail.images"
                 :key="image.id"
-                height="150"
-                :src="image.uri"
-                preview-disabled
-                :alt="image.id"
-                style="border-radius: 2px"
+                class="image-preview-button"
+                type="button"
+                :aria-label="`对比 ${image.href}`"
                 @click="showPreview(image)"
-              />
+              >
+                <n-image
+                  height="150"
+                  :src="image.uri"
+                  preview-disabled
+                  :alt="image.href"
+                  style="border-radius: 2px"
+                />
+              </button>
             </n-flex>
           </n-image-group>
         </c-x-scrollbar>
@@ -321,3 +327,18 @@ onBeforeUnmount(() => {
     </c-modal>
   </n-flex>
 </template>
+
+<style scoped>
+.image-preview-button {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.image-preview-button:focus-visible {
+  outline: 2px solid currentcolor;
+  outline-offset: 2px;
+}
+</style>

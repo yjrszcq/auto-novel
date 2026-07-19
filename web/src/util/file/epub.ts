@@ -636,10 +636,9 @@ export class Epub extends BaseFile {
   getText() {
     const contents: string[] = [];
     for (const item of this.iterDocInSpine()) {
-      Array.from(item.doc.getElementsByClassName('rt')).forEach((node) =>
-        node.parentNode!.removeChild(node),
-      );
-      contents.push(item.doc.body.textContent ?? '');
+      const body = item.doc.body.cloneNode(true) as HTMLElement;
+      body.querySelectorAll('.rt, rt, rp').forEach((node) => node.remove());
+      contents.push(body.textContent ?? '');
     }
     return contents.join('\n');
   }
