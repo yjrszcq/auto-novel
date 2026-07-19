@@ -70,6 +70,7 @@ const currentJob = ref<ProcessedJob>();
 const queueRunning = ref(false);
 const automaticQueue = ref(true);
 const startingWorkerIds = ref(new Set<string>());
+const workerStartErrors = ref(new Map<string, string>());
 let taskController: AbortController | undefined;
 
 const workerIsActive = (workerId: string) =>
@@ -78,6 +79,28 @@ const workerIsStarting = (workerId: string) =>
   startingWorkerIds.value.has(workerId);
 const workerActivity = (workerId: string) =>
   pipelineSnapshot.value.workers.find((worker) => worker.id === workerId);
+const workerMetrics = computed(() => {
+  const running = pipelineSnapshot.value.workers.length;
+  const starting = startingWorkerIds.value.size;
+  return {
+    total: workspaceRef.value.workers.length,
+    running,
+    starting,
+    stopped: Math.max(
+      0,
+      workspaceRef.value.workers.length - running - starting,
+    ),
+    active: pipelineSnapshot.value.aggregateActive,
+    maximum: pipelineSnapshot.value.aggregateMaximum,
+    errors:
+      pipelineSnapshot.value.workers.reduce(
+        (total, worker) => total + worker.errors,
+        0,
+      ) + workerStartErrors.value.size,
+  };
+});
+const workerStartError = (workerId: string) =>
+  workerStartErrors.value.get(workerId);
 const setWorkerStarting = (workerId: string, starting: boolean) => {
   const next = new Set(startingWorkerIds.value);
   if (starting) next.add(workerId);
@@ -175,6 +198,9 @@ const runQueuedJobs = async () => {
 
 const startWorker = async (worker: SakuraWorker) => {
   if (workerIsActive(worker.id) || workerIsStarting(worker.id)) return;
+  const nextErrors = new Map(workerStartErrors.value);
+  nextErrors.delete(worker.id);
+  workerStartErrors.value = nextErrors;
   setWorkerStarting(worker.id, true);
   try {
     const translator = await Translator.create(
@@ -194,7 +220,11 @@ const startWorker = async (worker: SakuraWorker) => {
     });
     void runQueuedJobs();
   } catch (error) {
-    message.error(`无法启动 ${worker.id}：${error}`);
+    const detail = error instanceof Error ? error.message : String(error);
+    const nextErrors = new Map(workerStartErrors.value);
+    nextErrors.set(worker.id, detail);
+    workerStartErrors.value = nextErrors;
+    message.error(`无法启动 ${worker.id}：${detail}`);
   } finally {
     setWorkerStarting(worker.id, false);
   }
@@ -206,6 +236,9 @@ const stopWorker = (workerId: string) => {
 
 const deleteWorker = (workerId: string) => {
   stopWorker(workerId);
+  const nextErrors = new Map(workerStartErrors.value);
+  nextErrors.delete(workerId);
+  workerStartErrors.value = nextErrors;
   workspace.deleteWorker(workerId);
 };
 
@@ -314,7 +347,11 @@ onBeforeUnmount(() => {
       style="margin-bottom: 0.5em"
     >
       <n-h1 style="margin: 0">Sakura工作区</n-h1>
-      <workspace-metrics-panel :cache-metrics="cacheMetrics" />
+      <workspace-metrics-panel
+        :cache-metrics="cacheMetrics"
+        :pipeline-metrics="pipelineSnapshot"
+        :worker-metrics="workerMetrics"
+      />
     </n-flex>
 
     <bulletin v-if="infoPanelHtml">
@@ -365,6 +402,7 @@ onBeforeUnmount(() => {
             :active="workerIsActive(worker.id)"
             :starting="workerIsStarting(worker.id)"
             :activity="workerActivity(worker.id)"
+            :error="workerStartError(worker.id)"
             @start="startWorker"
             @stop="stopWorker"
             @delete="deleteWorker"

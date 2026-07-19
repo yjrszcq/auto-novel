@@ -19,6 +19,7 @@ const props = defineProps<{
   active: boolean;
   starting: boolean;
   activity?: SakuraWorkerPipelineSnapshot['workers'][number];
+  error?: string;
 }>();
 
 const emit = defineEmits<{
@@ -94,10 +95,15 @@ const testWorker = async () => {
 
     <template #description>
       <n-flex
-        v-if="(activity?.assignments.length ?? 0) > 0 || active"
+        v-if="
+          (activity?.assignments.length ?? 0) > 0 || active || starting || error
+        "
         vertical
         :size="2"
       >
+        <n-text v-if="starting" depth="3" style="font-size: 12px">
+          正在连接并检测模型
+        </n-text>
         <n-text
           v-for="assignment of activity?.assignments ?? []"
           :key="`${assignment.chapter?.id ?? '?'}-${assignment.segmentIndex}`"
@@ -112,6 +118,9 @@ const testWorker = async () => {
           style="font-size: 12px"
         >
           空闲，等待共享任务
+        </n-text>
+        <n-text v-if="error" type="error" style="font-size: 12px">
+          启动失败：{{ error }}
         </n-text>
       </n-flex>
     </template>

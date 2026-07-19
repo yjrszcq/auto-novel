@@ -2701,6 +2701,9 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
       return { content: `Sakura译文${request.index + 1}` };
     },
   });
+  const incompatibleServer = await startOpenAiTestServer({
+    model: 'sakura-0.9.gguf',
+  });
 
   try {
     await page.goto('/');
@@ -2708,7 +2711,7 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
     await expect(page.getByText('还没有本地书籍')).toBeVisible();
     await page.goto('/workspace/sakura');
     await page.evaluate(
-      async ({ endpoint, task, volumeId }) => {
+      async ({ endpoint, incompatibleEndpoint, task, volumeId }) => {
         localStorage.setItem(
           'auto-novel:workspace:sakura',
           JSON.stringify({
@@ -2723,6 +2726,13 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
               {
                 id: 'sakura-worker-b',
                 endpoint,
+                segLength: 500,
+                prevSegLength: 500,
+                concurrency: 1,
+              },
+              {
+                id: 'sakura-worker-incompatible',
+                endpoint: incompatibleEndpoint,
                 segLength: 500,
                 prevSegLength: 500,
                 concurrency: 1,
@@ -2773,15 +2783,54 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
         });
         database.close();
       },
-      { endpoint: server.endpoint, task, volumeId },
+      {
+        endpoint: server.endpoint,
+        incompatibleEndpoint: incompatibleServer.endpoint,
+        task,
+        volumeId,
+      },
     );
     await page.reload();
 
-    await page.getByRole('button', { name: '批量控制翻译器' }).click();
-    await page.getByText('启动全部', { exact: true }).click();
+    for (const workerId of ['sakura-worker-a', 'sakura-worker-b']) {
+      await page
+        .locator('.n-list-item')
+        .filter({ hasText: workerId })
+        .getByRole('button', { name: '启动', exact: true })
+        .click();
+    }
     await twoRequestsArrived;
     expect(server.maximumActiveRequests).toBe(2);
     await expect(page.getByText(/章节 \d\/2 · 分段 1\/1/)).toHaveCount(2);
+    const incompatibleCard = page
+      .locator('.n-list-item')
+      .filter({ hasText: 'sakura-worker-incompatible' });
+    await incompatibleCard
+      .getByRole('button', { name: '启动', exact: true })
+      .click();
+    await expect(incompatibleCard).toContainText(
+      '启动失败：Sakura 翻译器配置不兼容',
+    );
+    await page.getByRole('button', { name: '翻译器运行统计' }).click();
+    const metricsPanel = page.getByRole('dialog', {
+      name: '翻译器运行统计',
+    });
+    await expect(
+      metricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '运行中' }),
+    ).toContainText('2');
+    await expect(
+      metricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '活跃请求' }),
+    ).toContainText('2/2');
+    await expect(
+      metricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '未完成' }),
+    ).toContainText('2');
+    await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
 
     releaseRequests();
     await expect
@@ -2822,6 +2871,7 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
     expect(translated.flat().sort()).toEqual(['Sakura译文1', 'Sakura译文2']);
   } finally {
     releaseRequests();
+    await incompatibleServer.close();
     await server.close();
   }
 });
@@ -3073,9 +3123,22 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   await expect(
     sakuraPanel.getByRole('region', { name: '翻译缓存统计' }),
   ).toBeVisible();
+  const sakuraWorkerPage = sakuraPanel.getByRole('button', {
+    name: '翻译器总览',
+    exact: true,
+  });
+  const sakuraPipelinePage = sakuraPanel.getByRole('button', {
+    name: '共享池',
+    exact: true,
+  });
+  await sakuraWorkerPage.click();
+  await expect(
+    sakuraPanel.getByRole('region', { name: '翻译器总览' }),
+  ).toBeVisible();
+  await sakuraPipelinePage.click();
   await expect(
     sakuraPanel.getByRole('region', { name: '共享池统计' }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   const panelBody = sakuraPanel.locator('.workspace-metrics-panel__body');
   const panelBodyBounds = await panelBody.boundingBox();
   expect(panelBodyBounds).not.toBeNull();
