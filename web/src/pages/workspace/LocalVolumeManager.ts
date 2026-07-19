@@ -24,8 +24,9 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
     },
     async addVolume(file: File, favoredId: string = 'default') {
       const repo = await useLocalVolumeStore();
-      await repo.createVolume(file, favoredId);
+      const result = await repo.createVolume(file, favoredId);
       await this.loadVolumes();
+      return result;
     },
     async deleteVolume(id: string) {
       const repo = await useLocalVolumeStore();

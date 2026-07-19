@@ -71,7 +71,29 @@ export type EpubManifestItemBase = {
 };
 export type EpubDocumentResource = EpubManifestItemBase & { doc: Document };
 export type EpubBlobResource = EpubManifestItemBase & { blob: Blob };
-export type EpubResource = EpubDocumentResource | EpubBlobResource;
+export type EpubUnavailableResource = EpubManifestItemBase & {
+  unavailableReason: string;
+};
+export type EpubResource =
+  | EpubManifestItemBase
+  | EpubDocumentResource
+  | EpubBlobResource
+  | EpubUnavailableResource;
+
+export type EpubDiagnosticCode =
+  | 'active-content-disabled'
+  | 'encrypted-font-disabled'
+  | 'malformed-document-recovered'
+  | 'missing-resource'
+  | 'navigation-fallback'
+  | 'remote-resource-disabled'
+  | 'unsupported-spine-resource';
+
+export interface EpubDiagnostic {
+  code: EpubDiagnosticCode;
+  message: string;
+  path?: string;
+}
 
 export interface EpubCoverManifestItem {
   id: string;
@@ -175,8 +197,22 @@ export class Epub extends BaseFile {
   items = new Map<string, EpubResource>();
   itemrefs: EpubItemref[] = [];
   navItems: EpubNavigationItem[] = [];
+  diagnostics: EpubDiagnostic[] = [];
   renditionLayout: 'reflowable' | 'pre-paginated' = 'reflowable';
   private epub2CoverId: string | undefined;
+
+  private addDiagnostic(diagnostic: EpubDiagnostic) {
+    if (
+      !this.diagnostics.some(
+        (item) =>
+          item.code === diagnostic.code &&
+          item.message === diagnostic.message &&
+          item.path === diagnostic.path,
+      )
+    ) {
+      this.diagnostics.push(diagnostic);
+    }
+  }
 
   private resolve(root: string, rpath: string) {
     const resolved = resolveEpubArchiveHref(root, rpath);
@@ -214,19 +250,21 @@ export class Epub extends BaseFile {
 
   private parseContainer(doc: Document) {
     const rootfile = getEl(doc, 'rootfile');
-    if (!rootfile) throw new Error('Container does not have rootfile');
+    if (!rootfile) throw new Error('EPUB 容器缺少根文件声明');
     const packagePath = rootfile.getAttribute('full-path');
-    if (!packagePath) throw new Error('Container does not have package path');
-    this.packagePath = packagePath;
+    if (!packagePath) throw new Error('EPUB 容器缺少包文档路径');
+    const canonicalPath = normalizeEpubArchivePath(packagePath);
+    if (!canonicalPath) throw new Error('EPUB 包文档路径无效');
+    this.packagePath = canonicalPath;
   }
 
   private parsePackage(doc: Document) {
     const metadata = getEl(doc, 'metadata');
-    if (!metadata) throw new Error('Package does not have metadata');
+    if (!metadata) throw new Error('EPUB 包文档缺少 metadata');
     const manifest = getEl(doc, 'manifest');
-    if (!manifest) throw new Error('Package does not have manifest');
+    if (!manifest) throw new Error('EPUB 包文档缺少 manifest');
     const spine = getEl(doc, 'spine');
-    if (!spine) throw new Error('Package does not have spine');
+    if (!spine) throw new Error('EPUB 包文档缺少 spine');
 
     this.packageDoc = doc;
     const renditionLayout = Array.from(metadata.getElementsByTagName('meta'))
@@ -249,41 +287,57 @@ export class Epub extends BaseFile {
   private parseManifest(el: Element) {
     for (const itemEl of Array.from(el.getElementsByTagName('item'))) {
       const id = itemEl.getAttribute('id');
-      if (!id) throw new Error('Manifest item does not have id');
+      if (!id) throw new Error('EPUB 清单资源缺少 id');
+      if (this.items.has(id)) throw new Error(`EPUB 清单包含重复 id：${id}`);
       const href = itemEl.getAttribute('href');
-      if (!href) throw new Error('Manifest item does not have href');
+      if (!href) throw new Error(`EPUB 清单资源缺少 href：${id}`);
       const mediaTypeValue = itemEl.getAttribute('media-type');
       if (!mediaTypeValue)
-        throw new Error('Manifest item does not have media type');
+        throw new Error(`EPUB 清单资源缺少 media-type：${id}`);
       const mediaType = mediaTypeValue.split(';', 1)[0].trim().toLowerCase();
       const overlay = itemEl.getAttribute('media-overlay');
       const properties = itemEl.getAttribute('properties');
       const fallback = itemEl.getAttribute('fallback');
 
+      const path = resolveEpubArchiveHref(this.packagePath, href)?.split(
+        '#',
+        1,
+      )[0];
       const itemBase: EpubManifestItemBase = {
         id,
         href,
-        path: this.resolve(this.packagePath, href),
+        path: path ?? `remote:${href}`,
         mediaType,
         overlay,
         properties: this.parseProperties(properties),
         fallback,
       };
-      this.items.set(id, itemBase as EpubResource);
+      if (path === undefined) {
+        const message = `已禁用远程清单资源：${href}`;
+        this.items.set(id, { ...itemBase, unavailableReason: message });
+        this.addDiagnostic({
+          code: 'remote-resource-disabled',
+          message,
+          path: href,
+        });
+      } else {
+        this.items.set(id, itemBase);
+      }
     }
 
-    const navHref = Array.from(this.items.values()).find(({ properties }) =>
+    const navItem = Array.from(this.items.values()).find(({ properties }) =>
       properties?.includes('nav'),
-    )?.href;
-    this.navigationPath = navHref && this.resolve(this.packagePath, navHref);
+    );
+    this.navigationPath =
+      navItem && !navItem.path.startsWith('remote:') ? navItem.path : undefined;
   }
 
   private parseSpine(el: Element) {
     for (const itemEl of Array.from(el.getElementsByTagName('itemref'))) {
       const idref = itemEl.getAttribute('idref');
-      if (!idref) throw new Error('Spine itemref does not have idref');
+      if (!idref) throw new Error('EPUB 正文条目缺少 idref');
       if (!this.items.has(idref))
-        throw new Error('Spine itemref idref not in manifest');
+        throw new Error(`EPUB 正文条目未在清单中声明：${idref}`);
       const linear = itemEl.getAttribute('linear');
       const properties = itemEl.getAttribute('properties');
 
@@ -297,8 +351,10 @@ export class Epub extends BaseFile {
     const tocIdref = el.getAttribute('toc');
     if (tocIdref) {
       const tocItem = this.items.get(tocIdref);
-      const tocItemHref = tocItem?.href;
-      this.ncxPath = tocItemHref && this.resolve(this.packagePath, tocItemHref);
+      this.ncxPath =
+        tocItem && !tocItem.path.startsWith('remote:')
+          ? tocItem.path
+          : undefined;
     }
   }
 
@@ -310,15 +366,15 @@ export class Epub extends BaseFile {
       const items: EpubNavigationSourceItem[] = [];
 
       olEl.querySelectorAll(':scope > li').forEach((liEl) => {
-        const linkEl = liEl.querySelector(':scope > a, :scope > span');
-        if (!linkEl) throw new Error('Nav toc item does not have link');
+        const linkEl = liEl.querySelector(':scope > a, :scope > span, a, span');
+        if (!linkEl) return;
 
         const item: EpubNavigationSourceItem = {
-          text: linkEl.textContent?.trim() || '',
+          text: linkEl.textContent?.trim() || '未命名章节',
           href: linkEl.getAttribute('href'),
           children: [],
         };
-        const childOlEl = liEl.querySelector(':scope > ol');
+        const childOlEl = liEl.querySelector(':scope > ol, ol');
         if (childOlEl) item.children = parseTocList(childOlEl);
         items.push(item);
       });
@@ -326,12 +382,12 @@ export class Epub extends BaseFile {
     };
     const navEls = Array.from(doc.getElementsByTagName('nav'));
     const tocNavEl =
-      navEls.find(
-        (navEl) =>
-          navEl.getAttribute('epub:type') === 'toc' ||
-          navEl.getAttribute('type') === 'toc',
+      navEls.find((navEl) =>
+        [navEl.getAttribute('epub:type'), navEl.getAttribute('type')].some(
+          (value) => value?.trim().toLowerCase().split(/\s+/).includes('toc'),
+        ),
       ) ?? navEls.find((navEl) => navEl.id === 'toc'); // 保守支持缺少 epub:type 的目录
-    const tocOlEl = tocNavEl?.querySelector(':scope > ol');
+    const tocOlEl = tocNavEl?.querySelector('ol');
     if (!tocOlEl) throw new Error('Nav toc not exist');
     this.navItems = normalizeEpubNavigationItems(
       this.navigationPath,
@@ -428,39 +484,199 @@ export class Epub extends BaseFile {
       this.parseContainer(await readDoc(CONTAINER_PATH));
       this.parsePackage(await readDoc(this.packagePath));
 
+      const encryptedResources = new Map<string, string>();
+      const encryptionPath = 'META-INF/encryption.xml';
+      if (entries.has(encryptionPath)) {
+        const encryptionDoc = await readDoc(encryptionPath);
+        for (const encryptedData of Array.from(
+          encryptionDoc.getElementsByTagNameNS('*', 'EncryptedData'),
+        )) {
+          const encryptionMethod = encryptedData.getElementsByTagNameNS(
+            '*',
+            'EncryptionMethod',
+          )[0];
+          const cipherReference = encryptedData.getElementsByTagNameNS(
+            '*',
+            'CipherReference',
+          )[0];
+          const algorithm = encryptionMethod?.getAttribute('Algorithm');
+          const uri = cipherReference?.getAttribute('URI');
+          const path = uri && normalizeEpubArchivePath(uri);
+          if (algorithm && path) encryptedResources.set(path, algorithm);
+        }
+      }
+
+      const fontObfuscationAlgorithms = new Set([
+        'http://www.idpf.org/2008/embedding',
+        'http://ns.adobe.com/pdf/enc#RC',
+      ]);
+      for (const [path, algorithm] of encryptedResources) {
+        if (fontObfuscationAlgorithms.has(algorithm)) continue;
+        throw new Error(`此 EPUB 包含不支持的受保护内容：${path}`);
+      }
+
+      const inspectDocument = (doc: Document, path: string) => {
+        if (
+          doc.querySelector(
+            'script, iframe, frame, object, embed, form, input, button',
+          )
+        ) {
+          this.addDiagnostic({
+            code: 'active-content-disabled',
+            message: `已禁用文档中的可执行或交互内容：${path}`,
+            path,
+          });
+        }
+        const hasRemoteResource = Array.from(
+          doc.querySelectorAll('[src], [poster], [data], link[href]'),
+        ).some((element) => {
+          const value =
+            element.getAttribute('src') ??
+            element.getAttribute('poster') ??
+            element.getAttribute('data') ??
+            element.getAttribute('href');
+          return (
+            value !== null && resolveEpubArchiveHref(path, value) === undefined
+          );
+        });
+        if (hasRemoteResource) {
+          this.addDiagnostic({
+            code: 'remote-resource-disabled',
+            message: `已禁用文档引用的远程资源：${path}`,
+            path,
+          });
+        }
+      };
+
+      const readPublicationDocument = async (path: string) => {
+        try {
+          const doc = await readDoc(path);
+          inspectDocument(doc, path);
+          return doc;
+        } catch (error) {
+          if (!entries.has(path)) throw error;
+          const doc = await readHtmlDoc(path);
+          this.addDiagnostic({
+            code: 'malformed-document-recovered',
+            message: `文档不是规范 XML，已按兼容 HTML 读取：${path}`,
+            path,
+          });
+          inspectDocument(doc, path);
+          return doc;
+        }
+      };
+
       let navigationParsed = false;
       if (this.navigationPath) {
         try {
-          this.parseNavigationDocument(await readDoc(this.navigationPath));
+          this.parseNavigationDocument(
+            await readPublicationDocument(this.navigationPath),
+          );
           navigationParsed = this.navItems.length > 0;
-        } catch {
+        } catch (error) {
           this.navItems = [];
+          this.addDiagnostic({
+            code: 'navigation-fallback',
+            message: `EPUB 3 目录不可用，已尝试兼容目录：${String(error)}`,
+            path: this.navigationPath,
+          });
         }
       }
       if (!navigationParsed && this.ncxPath) {
         try {
           this.parseNcx(await readDoc(this.ncxPath));
           navigationParsed = this.navItems.length > 0;
-        } catch {
+        } catch (error) {
           this.navItems = [];
+          this.addDiagnostic({
+            code: 'navigation-fallback',
+            message: `EPUB 2 NCX 目录不可用，已改用正文顺序：${String(error)}`,
+            path: this.ncxPath,
+          });
         }
       }
 
-      for (const item of this.items.values()) {
-        if (item.mediaType === 'application/xhtml+xml') {
-          (item as EpubDocumentResource).doc = await readDoc(item.path);
-        } else if (item.mediaType === 'text/html') {
-          item.mediaType = 'application/xhtml+xml';
-          (item as EpubDocumentResource).doc = await readHtmlDoc(item.path);
-        } else {
-          (item as EpubBlobResource).blob = await readBlob(
-            item.path,
-            item.mediaType,
-          );
+      for (const [id, item] of [...this.items]) {
+        if ('unavailableReason' in item) continue;
+        const encryptedAlgorithm = encryptedResources.get(item.path);
+        if (
+          encryptedAlgorithm !== undefined &&
+          fontObfuscationAlgorithms.has(encryptedAlgorithm)
+        ) {
+          const message = `内嵌字体经过混淆，已使用阅读器字体替代：${item.path}`;
+          this.items.set(id, { ...item, unavailableReason: message });
+          this.addDiagnostic({
+            code: 'encrypted-font-disabled',
+            message,
+            path: item.path,
+          });
+          continue;
         }
+        if (!entries.has(item.path)) {
+          const message = `EPUB 缺少可选资源，已跳过：${item.path}`;
+          this.items.set(id, { ...item, unavailableReason: message });
+          this.addDiagnostic({
+            code: 'missing-resource',
+            message,
+            path: item.path,
+          });
+          continue;
+        }
+        if (item.mediaType === 'application/xhtml+xml') {
+          this.items.set(id, {
+            ...item,
+            doc: await readPublicationDocument(item.path),
+          });
+        } else if (item.mediaType === 'text/html') {
+          const doc = await readHtmlDoc(item.path);
+          inspectDocument(doc, item.path);
+          this.items.set(id, {
+            ...item,
+            mediaType: 'application/xhtml+xml',
+            doc,
+          });
+        } else {
+          const blob = await readBlob(item.path, item.mediaType);
+          if (
+            item.mediaType === 'text/css' &&
+            /(?:url\s*\(\s*['"]?https?:|@import\s+(?:url\s*\()?\s*['"]?https?:)/i.test(
+              await blob.text(),
+            )
+          ) {
+            this.addDiagnostic({
+              code: 'remote-resource-disabled',
+              message: `已禁用样式表引用的远程资源：${item.path}`,
+              path: item.path,
+            });
+          }
+          this.items.set(id, { ...item, blob });
+        }
+      }
+
+      for (const itemref of this.itemrefs) {
+        if (
+          !this.getFallbackChain(itemref.idref).some(
+            (resource) => 'doc' in resource,
+          )
+        ) {
+          const resource = this.items.get(itemref.idref);
+          const path = resource?.path ?? itemref.idref;
+          this.addDiagnostic({
+            code: 'unsupported-spine-resource',
+            message: `正文资源不可读取且没有可用回退：${path}`,
+            path,
+          });
+        }
+      }
+      if (this.iterSpine().length === 0) {
+        throw new Error('EPUB 正文中没有浏览器可读取的 XHTML/HTML 内容');
       }
       if (!navigationParsed) {
         this.createSpineFallbackNavigation();
+        this.addDiagnostic({
+          code: 'navigation-fallback',
+          message: '未找到可用目录，已按正文顺序生成目录',
+        });
       }
     } finally {
       await reader.close();
@@ -480,7 +696,10 @@ export class Epub extends BaseFile {
     const reader = new ZipReader(new BlobReader(file));
     try {
       const entries = new Map(
-        (await reader.getEntries()).map((entry) => [entry.filename, entry]),
+        (await reader.getEntries()).flatMap((entry) => {
+          const path = normalizeEpubArchivePath(entry.filename);
+          return path === undefined ? [] : ([[path, entry]] as const);
+        }),
       );
       const readDoc = async (path: string) => {
         const entry = entries.get(path);
@@ -493,7 +712,8 @@ export class Epub extends BaseFile {
       epub.parsePackage(await readDoc(epub.packagePath));
       const cover = epub.getCoverItem();
       if (cover === undefined) return;
-      const entry = entries.get(epub.resolve(epub.packagePath, cover.href));
+      if (cover.path.startsWith('remote:')) return;
+      const entry = entries.get(cover.path);
       if (!entry) return;
       const data = await entry.getData!(new BlobWriter());
       return new Blob([data], { type: cover.mediaType });
@@ -653,11 +873,10 @@ export class Epub extends BaseFile {
     await writeDoc(this.packagePath, this.packageDoc);
 
     for (const item of this.items.values()) {
-      const path = this.resolve(this.packagePath, item.href);
       if ('doc' in item) {
-        await writeDoc(path, item.doc);
-      } else {
-        await writeBlob(path, item.blob);
+        await writeDoc(item.path, item.doc);
+      } else if ('blob' in item) {
+        await writeBlob(item.path, item.blob);
       }
     }
 
@@ -676,8 +895,10 @@ export class Epub extends BaseFile {
   }
   iterSpine(): EpubSpineItem[] {
     return this.itemrefs.flatMap((itemref, index) => {
-      const resource = this.items.get(itemref.idref);
-      return resource && 'doc' in resource
+      const resource = this.getFallbackChain(itemref.idref).find(
+        (candidate): candidate is EpubDocumentResource => 'doc' in candidate,
+      );
+      return resource
         ? [
             {
               index,
@@ -691,11 +912,13 @@ export class Epub extends BaseFile {
     });
   }
   iterDoc() {
-    return [...this.items.values()].filter((item) => 'doc' in item);
+    return [...this.items.values()].filter(
+      (item): item is EpubDocumentResource => 'doc' in item,
+    );
   }
   iterBlob(mediaTypes: string[]) {
     return [...this.items.values()]
-      .filter((item) => 'blob' in item)
+      .filter((item): item is EpubBlobResource => 'blob' in item)
       .filter((item) => mediaTypes.includes(item.mediaType));
   }
   iterImage() {

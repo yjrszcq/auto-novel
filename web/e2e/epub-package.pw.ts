@@ -30,6 +30,7 @@ const createStandardsFixture = async () => {
   <manifest>
     <item id="nav" href="nav/toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="cover-page" href="Text/cover.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter-bin" href="Media/chapter.bin" media-type="application/x-custom" fallback="chapter"/>
     <item id="chapter" href="Text/chapter%20one.xhtml" media-type="application/xhtml+xml"/>
     <item id="fixed" href="Text/fixed.xhtml" media-type="application/xhtml+xml"/>
     <item id="notes" href="Text/notes.xhtml" media-type="application/xhtml+xml"/>
@@ -37,10 +38,12 @@ const createStandardsFixture = async () => {
     <item id="cover" href="Images/cover%20art.svg" media-type="image/svg+xml" properties="cover-image"/>
     <item id="font" href="Fonts/reader.woff2" media-type="font/woff2"/>
     <item id="audio" href="Media/sample.mp3" media-type="audio/mpeg"/>
+    <item id="missing" href="Images/missing.png" media-type="image/png"/>
+    <item id="remote" href="https://example.com/remote.css" media-type="text/css"/>
   </manifest>
   <spine>
     <itemref idref="cover-page" linear="no"/>
-    <itemref idref="chapter"/>
+    <itemref idref="chapter-bin"/>
     <itemref idref="fixed" properties="rendition:layout-pre-paginated"/>
   </spine>
 </package>`),
@@ -50,14 +53,14 @@ const createStandardsFixture = async () => {
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head><title>目录</title></head><body>
-<nav epub:type="toc"><h1>目录</h1><ol>
+<nav epub:type="landmarks toc"><h1>目录</h1><div><ol>
   <li><a href="../Text/cover.xhtml">封面</a></li>
   <li><span>第一卷</span><ol>
     <li><a href="../Text/chapter%20one.xhtml#start">第一章</a></li>
   </ol></li>
   <li><a href="../Text/fixed.xhtml">固定版式</a></li>
   <li><a href="../Text/notes.xhtml#note-1">附录</a></li>
-</ol></nav>
+</ol></div></nav>
 </body></html>`),
   );
   await writer.add(
@@ -84,7 +87,7 @@ const createStandardsFixture = async () => {
 <section id="start"><h1 class="chapter-title" style="break-before: page">第一章</h1>
 <p>第一段 <a href="notes.xhtml#note-1">参见附录</a> <a href="https://example.org/author">外部网站</a></p>
 <ul><li>第一项</li><li>第二项 <ruby>字<rt>じ</rt></ruby></li></ul>
-<table><tbody><tr><td>单元格</td></tr></tbody></table>
+<table><tbody><tr><td>单元格</td></tr></tbody></table><aside class="vertical-note">纵排注记</aside>
 ${Array.from({ length: 30 }, (_, index) => `<p>分页测试段落 ${index + 1}</p>`).join('\n')}
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>
 <math xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math><audio src="../Media/sample.mp3" controls="controls"/>
@@ -100,7 +103,8 @@ ${Array.from({ length: 30 }, (_, index) => `<p>分页测试段落 ${index + 1}</
   await writer.add(
     'OPS/Styles/book.css',
     new TextReader(`@font-face { font-family: Fixture; src: url('../Fonts/reader.woff2'); }
-body { font-family: Fixture; }`),
+body { font-family: Fixture; }
+.vertical-note { writing-mode: vertical-rl; }`),
   );
   await writer.add(
     'OPS/Images/cover art.svg',
@@ -166,6 +170,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
     database.close();
     return {
       navigation: metadata.navigation,
+      importDiagnostics: metadata.importDiagnostics,
       sourceFormat: metadata.sourceFormat,
       fileSize: storedFile.file.size,
     };
@@ -192,6 +197,13 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       href: 'OPS/Text/notes.xhtml#note-1',
     }),
   ]);
+  expect(imported.importDiagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ code: 'active-content-disabled' }),
+      expect.objectContaining({ code: 'missing-resource' }),
+      expect.objectContaining({ code: 'remote-resource-disabled' }),
+    ]),
+  );
 
   const richProjection = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -325,6 +337,9 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
         fontFamily: getComputedStyle(
           host.shadowRoot!.querySelector('.epub-document')!,
         ).fontFamily,
+        writingMode: getComputedStyle(
+          host.shadowRoot!.querySelector('.vertical-note')!,
+        ).writingMode,
       })),
     )
     .toMatchObject({
@@ -333,6 +348,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       table: '单元格',
       remoteSource: null,
       fontFamily: 'Fixture',
+      writingMode: 'vertical-rl',
     });
   const richHost = page
     .locator('[data-reader-epub-host]')

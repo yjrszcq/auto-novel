@@ -140,6 +140,11 @@ describe('EPUB navigation normalization', () => {
       fallback: 'preferred',
       doc: {} as Document,
     });
+    epub.itemrefs.push({
+      idref: 'preferred',
+      linear: null,
+      properties: null,
+    });
 
     expect(
       epub.resolveResource('OPS/nav/toc.xhtml', '../text/chapter.xhtml')?.id,
@@ -148,6 +153,7 @@ describe('EPUB navigation normalization', () => {
       'preferred',
       'fallback',
     ]);
+    expect(epub.iterSpine()[0]?.resource.id).toBe('fallback');
   });
 
   it('keeps duplicate spine occurrences and their linear semantics', () => {

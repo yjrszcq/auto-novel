@@ -42,6 +42,12 @@ export interface LocalBookMetadata {
   languages?: string[];
 }
 
+export interface LocalVolumeImportDiagnostic {
+  code: string;
+  message: string;
+  path?: string;
+}
+
 export type DownloadMetadataPolicy = 'global' | 'embed' | 'source';
 
 interface LocalDownloadMetadataPreference {
@@ -60,6 +66,7 @@ export interface LocalVolumeMetadata {
   glossary: Glossary;
   favoredId: string;
   sourceBookMetadata: LocalBookMetadata;
+  importDiagnostics?: LocalVolumeImportDiagnostic[];
   bookMetadata?: LocalBookMetadata;
   downloadMetadataPreference?: LocalDownloadMetadataPreference;
 }

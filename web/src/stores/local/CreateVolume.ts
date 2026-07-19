@@ -36,6 +36,8 @@ export const createVolume = async (
   let navigation: LocalVolumeNavigationEntry[] | undefined;
 
   const myFile = await parseFile(file);
+  const importDiagnostics =
+    myFile.type === 'epub' ? myFile.diagnostics : undefined;
   const embeddedCover = myFile.type === 'epub' ? myFile.getCover() : undefined;
   const sourceBookMetadata: LocalBookMetadata =
     myFile.type === 'epub'
@@ -92,6 +94,7 @@ export const createVolume = async (
     glossary: {},
     favoredId,
     sourceBookMetadata,
+    ...(importDiagnostics?.length ? { importDiagnostics } : {}),
   };
   await dao.createVolume({
     metadata,
@@ -107,4 +110,5 @@ export const createVolume = async (
             updatedAt: Date.now(),
           },
   });
+  return { diagnostics: importDiagnostics ?? [] };
 };

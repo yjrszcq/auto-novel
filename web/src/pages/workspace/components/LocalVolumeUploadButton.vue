@@ -57,7 +57,20 @@ const customRequest = ({
 }: UploadCustomRequestOptions) => {
   store
     .addVolume(file.file!, props.favoredId ?? 'default')
-    .then(onFinish)
+    .then((result) => {
+      if (result.diagnostics.length > 0) {
+        const visibleDiagnostics = result.diagnostics
+          .slice(0, 3)
+          .map((diagnostic) => `• ${diagnostic.message}`)
+          .join('\n');
+        const remaining = result.diagnostics.length - 3;
+        message.warning(
+          `书籍已导入，并应用 ${result.diagnostics.length} 项兼容处理\n${visibleDiagnostics}${remaining > 0 ? `\n• 另有 ${remaining} 项` : ''}`,
+          { duration: 8000, keepAliveOnHover: true },
+        );
+      }
+      onFinish();
+    })
     .catch((error) => {
       message.error(`上传失败: ${error}\n文件名：${file.name}`);
       onError();
