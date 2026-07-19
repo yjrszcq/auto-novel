@@ -4,6 +4,7 @@ import { StandardNovel } from './standard';
 const MIMETYPE_PATH = 'mimetype';
 const MIMETYPE_TEMPLATE = 'application/epub+zip';
 const DUBLIN_CORE_NAMESPACE = 'http://purl.org/dc/elements/1.1/';
+const EPUB_ROOT_URL = new URL('file://book/');
 
 const CONTAINER_PATH = 'META-INF/container.xml';
 const CONTAINER_TEMPLATE = `<?xml version="1.0" encoding="utf-8"?>
@@ -16,7 +17,7 @@ const CONTAINER_TEMPLATE = `<?xml version="1.0" encoding="utf-8"?>
 const getEl = (doc: Document, tagName: string) =>
   doc.getElementsByTagName(tagName).item(0);
 
-const MIME = {
+export const EPUB_MIME = {
   IMAGE: [
     'image/gif',
     'image/jpeg',
@@ -27,6 +28,29 @@ const MIME = {
   CSS: ['text/css'],
 };
 
+const isLocalEpubUrl = (url: URL) =>
+  url.protocol === EPUB_ROOT_URL.protocol &&
+  url.hostname === EPUB_ROOT_URL.hostname;
+
+const decodeArchivePath = (path: string) => {
+  try {
+    return decodeURI(path);
+  } catch {
+    return path;
+  }
+};
+
+export const resolveEpubArchiveHref = (sourcePath: string, href: string) => {
+  const sourceUrl = new URL(sourcePath.replaceAll('\\', '/'), EPUB_ROOT_URL);
+  const targetUrl = new URL(href.replaceAll('\\', '/'), sourceUrl);
+  if (!isLocalEpubUrl(targetUrl)) return undefined;
+  const path = decodeArchivePath(targetUrl.pathname.substring(1));
+  return `${path}${targetUrl.hash}`;
+};
+
+export const normalizeEpubArchivePath = (path: string) =>
+  resolveEpubArchiveHref('', path)?.split('#', 1)[0];
+
 const imageExtension = (mime: string) =>
   ({
     'image/gif': 'gif',
@@ -36,17 +60,18 @@ const imageExtension = (mime: string) =>
     'image/webp': 'webp',
   })[mime];
 
-type EpubItemBase = {
+export type EpubManifestItemBase = {
   id: string;
   href: string;
+  path: string;
   mediaType: string;
   overlay: string | null;
   properties: string[] | null;
   fallback: string | null;
 };
-type EpubItemDoc = EpubItemBase & { doc: Document };
-type EpubItemBlob = EpubItemBase & { blob: Blob };
-type EpubItem = EpubItemDoc | EpubItemBlob;
+export type EpubDocumentResource = EpubManifestItemBase & { doc: Document };
+export type EpubBlobResource = EpubManifestItemBase & { blob: Blob };
+export type EpubResource = EpubDocumentResource | EpubBlobResource;
 
 export interface EpubCoverManifestItem {
   id: string;
@@ -63,7 +88,7 @@ export interface EpubBookMetadata {
 }
 
 const isImage = (item: EpubCoverManifestItem) =>
-  MIME.IMAGE.includes(item.mediaType);
+  EPUB_MIME.IMAGE.includes(item.mediaType);
 
 export const resolveEpubCoverId = (
   items: Iterable<EpubCoverManifestItem>,
@@ -85,6 +110,14 @@ interface EpubItemref {
   idref: string;
   linear: string | null;
   properties: string[] | null;
+}
+
+export interface EpubSpineItem {
+  index: number;
+  idref: string;
+  linear: boolean;
+  properties: string[];
+  resource: EpubDocumentResource;
 }
 
 export interface EpubNavigationItem {
@@ -111,12 +144,7 @@ export const normalizeEpubNavigationHref = (
   if (href === undefined || href === null || href.trim().length === 0) {
     return undefined;
   }
-  const sourceUrl = new URL(sourcePath, 'file://book/');
-  const targetUrl = new URL(href, sourceUrl);
-  if (targetUrl.protocol !== 'file:' || targetUrl.hostname !== 'book') {
-    return undefined;
-  }
-  return targetUrl.pathname.substring(1) + targetUrl.hash;
+  return resolveEpubArchiveHref(sourcePath, href);
 };
 
 export const createSpineFallbackNavigation = (
@@ -144,15 +172,17 @@ export class Epub extends BaseFile {
   navigationPath: string | undefined;
   ncxPath: string | undefined;
   packageDoc!: Document;
-  items = new Map<string, EpubItem>();
+  items = new Map<string, EpubResource>();
   itemrefs: EpubItemref[] = [];
   navItems: EpubNavigationItem[] = [];
   private epub2CoverId: string | undefined;
 
   private resolve(root: string, rpath: string) {
-    const rootUrl = new URL(root, 'file://book/');
-    const newURL = new URL(rpath, rootUrl);
-    return newURL.pathname.substring(1);
+    const resolved = resolveEpubArchiveHref(root, rpath);
+    if (resolved === undefined) {
+      throw new Error(`EPUB 资源路径越界或无效：${rpath}`);
+    }
+    return resolved.split('#', 1)[0];
   }
 
   getCanonicalHref(href: string) {
@@ -165,7 +195,7 @@ export class Epub extends BaseFile {
 
   private parseProperties(attr: string | null) {
     if (!attr) return null;
-    return attr.split(' ').filter((prop) => prop);
+    return attr.trim().split(/\s+/).filter(Boolean);
   }
 
   private parseContainer(doc: Document) {
@@ -199,21 +229,24 @@ export class Epub extends BaseFile {
       if (!id) throw new Error('Manifest item does not have id');
       const href = itemEl.getAttribute('href');
       if (!href) throw new Error('Manifest item does not have href');
-      const mediaType = itemEl.getAttribute('media-type');
-      if (!mediaType) throw new Error('Manifest item does not have media type');
+      const mediaTypeValue = itemEl.getAttribute('media-type');
+      if (!mediaTypeValue)
+        throw new Error('Manifest item does not have media type');
+      const mediaType = mediaTypeValue.split(';', 1)[0].trim().toLowerCase();
       const overlay = itemEl.getAttribute('media-overlay');
       const properties = itemEl.getAttribute('properties');
       const fallback = itemEl.getAttribute('fallback');
 
-      const itemBase: EpubItemBase = {
+      const itemBase: EpubManifestItemBase = {
         id,
         href,
+        path: this.resolve(this.packagePath, href),
         mediaType,
         overlay,
         properties: this.parseProperties(properties),
         fallback,
       };
-      this.items.set(id, itemBase as EpubItem);
+      this.items.set(id, itemBase as EpubResource);
     }
 
     const navHref = Array.from(this.items.values()).find(({ properties }) =>
@@ -331,68 +364,83 @@ export class Epub extends BaseFile {
     const { BlobReader, BlobWriter, ZipReader, TextWriter } =
       await import('@zip.js/zip.js');
     const reader = new ZipReader(new BlobReader(file));
-    const entries = new Map(
-      (await reader.getEntries()).map((obj) => [obj.filename, obj] as const),
-    );
+    try {
+      const entries = new Map(
+        (await reader.getEntries()).flatMap((entry) => {
+          const path = normalizeEpubArchivePath(entry.filename);
+          return path === undefined ? [] : ([[path, entry]] as const);
+        }),
+      );
 
-    const readDocWithType = async (
-      path: string,
-      type: DOMParserSupportedType,
-    ) => {
-      const entry = entries.get(path);
-      if (!entry) throw new Error(`Entry not found: ${path}`);
-      const text = await entry.getData!(new TextWriter());
-      const parser = new DOMParser();
-      return parser.parseFromString(text, type);
-    };
+      const readDocWithType = async (
+        path: string,
+        type: DOMParserSupportedType,
+      ) => {
+        const entry = entries.get(path);
+        if (!entry) throw new Error(`EPUB 缺少资源：${path}`);
+        const text = await entry.getData!(new TextWriter());
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, type);
+        if (
+          type !== 'text/html' &&
+          doc.getElementsByTagName('parsererror').length > 0
+        ) {
+          throw new Error(`EPUB XML 无法解析：${path}`);
+        }
+        return doc;
+      };
 
-    const readDoc = async (path: string) =>
-      readDocWithType(path, 'application/xhtml+xml');
-    const readHtmlDoc = async (path: string) =>
-      readDocWithType(path, 'text/html');
+      const readDoc = async (path: string) =>
+        readDocWithType(path, 'application/xhtml+xml');
+      const readHtmlDoc = async (path: string) =>
+        readDocWithType(path, 'text/html');
 
-    const readBlob = async (path: string, type: string) => {
-      const entry = entries.get(path);
-      if (!entry) throw new Error(`Entry not found: ${path}`);
-      const data = await entry.getData!(new BlobWriter());
-      return new Blob([data], { type });
-    };
+      const readBlob = async (path: string, type: string) => {
+        const entry = entries.get(path);
+        if (!entry) throw new Error(`EPUB 缺少资源：${path}`);
+        const data = await entry.getData!(new BlobWriter());
+        return new Blob([data], { type });
+      };
 
-    this.parseContainer(await readDoc(CONTAINER_PATH));
-    this.parsePackage(await readDoc(this.packagePath));
+      this.parseContainer(await readDoc(CONTAINER_PATH));
+      this.parsePackage(await readDoc(this.packagePath));
 
-    let navigationParsed = false;
-    if (this.navigationPath) {
-      try {
-        this.parseNavigationDocument(await readDoc(this.navigationPath));
-        navigationParsed = this.navItems.length > 0;
-      } catch {
-        this.navItems = [];
+      let navigationParsed = false;
+      if (this.navigationPath) {
+        try {
+          this.parseNavigationDocument(await readDoc(this.navigationPath));
+          navigationParsed = this.navItems.length > 0;
+        } catch {
+          this.navItems = [];
+        }
       }
-    }
-    if (!navigationParsed && this.ncxPath) {
-      try {
-        this.parseNcx(await readDoc(this.ncxPath));
-        navigationParsed = this.navItems.length > 0;
-      } catch {
-        this.navItems = [];
+      if (!navigationParsed && this.ncxPath) {
+        try {
+          this.parseNcx(await readDoc(this.ncxPath));
+          navigationParsed = this.navItems.length > 0;
+        } catch {
+          this.navItems = [];
+        }
       }
-    }
 
-    for (const item of this.items.values()) {
-      const path = this.resolve(this.packagePath, item.href);
-
-      if (item.mediaType === 'application/xhtml+xml') {
-        (item as EpubItemDoc).doc = await readDoc(path);
-      } else if (item.mediaType === 'text/html') {
-        item.mediaType = 'application/xhtml+xml';
-        (item as EpubItemDoc).doc = await readHtmlDoc(path);
-      } else {
-        (item as EpubItemBlob).blob = await readBlob(path, item.mediaType);
+      for (const item of this.items.values()) {
+        if (item.mediaType === 'application/xhtml+xml') {
+          (item as EpubDocumentResource).doc = await readDoc(item.path);
+        } else if (item.mediaType === 'text/html') {
+          item.mediaType = 'application/xhtml+xml';
+          (item as EpubDocumentResource).doc = await readHtmlDoc(item.path);
+        } else {
+          (item as EpubBlobResource).blob = await readBlob(
+            item.path,
+            item.mediaType,
+          );
+        }
       }
-    }
-    if (!navigationParsed) {
-      this.createSpineFallbackNavigation();
+      if (!navigationParsed) {
+        this.createSpineFallbackNavigation();
+      }
+    } finally {
+      await reader.close();
     }
   }
 
@@ -434,7 +482,7 @@ export class Epub extends BaseFile {
   private getCoverItem() {
     const coverId = resolveEpubCoverId(this.items.values(), this.epub2CoverId);
     const item = coverId === undefined ? undefined : this.items.get(coverId);
-    return item && MIME.IMAGE.includes(item.mediaType) ? item : undefined;
+    return item && EPUB_MIME.IMAGE.includes(item.mediaType) ? item : undefined;
   }
 
   getCover() {
@@ -505,6 +553,7 @@ export class Epub extends BaseFile {
       cover = {
         id,
         href: `images/${id}.${extension}`,
+        path: this.resolve(this.packagePath, `images/${id}.${extension}`),
         mediaType: blob.type,
         overlay: null,
         properties: ['cover-image'],
@@ -600,9 +649,23 @@ export class Epub extends BaseFile {
   // ==============================
 
   iterDocInSpine() {
-    return this.itemrefs
-      .map((itemref) => this.items.get(itemref.idref)!)
-      .filter((item) => 'doc' in item);
+    return this.iterSpine().map((item) => item.resource);
+  }
+  iterSpine(): EpubSpineItem[] {
+    return this.itemrefs.flatMap((itemref, index) => {
+      const resource = this.items.get(itemref.idref);
+      return resource && 'doc' in resource
+        ? [
+            {
+              index,
+              idref: itemref.idref,
+              linear: itemref.linear?.toLowerCase() !== 'no',
+              properties: itemref.properties ?? [],
+              resource,
+            },
+          ]
+        : [];
+    });
   }
   iterDoc() {
     return [...this.items.values()].filter((item) => 'doc' in item);
@@ -613,14 +676,38 @@ export class Epub extends BaseFile {
       .filter((item) => mediaTypes.includes(item.mediaType));
   }
   iterImage() {
-    return this.iterBlob(MIME.IMAGE);
+    return this.iterBlob(EPUB_MIME.IMAGE);
+  }
+
+  getResourceByPath(path: string) {
+    const canonicalPath = normalizeEpubArchivePath(path);
+    return [...this.items.values()].find((item) => item.path === canonicalPath);
+  }
+
+  resolveResource(sourcePath: string, href: string) {
+    const resolved = resolveEpubArchiveHref(sourcePath, href);
+    return resolved === undefined
+      ? undefined
+      : this.getResourceByPath(resolved.split('#', 1)[0]);
+  }
+
+  getFallbackChain(id: string) {
+    const chain: EpubResource[] = [];
+    const seen = new Set<string>();
+    let current = this.items.get(id);
+    while (current !== undefined && !seen.has(current.id)) {
+      chain.push(current);
+      seen.add(current.id);
+      current = current.fallback ? this.items.get(current.fallback) : undefined;
+    }
+    return chain;
   }
 
   updateImage(id: string, blob: Blob) {
-    if (!MIME.IMAGE.includes(blob.type)) return;
+    if (!EPUB_MIME.IMAGE.includes(blob.type)) return;
 
     const item = this.items.get(id);
-    if (!item || !('blob' in item) || !MIME.IMAGE.includes(item.mediaType))
+    if (!item || !('blob' in item) || !EPUB_MIME.IMAGE.includes(item.mediaType))
       return;
 
     item.mediaType = blob.type;
@@ -628,7 +715,7 @@ export class Epub extends BaseFile {
   }
 
   cleanStyle() {
-    for (const item of this.iterBlob(MIME.CSS)) {
+    for (const item of this.iterBlob(EPUB_MIME.CSS)) {
       item.blob = new Blob([''], { type: item.mediaType });
     }
   }

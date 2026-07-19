@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   Epub,
   createSpineFallbackNavigation,
+  normalizeEpubArchivePath,
   normalizeEpubNavigationHref,
   normalizeEpubNavigationItems,
+  resolveEpubArchiveHref,
 } from '../src/util/file/epub';
 
 describe('EPUB navigation normalization', () => {
@@ -35,6 +37,21 @@ describe('EPUB navigation normalization', () => {
         '../Text/chapter-01.xhtml#part-2',
       ),
     ).toBe('OEBPS/Text/chapter-01.xhtml#part-2');
+  });
+
+  it('canonicalizes encoded and non-standard archive paths once', () => {
+    expect(
+      resolveEpubArchiveHref(
+        'OPS/Text/chapter.xhtml',
+        '../Images/cover%20art.jpg#preview',
+      ),
+    ).toBe('OPS/Images/cover art.jpg#preview');
+    expect(normalizeEpubArchivePath('OPS\\Images\\cover art.jpg')).toBe(
+      'OPS/Images/cover art.jpg',
+    );
+    expect(
+      resolveEpubArchiveHref('OPS/Text/chapter.xhtml', 'https://example.com'),
+    ).toBeUndefined();
   });
 
   it('keeps local fragments and rejects external navigation targets', () => {
@@ -97,6 +114,74 @@ describe('EPUB navigation normalization', () => {
             children: [],
           },
         ],
+      },
+    ]);
+  });
+
+  it('exposes canonical resources and terminates cyclic fallback chains', () => {
+    const epub = new Epub('fallback.epub');
+    epub.items.set('preferred', {
+      id: 'preferred',
+      href: 'media/chapter.bin',
+      path: 'OPS/media/chapter.bin',
+      mediaType: 'application/x-custom',
+      overlay: null,
+      properties: null,
+      fallback: 'fallback',
+      blob: new Blob(),
+    });
+    epub.items.set('fallback', {
+      id: 'fallback',
+      href: 'text/chapter.xhtml',
+      path: 'OPS/text/chapter.xhtml',
+      mediaType: 'application/xhtml+xml',
+      overlay: null,
+      properties: null,
+      fallback: 'preferred',
+      doc: {} as Document,
+    });
+
+    expect(
+      epub.resolveResource('OPS/nav/toc.xhtml', '../text/chapter.xhtml')?.id,
+    ).toBe('fallback');
+    expect(epub.getFallbackChain('preferred').map((item) => item.id)).toEqual([
+      'preferred',
+      'fallback',
+    ]);
+  });
+
+  it('keeps duplicate spine occurrences and their linear semantics', () => {
+    const epub = new Epub('spine.epub');
+    const resource = {
+      id: 'chapter',
+      href: 'Text/chapter.xhtml',
+      path: 'OPS/Text/chapter.xhtml',
+      mediaType: 'application/xhtml+xml',
+      overlay: null,
+      properties: null,
+      fallback: null,
+      doc: {} as Document,
+    };
+    epub.items.set(resource.id, resource);
+    epub.itemrefs.push(
+      { idref: resource.id, linear: 'no', properties: ['page-spread-left'] },
+      { idref: resource.id, linear: null, properties: null },
+    );
+
+    expect(epub.iterSpine()).toEqual([
+      {
+        index: 0,
+        idref: 'chapter',
+        linear: false,
+        properties: ['page-spread-left'],
+        resource,
+      },
+      {
+        index: 1,
+        idref: 'chapter',
+        linear: true,
+        properties: [],
+        resource,
       },
     ]);
   });
