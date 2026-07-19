@@ -60,6 +60,27 @@ const operationSummary = computed(() => {
 });
 
 const files = shallowRef<ParsedFile[]>([]);
+const selectedFileNames = ref<string[]>([]);
+const selectedFiles = computed(() =>
+  files.value.filter((file) => selectedFileNames.value.includes(file.name)),
+);
+const allFilesSelected = computed(
+  () =>
+    files.value.length > 0 &&
+    selectedFileNames.value.length === files.value.length,
+);
+
+const setFileSelected = (name: string, selected: boolean) => {
+  selectedFileNames.value = selected
+    ? [...new Set([...selectedFileNames.value, name])]
+    : selectedFileNames.value.filter((item) => item !== name);
+};
+
+const toggleSelectAll = () => {
+  selectedFileNames.value = allFilesSelected.value
+    ? []
+    : files.value.map((file) => file.name);
+};
 
 const loadFile = async (file: File) => {
   if (files.value.find((it) => it.name === file.name) !== undefined) {
@@ -70,6 +91,7 @@ const loadFile = async (file: File) => {
     const toolboxFile = await parseFile(file, ['txt', 'epub']);
     files.value.push(toolboxFile);
     files.value = [...files.value];
+    setFileSelected(toolboxFile.name, true);
     triggerRef(files);
   } catch (e) {
     message.warning(`${e}`);
@@ -78,11 +100,13 @@ const loadFile = async (file: File) => {
 
 const removeFile = (name: string) => {
   files.value = files.value.filter((it) => !(it.name === name));
+  setFileSelected(name, false);
   triggerRef(files);
 };
 
 const clearFile = () => {
   files.value = [];
+  selectedFileNames.value = [];
   triggerRef(files);
 };
 
@@ -141,11 +165,37 @@ const showListModal = ref(false);
       />
     </n-flex>
 
-    <n-flex vertical style="margin-top: 16px">
-      <n-text v-for="file of files" :key="file.name">
-        <toolbox-file-card :file="file" @delete="removeFile(file.name)" />
-      </n-text>
-    </n-flex>
+    <section v-if="files.length > 0" class="toolbox-file-section">
+      <n-flex align="center" justify="space-between">
+        <n-h2 style="margin: 0">源文件</n-h2>
+        <n-flex align="center" size="small">
+          <n-text depth="3">
+            已选择 {{ selectedFiles.length }}/{{ files.length }}
+          </n-text>
+          <c-button
+            :label="allFilesSelected ? '取消全选' : '全选'"
+            size="small"
+            @action="toggleSelectAll"
+          />
+          <c-button
+            label="清空选择"
+            size="small"
+            :disabled="selectedFiles.length === 0"
+            @action="selectedFileNames = []"
+          />
+        </n-flex>
+      </n-flex>
+      <n-flex vertical size="small">
+        <toolbox-file-card
+          v-for="file of files"
+          :key="file.name"
+          :file="file"
+          :selected="selectedFileNames.includes(file.name)"
+          @update:selected="setFileSelected(file.name, $event)"
+          @delete="removeFile(file.name)"
+        />
+      </n-flex>
+    </section>
 
     <n-alert
       v-if="operation.state.status !== 'idle'"
@@ -181,18 +231,35 @@ const showListModal = ref(false);
       </n-flex>
     </n-alert>
 
+    <section
+      v-if="operation.state.outputs.length > 0"
+      class="toolbox-file-section"
+    >
+      <n-h2 style="margin: 0">处理结果</n-h2>
+      <n-flex vertical size="small">
+        <toolbox-file-card
+          v-for="file of operation.state.outputs"
+          :key="file.name"
+          :file="file"
+          kind="result"
+          :selectable="false"
+          :removable="false"
+        />
+      </n-flex>
+    </section>
+
     <n-tabs type="segment" animated style="margin-top: 48px">
       <n-tab-pane name="0" tab="术语表">
-        <toolbox-item-glossary :files="files" />
+        <toolbox-item-glossary :files="selectedFiles" />
       </n-tab-pane>
       <n-tab-pane name="1" tab="EPUB：压缩图片">
-        <toolbox-item-compress-image :files="files" />
+        <toolbox-item-compress-image :files="selectedFiles" />
       </n-tab-pane>
       <n-tab-pane name="2" tab="TXT：修复OCR换行">
-        <toolbox-item-fix-ocr :files="files" />
+        <toolbox-item-fix-ocr :files="selectedFiles" />
       </n-tab-pane>
       <n-tab-pane name="3" tab="EPUB：转换成TXT">
-        <toolbox-item-convert v-model:files="files" />
+        <toolbox-item-convert :files="selectedFiles" />
       </n-tab-pane>
     </n-tabs>
 
@@ -209,7 +276,19 @@ const showListModal = ref(false);
   overflow-wrap: anywhere;
 }
 
+.toolbox-file-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 920px;
+  margin-top: 24px;
+}
+
 @media (max-width: 639px) {
+  .toolbox-file-section > :first-child {
+    align-items: flex-start !important;
+  }
+
   .toolbox-operation :deep(.n-alert-body__content) {
     min-width: 0;
   }

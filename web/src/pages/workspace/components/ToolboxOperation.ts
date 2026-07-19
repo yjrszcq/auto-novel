@@ -16,6 +16,7 @@ export interface ToolboxOperationState {
   succeeded: number;
   failed: number;
   currentName: string;
+  outputs: ParsedFile[];
   failures: Toolbox.BatchFailure[];
   busy: boolean;
 }
@@ -43,6 +44,7 @@ export const createToolboxOperation = (): ToolboxOperationController => {
     succeeded: 0,
     failed: 0,
     currentName: '',
+    outputs: [],
     failures: [],
     busy: false,
   });
@@ -61,6 +63,7 @@ export const createToolboxOperation = (): ToolboxOperationController => {
       succeeded: 0,
       failed: 0,
       currentName: '',
+      outputs: [],
       failures: [],
       busy: true,
     });
@@ -81,6 +84,7 @@ export const createToolboxOperation = (): ToolboxOperationController => {
         completed: result.completed,
         succeeded: result.outputs.length,
         failed: result.failures.length,
+        outputs: result.outputs,
         failures: result.failures,
       });
     } catch (error) {

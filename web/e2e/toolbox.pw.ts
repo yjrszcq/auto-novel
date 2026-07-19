@@ -91,6 +91,22 @@ test('previews compressed EPUB images without leaving the viewport', async ({
     mimeType: 'application/epub+zip',
     buffer: await createToolboxEpub(cover),
   });
+  const sourceSection = page.locator('.toolbox-file-section').filter({
+    has: page.getByRole('heading', { name: '源文件', exact: true }),
+  });
+  await expect(sourceSection).toContainText('已选择 1/1');
+  await expect(sourceSection).toContainText('toolbox-image.epub');
+  await expect(sourceSection).toContainText('EPUB');
+  await expect(sourceSection).toContainText('源文件');
+  await expect(sourceSection).not.toContainText('计算中');
+  await expect(
+    page.getByRole('checkbox', { name: '选择 toolbox-image.epub' }),
+  ).toBeChecked();
+
+  await page.getByRole('button', { name: '预览 toolbox-image.epub' }).click();
+  await expect(page.getByText('工具箱正文')).toBeVisible();
+  await page.keyboard.press('Escape');
+
   await page.getByText('EPUB：压缩图片', { exact: true }).click();
   await page.getByText('PNG', { exact: true }).click();
   await expect(
@@ -176,11 +192,18 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   const operation = page.locator('.toolbox-operation');
   await expect(operation).toContainText('压缩图片');
   await expect(operation).toContainText('已完成 1/1');
+  const resultSection = page.locator('.toolbox-file-section').filter({
+    has: page.getByRole('heading', { name: '处理结果', exact: true }),
+  });
+  await expect(resultSection).toContainText('toolbox-image.epub');
+  await expect(resultSection).toContainText('处理结果');
   const operationBounds = await operation.boundingBox();
   expect(operationBounds).not.toBeNull();
   expect(operationBounds!.x).toBeGreaterThanOrEqual(0);
   expect(operationBounds!.x + operationBounds!.width).toBeLessThanOrEqual(390);
 
+  await page.getByRole('button', { name: '清空选择', exact: true }).click();
+  await expect(sourceSection).toContainText('已选择 0/1');
   await page.getByText('TXT：修复OCR换行', { exact: true }).click();
   await page.getByRole('button', { name: '修复', exact: true }).click();
   await expect(operation).toContainText('修复 OCR 换行');
