@@ -2216,6 +2216,9 @@ onBeforeUnmount(() => {
               :segments="chapter.segments"
               :mode="getChapterRenderedMode(chapter)"
               :annotations="annotations"
+              :flow="resolvedFlow"
+              :double-spread="usesDoublePageSpread"
+              :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               @content-change="handleSegmentContentChange"
               @link-activate="navigateToEpubHref"
             />
@@ -2239,6 +2242,9 @@ onBeforeUnmount(() => {
           :segments="result.chapter.segments"
           :mode="renderedMode"
           :annotations="annotations"
+          :flow="resolvedFlow"
+          :double-spread="usesDoublePageSpread"
+          :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
           @content-change="handleSegmentContentChange"
           @link-activate="navigateToEpubHref"
         />

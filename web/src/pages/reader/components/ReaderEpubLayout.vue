@@ -3,6 +3,7 @@ import type {
   ReaderAnnotation,
   ReaderEpubChapterContent,
   ReaderEpubDocumentSlice,
+  ReaderFlow,
   ReaderSegment,
 } from '@/model/Reader';
 
@@ -16,6 +17,9 @@ const props = defineProps<{
   segments: ReaderSegment[];
   mode: RenderedReaderMode;
   annotations: ReaderAnnotation[];
+  flow: ReaderFlow;
+  doubleSpread?: boolean;
+  layoutRevision: string;
 }>();
 
 const emit = defineEmits<{
@@ -26,7 +30,7 @@ const emit = defineEmits<{
 const layout = ref<HTMLElement>();
 let session: EpubResourceSession | undefined;
 let renderGeneration = 0;
-let fixedLayoutResizeFrame: number | undefined;
+let layoutResizeFrame: number | undefined;
 
 const BLOCKED_ELEMENTS = new Set([
   'base',
@@ -296,39 +300,74 @@ const applyReaderMode = (wrapper: HTMLElement) => {
     });
 };
 
-const sizeFixedLayout = (
+const sizeDocumentLayout = (
   host: HTMLElement,
   wrapper: HTMLElement,
   slice: ReaderEpubDocumentSlice,
 ) => {
+  const viewport = layout.value?.parentElement;
+  if (props.flow === 'paginated' && slice.layout === 'reflowable') {
+    const width = Math.max(1, viewport?.clientWidth ?? host.clientWidth);
+    const height = Math.max(1, viewport?.clientHeight ?? window.innerHeight);
+    host.style.display = 'block';
+    host.style.height = `${height}px`;
+    host.style.overflow = 'visible';
+    wrapper.style.boxSizing = 'border-box';
+    wrapper.style.width = `${width}px`;
+    wrapper.style.height = `${height}px`;
+    wrapper.style.padding = '44px var(--reader-page-padding) 24px';
+    wrapper.style.columnCount = props.doubleSpread ? '2' : '1';
+    wrapper.style.columnGap = 'calc(var(--reader-page-padding) * 2)';
+    wrapper.style.columnFill = 'auto';
+    host.style.width = `${Math.max(width, wrapper.scrollWidth)}px`;
+    host.style.flex = '0 0 auto';
+    return;
+  }
   if (slice.layout !== 'pre-paginated') {
     host.style.removeProperty('display');
     host.style.removeProperty('height');
     host.style.removeProperty('overflow');
+    host.style.removeProperty('width');
+    host.style.removeProperty('flex');
     return;
   }
   const width = Math.max(1, slice.viewport?.width ?? 1200);
   const height = Math.max(1, slice.viewport?.height ?? 1600);
   host.style.display = 'block';
   host.style.overflow = 'hidden';
-  const availableWidth = Math.max(
-    1,
-    host.clientWidth || host.parentElement?.clientWidth || width,
-  );
-  const scale = availableWidth / width;
-  host.style.height = `${height * scale}px`;
+  const availableWidth = Math.max(1, viewport?.clientWidth ?? host.clientWidth);
+  const availableHeight =
+    props.flow === 'paginated'
+      ? Math.max(1, viewport?.clientHeight ?? window.innerHeight)
+      : Number.POSITIVE_INFINITY;
+  const scale = Math.min(availableWidth / width, availableHeight / height);
+  const renderedWidth = width * scale;
+  const renderedHeight = height * scale;
+  host.style.width = `${availableWidth}px`;
+  host.style.height = `${
+    props.flow === 'paginated' ? availableHeight : renderedHeight
+  }px`;
+  host.style.flex = '0 0 auto';
+  host.style.position = 'relative';
   wrapper.style.width = `${width}px`;
   wrapper.style.height = `${height}px`;
+  wrapper.style.position = 'absolute';
+  wrapper.style.left = `${Math.max(0, (availableWidth - renderedWidth) / 2)}px`;
+  wrapper.style.top = `${
+    props.flow === 'paginated'
+      ? Math.max(0, (availableHeight - renderedHeight) / 2)
+      : 0
+  }px`;
   wrapper.style.transform = `scale(${scale})`;
   wrapper.style.transformOrigin = 'top left';
 };
 
-const resizeFixedLayouts = () => {
-  if (fixedLayoutResizeFrame !== undefined) {
-    cancelAnimationFrame(fixedLayoutResizeFrame);
+const resizeDocumentLayouts = () => {
+  if (layoutResizeFrame !== undefined) {
+    cancelAnimationFrame(layoutResizeFrame);
   }
-  fixedLayoutResizeFrame = requestAnimationFrame(() => {
-    fixedLayoutResizeFrame = undefined;
+  layoutResizeFrame = requestAnimationFrame(() => {
+    layoutResizeFrame = undefined;
     const hosts = Array.from(
       layout.value?.querySelectorAll<HTMLElement>('[data-reader-epub-host]') ??
         [],
@@ -338,7 +377,7 @@ const resizeFixedLayouts = () => {
         host.shadowRoot?.querySelector<HTMLElement>('.epub-document');
       const slice = props.epub.documents[index];
       if (wrapper !== undefined && wrapper !== null && slice !== undefined) {
-        sizeFixedLayout(host, wrapper, slice);
+        sizeDocumentLayout(host, wrapper, slice);
       }
     });
   });
@@ -437,7 +476,8 @@ const renderSlice = async (
   content.append(wrapper);
   if (isCurrent()) {
     shadow.replaceChildren(content);
-    sizeFixedLayout(host, wrapper, slice);
+    sizeDocumentLayout(host, wrapper, slice);
+    wrapper.addEventListener('load', resizeDocumentLayouts, true);
   }
 };
 
@@ -469,28 +509,41 @@ const render = async () => {
 };
 
 watch(
-  () => [props.epub, props.segments, props.mode, props.annotations] as const,
+  () =>
+    [
+      props.epub,
+      props.segments,
+      props.mode,
+      props.annotations,
+      props.flow,
+      props.doubleSpread,
+      props.layoutRevision,
+    ] as const,
   () => void render(),
   { immediate: true },
 );
 
-onMounted(() => window.addEventListener('resize', resizeFixedLayouts));
+onMounted(() => window.addEventListener('resize', resizeDocumentLayouts));
 
 onBeforeUnmount(() => {
   renderGeneration += 1;
   session?.dispose();
-  window.removeEventListener('resize', resizeFixedLayouts);
-  if (fixedLayoutResizeFrame !== undefined) {
-    cancelAnimationFrame(fixedLayoutResizeFrame);
+  window.removeEventListener('resize', resizeDocumentLayouts);
+  if (layoutResizeFrame !== undefined) {
+    cancelAnimationFrame(layoutResizeFrame);
   }
 });
 </script>
 
 <template>
-  <section ref="layout" class="reader-epub-layout">
+  <section
+    ref="layout"
+    class="reader-epub-layout"
+    :class="`reader-epub-layout--${props.flow}`"
+  >
     <div
-      v-for="documentSlice in props.epub.documents"
-      :key="documentSlice.sourcePath"
+      v-for="(documentSlice, documentIndex) in props.epub.documents"
+      :key="`${documentSlice.sourcePath}/${documentIndex}`"
       class="reader-epub-layout__document"
       data-reader-epub-host
     />
@@ -501,5 +554,12 @@ onBeforeUnmount(() => {
 .reader-epub-layout,
 .reader-epub-layout__document {
   display: contents;
+}
+
+.reader-epub-layout--paginated {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  height: 100%;
 }
 </style>

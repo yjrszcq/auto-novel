@@ -85,6 +85,7 @@ const createStandardsFixture = async () => {
 <p>第一段 <a href="notes.xhtml#note-1">参见附录</a> <a href="https://example.org/author">外部网站</a></p>
 <ul><li>第一项</li><li>第二项 <ruby>字<rt>じ</rt></ruby></li></ul>
 <table><tbody><tr><td>单元格</td></tr></tbody></table>
+${Array.from({ length: 30 }, (_, index) => `<p>分页测试段落 ${index + 1}</p>`).join('\n')}
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>
 <math xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math><audio src="../Media/sample.mp3" controls="controls"/>
 <img src="https://example.com/tracker.png" alt="应被阻止"/><script>window.epubScriptExecuted = true</script></section>
@@ -242,7 +243,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   expect(cover?.paragraphs).toEqual([]);
   expect(cover?.rich?.documents[0]?.content).toContain('<img');
   const chapter = richProjection.find((item) => item.id.includes('#start'));
-  expect(chapter?.paragraphs).toEqual([
+  expect(chapter?.paragraphs.slice(0, 5)).toEqual([
     '第一章',
     '第一段 参见附录 外部网站',
     '第一项',
@@ -333,10 +334,53 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       remoteSource: null,
       fontFamily: 'Fixture',
     });
+  const richHost = page
+    .locator('[data-reader-epub-host]')
+    .filter({ hasText: '分页测试段落 30' });
+  const paginatedViewport = page.locator('.book-reader__content--paginated');
+  await expect
+    .poll(() =>
+      paginatedViewport.evaluate(
+        (viewport) => viewport.scrollWidth > viewport.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.keyboard.press('PageDown');
+  await expect
+    .poll(() => paginatedViewport.evaluate((viewport) => viewport.scrollLeft))
+    .toBeGreaterThan(0);
+  await page.keyboard.press('PageUp');
+  await expect
+    .poll(() => paginatedViewport.evaluate((viewport) => viewport.scrollLeft))
+    .toBe(0);
+  const chooseFlow = async (label: string) => {
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    const flowSetting = page
+      .locator('.book-reader__settings-theme')
+      .filter({ hasText: '阅读流' });
+    await flowSetting.locator('.n-base-selection').click();
+    await page
+      .locator('.n-base-select-menu')
+      .getByText(label, { exact: true })
+      .click();
+    await page.keyboard.press('Escape');
+  };
+  await chooseFlow('滚动');
+  await expect(page.locator('.book-reader__content--scrolled')).toBeVisible();
+  await expect(richHost).not.toHaveAttribute('style', /width:/);
+  await chooseFlow('自动（电脑分页，手机滚动）');
+  await expect(page.locator('.book-reader__content--paginated')).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator('.book-reader__content--paginated')
+        .evaluate((viewport) => viewport.scrollWidth > viewport.clientWidth),
+    )
+    .toBe(true);
   expect(remotePublicationRequests).toEqual([]);
   expect(await page.evaluate(() => 'epubScriptExecuted' in window)).toBe(false);
   const firstSegmentId = chapter!.segmentIds[0];
-  const richHost = page.locator('[data-reader-epub-host]');
   await richHost.evaluate((host, segmentId) => {
     const target = host.shadowRoot?.querySelector(
       `[data-reader-segment-id="${segmentId}"]`,
