@@ -133,6 +133,7 @@ corepack pnpm lint
 corepack pnpm test
 corepack pnpm test:performance
 corepack pnpm run build
+corepack pnpm test:pwa
 corepack pnpm test:e2e
 corepack pnpm test:gate
 corepack pnpm audit --prod
@@ -145,10 +146,13 @@ Vue TypeScript 检查；lint 覆盖应用源码、单元测试和端到端测试
 通过标准。
 
 `test:gate` 会依次执行严格 lint、全部 Vitest、生产构建/类型检查和完整
-Playwright 核心流程，不需要商业翻译服务凭据。Playwright 默认自行启动 Vite；
+PWA 离线检查、Playwright 核心流程，不需要商业翻译服务凭据。Playwright 默认自行启动 Vite；
 `test:performance` 使用本地临时 HTTP 服务和 fake IndexedDB，验证分段、GPT 与
 Sakura 共享池高水位、多工作者热加入/停止重排、独立服务退避、取消/恢复、缓存身份、千章读取
 和长章节窗口，也不需要真实 API Key。
+`test:pwa` 会构建生产包并临时启动 Vite Preview，检查 Web App Manifest、安装
+图标、Service Worker 控制权、手机视口下的离线深路由，以及运行时配置不会被
+错误缓存。它和浏览器测试一样，需要先安装 Playwright Chromium。
 如需验证已经启动的本地或容器实例，可指定地址，例如：
 
 ```bash
@@ -179,6 +183,23 @@ corepack pnpm test:runtime-smoke http://127.0.0.1:8011 docker
   "defaultBookCoverImage": "images/default-cover.webp"
 }
 ```
+
+### 安装为网页 App（PWA）
+
+生产包已包含 Web App Manifest、桌面/手机安装图标和离线应用外壳。Chrome、
+Edge 等浏览器可从地址栏或浏览器菜单选择“安装应用”；iPhone/iPad 使用 Safari
+的“共享”→“添加到主屏幕”。安装后，书籍和阅读数据仍保存在当前浏览器的
+IndexedDB 中，不会上传到服务器，也不会与另一台设备自动同步。
+
+除 `localhost` 外，Service Worker 和安装功能必须通过 **HTTPS** 提供。若从局域网
+IP 或域名访问 Docker 容器，请在 Caddy、Nginx 或其他反向代理上配置有效 TLS；
+普通 HTTP 下网站仍可打开，但浏览器不会把它视为可安装 PWA。
+
+应用壳和已构建的页面资源可以离线打开，已经导入的本地书籍仍可读取。GPT、
+Sakura、远程封面、运行时公告和配置等网络资源离线时不可用；这些动态资源不会
+写入 Service Worker 缓存。检测到新版本时页面会提示“立即更新”，只有用户确认
+后才重新加载，避免自动打断当前翻译。清除站点数据、卸载应用或使用无痕模式都
+可能移除本地书籍和阅读记录，请按需先下载备份。
 
 将 Logo、背景图或默认书籍封面上传到映射目录的 `images/` 后，在 `logoImage`、`homeBackgroundImage` 或 `defaultBookCoverImage` 填入相对路径，例如 `images/logo.png`。值以 `http://` 或 `https://` 开头时会被当作远程图片链接，其他非空值均作为相对 `/app/config` 的本地文件路径处理。
 
