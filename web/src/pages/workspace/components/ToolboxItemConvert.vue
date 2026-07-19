@@ -23,6 +23,7 @@ const includeVolumeTitles = ref(true);
 const includeDescription = ref(false);
 const previews = shallowRef<ConversionPreview[]>([]);
 const previewReady = ref(false);
+let previewRequest = 0;
 const epubFiles = computed(() =>
   props.files.filter((file): file is Epub => file.type === 'epub'),
 );
@@ -36,6 +37,7 @@ const options = (): StandardTxtOptions => ({
 });
 
 const clearPreview = () => {
+  previewRequest += 1;
   previews.value = [];
   previewReady.value = false;
 };
@@ -51,8 +53,9 @@ watch(
 );
 
 const previewConversion = async () => {
+  const request = ++previewRequest;
   const selectedOptions = options();
-  previews.value = await Promise.all(
+  const nextPreviews = await Promise.all(
     epubFiles.value.map(async (file) => {
       const novel = StandardNovel.fromEpub(file);
       const output = await StandardNovel.toTxt(novel, selectedOptions);
@@ -64,8 +67,14 @@ const previewConversion = async () => {
       };
     }),
   );
+  if (request !== previewRequest) return;
+  previews.value = nextPreviews;
   previewReady.value = true;
 };
+
+onBeforeUnmount(() => {
+  previewRequest += 1;
+});
 
 const generateResults = () => {
   const files = previews.value.map(({ file }) => file);

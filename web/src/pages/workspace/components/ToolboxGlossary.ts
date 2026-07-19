@@ -107,6 +107,9 @@ const validateTranslations = (words: string[], translated: string[]) => {
       `翻译行数不一致：请求 ${words.length}，返回 ${translated.length}`,
     );
   }
+  if (translated.some((value) => value.trim().length === 0)) {
+    throw new Error('翻译结果包含空译文');
+  }
   return translated;
 };
 

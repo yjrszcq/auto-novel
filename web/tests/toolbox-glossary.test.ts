@@ -86,6 +86,13 @@ describe('toolbox glossary workflow', () => {
     expect(translate).toHaveBeenCalledTimes(3);
   });
 
+  it('treats empty translations as malformed output', async () => {
+    const result = await translateGlossaryWords(['アルファ'], async () => ['']);
+
+    expect(result.translations.size).toBe(0);
+    expect([...result.failures.keys()]).toEqual(['アルファ']);
+  });
+
   it('never overwrites manually edited translations', () => {
     expect(
       mergeAutomaticTranslations(

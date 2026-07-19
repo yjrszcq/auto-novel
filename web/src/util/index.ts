@@ -1,9 +1,11 @@
 export const downloadFile = (filename: string, blob: Blob) => {
   const el = document.createElement('a');
-  el.href = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  el.href = url;
   el.target = '_blank';
   el.download = filename;
   el.click();
+  globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
 export const querySearch = <T>(

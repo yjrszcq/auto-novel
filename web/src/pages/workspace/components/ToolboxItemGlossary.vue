@@ -111,6 +111,13 @@ watch(
     translationController?.abort(
       new DOMException('源文件已变化', 'AbortError'),
     );
+    sourceCounts.value = new Map();
+    deletedWords.value = new Set();
+    deletionHistory.value = [];
+    selectedWords.value = [];
+    translations.value = {};
+    manuallyEdited.value = new Set();
+    translationFailures.value = new Map();
     extractionLoading.value = true;
     extractionError.value = '';
     try {
@@ -123,9 +130,6 @@ watch(
       );
       if (request !== extractionRequest) return;
       sourceCounts.value = mergeGlossaryCounts(counts);
-      deletedWords.value = new Set();
-      deletionHistory.value = [];
-      selectedWords.value = [];
     } catch (error) {
       if (request === extractionRequest) extractionError.value = String(error);
     } finally {
@@ -394,14 +398,18 @@ onBeforeUnmount(() => {
     <n-flex align="center">
       <c-button
         label="复制术语表"
-        :disabled="activeCandidates.length === 0"
+        :disabled="
+          extractionLoading || translating || activeCandidates.length === 0
+        "
         size="small"
         :round="false"
         @action="copyGlossary"
       />
       <c-button
         label="下载术语表"
-        :disabled="activeCandidates.length === 0"
+        :disabled="
+          extractionLoading || translating || activeCandidates.length === 0
+        "
         size="small"
         :round="false"
         @action="downloadGlossary"

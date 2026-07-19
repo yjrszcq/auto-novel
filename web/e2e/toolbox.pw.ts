@@ -231,6 +231,20 @@ test('previews compressed EPUB images without leaving the viewport', async ({
     'toolbox-image.epub',
   );
   expect(downloadCount).toBe(1);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const lifecycle = (
+          window as typeof window & {
+            toolboxObjectUrls: { created: string[]; revoked: string[] };
+          }
+        ).toolboxObjectUrls;
+        return lifecycle.created.every((url) =>
+          lifecycle.revoked.includes(url),
+        );
+      }),
+    )
+    .toBe(true);
 
   await page.getByRole('button', { name: '移除所选', exact: true }).click();
   await expect(resultSection).toHaveCount(0);
