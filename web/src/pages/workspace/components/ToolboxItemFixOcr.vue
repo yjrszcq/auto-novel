@@ -3,12 +3,13 @@ import type { ParsedFile, Txt } from '@/util/file';
 import { RegexUtil } from '@/util';
 
 import { Toolbox } from './Toolbox';
+import { useToolboxOperation } from './ToolboxOperation';
 
 const props = defineProps<{
   files: ParsedFile[];
 }>();
 
-const message = useMessage();
+const operation = useToolboxOperation();
 
 const fixOcrForTxt = async (txt: Txt) => {
   const endsCorrectly = (s: string) => {
@@ -51,19 +52,23 @@ const fixOcrForTxt = async (txt: Txt) => {
   txt.text = lines.join('\n');
 };
 
-const fixOcr = () =>
-  Toolbox.modifyFiles(
-    props.files.filter((file) => file.type === 'txt'),
-    fixOcrForTxt,
-    (e) => message.error(`发生错误：${e}`),
+const fixOcr = () => {
+  const files = props.files.filter((file) => file.type === 'txt');
+  return operation.run('修复 OCR 换行', files.length, (options) =>
+    Toolbox.modifyFiles(files, fixOcrForTxt, options),
   );
+};
 </script>
 
 <template>
   <n-flex vertical>
     OCR输出的文本通常存在额外的换行符，导致翻译器错误。当前修复方法是检测每一行的结尾是否是字符（汉字/日文假名/韩文字符/英文字母/全角半角逗号），如果是的话则删除行尾的换行符。
     <n-flex>
-      <c-button label="修复" @action="fixOcr" />
+      <c-button
+        label="修复"
+        :disabled="operation.state.busy"
+        @action="fixOcr"
+      />
     </n-flex>
   </n-flex>
 </template>

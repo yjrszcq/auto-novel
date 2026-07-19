@@ -6,7 +6,58 @@ import { useLocalVolumeStore } from '@/stores';
 import type { ParsedFile } from '@/util/file';
 import { parseFile } from '@/util/file';
 
+import {
+  createToolboxOperation,
+  toolboxOperationKey,
+} from './components/ToolboxOperation';
+
 const message = useMessage();
+
+const operation = createToolboxOperation();
+provide(toolboxOperationKey, operation);
+onBeforeUnmount(operation.dispose);
+
+const operationPercentage = computed(() =>
+  operation.state.total === 0
+    ? 0
+    : Math.round((operation.state.completed / operation.state.total) * 100),
+);
+const operationAlertType = computed(() => {
+  switch (operation.state.status) {
+    case 'success':
+      return 'success';
+    case 'failed':
+      return 'error';
+    case 'partial':
+    case 'empty':
+    case 'cancelled':
+    case 'cancelling':
+      return 'warning';
+    default:
+      return 'info';
+  }
+});
+const operationSummary = computed(() => {
+  const state = operation.state;
+  switch (state.status) {
+    case 'running':
+      return `正在处理 ${state.completed}/${state.total}${state.currentName ? ` · ${state.currentName}` : ''}`;
+    case 'cancelling':
+      return '正在取消，当前文件完成后停止';
+    case 'success':
+      return `已完成 ${state.succeeded}/${state.total}`;
+    case 'partial':
+      return `部分完成：成功 ${state.succeeded}，失败 ${state.failed}`;
+    case 'failed':
+      return `处理失败 ${state.failed}/${state.total}`;
+    case 'empty':
+      return '没有符合当前工具要求的文件';
+    case 'cancelled':
+      return `已取消：完成 ${state.completed}/${state.total}`;
+    default:
+      return '';
+  }
+});
 
 const files = shallowRef<ParsedFile[]>([]);
 
@@ -96,6 +147,40 @@ const showListModal = ref(false);
       </n-text>
     </n-flex>
 
+    <n-alert
+      v-if="operation.state.status !== 'idle'"
+      class="toolbox-operation"
+      :title="operation.state.label"
+      :type="operationAlertType"
+      style="margin-top: 16px"
+    >
+      <n-flex vertical size="small">
+        <n-flex align="center" justify="space-between" :wrap="false">
+          <n-text>{{ operationSummary }}</n-text>
+          <n-button
+            v-if="operation.state.status === 'running'"
+            size="small"
+            @click="operation.cancel"
+          >
+            取消
+          </n-button>
+        </n-flex>
+        <n-progress
+          v-if="operation.state.total > 0"
+          type="line"
+          :percentage="operationPercentage"
+          :show-indicator="false"
+        />
+        <n-text v-if="operation.state.failures.length > 0" depth="3">
+          {{
+            operation.state.failures
+              .map(({ name, error }) => `${name}：${String(error)}`)
+              .join('；')
+          }}
+        </n-text>
+      </n-flex>
+    </n-alert>
+
     <n-tabs type="segment" animated style="margin-top: 48px">
       <n-tab-pane name="0" tab="术语表">
         <toolbox-item-glossary :files="files" />
@@ -117,3 +202,16 @@ const showListModal = ref(false);
     />
   </div>
 </template>
+
+<style scoped>
+.toolbox-operation {
+  max-width: 720px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .toolbox-operation :deep(.n-alert-body__content) {
+    min-width: 0;
+  }
+}
+</style>

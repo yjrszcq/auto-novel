@@ -160,4 +160,20 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   expect(urlLifecycle.revoked).toEqual(
     expect.arrayContaining(urlLifecycle.created),
   );
+
+  const compressedDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: '压缩', exact: true }).click();
+  await compressedDownload;
+  const operation = page.locator('.toolbox-operation');
+  await expect(operation).toContainText('压缩图片');
+  await expect(operation).toContainText('已完成 1/1');
+  const operationBounds = await operation.boundingBox();
+  expect(operationBounds).not.toBeNull();
+  expect(operationBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(operationBounds!.x + operationBounds!.width).toBeLessThanOrEqual(390);
+
+  await page.getByText('TXT：修复OCR换行', { exact: true }).click();
+  await page.getByRole('button', { name: '修复', exact: true }).click();
+  await expect(operation).toContainText('修复 OCR 换行');
+  await expect(operation).toContainText('没有符合当前工具要求的文件');
 });

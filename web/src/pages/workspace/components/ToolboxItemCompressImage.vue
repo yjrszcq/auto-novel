@@ -6,12 +6,14 @@ import type { Epub, ParsedFile } from '@/util/file';
 
 import { Toolbox } from './Toolbox';
 import { assertEncodedImageType, resolveImageOutputType } from './ToolboxImage';
+import { useToolboxOperation } from './ToolboxOperation';
 
 const props = defineProps<{
   files: ParsedFile[];
 }>();
 
 const message = useMessage();
+const operation = useToolboxOperation();
 
 const quality = ref(0.8);
 const scaleRatio = ref(1.0);
@@ -67,12 +69,12 @@ const compressImagesForEpub = async (epub: Epub) => {
   }
 };
 
-const compressImages = () =>
-  Toolbox.modifyFiles(
-    props.files.filter((file) => file.type === 'epub'),
-    compressImagesForEpub,
-    (e) => message.error(`发生错误：${e}`),
+const compressImages = () => {
+  const files = props.files.filter((file) => file.type === 'epub');
+  return operation.run('压缩图片', files.length, (options) =>
+    Toolbox.modifyFiles(files, compressImagesForEpub, options),
   );
+};
 
 interface EpubImage {
   id: string;
@@ -211,8 +213,16 @@ onBeforeUnmount(clearDetailList);
     </c-action-wrapper>
 
     <n-button-group>
-      <c-button label="压缩" @action="compressImages" />
-      <c-button label="预览效果" @action="toggleShowDetail" />
+      <c-button
+        label="压缩"
+        :disabled="operation.state.busy"
+        @action="compressImages"
+      />
+      <c-button
+        label="预览效果"
+        :disabled="operation.state.busy"
+        @action="toggleShowDetail"
+      />
     </n-button-group>
 
     <template v-if="showDetail">
