@@ -515,19 +515,19 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   );
   await expect(page.getByText('GPT 翻译器', { exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 1280, height: 800 });
-  const desktopToolbarBounds = await page
-    .locator('.glossary-toolbar')
-    .boundingBox();
-  const desktopConfigButtonBounds = await translatorConfigButton.boundingBox();
-  expect(desktopToolbarBounds).not.toBeNull();
-  expect(desktopConfigButtonBounds).not.toBeNull();
-  expect(
-    Math.abs(
-      desktopToolbarBounds!.x +
-        desktopToolbarBounds!.width -
-        (desktopConfigButtonBounds!.x + desktopConfigButtonBounds!.width),
-    ),
-  ).toBeLessThanOrEqual(2);
+  await expect
+    .poll(() =>
+      page.locator('.glossary-toolbar').evaluate((toolbar) => {
+        const button = toolbar.querySelector<HTMLElement>(
+          '[aria-haspopup="dialog"]',
+        );
+        if (button === null) return Number.POSITIVE_INFINITY;
+        const toolbarBounds = toolbar.getBoundingClientRect();
+        const buttonBounds = button.getBoundingClientRect();
+        return Math.abs(toolbarBounds.right - buttonBounds.right);
+      }),
+    )
+    .toBeLessThanOrEqual(2);
   await translatorConfigButton.click();
   await expect(translatorConfigButton).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByText('GPT 翻译器', { exact: true })).toBeVisible();
