@@ -1,6 +1,8 @@
 export { translate } from './Translate';
 export { GptWorkerPipeline } from './GptWorkerPipeline';
 export type { GptWorkerPipelineSnapshot } from './GptWorkerPipeline';
+export { SakuraWorkerPipeline } from './SakuraWorkerPipeline';
+export type { SakuraWorkerPipelineSnapshot } from './SakuraWorkerPipeline';
 export { SharedWorkerPool } from './SharedWorkerPool';
 export type {
   SharedWorkerSnapshot,

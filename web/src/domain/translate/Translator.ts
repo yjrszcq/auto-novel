@@ -83,6 +83,13 @@ export class Translator {
     }
   }
 
+  sakuraProfile() {
+    if (this.segTranslator instanceof SakuraTranslator) {
+      return this.segTranslator.profile();
+    }
+    return undefined;
+  }
+
   async translatePlain(textJp: string) {
     const result = await this.translate(textJp.split('\n'));
     return result.join('\n');

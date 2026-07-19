@@ -52,6 +52,15 @@ export class SakuraTranslator implements SegmentTranslator {
     return this;
   }
 
+  profile(): SakuraTranslator.Profile {
+    return {
+      model: this.model?.id ?? '未知',
+      version: this.version,
+      segLength: this.segLength,
+      prevSegLength: this.prevSegLength,
+    };
+  }
+
   async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, prevSegs, signal } = context;
     const formatRetryCount = normalizeFormatRetryCount(
@@ -257,6 +266,13 @@ export class SakuraTranslator implements SegmentTranslator {
 }
 
 export namespace SakuraTranslator {
+  export type Profile = {
+    model: string;
+    version: string;
+    segLength: number;
+    prevSegLength: number;
+  };
+
   export interface Config {
     endpoint: string;
     segLength?: number;
