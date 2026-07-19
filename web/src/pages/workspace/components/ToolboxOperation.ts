@@ -1,4 +1,4 @@
-import { inject, reactive, readonly } from 'vue';
+import { inject, markRaw, reactive, readonly } from 'vue';
 import type { InjectionKey } from 'vue';
 
 import type { ParsedFile } from '@/util/file';
@@ -16,7 +16,7 @@ export interface ToolboxOperationState {
   succeeded: number;
   failed: number;
   currentName: string;
-  outputs: ParsedFile[];
+  outputs: Toolbox.BatchOutput[];
   failures: Toolbox.BatchFailure[];
   busy: boolean;
 }
@@ -29,6 +29,7 @@ export interface ToolboxOperationController {
   state: Readonly<ToolboxOperationState>;
   run: (label: string, total: number, task: ToolboxTask) => Promise<void>;
   cancel: () => void;
+  setOutputs: (outputs: Toolbox.BatchOutput[]) => void;
   dispose: () => void;
 }
 
@@ -36,6 +37,12 @@ export const toolboxOperationKey: InjectionKey<ToolboxOperationController> =
   Symbol('toolbox-operation');
 
 export const createToolboxOperation = (): ToolboxOperationController => {
+  const retainOutputFiles = (outputs: Toolbox.BatchOutput[]) =>
+    outputs.map((output) => ({
+      sourceName: output.sourceName,
+      file: markRaw(output.file),
+    }));
+
   const state = reactive<ToolboxOperationState>({
     status: 'idle',
     label: '',
@@ -84,7 +91,7 @@ export const createToolboxOperation = (): ToolboxOperationController => {
         completed: result.completed,
         succeeded: result.outputs.length,
         failed: result.failures.length,
-        outputs: result.outputs,
+        outputs: retainOutputFiles(result.outputs),
         failures: result.failures,
       });
     } catch (error) {
@@ -110,13 +117,17 @@ export const createToolboxOperation = (): ToolboxOperationController => {
     activeController.abort(new DOMException('操作已取消', 'AbortError'));
   };
 
+  const setOutputs = (outputs: Toolbox.BatchOutput[]) => {
+    state.outputs = retainOutputFiles(outputs);
+  };
+
   const dispose = () => {
     disposed = true;
     activeController?.abort(new DOMException('页面已关闭', 'AbortError'));
     activeController = undefined;
   };
 
-  return { state: readonly(state), run, cancel, dispose };
+  return { state: readonly(state), run, cancel, setOutputs, dispose };
 };
 
 export const useToolboxOperation = () => {

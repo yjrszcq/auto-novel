@@ -22,8 +22,13 @@ export namespace Toolbox {
     status: BatchStatus;
     total: number;
     completed: number;
-    outputs: T[];
+    outputs: BatchOutput<T>[];
     failures: BatchFailure[];
+  }
+
+  export interface BatchOutput<T extends ParsedFile = ParsedFile> {
+    sourceName: string;
+    file: T;
   }
 
   export interface DownloadOptions {
@@ -34,7 +39,6 @@ export namespace Toolbox {
   export interface BatchOptions {
     signal?: AbortSignal;
     onProgress?: (progress: BatchProgress) => void;
-    download?: (files: ParsedFile[], signal?: AbortSignal) => Promise<void>;
   }
 
   type ModifyFn<T extends ParsedFile> = (
@@ -94,7 +98,7 @@ export namespace Toolbox {
 
   const statusFor = <T extends ParsedFile>(
     total: number,
-    outputs: T[],
+    outputs: BatchOutput<T>[],
     failures: BatchFailure[],
   ): BatchStatus => {
     if (total === 0) return 'empty';
@@ -105,7 +109,7 @@ export namespace Toolbox {
   const cancelledResult = <T extends ParsedFile>(
     total: number,
     completed: number,
-    outputs: T[],
+    outputs: BatchOutput<T>[],
     failures: BatchFailure[],
   ): BatchResult<T> => ({
     status: 'cancelled',
@@ -120,7 +124,7 @@ export namespace Toolbox {
     process: (file: T, signal?: AbortSignal) => Promise<ParsedFile>,
     options: BatchOptions,
   ): Promise<BatchResult<ParsedFile>> => {
-    const outputs: ParsedFile[] = [];
+    const outputs: BatchOutput[] = [];
     const failures: BatchFailure[] = [];
     let completed = 0;
 
@@ -140,7 +144,7 @@ export namespace Toolbox {
         if (options.signal?.aborted) {
           return cancelledResult(files.length, completed, outputs, failures);
         }
-        outputs.push(output);
+        outputs.push({ sourceName: file.name, file: output });
       } catch (error) {
         if (options.signal?.aborted) {
           return cancelledResult(files.length, completed, outputs, failures);
@@ -166,36 +170,12 @@ export namespace Toolbox {
     };
   };
 
-  const downloadSuccessful = async <T extends ParsedFile>(
-    result: BatchResult<T>,
-    options: BatchOptions,
-  ): Promise<BatchResult<T>> => {
-    if (result.status !== 'success' && result.status !== 'partial') {
-      return result;
-    }
-    try {
-      const download =
-        options.download ??
-        ((files, signal) => downloadFiles(files, { signal }));
-      await download(result.outputs, options.signal);
-      if (!options.signal?.aborted) return result;
-    } catch (error) {
-      if (!options.signal?.aborted) throw error;
-    }
-    return cancelledResult(
-      result.total,
-      result.completed,
-      result.outputs,
-      result.failures,
-    );
-  };
-
   export const modifyFiles = async <T extends ParsedFile>(
     files: T[],
     modify: ModifyFn<T>,
     options: BatchOptions = {},
   ) => {
-    const result = await processFiles(
+    return processFiles(
       files,
       async (file, signal) => {
         const newFile = (await file.clone()) as T;
@@ -205,7 +185,6 @@ export namespace Toolbox {
       },
       options,
     );
-    return downloadSuccessful(result, options);
   };
 
   export const convertFiles = async <T extends ParsedFile>(
@@ -213,7 +192,7 @@ export namespace Toolbox {
     convert: ConvertFn<T>,
     options: BatchOptions = {},
   ) => {
-    const result = await processFiles(
+    return processFiles(
       files,
       async (file, signal) => {
         const newFile = (await file.clone()) as T;
@@ -222,6 +201,5 @@ export namespace Toolbox {
       },
       options,
     );
-    return downloadSuccessful(result, options);
   };
 }

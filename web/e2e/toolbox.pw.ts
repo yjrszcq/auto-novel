@@ -186,9 +186,11 @@ test('previews compressed EPUB images without leaving the viewport', async ({
     expect.arrayContaining(urlLifecycle.created),
   );
 
-  const compressedDownload = page.waitForEvent('download');
+  let downloadCount = 0;
+  page.on('download', () => {
+    downloadCount += 1;
+  });
   await page.getByRole('button', { name: '压缩', exact: true }).click();
-  await compressedDownload;
   const operation = page.locator('.toolbox-operation');
   await expect(operation).toContainText('压缩图片');
   await expect(operation).toContainText('已完成 1/1');
@@ -197,6 +199,27 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   });
   await expect(resultSection).toContainText('toolbox-image.epub');
   await expect(resultSection).toContainText('处理结果');
+  const resultBounds = await resultSection.boundingBox();
+  expect(resultBounds).not.toBeNull();
+  expect(resultBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(resultBounds!.x + resultBounds!.width).toBeLessThanOrEqual(390);
+  expect(downloadCount).toBe(0);
+
+  const explicitDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: '下载所选', exact: true }).click();
+  expect((await explicitDownload).suggestedFilename()).toBe(
+    'toolbox-image.epub',
+  );
+  expect(downloadCount).toBe(1);
+
+  await page.getByRole('button', { name: '移除所选', exact: true }).click();
+  await expect(resultSection).toHaveCount(0);
+
+  await page.getByRole('button', { name: '压缩', exact: true }).click();
+  await expect(resultSection).toBeVisible();
+  await page.getByRole('button', { name: '替换源文件', exact: true }).click();
+  await expect(resultSection).toHaveCount(0);
+  expect(downloadCount).toBe(1);
   const operationBounds = await operation.boundingBox();
   expect(operationBounds).not.toBeNull();
   expect(operationBounds!.x).toBeGreaterThanOrEqual(0);

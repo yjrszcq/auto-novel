@@ -10,6 +10,7 @@ import {
   createToolboxOperation,
   toolboxOperationKey,
 } from './components/ToolboxOperation';
+import { Toolbox } from './components/Toolbox';
 
 const message = useMessage();
 
@@ -61,6 +62,7 @@ const operationSummary = computed(() => {
 
 const files = shallowRef<ParsedFile[]>([]);
 const selectedFileNames = ref<string[]>([]);
+const selectedResultSources = ref<string[]>([]);
 const selectedFiles = computed(() =>
   files.value.filter((file) => selectedFileNames.value.includes(file.name)),
 );
@@ -80,6 +82,91 @@ const toggleSelectAll = () => {
   selectedFileNames.value = allFilesSelected.value
     ? []
     : files.value.map((file) => file.name);
+};
+
+watch(
+  () => operation.state.outputs,
+  (outputs, previousOutputs) => {
+    const available = new Set(outputs.map((output) => output.sourceName));
+    const previous = new Set(
+      previousOutputs?.map((output) => output.sourceName) ?? [],
+    );
+    selectedResultSources.value = [
+      ...selectedResultSources.value.filter((source) => available.has(source)),
+      ...outputs
+        .map((output) => output.sourceName)
+        .filter((source) => !previous.has(source)),
+    ];
+  },
+);
+
+const selectedResults = computed(() =>
+  operation.state.outputs.filter((output) =>
+    selectedResultSources.value.includes(output.sourceName),
+  ),
+);
+const allResultsSelected = computed(
+  () =>
+    operation.state.outputs.length > 0 &&
+    selectedResultSources.value.length === operation.state.outputs.length,
+);
+
+const setResultSelected = (sourceName: string, selected: boolean) => {
+  selectedResultSources.value = selected
+    ? [...new Set([...selectedResultSources.value, sourceName])]
+    : selectedResultSources.value.filter((item) => item !== sourceName);
+};
+
+const toggleSelectAllResults = () => {
+  selectedResultSources.value = allResultsSelected.value
+    ? []
+    : operation.state.outputs.map((output) => output.sourceName);
+};
+
+const removeResults = (sourceNames: string[]) => {
+  const removed = new Set(sourceNames);
+  operation.setOutputs(
+    operation.state.outputs.filter((output) => !removed.has(output.sourceName)),
+  );
+};
+
+const downloadSelectedResults = async () => {
+  try {
+    await Toolbox.downloadFiles(selectedResults.value.map(({ file }) => file));
+  } catch (error) {
+    message.error(`下载失败：${error}`);
+  }
+};
+
+const replaceSourcesWithResults = () => {
+  if (selectedResults.value.length === 0) return;
+  const nextFiles = [...files.value];
+  const replacements = new Map<string, string>();
+
+  for (const result of selectedResults.value) {
+    const sourceIndex = nextFiles.findIndex(
+      (file) => file.name === result.sourceName,
+    );
+    if (sourceIndex < 0) {
+      message.error(`源文件已不存在：${result.sourceName}`);
+      return;
+    }
+    nextFiles[sourceIndex] = result.file;
+    replacements.set(result.sourceName, result.file.name);
+  }
+
+  if (new Set(nextFiles.map((file) => file.name)).size !== nextFiles.length) {
+    message.error('替换后会产生同名源文件，请先移除冲突文件');
+    return;
+  }
+
+  files.value = nextFiles;
+  selectedFileNames.value = selectedFileNames.value.map(
+    (name) => replacements.get(name) ?? name,
+  );
+  removeResults([...replacements.keys()]);
+  triggerRef(files);
+  message.success(`已替换 ${replacements.size} 个源文件`);
 };
 
 const loadFile = async (file: File) => {
@@ -235,15 +322,53 @@ const showListModal = ref(false);
       v-if="operation.state.outputs.length > 0"
       class="toolbox-file-section"
     >
-      <n-h2 style="margin: 0">处理结果</n-h2>
+      <n-flex align="center" justify="space-between">
+        <n-h2 style="margin: 0">处理结果</n-h2>
+        <n-flex align="center" size="small">
+          <n-text depth="3">
+            已选择 {{ selectedResults.length }}/{{
+              operation.state.outputs.length
+            }}
+          </n-text>
+          <c-button
+            :label="allResultsSelected ? '取消全选' : '全选'"
+            size="small"
+            @action="toggleSelectAllResults"
+          />
+          <c-button
+            label="替换源文件"
+            size="small"
+            :disabled="selectedResults.length === 0"
+            @action="replaceSourcesWithResults"
+          />
+          <c-button
+            label="下载所选"
+            size="small"
+            :disabled="selectedResults.length === 0"
+            @action="downloadSelectedResults"
+          />
+          <c-button
+            label="移除所选"
+            size="small"
+            :disabled="selectedResults.length === 0"
+            @action="removeResults(selectedResultSources)"
+          />
+          <c-button
+            label="清空结果"
+            size="small"
+            @action="operation.setOutputs([])"
+          />
+        </n-flex>
+      </n-flex>
       <n-flex vertical size="small">
         <toolbox-file-card
-          v-for="file of operation.state.outputs"
-          :key="file.name"
-          :file="file"
+          v-for="output of operation.state.outputs"
+          :key="output.sourceName"
+          :file="output.file"
           kind="result"
-          :selectable="false"
-          :removable="false"
+          :selected="selectedResultSources.includes(output.sourceName)"
+          @update:selected="setResultSelected(output.sourceName, $event)"
+          @delete="removeResults([output.sourceName])"
         />
       </n-flex>
     </section>

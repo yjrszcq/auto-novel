@@ -83,6 +83,7 @@ const openPreview = async () => {
     <c-icon-button
       v-if="removable"
       tooltip="移除"
+      :aria-label="`移除 ${file.name}`"
       :icon="DeleteOutlineOutlined"
       text
       size="small"
