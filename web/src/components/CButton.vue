@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 const props = defineProps<{
   label?: string;
+  mobileLabel?: string;
   icon?: Component;
   iconHidden?: boolean;
   compactOnMobile?: boolean;
@@ -49,7 +50,16 @@ const onClick = async (e: MouseEvent) => {
         <span v-if="running" class="c-button__spinner" aria-hidden="true" />
       </span>
     </template>
-    <span v-if="label" class="c-button__label">{{ label }}</span>
+    <span
+      v-if="label"
+      class="c-button__label"
+      :class="{ 'c-button__label--desktop': mobileLabel }"
+    >
+      {{ label }}
+    </span>
+    <span v-if="mobileLabel" class="c-button__label c-button__label--mobile">
+      {{ mobileLabel }}
+    </span>
     <template v-if="icon && !label">
       <span class="c-button__icon-wrapper c-button__icon-wrapper--solo">
         <n-icon
@@ -63,6 +73,10 @@ const onClick = async (e: MouseEvent) => {
 </template>
 
 <style scoped>
+.c-button__label--mobile {
+  display: none;
+}
+
 @media (max-width: 639px) {
   .c-button--compact-on-mobile {
     width: var(--n-height);
@@ -71,6 +85,14 @@ const onClick = async (e: MouseEvent) => {
 
   .c-button--compact-on-mobile .c-button__label {
     display: none;
+  }
+
+  .c-button__label--desktop {
+    display: none;
+  }
+
+  .c-button__label--mobile {
+    display: inline;
   }
 
   .c-button--compact-on-mobile :deep(.n-button__icon) {

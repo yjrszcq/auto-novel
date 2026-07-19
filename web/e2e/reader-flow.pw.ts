@@ -3163,13 +3163,15 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   expect(recordActionBounds!.x + recordActionBounds!.width).toBeLessThanOrEqual(
     390,
   );
-  await expect(retryRecords.locator('.c-button__label')).not.toBeVisible();
+  await expect(retryRecords.locator('.c-button__label')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: '下载本地小说', exact: true }),
+    page.getByRole('button', { name: '下载', exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '清空', exact: true }).last(),
-  ).toBeVisible();
+  const clearRecords = page
+    .getByRole('button', { name: '清空', exact: true })
+    .last();
+  await expect(clearRecords).toBeVisible();
+  await expect(clearRecords.locator('.c-button__label')).toBeVisible();
 
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   const shortPanel = page.getByRole('dialog', { name: '翻译器运行统计' });
