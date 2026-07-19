@@ -475,6 +475,9 @@ onBeforeUnmount(() => {
     width: calc(100vw - 24px);
     max-height: calc(100dvh - 66px);
     border-radius: 10px;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .workspace-metrics-panel__body {

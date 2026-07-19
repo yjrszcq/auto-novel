@@ -3115,6 +3115,7 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   expect(mobileBounds!.width).toBeCloseTo(366, 0);
   expect(390 - mobileBounds!.x - mobileBounds!.width).toBeCloseTo(12, 0);
   expect(mobileBounds!.y).toBeCloseTo(58, 0);
+  await expect(sakuraPanel).toHaveCSS('user-select', 'none');
   await expect(
     sakuraPanel.getByRole('region', { name: '翻译缓存统计' }),
   ).toBeVisible();
