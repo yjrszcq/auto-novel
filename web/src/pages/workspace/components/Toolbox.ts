@@ -213,7 +213,15 @@ export namespace Toolbox {
     convert: ConvertFn<T>,
     options: BatchOptions = {},
   ) => {
-    const result = await processFiles(files, convert, options);
+    const result = await processFiles(
+      files,
+      async (file, signal) => {
+        const newFile = (await file.clone()) as T;
+        throwIfAborted(signal);
+        return convert(newFile, signal);
+      },
+      options,
+    );
     return downloadSuccessful(result, options);
   };
 }

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { BlobReader, BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
 
 const createToolboxEpub = async (cover: Buffer) => {
@@ -26,6 +27,7 @@ const createToolboxEpub = async (cover: Buffer) => {
   <manifest>
     <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
     <item id="cover" href="cover.png" media-type="image/png" properties="cover-image"/>
+    <item id="illustration" href="illustration.png" media-type="image/png"/>
   </manifest>
   <spine><itemref idref="chapter"/></spine>
 </package>`),
@@ -40,19 +42,16 @@ const createToolboxEpub = async (cover: Buffer) => {
     'OEBPS/cover.png',
     new BlobReader(new Blob([cover], { type: 'image/png' })),
   );
+  await writer.add(
+    'OEBPS/illustration.png',
+    new BlobReader(new Blob([cover], { type: 'image/png' })),
+  );
   await writer.close();
   return Buffer.from(await (await output.getData()).arrayBuffer());
 };
 
-test('previews compressed EPUB images without leaving the viewport', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/workspace/toolbox');
-  await expect(
-    page.getByRole('heading', { name: '小说工具箱', exact: true }),
-  ).toBeVisible();
-  const cover = Buffer.from(
+const createPngCover = async (page: Page) =>
+  Buffer.from(
     await page.evaluate(async () => {
       const canvas = document.createElement('canvas');
       canvas.width = 320;
@@ -77,6 +76,16 @@ test('previews compressed EPUB images without leaving the viewport', async ({
       return [...new Uint8Array(await blob.arrayBuffer())];
     }),
   );
+
+test('previews compressed EPUB images without leaving the viewport', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/workspace/toolbox');
+  await expect(
+    page.getByRole('heading', { name: '小说工具箱', exact: true }),
+  ).toBeVisible();
+  const cover = await createPngCover(page);
   await page.locator('input[type="file"]').setInputFiles({
     name: 'toolbox-image.epub',
     mimeType: 'application/epub+zip',
@@ -176,4 +185,64 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   await page.getByRole('button', { name: '修复', exact: true }).click();
   await expect(operation).toContainText('修复 OCR 换行');
   await expect(operation).toContainText('没有符合当前工具要求的文件');
+});
+
+test('releases completed image previews when a later image fails', async ({
+  page,
+}) => {
+  await page.goto('/workspace/toolbox');
+  const cover = await createPngCover(page);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'toolbox-preview-failure.epub',
+    mimeType: 'application/epub+zip',
+    buffer: await createToolboxEpub(cover),
+  });
+  await page.getByText('EPUB：压缩图片', { exact: true }).click();
+  await page.getByText('PNG', { exact: true }).click();
+  await page.evaluate(() => {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const createObjectURL = URL.createObjectURL.bind(URL);
+    const revokeObjectURL = URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL = (object) => {
+      const value = createObjectURL(object);
+      created.push(value);
+      return value;
+    };
+    URL.revokeObjectURL = (value) => {
+      revoked.push(value);
+      revokeObjectURL(value);
+    };
+    const toBlob = HTMLCanvasElement.prototype.toBlob;
+    let encodeCount = 0;
+    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+      encodeCount += 1;
+      if (encodeCount === 2) {
+        callback(null);
+        return;
+      }
+      toBlob.call(this, callback, type, quality);
+    };
+    (
+      window as typeof window & {
+        toolboxObjectUrls: { created: string[]; revoked: string[] };
+      }
+    ).toolboxObjectUrls = { created, revoked };
+  });
+
+  await page.getByRole('button', { name: '预览效果', exact: true }).click();
+  await expect(page.locator('.n-message')).toContainText('预览失败');
+  const urlLifecycle = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          toolboxObjectUrls: { created: string[]; revoked: string[] };
+        }
+      ).toolboxObjectUrls,
+  );
+  expect(urlLifecycle.created.length).toBeGreaterThan(0);
+  expect(urlLifecycle.revoked).toEqual(
+    expect.arrayContaining(urlLifecycle.created),
+  );
+  await expect(page.locator('.n-image img')).toHaveCount(0);
 });

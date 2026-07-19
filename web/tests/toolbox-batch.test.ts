@@ -57,6 +57,24 @@ describe('toolbox batch execution', () => {
     });
   });
 
+  it('converts a clone instead of exposing the loaded source object', async () => {
+    const source = fakeFile('source.txt');
+    let convertedInput: ParsedFile | undefined;
+
+    const result = await Toolbox.convertFiles(
+      [source],
+      async (file) => {
+        convertedInput = file;
+        return file;
+      },
+      { download: vi.fn() },
+    );
+
+    expect(result.status).toBe('success');
+    expect(convertedInput).not.toBe(source);
+    expect(convertedInput?.name).toBe(source.name);
+  });
+
   it('stops before the next file and suppresses late downloads after cancel', async () => {
     const files = [fakeFile('a.txt'), fakeFile('b.txt')];
     const controller = new AbortController();

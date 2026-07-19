@@ -104,6 +104,7 @@ const getEpubDetailList = async () => {
           sizeCompressed: 0,
           failed: 0,
         };
+        detailList.push(detail);
         for await (const item of file.iterImage()) {
           const blobCompressed = await compressImage(item.blob);
           detail.images.push({
@@ -118,7 +119,6 @@ const getEpubDetailList = async () => {
           detail.sizeCompressed += (blobCompressed ?? item.blob).size;
           if (!blobCompressed) detail.failed += 1;
         }
-        detailList.push(detail);
       }
     }
     return detailList;
