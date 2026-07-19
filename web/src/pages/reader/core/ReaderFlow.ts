@@ -35,8 +35,8 @@ export const getReaderPageMetrics = ({
 };
 
 export const getReaderPageDelta = (key: string) => {
-  if (key === 'ArrowLeft' || key === 'PageUp') return -1;
-  if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') return 1;
+  if (key === 'PageUp') return -1;
+  if (key === 'PageDown' || key === ' ') return 1;
   return 0;
 };
 

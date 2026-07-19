@@ -6,6 +6,7 @@ import type {
 } from '../src/model/Reader';
 import {
   getAvailableReaderModes,
+  getReaderModeShortcut,
   getReaderModeLabel,
   readerModeLabels,
   readerModes,
@@ -29,6 +30,13 @@ const translated: BookReadingCapabilities = {
 };
 
 describe('reader open mode', () => {
+  it('maps number shortcuts to the four display modes', () => {
+    expect(getReaderModeShortcut('1')).toBe('translated');
+    expect(getReaderModeShortcut('2')).toBe('translated-original');
+    expect(getReaderModeShortcut('3')).toBe('original-translated');
+    expect(getReaderModeShortcut('4')).toBe('original');
+    expect(getReaderModeShortcut('5')).toBeUndefined();
+  });
   it('uses temporary, then per-book, then global preferences', () => {
     expect(
       resolveReaderMode({

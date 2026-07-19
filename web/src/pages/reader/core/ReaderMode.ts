@@ -14,6 +14,15 @@ export const readerModes: SelectableReaderMode[] = [
   'original',
 ];
 
+const readerModeShortcuts: Record<string, ReaderMode> = {
+  '1': 'translated',
+  '2': 'translated-original',
+  '3': 'original-translated',
+  '4': 'original',
+};
+
+export const getReaderModeShortcut = (key: string) => readerModeShortcuts[key];
+
 export const readerModeLabels: Record<ReaderMode, string> = {
   translated: '中文',
   'translated-original': '中日对照',

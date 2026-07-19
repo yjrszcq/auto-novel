@@ -60,7 +60,11 @@ import {
   getBookmarkTarget,
   sortReaderBookmarks,
 } from './core/ReaderBookmarks';
-import { getAvailableReaderModes, resolveReaderMode } from './core/ReaderMode';
+import {
+  getAvailableReaderModes,
+  getReaderModeShortcut,
+  resolveReaderMode,
+} from './core/ReaderMode';
 import {
   getChapterTranslationParams,
   getTranslationStatusLabel,
@@ -559,14 +563,44 @@ const handleReaderKeydown = (event: KeyboardEvent) => {
     }
     return;
   }
-  const target = event.target as HTMLElement | null;
-  const pageDelta = getReaderPageDelta(event.key);
   if (
-    resolvedFlow.value === 'paginated' &&
-    pageDelta !== 0 &&
-    !hasOpenReaderPanel() &&
-    target?.closest('input, textarea, select, button, a') === null
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.isComposing
+  )
+    return;
+  const target = event.target;
+  const isInteractiveTarget =
+    target instanceof Element &&
+    target.closest(
+      'input, textarea, select, button, a, [contenteditable="true"], [role="textbox"]',
+    ) !== null;
+  if (hasOpenReaderPanel() || isInteractiveTarget) return;
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (event.repeat) return;
+    const previous = event.key === 'ArrowLeft';
+    const chapterId = previous ? previousChapterId.value : nextChapterId.value;
+    if (chapterId !== undefined) {
+      event.preventDefault();
+      navigate(chapterId, previous ? 'end' : 'start');
+    }
+    return;
+  }
+  const mode = getReaderModeShortcut(event.key);
+  if (
+    mode !== undefined &&
+    !event.repeat &&
+    result.value?.kind === 'ready' &&
+    availableModes.value.includes(mode)
   ) {
+    event.preventDefault();
+    void chooseMode(mode);
+    return;
+  }
+  const pageDelta = getReaderPageDelta(event.key);
+  if (resolvedFlow.value === 'paginated' && pageDelta !== 0) {
     event.preventDefault();
     void scrollReaderPage(pageDelta);
   }
@@ -812,14 +846,15 @@ const resolveMode = async (
 };
 
 const chooseMode = async (mode: ReaderMode) => {
-  const segmentId = getActiveSegmentId();
+  const anchor = captureReaderPosition();
   temporaryMode = mode;
   readingMode.value = mode;
   showModePrompt.value = false;
   await nextTick();
-  scrollToSegment(segmentId);
   await nextTick();
+  restoreReaderPosition(anchor);
   updateViewportMetrics();
+  await saveProgress();
   if (rememberModeChoice.value) {
     const repository = await repositoryPromise;
     const preference = await repository.getReaderBookPreference(bookId.value);
@@ -835,6 +870,177 @@ const chooseMode = async (mode: ReaderMode) => {
 const getSegmentElements = () => [
   ...document.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
 ];
+
+type ReaderPositionAnchor = {
+  segmentId: string;
+  languageSide?: 'original' | 'translated';
+  offsetRatio: number;
+  viewportTopOffset: number;
+};
+
+type ReaderCharacterPosition = {
+  offset: number;
+  rect: DOMRect;
+};
+
+const getReaderVisibleTop = () =>
+  controlsVisible.value
+    ? (document
+        .querySelector<HTMLElement>('.book-reader__app-bar')
+        ?.getBoundingClientRect().bottom ?? 0)
+    : 0;
+
+const getReaderVisibleBottom = () =>
+  controlsVisible.value
+    ? (document
+        .querySelector<HTMLElement>('.book-reader__bottom-navigation')
+        ?.getBoundingClientRect().top ?? window.innerHeight)
+    : window.innerHeight;
+
+const getParagraphCharacterPositions = (paragraph: HTMLElement) => {
+  const positions: ReaderCharacterPosition[] = [];
+  const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  let paragraphOffset = 0;
+  while (node !== null) {
+    const text = node.textContent ?? '';
+    for (let offset = 0; offset < text.length; offset += 1) {
+      const range = document.createRange();
+      range.setStart(node, offset);
+      range.setEnd(node, offset + 1);
+      const rect = [...range.getClientRects()].find(
+        (item) => item.width > 0 && item.height > 0,
+      );
+      if (rect !== undefined) {
+        positions.push({ offset: paragraphOffset + offset, rect });
+      }
+    }
+    paragraphOffset += text.length;
+    node = walker.nextNode();
+  }
+  return positions;
+};
+
+const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
+  const viewport = readerViewport.value;
+  const paginated = resolvedFlow.value === 'paginated' && viewport !== null;
+  const bounds = paginated
+    ? viewport.getBoundingClientRect()
+    : {
+        top: getReaderVisibleTop(),
+        right: window.innerWidth,
+        bottom: getReaderVisibleBottom(),
+        left: 0,
+      };
+  const intersectsViewport = (rect: DOMRect) =>
+    rect.right > bounds.left + 1 &&
+    rect.left < bounds.right - 1 &&
+    rect.bottom > bounds.top + 1 &&
+    rect.top < bounds.bottom - 1;
+  const candidates = getSegmentElements().flatMap((segment) =>
+    [...segment.querySelectorAll<HTMLElement>('[data-reader-language-side]')]
+      .filter((paragraph) =>
+        [...paragraph.getClientRects()].some(intersectsViewport),
+      )
+      .flatMap((paragraph) =>
+        getParagraphCharacterPositions(paragraph).map((position) => ({
+          ...position,
+          paragraph,
+          segment,
+        })),
+      ),
+  );
+  const visible = candidates.filter(({ rect }) =>
+    paginated
+      ? rect.right > bounds.left + 1 &&
+        rect.left < bounds.right - 1 &&
+        rect.bottom > bounds.top + 1 &&
+        rect.top < bounds.bottom - 1
+      : rect.top >= bounds.top - 1 &&
+        rect.bottom <= bounds.bottom + 1 &&
+        rect.left >= bounds.left - 1 &&
+        rect.right <= bounds.right + 1,
+  );
+  visible.sort((left, right) => {
+    if (paginated && Math.abs(left.rect.left - right.rect.left) > 2) {
+      return left.rect.left - right.rect.left;
+    }
+    if (Math.abs(left.rect.top - right.rect.top) > 2) {
+      return left.rect.top - right.rect.top;
+    }
+    return left.rect.left - right.rect.left;
+  });
+  const first = visible[0];
+  const segmentId = first?.segment.dataset.readerSegmentId;
+  if (first === undefined || segmentId === undefined) return undefined;
+  const textLength = first.paragraph.textContent?.length ?? 0;
+  const languageSide = first.paragraph.dataset.readerLanguageSide;
+  return {
+    segmentId,
+    languageSide:
+      languageSide === 'original' || languageSide === 'translated'
+        ? languageSide
+        : undefined,
+    offsetRatio: textLength <= 1 ? 0 : first.offset / (textLength - 1),
+    viewportTopOffset: first.rect.top - bounds.top,
+  };
+};
+
+const restoreReaderPosition = (anchor: ReaderPositionAnchor | undefined) => {
+  if (anchor === undefined) return;
+  const segment = getSegmentElements().find(
+    (item) => item.dataset.readerSegmentId === anchor.segmentId,
+  );
+  if (segment === undefined) {
+    scrollToSegment(anchor.segmentId);
+    return;
+  }
+  const paragraphs = [
+    ...segment.querySelectorAll<HTMLElement>('[data-reader-language-side]'),
+  ];
+  const paragraph =
+    paragraphs.find(
+      (item) => item.dataset.readerLanguageSide === anchor.languageSide,
+    ) ?? paragraphs[0];
+  if (paragraph === undefined) {
+    scrollToSegment(anchor.segmentId);
+    return;
+  }
+  const positions = getParagraphCharacterPositions(paragraph);
+  if (positions.length === 0) {
+    scrollToSegment(anchor.segmentId);
+    return;
+  }
+  const textLength = paragraph.textContent?.length ?? 0;
+  const targetOffset = Math.round(
+    anchor.offsetRatio * Math.max(0, textLength - 1),
+  );
+  const target = positions.reduce((closest, position) =>
+    Math.abs(position.offset - targetOffset) <
+    Math.abs(closest.offset - targetOffset)
+      ? position
+      : closest,
+  );
+  if (resolvedFlow.value === 'paginated' && readerViewport.value !== null) {
+    const viewport = readerViewport.value;
+    const viewportRect = viewport.getBoundingClientRect();
+    const absoluteLeft =
+      viewport.scrollLeft + target.rect.left - viewportRect.left;
+    positionReaderPage(
+      viewport,
+      Math.max(
+        0,
+        Math.floor((absoluteLeft + 1) / Math.max(1, viewport.clientWidth)),
+      ),
+    );
+    paginatedAnchorSegmentId = anchor.segmentId;
+    return;
+  }
+  window.scrollBy({
+    top: target.rect.top - (getReaderVisibleTop() + anchor.viewportTopOffset),
+    behavior: 'auto',
+  });
+};
 
 const getActiveSegmentId = (flow = resolvedFlow.value) => {
   const elements = getSegmentElements();

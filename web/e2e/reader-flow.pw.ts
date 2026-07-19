@@ -1173,7 +1173,10 @@ test('persists keyboard pagination and every reading mode across responsive layo
     transaction.objectStore('metadata').put({
       id: bookId,
       createAt: 1,
-      toc: [{ chapterId: '0', title: '模式与进度', gpt: 'gpt-glossary' }],
+      toc: [
+        { chapterId: '0', title: '模式与进度', gpt: 'gpt-glossary' },
+        { chapterId: '1', title: '快捷键章节' },
+      ],
       sourceFormat: 'txt',
       glossaryId: 'glossary',
       glossary: {},
@@ -1192,8 +1195,16 @@ test('persists keyboard pagination and every reading mode across responsive layo
       gpt: {
         glossaryId: 'gpt-glossary',
         glossary: {},
-        paragraphs: paragraphs.map((_, index) => `译文 ${index + 1}`),
+        paragraphs: paragraphs.map(
+          (_, index) => `译文 ${index + 1} ${'分页稳定性译文'.repeat(10)}`,
+        ),
       },
+    });
+    transaction.objectStore('chapter').put({
+      id: `${bookId}/1`,
+      volumeId: bookId,
+      paragraphs: ['第二章快捷键正文'],
+      segmentIds: ['mode-chapter-1-segment'],
     });
     transaction.objectStore('reader-settings').put({
       id: 'default',
@@ -1314,29 +1325,72 @@ test('persists keyboard pagination and every reading mode across responsive layo
   await expect
     .poll(() => readerContent.evaluate((element) => element.scrollLeft))
     .toBeGreaterThan(initialScrollLeft);
-  await page.keyboard.press('ArrowRight');
-  await expect
-    .poll(() =>
-      readerContent.evaluate((element) => {
-        const match = element
-          .getAttribute('aria-label')
-          ?.match(/第 (\d+) \/ (\d+) 页/);
-        return match === undefined ? 0 : Number(match[1]);
-      }),
-    )
-    .toBeGreaterThan(2);
-  const visibleSegmentId = await readerContent.evaluate((element) => {
-    const viewport = element.getBoundingClientRect();
-    return [
-      ...element.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
-    ]
-      .find((segment) =>
-        [...segment.getClientRects()].some(
-          (rect) => rect.right > viewport.left && rect.left < viewport.right,
+  const getLeftPageSegment = () =>
+    readerContent.evaluate((element) => {
+      const viewport = element.getBoundingClientRect();
+      return [
+        ...element.querySelectorAll<HTMLElement>(
+          '[data-reader-segment-id] [data-reader-language-side]',
         ),
+      ]
+        .flatMap((paragraph) =>
+          [...paragraph.getClientRects()]
+            .filter(
+              (rect) =>
+                rect.right > viewport.left && rect.left < viewport.right,
+            )
+            .map((rect) => ({
+              left: rect.left,
+              top: rect.top,
+              segmentId: paragraph.closest<HTMLElement>(
+                '[data-reader-segment-id]',
+              )?.dataset.readerSegmentId,
+            })),
+        )
+        .sort(
+          (left, right) => left.left - right.left || left.top - right.top,
+        )[0]?.segmentId;
+    });
+  const expectModeSwitchKeepsPosition = async (
+    key: string,
+    expectedClass: RegExp,
+  ) => {
+    const anchor = await getLeftPageSegment();
+    expect(anchor).toBeTruthy();
+    await page.keyboard.press(key);
+    await expect(layout).toHaveClass(expectedClass);
+    await expect
+      .poll(() =>
+        readerContent.evaluate((element, segmentId) => {
+          const viewport = element.getBoundingClientRect();
+          const segment = element.querySelector<HTMLElement>(
+            `[data-reader-segment-id="${segmentId}"]`,
+          );
+          return (
+            segment !== null &&
+            [...segment.getClientRects()].some(
+              (rect) =>
+                rect.right > viewport.left && rect.left < viewport.right,
+            )
+          );
+        }, anchor),
       )
-      ?.getAttribute('data-reader-segment-id');
-  });
+      .toBe(true);
+  };
+  await expectModeSwitchKeepsPosition(
+    '1',
+    /reader-segment-layout--translated$/,
+  );
+  await expectModeSwitchKeepsPosition(
+    '2',
+    /reader-segment-layout--translated-original/,
+  );
+  await expectModeSwitchKeepsPosition(
+    '3',
+    /reader-segment-layout--original-translated/,
+  );
+  await expectModeSwitchKeepsPosition('4', /reader-segment-layout--original$/);
+  const visibleSegmentId = await getLeftPageSegment();
   expect(visibleSegmentId).toBeTruthy();
   await expect
     .poll(() =>
@@ -1402,10 +1456,111 @@ test('persists keyboard pagination and every reading mode across responsive layo
       }, visibleSegmentId),
     )
     .toBe(true);
+  await expectModeSwitchKeepsPosition(
+    '2',
+    /reader-segment-layout--translated-original/,
+  );
+  await expectModeSwitchKeepsPosition('4', /reader-segment-layout--original$/);
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(readerContent).toHaveClass(
     /book-reader__content--double-spread/,
   );
+  await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction('reader-settings', 'readwrite');
+    const store = transaction.objectStore('reader-settings');
+    const request = store.get('default');
+    const current = await new Promise<Record<string, unknown>>(
+      (resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      },
+    );
+    store.put({ ...current, flow: 'scrolled', updatedAt: Date.now() });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  });
+  await page.reload();
+  await expect(readerContent).toHaveClass(/book-reader__content--scrolled/);
+  const scrolledAnchor = readerContent.locator(
+    '[data-reader-segment-id="mode-segment-40"] [data-reader-language-side="original"]',
+  );
+  await scrolledAnchor.evaluate((element) =>
+    element.scrollIntoView({ block: 'start', behavior: 'auto' }),
+  );
+  await scrolledAnchor.evaluate((element) => {
+    const visibleTop =
+      document
+        .querySelector<HTMLElement>('.book-reader__app-bar')
+        ?.getBoundingClientRect().bottom ?? 0;
+    window.scrollBy({
+      top: element.getBoundingClientRect().top - visibleTop,
+      behavior: 'auto',
+    });
+  });
+  const getScrollAnchor = (targetOffset?: number | null) =>
+    scrolledAnchor.evaluate((element, requestedOffset) => {
+      const top =
+        document
+          .querySelector<HTMLElement>('.book-reader__app-bar')
+          ?.getBoundingClientRect().bottom ?? 0;
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      const positions: Array<{ offset: number; top: number }> = [];
+      let node = walker.nextNode();
+      let paragraphOffset = 0;
+      while (node !== null) {
+        const text = node.textContent ?? '';
+        for (let offset = 0; offset < text.length; offset += 1) {
+          const range = document.createRange();
+          range.setStart(node, offset);
+          range.setEnd(node, offset + 1);
+          for (const rect of range.getClientRects()) {
+            const absoluteOffset = paragraphOffset + offset;
+            if (
+              requestedOffset === absoluteOffset ||
+              ((requestedOffset === undefined || requestedOffset === null) &&
+                rect.top >= top - 1 &&
+                rect.bottom <= window.innerHeight + 1)
+            ) {
+              positions.push({ offset: absoluteOffset, top: rect.top });
+            }
+          }
+        }
+        paragraphOffset += text.length;
+        node = walker.nextNode();
+      }
+      return positions.sort((left, right) => left.top - right.top)[0];
+    }, targetOffset);
+  const scrollAnchor = await getScrollAnchor();
+  expect(scrollAnchor).toBeTruthy();
+  await page.keyboard.press('2');
+  await expect(layout).toHaveClass(
+    /reader-segment-layout--translated-original/,
+  );
+  await expect
+    .poll(async () => {
+      const restoredAnchor = await getScrollAnchor(scrollAnchor?.offset);
+      return restoredAnchor === undefined || scrollAnchor === undefined
+        ? Number.POSITIVE_INFINITY
+        : Math.abs(restoredAnchor.top - scrollAnchor.top);
+    })
+    .toBeLessThanOrEqual(2);
+  await page.keyboard.press('4');
+  await expect(layout).toHaveClass(/reader-segment-layout--original$/);
+  await page.keyboard.press('ArrowRight');
+  await expect(page).toHaveURL(new RegExp(`/read/1$`));
+  await expect(
+    readerContent.locator('[data-reader-segment-id="mode-chapter-1-segment"]'),
+  ).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page).toHaveURL(new RegExp(`/read/0$`));
   expect(pageErrors).toEqual([]);
 });
 
@@ -2136,6 +2291,17 @@ test('persists the global reading version selected in Settings', async ({
 }) => {
   await page.goto('/setting');
   await expect(page.getByText('阅读偏好', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('阅读页面，可以使用左右方向键跳转上/下一章。', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      '阅读页面，可以使用数字键 1～4 快速切换翻译（中文/中日/日中/原文）。',
+      { exact: true },
+    ),
+  ).toBeVisible();
 
   const workspaceSetting = page
     .locator('.n-list-item')

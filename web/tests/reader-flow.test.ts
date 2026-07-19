@@ -38,7 +38,8 @@ describe('reader flow', () => {
   });
 
   it('maps keyboard pagination without consuming unrelated keys', () => {
-    expect(getReaderPageDelta('ArrowLeft')).toBe(-1);
+    expect(getReaderPageDelta('ArrowLeft')).toBe(0);
+    expect(getReaderPageDelta('PageUp')).toBe(-1);
     expect(getReaderPageDelta('PageDown')).toBe(1);
     expect(getReaderPageDelta('Escape')).toBe(0);
   });
