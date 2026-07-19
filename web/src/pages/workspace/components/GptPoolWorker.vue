@@ -90,14 +90,11 @@ const testWorker = async () => {
     </template>
 
     <template #description>
-      <n-flex vertical :size="2">
-        <n-text :type="active ? 'success' : undefined" depth="3">
-          {{ starting ? '正在连接' : active ? '已加入共享池' : '已停止' }} ·
-          活跃 {{ activity?.active ?? 0 }}/{{
-            activity?.maximum ?? worker.concurrency
-          }}
-          · 错误 {{ activity?.errors ?? 0 }}
-        </n-text>
+      <n-flex
+        v-if="(activity?.assignments.length ?? 0) > 0 || active"
+        vertical
+        :size="2"
+      >
         <n-text
           v-for="assignment of activity?.assignments ?? []"
           :key="`${assignment.chapter?.id ?? '?'}-${assignment.segmentIndex}`"

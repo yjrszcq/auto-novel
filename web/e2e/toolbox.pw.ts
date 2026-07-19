@@ -445,6 +445,8 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'Sakura 翻译', exact: true }),
   ).toBeVisible();
+  await expect(page.getByText('GPT 翻译器', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sakura 翻译器', { exact: true })).toBeVisible();
 
   const corsHeaders = {
     'access-control-allow-origin': 'http://127.0.0.1:4173',

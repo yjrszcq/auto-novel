@@ -13,17 +13,25 @@ type CacheMetrics = {
 };
 
 type PipelineMetrics = {
-  workers: unknown[];
-  aggregateActive: number;
-  aggregateMaximum: number;
   outstanding: number;
   queued: number;
   waitingProducers: number;
 };
 
+type WorkerMetrics = {
+  total: number;
+  running: number;
+  starting: number;
+  stopped: number;
+  active: number;
+  maximum: number;
+  errors: number;
+};
+
 defineProps<{
   cacheMetrics?: CacheMetrics;
   pipelineMetrics?: PipelineMetrics;
+  workerMetrics?: WorkerMetrics;
 }>();
 
 const panel = useTemplateRef('panel');
@@ -221,24 +229,47 @@ onBeforeUnmount(() => {
           <n-skeleton v-else text :repeat="2" />
         </section>
 
+        <section v-if="workerMetrics" aria-label="翻译器总览">
+          <n-divider />
+          <n-text depth="3" class="workspace-metrics-panel__section-title">
+            翻译器总览
+          </n-text>
+          <div class="workspace-metrics-panel__grid">
+            <div class="workspace-metrics-panel__metric">
+              <span>已配置</span>
+              <strong>{{ workerMetrics.total }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>运行中</span>
+              <strong>{{ workerMetrics.running }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>连接中</span>
+              <strong>{{ workerMetrics.starting }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>已停止</span>
+              <strong>{{ workerMetrics.stopped }}</strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>活跃请求</span>
+              <strong>
+                {{ workerMetrics.active }}/{{ workerMetrics.maximum }}
+              </strong>
+            </div>
+            <div class="workspace-metrics-panel__metric">
+              <span>错误</span>
+              <strong>{{ workerMetrics.errors }}</strong>
+            </div>
+          </div>
+        </section>
+
         <section v-if="pipelineMetrics" aria-label="共享池统计">
           <n-divider />
           <n-text depth="3" class="workspace-metrics-panel__section-title">
             共享池
           </n-text>
           <div class="workspace-metrics-panel__grid">
-            <div class="workspace-metrics-panel__metric">
-              <span>工作者</span>
-              <strong>{{ pipelineMetrics.workers.length }}</strong>
-            </div>
-            <div class="workspace-metrics-panel__metric">
-              <span>活跃请求</span>
-              <strong>
-                {{ pipelineMetrics.aggregateActive }}/{{
-                  pipelineMetrics.aggregateMaximum
-                }}
-              </strong>
-            </div>
             <div class="workspace-metrics-panel__metric">
               <span>未完成</span>
               <strong>{{ pipelineMetrics.outstanding }}</strong>

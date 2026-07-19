@@ -2334,22 +2334,34 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     const metricsPanel = page.getByRole('dialog', {
       name: '翻译器运行统计',
     });
-    const workerMetric = metricsPanel
+    const runningMetric = metricsPanel
       .locator('.workspace-metrics-panel__metric')
-      .filter({ hasText: '工作者' });
-    await expect(workerMetric).toContainText('2');
+      .filter({ hasText: '运行中' });
+    await expect(runningMetric).toContainText('2');
+    await expect(
+      metricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '已配置' }),
+    ).toContainText('2');
     await expect(
       page.getByRole('alert').filter({ hasText: '正在混用不同模型或接口' }),
     ).toBeVisible();
-    await expect(firstWorker.getByText(/活跃 1\/1/)).toBeVisible();
-    await expect(secondWorker.getByText(/活跃 1\/1/)).toBeVisible();
+    await expect(
+      metricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '活跃请求' }),
+    ).toContainText('2/2');
     await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
     await firstWorker
       .getByRole('button', { name: '停止', exact: true })
       .click();
     await page.getByRole('button', { name: '翻译器运行统计' }).click();
-    await expect(workerMetric).toContainText('1');
-    await expect(firstWorker.getByText(/已停止 · 活跃 0\/1/)).toBeVisible();
+    await expect(runningMetric).toContainText('1');
+    await expect(
+      metricsPanel
+        .locator('.workspace-metrics-panel__metric')
+        .filter({ hasText: '已停止' }),
+    ).toContainText('1');
     await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
     releaseRequests();
 
@@ -2939,7 +2951,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(
     metricsPanel
       .locator('.workspace-metrics-panel__metric')
-      .filter({ hasText: '工作者' }),
+      .filter({ hasText: '运行中' }),
   ).toContainText('2');
   await expect(
     metricsPanel
@@ -2964,7 +2976,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(
     metricsPanel
       .locator('.workspace-metrics-panel__metric')
-      .filter({ hasText: '工作者' }),
+      .filter({ hasText: '运行中' }),
   ).toContainText('0');
 
   await page.goto('/workspace/sakura');

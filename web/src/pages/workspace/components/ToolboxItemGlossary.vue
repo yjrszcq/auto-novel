@@ -432,22 +432,28 @@ onBeforeUnmount(() => {
     </n-flex>
 
     <n-flex align="center" class="glossary-translator-selectors">
-      <n-select
-        v-model:value="selectedGptWorkerId"
-        :options="gptWorkerOptions"
-        :disabled="translating"
-        placeholder="未配置 GPT 翻译器"
-        aria-label="选择 GPT 翻译器"
-        size="small"
-      />
-      <n-select
-        v-model:value="selectedSakuraWorkerId"
-        :options="sakuraWorkerOptions"
-        :disabled="translating"
-        placeholder="未配置 Sakura 翻译器"
-        aria-label="选择 Sakura 翻译器"
-        size="small"
-      />
+      <label class="glossary-translator-selector">
+        <n-text depth="3">GPT 翻译器</n-text>
+        <n-select
+          v-model:value="selectedGptWorkerId"
+          :options="gptWorkerOptions"
+          :disabled="translating"
+          placeholder="未配置 GPT 翻译器"
+          aria-label="选择 GPT 翻译器"
+          size="small"
+        />
+      </label>
+      <label class="glossary-translator-selector">
+        <n-text depth="3">Sakura 翻译器</n-text>
+        <n-select
+          v-model:value="selectedSakuraWorkerId"
+          :options="sakuraWorkerOptions"
+          :disabled="translating"
+          placeholder="未配置 Sakura 翻译器"
+          aria-label="选择 Sakura 翻译器"
+          size="small"
+        />
+      </label>
     </n-flex>
 
     <n-flex align="center">
@@ -592,8 +598,15 @@ onBeforeUnmount(() => {
   min-width: 220px;
 }
 
-.glossary-translator-selectors :deep(.n-select) {
+.glossary-translator-selector {
+  display: flex;
   width: min(300px, 100%);
+  flex-direction: column;
+  gap: 6px;
+}
+
+.glossary-translator-selector :deep(.n-select) {
+  width: 100%;
 }
 
 @media (max-width: 639px) {
@@ -610,7 +623,7 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .glossary-translator-selectors :deep(.n-select) {
+  .glossary-translator-selector {
     width: 100%;
   }
 }

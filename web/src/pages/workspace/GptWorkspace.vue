@@ -77,6 +77,25 @@ const workerIsStarting = (workerId: string) =>
   startingWorkerIds.value.has(workerId);
 const workerActivity = (workerId: string) =>
   pipelineSnapshot.value.workers.find((worker) => worker.id === workerId);
+const workerMetrics = computed(() => {
+  const running = pipelineSnapshot.value.workers.length;
+  const starting = startingWorkerIds.value.size;
+  return {
+    total: workspaceRef.value.workers.length,
+    running,
+    starting,
+    stopped: Math.max(
+      0,
+      workspaceRef.value.workers.length - running - starting,
+    ),
+    active: pipelineSnapshot.value.aggregateActive,
+    maximum: pipelineSnapshot.value.aggregateMaximum,
+    errors: pipelineSnapshot.value.workers.reduce(
+      (total, worker) => total + worker.errors,
+      0,
+    ),
+  };
+});
 const setWorkerStarting = (workerId: string, starting: boolean) => {
   const next = new Set(startingWorkerIds.value);
   if (starting) next.add(workerId);
@@ -334,6 +353,7 @@ onBeforeUnmount(() => {
       <workspace-metrics-panel
         :cache-metrics="cacheMetrics"
         :pipeline-metrics="pipelineSnapshot"
+        :worker-metrics="workerMetrics"
       />
     </n-flex>
 
