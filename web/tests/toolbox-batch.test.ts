@@ -130,6 +130,18 @@ describe('toolbox batch execution', () => {
     expect(entries.map((entry) => entry.filename)).toEqual(['b.txt', 'a.txt']);
   });
 
+  it('rejects ambiguous duplicate archive entries', async () => {
+    const save = vi.fn();
+
+    await expect(
+      Toolbox.downloadFiles(
+        [fakeFile('same.txt', 'a'), fakeFile('same.txt', 'b')],
+        { save },
+      ),
+    ).rejects.toThrow('下载结果中存在同名文件');
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it('does not start a second operation while one is active', async () => {
     const operation = createToolboxOperation();
     let release: (() => void) | undefined;

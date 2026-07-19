@@ -72,6 +72,10 @@ export namespace Toolbox {
       return;
     }
 
+    if (new Set(files.map((file) => file.name)).size !== files.length) {
+      throw new Error('下载结果中存在同名文件');
+    }
+
     const { BlobReader, BlobWriter, ZipWriter } =
       await import('@zip.js/zip.js');
     const zipBlobWriter = new BlobWriter('application/zip');

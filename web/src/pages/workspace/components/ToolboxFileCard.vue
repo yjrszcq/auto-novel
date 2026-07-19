@@ -32,35 +32,51 @@ const previewLoading = ref(false);
 const previewText = ref('');
 const previewTruncated = ref(false);
 const previewError = ref('');
-const fileSize = ref<number>();
+const fileSize = ref<number | null>();
+let fileRequest = 0;
+let previewRequest = 0;
 
 watch(
   () => props.file,
   async (file) => {
+    const request = ++fileRequest;
+    previewRequest += 1;
+    showPreviewModal.value = false;
+    previewText.value = '';
+    previewTruncated.value = false;
+    previewError.value = '';
     fileSize.value = undefined;
     try {
-      fileSize.value = (await file.toBlob()).size;
+      const size = (await file.toBlob()).size;
+      if (request === fileRequest) fileSize.value = size;
     } catch {
-      fileSize.value = undefined;
+      if (request === fileRequest) fileSize.value = null;
     }
   },
   { immediate: true },
 );
 
 const openPreview = async () => {
+  const request = ++previewRequest;
   showPreviewModal.value = true;
   previewLoading.value = true;
   previewError.value = '';
   try {
     const preview = await getToolboxPreview(props.file);
+    if (request !== previewRequest) return;
     previewText.value = preview.text;
     previewTruncated.value = preview.truncated;
   } catch (error) {
-    previewError.value = String(error);
+    if (request === previewRequest) previewError.value = String(error);
   } finally {
-    previewLoading.value = false;
+    if (request === previewRequest) previewLoading.value = false;
   }
 };
+
+onBeforeUnmount(() => {
+  fileRequest += 1;
+  previewRequest += 1;
+});
 </script>
 
 <template>
@@ -102,7 +118,13 @@ const openPreview = async () => {
       {{ kind === 'result' ? '处理结果' : '源文件' }}
     </n-tag>
     <n-text depth="3" class="toolbox-file-card__size">
-      {{ fileSize === undefined ? '计算中' : Humanize.bytes(fileSize) }}
+      {{
+        fileSize === undefined
+          ? '计算中'
+          : fileSize === null
+            ? '大小未知'
+            : Humanize.bytes(fileSize)
+      }}
     </n-text>
   </n-flex>
 
