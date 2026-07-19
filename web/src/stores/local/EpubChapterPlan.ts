@@ -1,12 +1,14 @@
 import type { EpubNavigationItem } from '@/util/file/epub';
 import type { Epub } from '@/util/file/epub';
 
-import { getEpubTextParagraphElements } from './EpubParser';
+import { getEpubTextBlockElements, getEpubTextBlockText } from './EpubParser';
 
 interface EpubChapterSourceRange {
   href: string;
   start: number;
   end: number;
+  startFragment?: string;
+  endFragment?: string;
 }
 
 export interface EpubChapterPlanItem {
@@ -21,6 +23,7 @@ export interface EpubChapterPlanSource {
   title?: string;
   paragraphs: string[];
   anchors?: Record<string, number>;
+  hasContent?: boolean;
 }
 
 export interface EpubNavigationPlanItem {
@@ -46,6 +49,7 @@ type EpubNavigationTarget = {
 type EpubChapterLocation = EpubNavigationTarget & {
   sourceIndex: number;
   paragraphIndex: number;
+  fragment?: string;
 };
 
 const splitHref = (href: string) => {
@@ -75,11 +79,18 @@ const collectNavigationTargets = (
 
 const createFallbackPlan = (
   sources: readonly EpubChapterPlanSource[],
-): EpubChapterPlanItem[] =>
-  sources
-    .filter((source) => source.paragraphs.length > 0)
+): EpubChapterPlanItem[] => {
+  const hrefOccurrences = new Map<string, number>();
+  return sources
+    .filter((source) => source.paragraphs.length > 0 || source.hasContent)
     .map((source, index) => ({
-      chapterId: source.href,
+      chapterId: (() => {
+        const occurrence = hrefOccurrences.get(source.href) ?? 0;
+        hrefOccurrences.set(source.href, occurrence + 1);
+        return occurrence === 0
+          ? source.href
+          : `${source.href}::spine-${index}`;
+      })(),
       title: source.title?.trim() || `第 ${index + 1} 章`,
       paragraphs: [...source.paragraphs],
       sourceRanges: [
@@ -90,23 +101,27 @@ const createFallbackPlan = (
         },
       ],
     }));
+};
 
 const getChapterLocations = (
   navigation: readonly EpubNavigationItem[],
   sources: readonly EpubChapterPlanSource[],
 ) => {
-  const sourceIndexByHref = new Map(
-    sources.map((source, index) => [source.href, index]),
-  );
+  const sourceIndexByHref = new Map<string, number>();
+  sources.forEach((source, index) => {
+    if (!sourceIndexByHref.has(source.href)) {
+      sourceIndexByHref.set(source.href, index);
+    }
+  });
   const locations: EpubChapterLocation[] = [];
   for (const target of collectNavigationTargets(navigation)) {
     const { href, fragment } = splitHref(target.href);
     const sourceIndex = sourceIndexByHref.get(href);
     if (sourceIndex === undefined) continue;
     const paragraphIndex = fragment
-      ? sources[sourceIndex].anchors?.[fragment] ?? 0
+      ? (sources[sourceIndex].anchors?.[fragment] ?? 0)
       : 0;
-    locations.push({ ...target, sourceIndex, paragraphIndex });
+    locations.push({ ...target, sourceIndex, paragraphIndex, fragment });
   }
   return locations;
 };
@@ -139,8 +154,19 @@ const buildRanges = (
       sourceIndex === nextLocation?.sourceIndex
         ? nextLocation.paragraphIndex
         : source.paragraphs.length;
-    if (end > start) {
-      ranges.push({ href: source.href, start, end });
+    const endsAtNextLocation = sourceIndex === nextLocation?.sourceIndex;
+    if (end > start || (source.hasContent && !endsAtNextLocation)) {
+      ranges.push({
+        href: source.href,
+        start,
+        end,
+        ...(sourceIndex === location.sourceIndex && location.fragment
+          ? { startFragment: location.fragment }
+          : {}),
+        ...(endsAtNextLocation && nextLocation?.fragment
+          ? { endFragment: nextLocation.fragment }
+          : {}),
+      });
     }
   }
   return ranges;
@@ -167,7 +193,7 @@ export const buildEpubChapterPlan = (
         sourceRanges,
       };
     })
-    .filter((chapter) => chapter.paragraphs.length > 0);
+    .filter((chapter) => chapter.sourceRanges.length > 0);
   return chapters.length > 0 ? chapters : createFallbackPlan(sources);
 };
 
@@ -212,10 +238,7 @@ export const buildEpubNavigationPlan = (
       }));
 };
 
-const createAnchors = (
-  doc: Document,
-  paragraphs: readonly HTMLParagraphElement[],
-) => {
+const createAnchors = (doc: Document, paragraphs: readonly Element[]) => {
   const elements = Array.from(doc.body.getElementsByTagName('*'));
   const paragraphIndexes = new Map(
     paragraphs.map((paragraph, index) => [paragraph, index]),
@@ -224,9 +247,7 @@ const createAnchors = (
   for (const element of elements) {
     const id = element.getAttribute('id');
     if (!id) continue;
-    const paragraphIndex = paragraphIndexes.get(
-      element as HTMLParagraphElement,
-    );
+    const paragraphIndex = paragraphIndexes.get(element);
     if (paragraphIndex !== undefined) {
       anchors[id] = paragraphIndex;
       continue;
@@ -242,19 +263,50 @@ const createAnchors = (
   return anchors;
 };
 
+const collectNavigationDocumentPaths = (
+  epub: Epub,
+  nodes = epub.navItems,
+  result: string[] = [],
+) => {
+  for (const node of nodes) {
+    if (node.href !== undefined) {
+      const path = splitHref(node.href).href;
+      if (!result.includes(path)) result.push(path);
+    }
+    collectNavigationDocumentPaths(epub, node.children, result);
+  }
+  return result;
+};
+
+const createSource = (href: string, doc: Document) => {
+  const paragraphElements = getEpubTextBlockElements(doc);
+  return {
+    href,
+    title:
+      doc.title.trim() ||
+      doc.querySelector('h1, h2, h3, h4, h5, h6')?.textContent ||
+      undefined,
+    paragraphs: paragraphElements.map(getEpubTextBlockText),
+    anchors: createAnchors(doc, paragraphElements),
+    hasContent: doc.body.childNodes.length > 0,
+  } satisfies EpubChapterPlanSource;
+};
+
 const createEpubChapterPlanSources = (epub: Epub) => {
-  return epub.iterDocInSpine().map((item) => {
-    const paragraphElements = getEpubTextParagraphElements(item.doc);
+  const sources = epub.iterDocInSpine().map((item) => {
     return {
-      href: epub.getCanonicalHref(item.href),
-      title:
-        item.doc.title.trim() ||
-        item.doc.querySelector('h1, h2, h3, h4, h5, h6')?.textContent ||
-        undefined,
-      paragraphs: paragraphElements.map((paragraph) => paragraph.innerText),
-      anchors: createAnchors(item.doc, paragraphElements),
-    } satisfies EpubChapterPlanSource;
+      ...createSource(item.path, item.doc),
+    };
   });
+  const spinePaths = new Set(sources.map((source) => source.href));
+  for (const path of collectNavigationDocumentPaths(epub)) {
+    if (spinePaths.has(path)) continue;
+    const resource = epub.getResourceByPath(path);
+    if (resource === undefined || !('doc' in resource)) continue;
+    sources.push(createSource(resource.path, resource.doc));
+    spinePaths.add(path);
+  }
+  return sources;
 };
 
 export const createEpubImportPlan = (epub: Epub): EpubImportPlan => {

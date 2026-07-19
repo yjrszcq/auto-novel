@@ -10,6 +10,8 @@ export interface LocalVolumeChapterSourceRange {
   href: string;
   start: number;
   end: number;
+  startFragment?: string;
+  endFragment?: string;
 }
 
 export interface LocalVolumeTocEntry {

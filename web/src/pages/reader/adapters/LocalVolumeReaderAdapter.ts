@@ -16,6 +16,9 @@ import type {
 } from '@/model/Reader';
 import type { TranslatorId } from '@/model/Translator';
 import type { useLocalVolumeStore } from '@/stores';
+import { Epub } from '@/util/file';
+
+import { createEpubRichChapter } from '@/stores/local/EpubRichChapter';
 
 import {
   defaultTranslationPriority,
@@ -62,7 +65,8 @@ const getBook = (volume: LocalVolumeMetadata): ReaderBook => {
 export type LocalVolumeReaderRepository = Pick<
   Awaited<ReturnType<typeof useLocalVolumeStore>>,
   'getVolume' | 'listChapter'
->;
+> &
+  Partial<Pick<Awaited<ReturnType<typeof useLocalVolumeStore>>, 'getFile'>>;
 
 export const createLocalVolumeReaderAdapter = (
   repository: LocalVolumeReaderRepository,
@@ -73,6 +77,7 @@ export const createLocalVolumeReaderAdapter = (
     string,
     Promise<Map<string, LocalVolumeChapter>>
   >();
+  const epubCache = new Map<string, Promise<Epub | undefined>>();
   const getVolume = async (bookId: string) => {
     let pending = volumeCache.get(bookId);
     if (pending === undefined) {
@@ -97,6 +102,23 @@ export const createLocalVolumeReaderAdapter = (
         );
       chapterCache.set(bookId, pending);
       pending.catch(() => chapterCache.delete(bookId));
+    }
+    return pending;
+  };
+
+  const getEpub = (bookId: string, volume: LocalVolumeMetadata) => {
+    if (volume.sourceFormat !== 'epub' || repository.getFile === undefined) {
+      return Promise.resolve(undefined);
+    }
+    let pending = epubCache.get(bookId);
+    if (pending === undefined) {
+      pending = repository
+        .getFile(bookId)
+        .then((stored) =>
+          stored === undefined ? undefined : Epub.fromFile(stored.file),
+        );
+      epubCache.set(bookId, pending);
+      pending.catch(() => epubCache.delete(bookId));
     }
     return pending;
   };
@@ -184,6 +206,11 @@ export const createLocalVolumeReaderAdapter = (
         throw new Error('章节不存在');
       }
       const translation = selectTranslation(chapter, translationPriority);
+      const epub = chapter.sourceRanges?.length
+        ? await getEpub(bookId, volume)
+        : undefined;
+      const richChapter =
+        epub === undefined ? undefined : createEpubRichChapter(epub, chapter);
       return {
         bookId,
         chapterId,
@@ -200,6 +227,7 @@ export const createLocalVolumeReaderAdapter = (
           original,
           translated: translation?.paragraphs[index],
         })),
+        ...(richChapter === undefined ? {} : { epub: richChapter }),
       } satisfies ReaderChapterContent;
     },
 
@@ -214,6 +242,7 @@ export const createLocalVolumeReaderAdapter = (
     invalidateBook(bookId) {
       volumeCache.delete(bookId);
       chapterCache.delete(bookId);
+      epubCache.delete(bookId);
     },
   };
 };

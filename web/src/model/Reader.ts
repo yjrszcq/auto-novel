@@ -138,6 +138,19 @@ export interface ReaderSegment {
   translated?: string;
 }
 
+export interface ReaderEpubDocumentSlice {
+  sourcePath: string;
+  content: string;
+  inlineStyles: string[];
+  stylesheetHrefs: string[];
+  documentAttributes: Record<string, string>;
+  bodyAttributes: Record<string, string>;
+}
+
+export interface ReaderEpubChapterContent {
+  documents: ReaderEpubDocumentSlice[];
+}
+
 export interface ReaderChapterContent {
   bookId: string;
   chapterId: string;
@@ -145,6 +158,7 @@ export interface ReaderChapterContent {
   title: string;
   segments: ReaderSegment[];
   translationSource?: string;
+  epub?: ReaderEpubChapterContent;
 }
 
 export interface BookReadingCapabilities {

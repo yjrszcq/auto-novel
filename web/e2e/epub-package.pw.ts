@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { BlobReader, BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
 
+import type { Epub as ParsedEpub } from '../src/util/file/epub';
+import type { createEpubRichChapter as CreateEpubRichChapter } from '../src/stores/local/EpubRichChapter';
+
 const createStandardsFixture = async () => {
   const output = new BlobWriter('application/epub+zip');
   const writer = new ZipWriter(output);
@@ -160,4 +163,63 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       href: 'OPS/Text/notes.xhtml#note-1',
     }),
   ]);
+
+  const richProjection = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes', 5);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(['file', 'chapter'], 'readonly');
+    const storedFile = await new Promise<{ file: File }>((resolve, reject) => {
+      const request = transaction.objectStore('file').get('rich fixture.epub');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const chapters = await new Promise<
+      Array<{
+        id: string;
+        paragraphs: string[];
+        segmentIds: string[];
+        sourceRanges: Array<{ href: string; start: number; end: number }>;
+      }>
+    >((resolve, reject) => {
+      const request = transaction.objectStore('chapter').getAll();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    database.close();
+
+    const dynamicImport = (path: string) => import(/* @vite-ignore */ path);
+    const { Epub } = (await dynamicImport('/src/util/file/epub.ts')) as {
+      Epub: { fromFile(file: File): Promise<ParsedEpub> };
+    };
+    const { createEpubRichChapter } = (await dynamicImport(
+      '/src/stores/local/EpubRichChapter.ts',
+    )) as { createEpubRichChapter: typeof CreateEpubRichChapter };
+    const epub = await Epub.fromFile(storedFile.file);
+    return chapters
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((chapter) => ({
+        id: chapter.id,
+        paragraphs: chapter.paragraphs,
+        segmentIds: chapter.segmentIds,
+        rich: createEpubRichChapter(epub, chapter),
+      }));
+  });
+
+  const cover = richProjection.find((chapter) =>
+    chapter.id.endsWith('/Text/cover.xhtml'),
+  );
+  expect(cover?.paragraphs).toEqual([]);
+  expect(cover?.rich?.documents[0]?.content).toContain('<img');
+  const chapter = richProjection.find((item) => item.id.includes('#start'));
+  expect(chapter?.paragraphs).toEqual(['第一章', '第一段']);
+  expect(chapter?.rich?.documents[0]).toMatchObject({
+    sourcePath: 'OPS/Text/chapter one.xhtml',
+    stylesheetHrefs: ['../Styles/book.css'],
+  });
+  for (const segmentId of chapter?.segmentIds ?? []) {
+    expect(chapter?.rich?.documents[0]?.content).toContain(segmentId);
+  }
 });

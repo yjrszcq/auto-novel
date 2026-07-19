@@ -26,13 +26,28 @@ describe('native EPUB chapter plan', () => {
         chapterId: 'OEBPS/Text/book.xhtml#one',
         title: '第一章',
         paragraphs: ['一', '二'],
-        sourceRanges: [{ href: 'OEBPS/Text/book.xhtml', start: 0, end: 2 }],
+        sourceRanges: [
+          {
+            href: 'OEBPS/Text/book.xhtml',
+            start: 0,
+            end: 2,
+            startFragment: 'one',
+            endFragment: 'two',
+          },
+        ],
       },
       {
         chapterId: 'OEBPS/Text/book.xhtml#two',
         title: '第二章',
         paragraphs: ['三', '四'],
-        sourceRanges: [{ href: 'OEBPS/Text/book.xhtml', start: 2, end: 4 }],
+        sourceRanges: [
+          {
+            href: 'OEBPS/Text/book.xhtml',
+            start: 2,
+            end: 4,
+            startFragment: 'two',
+          },
+        ],
       },
     ]);
   });
@@ -62,7 +77,12 @@ describe('native EPUB chapter plan', () => {
     expect(chapters[0].sourceRanges).toEqual([
       { href: 'OEBPS/Text/one.xhtml', start: 0, end: 1 },
       { href: 'OEBPS/Text/two.xhtml', start: 0, end: 2 },
-      { href: 'OEBPS/Text/three.xhtml', start: 0, end: 1 },
+      {
+        href: 'OEBPS/Text/three.xhtml',
+        start: 0,
+        end: 1,
+        endFragment: 'end',
+      },
     ]);
     expect(chapters[1].paragraphs).toEqual(['五']);
   });
@@ -157,6 +177,100 @@ describe('native EPUB chapter plan', () => {
         href: 'Text/one.xhtml',
         chapterId: 'Text/one.xhtml',
         parentId: 'nav-0',
+      },
+    ]);
+  });
+
+  it('keeps image-only and non-spine navigation targets as readable chapters', () => {
+    const navigation = [
+      { text: '封面', href: 'Text/cover.xhtml', children: [] },
+      {
+        text: '正文',
+        href: 'Text/chapter.xhtml#start',
+        children: [],
+      },
+      { text: '附录', href: 'Text/notes.xhtml#note', children: [] },
+    ];
+    const chapters = buildEpubChapterPlan(navigation, [
+      { href: 'Text/cover.xhtml', paragraphs: [], hasContent: true },
+      {
+        href: 'Text/chapter.xhtml',
+        paragraphs: ['标题', '正文'],
+        anchors: { start: 0 },
+        hasContent: true,
+      },
+      {
+        href: 'Text/notes.xhtml',
+        paragraphs: ['附录内容'],
+        anchors: { note: 0 },
+        hasContent: true,
+      },
+    ]);
+
+    expect(chapters).toEqual([
+      {
+        chapterId: 'Text/cover.xhtml',
+        title: '封面',
+        paragraphs: [],
+        sourceRanges: [{ href: 'Text/cover.xhtml', start: 0, end: 0 }],
+      },
+      {
+        chapterId: 'Text/chapter.xhtml#start',
+        title: '正文',
+        paragraphs: ['标题', '正文'],
+        sourceRanges: [
+          {
+            href: 'Text/chapter.xhtml',
+            start: 0,
+            end: 2,
+            startFragment: 'start',
+          },
+        ],
+      },
+      {
+        chapterId: 'Text/notes.xhtml#note',
+        title: '附录',
+        paragraphs: ['附录内容'],
+        sourceRanges: [
+          {
+            href: 'Text/notes.xhtml',
+            start: 0,
+            end: 1,
+            startFragment: 'note',
+          },
+        ],
+      },
+    ]);
+    expect(
+      buildEpubNavigationPlan(navigation, chapters).map(
+        ({ title, chapterId }) => ({ title, chapterId }),
+      ),
+    ).toEqual([
+      { title: '封面', chapterId: 'Text/cover.xhtml' },
+      { title: '正文', chapterId: 'Text/chapter.xhtml#start' },
+      { title: '附录', chapterId: 'Text/notes.xhtml#note' },
+    ]);
+  });
+
+  it('keeps duplicate spine occurrences addressable in fallback order', () => {
+    const chapters = buildEpubChapterPlan(
+      [],
+      [
+        { href: 'Text/repeated.xhtml', paragraphs: ['第一次'] },
+        { href: 'Text/repeated.xhtml', paragraphs: ['第二次'] },
+      ],
+    );
+
+    expect(
+      chapters.map(({ chapterId, paragraphs }) => ({
+        chapterId,
+        paragraphs,
+      })),
+    ).toEqual([
+      { chapterId: 'Text/repeated.xhtml', paragraphs: ['第一次'] },
+      {
+        chapterId: 'Text/repeated.xhtml::spine-1',
+        paragraphs: ['第二次'],
       },
     ]);
   });
