@@ -297,7 +297,9 @@ const closeReaderPanels = () => {
 };
 
 const openCatalog = async () => {
-  showMobileTranslationNotice.value = false;
+  const shouldOpen = !showCatalog.value;
+  closeReaderPanels();
+  if (!shouldOpen) return;
   showCatalog.value = true;
   await nextTick();
   document
@@ -305,9 +307,16 @@ const openCatalog = async () => {
     ?.scrollIntoView({ block: 'center', behavior: 'auto' });
 };
 
+const openSettings = () => {
+  const shouldOpen = !showSettings.value;
+  closeReaderPanels();
+  showSettings.value = shouldOpen;
+};
+
 const openTools = () => {
-  showMobileTranslationNotice.value = false;
-  showTools.value = true;
+  const shouldOpen = !showTools.value;
+  closeReaderPanels();
+  showTools.value = shouldOpen;
 };
 
 const openSearch = () => {
@@ -2341,7 +2350,7 @@ onBeforeUnmount(() => {
         />
         <span>{{ isDarkReaderTheme ? '白天' : '夜晚' }}</span>
       </button>
-      <button type="button" @click="showSettings = true">
+      <button type="button" @click="openSettings">
         <n-icon :component="SettingsOutlined" />
         <span>设置</span>
       </button>

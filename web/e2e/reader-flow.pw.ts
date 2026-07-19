@@ -125,7 +125,14 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
     'scrollbar-color',
     'rgb(98, 98, 98) rgb(36, 36, 36)',
   );
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '目录' })).toHaveCount(0);
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '目录' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: '阅读设置' })).toBeVisible();
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '阅读设置' })).toHaveCount(0);
 
   await page.getByRole('button', { name: '白天', exact: true }).click();
   await expect(reader).toHaveClass(/book-reader--light/);
@@ -162,6 +169,11 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
     page.locator('.reader-sheet__panel'),
     bottomNavigation,
   );
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '目录' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: '阅读工具' })).toBeVisible();
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '阅读工具' })).toHaveCount(0);
 });
 
 test('opens a local bookshelf book safely through the current reader route', async ({
