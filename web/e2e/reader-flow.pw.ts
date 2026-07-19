@@ -1034,6 +1034,35 @@ test('opens a local bookshelf book safely through the current reader route', asy
     'background-color',
     'rgb(11, 11, 11)',
   );
+  const ultraDarkSliderHandles = page.locator('.reader-sheet .n-slider-handle');
+  const ultraDarkSliderFills = page.locator(
+    '.reader-sheet .n-slider-rail__fill',
+  );
+  await expect(ultraDarkSliderHandles).toHaveCount(4);
+  await expect(ultraDarkSliderFills).toHaveCount(4);
+  expect(
+    await ultraDarkSliderHandles.evaluateAll((handles) =>
+      handles.map((handle) => getComputedStyle(handle).backgroundColor),
+    ),
+  ).toEqual(Array(4).fill('rgb(36, 36, 36)'));
+  expect(
+    (
+      await ultraDarkSliderFills.evaluateAll((fills) =>
+        fills.map((fill) => getComputedStyle(fill).backgroundColor),
+      )
+    ).every(
+      (color) => color === 'rgb(37, 73, 63)' || color === 'rgb(45, 87, 75)',
+    ),
+  ).toBe(true);
+  expect(
+    await page.locator('.book-reader').evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        track: style.getPropertyValue('--reader-progress-track').trim(),
+        color: style.getPropertyValue('--reader-progress-color').trim(),
+      };
+    }),
+  ).toEqual({ track: '#0c0c0c', color: '#25493f' });
   await themeSetting.locator('.n-base-selection').click();
   await page.locator('.n-base-select-menu').getByText('浅色').click();
   const flowSetting = page

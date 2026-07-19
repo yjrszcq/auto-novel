@@ -758,6 +758,13 @@ const ultraDarkNaiveThemeOverrides: GlobalThemeOverrides = {
   Slider: {
     railColor: '#181818',
     railColorHover: '#202020',
+    fillColor: '#25493f',
+    fillColorHover: '#2d574b',
+    handleColor: '#242424',
+    handleBoxShadow: '0 0 0 1px #303030',
+    handleBoxShadowHover: '0 0 0 1px #383838',
+    handleBoxShadowActive: '0 0 0 1px #383838',
+    handleBoxShadowFocus: '0 0 0 1px #383838',
   },
   Select: {
     peers: {
@@ -2766,6 +2773,8 @@ onBeforeUnmount(() => {
 .book-reader {
   --reader-app-bar-height: 40px;
   --reader-bottom-navigation-height: 52px;
+  --reader-progress-track: rgb(127 127 127 / 20%);
+  --reader-progress-color: #5bd6b0;
   width: 100%;
   box-sizing: border-box;
   min-height: 100vh;
@@ -2820,6 +2829,8 @@ onBeforeUnmount(() => {
   --reader-scrollbar-track: #050505;
   --reader-scrollbar-thumb: #202020;
   --reader-scrollbar-thumb-hover: #2b2b2b;
+  --reader-progress-track: #0c0c0c;
+  --reader-progress-color: #25493f;
 }
 
 .book-reader--sepia {
@@ -3296,13 +3307,13 @@ onBeforeUnmount(() => {
   z-index: 30;
   height: 3px;
   overflow: hidden;
-  background: rgb(127 127 127 / 20%);
+  background: var(--reader-progress-track);
 }
 
 .book-reader__progress-track span {
   display: block;
   height: 100%;
-  background: #5bd6b0;
+  background: var(--reader-progress-color);
   transition: width 180ms ease;
 }
 
