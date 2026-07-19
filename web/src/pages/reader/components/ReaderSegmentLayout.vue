@@ -1,20 +1,17 @@
 <script lang="ts" setup>
-import type { ReaderAnnotation, ReaderSegment } from '@/model/Reader';
+import type { ReaderSegment } from '@/model/Reader';
 
 import type { RenderedReaderMode } from '../core/BilingualLayout';
 import type { ResolvedReaderFlow } from '../core/ReaderFlow';
 import { hasTranslation } from '../core/BilingualLayout';
-import { indexReaderAnnotations } from '../core/ReaderAnnotations';
 import {
   expandSegmentRange,
   getInitialSegmentRange,
 } from '../core/ReaderSegmentWindow';
-import ReaderSegmentText from './ReaderSegmentText.vue';
 
 const props = defineProps<{
   segments: ReaderSegment[];
   mode: RenderedReaderMode;
-  annotations: ReaderAnnotation[];
   initialSegmentId?: string;
   flow: ResolvedReaderFlow;
   scrollRoot?: HTMLElement;
@@ -39,13 +36,6 @@ const segmentRange = ref(getInitialRange());
 const renderedSegments = computed(() =>
   props.segments.slice(segmentRange.value.start, segmentRange.value.end),
 );
-const annotationIndex = computed(() =>
-  indexReaderAnnotations(props.annotations),
-);
-const getSegmentAnnotations = (
-  segmentId: string,
-  languageSide: 'original' | 'translated',
-) => annotationIndex.value.get(segmentId, languageSide);
 const hasPreviousSegments = computed(() => segmentRange.value.start > 0);
 const hasMoreSegments = computed(
   () => segmentRange.value.end < props.segments.length,
@@ -216,10 +206,7 @@ onBeforeUnmount(() => {
         class="reader-segment__original"
         data-reader-language-side="original"
       >
-        <ReaderSegmentText
-          :annotations="getSegmentAnnotations(segment.id, 'original')"
-          :text="segment.original"
-        />
+        {{ segment.original }}
       </p>
 
       <template v-else-if="props.mode === 'translated'">
@@ -228,10 +215,7 @@ onBeforeUnmount(() => {
           class="reader-segment__translated"
           data-reader-language-side="translated"
         >
-          <ReaderSegmentText
-            :annotations="getSegmentAnnotations(segment.id, 'translated')"
-            :text="segment.translated!"
-          />
+          {{ segment.translated }}
         </p>
         <p v-else class="reader-segment__missing">未翻译</p>
       </template>
@@ -241,19 +225,13 @@ onBeforeUnmount(() => {
           class="reader-segment__translated"
           data-reader-language-side="translated"
         >
-          <ReaderSegmentText
-            :annotations="getSegmentAnnotations(segment.id, 'translated')"
-            :text="hasTranslation(segment) ? segment.translated! : '未翻译'"
-          />
+          {{ hasTranslation(segment) ? segment.translated : '未翻译' }}
         </p>
         <p
           class="reader-segment__original"
           data-reader-language-side="original"
         >
-          <ReaderSegmentText
-            :annotations="getSegmentAnnotations(segment.id, 'original')"
-            :text="segment.original"
-          />
+          {{ segment.original }}
         </p>
       </template>
 
@@ -262,19 +240,13 @@ onBeforeUnmount(() => {
           class="reader-segment__original"
           data-reader-language-side="original"
         >
-          <ReaderSegmentText
-            :annotations="getSegmentAnnotations(segment.id, 'original')"
-            :text="segment.original"
-          />
+          {{ segment.original }}
         </p>
         <p
           class="reader-segment__translated"
           data-reader-language-side="translated"
         >
-          <ReaderSegmentText
-            :annotations="getSegmentAnnotations(segment.id, 'translated')"
-            :text="hasTranslation(segment) ? segment.translated! : '未翻译'"
-          />
+          {{ hasTranslation(segment) ? segment.translated : '未翻译' }}
         </p>
       </template>
     </div>

@@ -8,7 +8,11 @@ export const createBrowserSpeechController = (
   createUtterance: ((text: string) => SpeechSynthesisUtterance) | undefined,
 ) => ({
   isAvailable: engine !== undefined && createUtterance !== undefined,
-  speak: (text: string, language: string) => {
+  speak: (
+    text: string,
+    language: string,
+    callbacks?: { onEnd?: () => void; onError?: () => void },
+  ) => {
     if (
       engine === undefined ||
       createUtterance === undefined ||
@@ -18,6 +22,8 @@ export const createBrowserSpeechController = (
     }
     const utterance = createUtterance(text);
     utterance.lang = language;
+    utterance.onend = () => callbacks?.onEnd?.();
+    utterance.onerror = () => callbacks?.onError?.();
     engine.cancel();
     engine.speak(utterance);
     return true;

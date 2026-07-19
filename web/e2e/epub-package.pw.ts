@@ -400,35 +400,6 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   expect(remotePublicationRequests).toEqual([]);
   expect(await page.evaluate(() => 'epubScriptExecuted' in window)).toBe(false);
   const firstSegmentId = chapter!.segmentIds[0];
-  await richHost.evaluate((host, segmentId) => {
-    const target = host.shadowRoot?.querySelector(
-      `[data-reader-segment-id="${segmentId}"]`,
-    );
-    const text = target?.firstChild;
-    if (!(text instanceof Text)) throw new Error('找不到 EPUB 批注文本');
-    const range = document.createRange();
-    range.setStart(text, 0);
-    range.setEnd(text, 3);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }, firstSegmentId);
-  await page.getByRole('button', { name: '工具', exact: true }).click();
-  await page.getByRole('button', { name: '高亮选中', exact: true }).click();
-  await expect(page.getByText('已添加高亮批注', { exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
-  await expect
-    .poll(() =>
-      richHost.evaluate(
-        (host, segmentId) =>
-          host.shadowRoot?.querySelector(
-            `[data-reader-segment-id="${segmentId}"] mark`,
-          )?.textContent,
-        firstSegmentId,
-      ),
-    )
-    .toBe('第一章');
 
   const getLanguageOrder = () =>
     richHost.evaluate(

@@ -6,7 +6,6 @@ import type {
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import type {
-  ReaderAnnotation,
   ReaderBookPreference,
   ReaderBookshelfState,
   ReaderBookmark,
@@ -61,11 +60,6 @@ interface VolumesDBSchema extends DBSchema {
     value: ReaderBookmark;
     indexes: { byBookId: string };
   };
-  'reader-annotation': {
-    key: string;
-    value: ReaderAnnotation;
-    indexes: { byBookId: string };
-  };
   'reader-cover': {
     key: string;
     value: ReaderCover;
@@ -102,10 +96,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
           keyPath: 'id',
         });
         bookmarkStore.createIndex('byBookId', 'bookId');
-        const annotationStore = db.createObjectStore('reader-annotation', {
-          keyPath: 'id',
-        });
-        annotationStore.createIndex('byBookId', 'bookId');
         db.createObjectStore('reader-cover', { keyPath: 'bookId' });
         const cacheStore = db.createObjectStore('reader-chapter-cache', {
           keyPath: 'key',
@@ -244,12 +234,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   const getReaderCover = (bookId: string) => db.get('reader-cover', bookId);
   const deleteReaderCover = (bookId: string) =>
     db.delete('reader-cover', bookId);
-  const putReaderAnnotation = (value: ReaderAnnotation) =>
-    db.put('reader-annotation', value);
-  const deleteReaderAnnotation = (id: string) =>
-    db.delete('reader-annotation', id);
-  const listReaderAnnotations = (bookId: string) =>
-    db.getAllFromIndex('reader-annotation', 'byBookId', bookId);
   const putReaderCover = (value: ReaderCover) => db.put('reader-cover', value);
   const putReaderChapterCache = (value: ReaderChapterCache) =>
     db.put('reader-chapter-cache', value);
@@ -267,7 +251,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
         'reader-reading-stats',
         'reader-cover',
         'reader-bookmark',
-        'reader-annotation',
         'reader-chapter-cache',
       ],
       'readwrite',
@@ -283,14 +266,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     const deleteBookmarks = async () => {
       for await (const cursor of tx
         .objectStore('reader-bookmark')
-        .index('byBookId')
-        .iterate(bookId)) {
-        cursor.delete();
-      }
-    };
-    const deleteAnnotations = async () => {
-      for await (const cursor of tx
-        .objectStore('reader-annotation')
         .index('byBookId')
         .iterate(bookId)) {
         cursor.delete();
@@ -314,7 +289,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       tx.objectStore('reader-cover').delete(bookId),
       deleteChapters(),
       deleteBookmarks(),
-      deleteAnnotations(),
       deleteCaches(),
     ]);
     await tx.done;
@@ -350,9 +324,6 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     putReaderBookmark,
     deleteReaderBookmark,
     listReaderBookmarks,
-    putReaderAnnotation,
-    deleteReaderAnnotation,
-    listReaderAnnotations,
     deleteVolume,
     close,
     getReaderCover,

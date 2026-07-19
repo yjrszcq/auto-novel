@@ -1681,7 +1681,7 @@ test('persists keyboard pagination and every reading mode across responsive layo
   expect(pageErrors).toEqual([]);
 });
 
-test('keeps reader search, annotations, bookmarks, speech, and handoffs on stable segments', async ({
+test('keeps reader search, bookmarks, speech, and lookups on stable segments', async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -1803,20 +1803,19 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
     });
   };
 
-  await selectQuery();
-  await page.getByRole('button', { name: '工具', exact: true }).click();
-  await page.getByRole('button', { name: '高亮选中', exact: true }).click();
-  await expect(page.getByText('已添加高亮批注', { exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(
-    firstParagraph.locator('.reader-annotation--highlight'),
-  ).toHaveText('选择词语');
-
-  await page.getByRole('button', { name: '工具', exact: true }).click();
-  await page.getByRole('button', { name: '添加书签', exact: true }).click();
+  await page
+    .getByRole('button', { name: '添加当前位置书签', exact: true })
+    .click();
   await expect(page.getByText('已添加书签', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '朗读当前段', exact: true }).click();
-  await page.getByRole('button', { name: '停止朗读', exact: true }).click();
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  const speechButton = page.getByRole('button', {
+    name: '朗读当前段',
+    exact: true,
+  });
+  await speechButton.click();
+  await expect(speechButton).toHaveClass(/n-button--primary-type/);
+  await speechButton.click();
+  await expect(speechButton).not.toHaveClass(/n-button--primary-type/);
   const speechEvents = await page.evaluate(
     () =>
       (
@@ -1882,22 +1881,11 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
   await page.getByRole('button', { name: '关闭AI 查词' }).click();
 
   await page.getByRole('button', { name: '工具', exact: true }).click();
-  await page.getByRole('button', { name: 'GPT 翻译本章', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Sakura 翻译本章', exact: true })
-    .click();
-  const queued = await page.evaluate(() => ({
-    gpt: JSON.parse(
-      localStorage.getItem('auto-novel:workspace:gpt') ?? '{"jobs":[]}',
-    ).jobs,
-    sakura: JSON.parse(
-      localStorage.getItem('auto-novel:workspace:sakura') ?? '{"jobs":[]}',
-    ).jobs,
-  }));
-  expect(queued.gpt).toHaveLength(1);
-  expect(queued.sakura).toHaveLength(1);
-  expect(queued.gpt[0].description).toBe(toolsBookId);
-  expect(queued.sakura[0].description).toBe(toolsBookId);
+  await page.getByRole('button', { name: '书籍信息', exact: true }).click();
+  const bookInfoDialog = page.getByRole('dialog', { name: '书籍信息' });
+  await expect(bookInfoDialog.getByText('阅读工具测试')).toBeVisible();
+  await expect(bookInfoDialog.getByText('工具第一章')).toBeVisible();
+  await page.getByRole('button', { name: '关闭书籍信息' }).click();
 
   const persistedTools = await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -1905,26 +1893,17 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
-    const transaction = database.transaction(
-      ['reader-bookmark', 'reader-annotation'],
-      'readonly',
-    );
+    const transaction = database.transaction('reader-bookmark', 'readonly');
     const bookmarkRequest = transaction
       .objectStore('reader-bookmark')
       .index('byBookId')
       .getAll(bookId);
-    const annotationRequest = transaction
-      .objectStore('reader-annotation')
-      .index('byBookId')
-      .getAll(bookId);
     const result = await new Promise<{
       bookmarks: Array<{ segmentId?: string; offsetRatio?: number }>;
-      annotations: Array<{ segmentId: string; quote: string }>;
     }>((resolve, reject) => {
       transaction.oncomplete = () =>
         resolve({
           bookmarks: bookmarkRequest.result,
-          annotations: annotationRequest.result,
         });
       transaction.onerror = () => reject(transaction.error);
     });
@@ -1934,9 +1913,136 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
   expect(persistedTools.bookmarks).toMatchObject([
     { segmentId: 'tools-segment-0', offsetRatio: 0 },
   ]);
-  expect(persistedTools.annotations).toMatchObject([
-    { segmentId: 'tools-segment-0', quote: '选择词语' },
-  ]);
+});
+
+test('temporarily translates only the visible reader page without persisting it', async ({
+  page,
+}) => {
+  const temporaryBookId = 'reader-temporary-translation.txt';
+  const server = await startOpenAiTestServer();
+  try {
+    await page.addInitScript((endpoint) => {
+      localStorage.setItem(
+        'auto-novel:workspace:gpt',
+        JSON.stringify({
+          workers: [
+            {
+              id: 'reader-default-worker',
+              endpoint,
+              model: 'reader-test-model',
+              key: 'reader-test-key',
+              concurrency: 2,
+            },
+          ],
+          jobs: [],
+          jobRecords: [],
+        }),
+      );
+    }, server.endpoint);
+    await page.goto('/');
+    await expect(
+      page.getByRole('heading', { name: '轻小说机翻机器人' }),
+    ).toBeVisible();
+    await page.evaluate(async (bookId) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter', 'reader-settings'],
+        'readwrite',
+      );
+      transaction.objectStore('metadata').put({
+        id: bookId,
+        createAt: 1,
+        toc: [{ chapterId: '0', title: '临时翻译章节' }],
+        sourceFormat: 'txt',
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+        sourceBookMetadata: {
+          title: '临时翻译测试',
+          authors: [],
+          languages: ['ja'],
+        },
+      });
+      transaction.objectStore('chapter').put({
+        id: `${bookId}/0`,
+        volumeId: bookId,
+        paragraphs: Array.from(
+          { length: 24 },
+          (_, index) => `临时原文第 ${index + 1} 段`,
+        ),
+        segmentIds: Array.from(
+          { length: 24 },
+          (_, index) => `temporary-segment-${index}`,
+        ),
+      });
+      transaction.objectStore('reader-settings').put({
+        id: 'default',
+        defaultMode: 'translated',
+        translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+        fontSize: 18,
+        lineHeight: 1.9,
+        contentWidth: 840,
+        horizontalPadding: 24,
+        theme: 'light',
+        flow: 'scrolled',
+        updatedAt: 1,
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    }, temporaryBookId);
+
+    await page.goto(`/books/${temporaryBookId}/read/0`);
+    const source = page.locator(
+      '[data-reader-segment-id="temporary-segment-0"]',
+    );
+    await expect(source).toContainText('临时原文第 1 段');
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'GPT 翻译本页', exact: true })
+      .click();
+    await expect(
+      page.getByText('当前页面已临时翻译', { exact: true }),
+    ).toBeVisible();
+    await expect(source).toContainText('译文第1行');
+    await expect(page.getByRole('dialog', { name: '阅读工具' })).toBeHidden();
+    await page.keyboard.press('4');
+    await expect(source).toContainText('临时原文第 1 段');
+    await page.keyboard.press('1');
+    await expect(source).toContainText('译文第1行');
+
+    const persistedChapter = await page.evaluate(async (bookId) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const chapter = await new Promise<Record<string, unknown> | undefined>(
+        (resolve, reject) => {
+          const transaction = database.transaction('chapter', 'readonly');
+          const request = transaction.objectStore('chapter').get(`${bookId}/0`);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        },
+      );
+      database.close();
+      return chapter;
+    }, temporaryBookId);
+    expect(persistedChapter).not.toHaveProperty('gpt');
+    expect(server.requests.length).toBeGreaterThan(0);
+
+    await page.reload();
+    await expect(source).toContainText('临时原文第 1 段');
+    await expect(source).not.toContainText('译文第1行');
+  } finally {
+    await server.close();
+  }
 });
 
 test('continues paging backward after loading an earlier long-chapter window', async ({

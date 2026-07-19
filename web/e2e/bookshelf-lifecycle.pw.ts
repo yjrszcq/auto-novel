@@ -1472,7 +1472,6 @@ test('permanent deletion removes exactly one complete book graph', async ({
       'reader-reading-stats',
       'reader-cover',
       'reader-bookmark',
-      'reader-annotation',
       'reader-chapter-cache',
     ];
     const transaction = database.transaction(stores, 'readwrite');
@@ -1521,19 +1520,6 @@ test('permanent deletion removes exactly one complete book graph', async ({
         bookId: target,
         chapterId: '0',
         createdAt: 1,
-      });
-      transaction.objectStore('reader-annotation').put({
-        id: `${target}-annotation`,
-        bookId: target,
-        chapterId: '0',
-        segmentId: 'segment',
-        languageSide: 'original',
-        startOffset: 0,
-        endOffset: 1,
-        quote: 'x',
-        style: 'highlight',
-        createdAt: 1,
-        updatedAt: 1,
       });
       transaction.objectStore('reader-chapter-cache').put({
         key: `${target}/0/current`,
@@ -1587,7 +1573,6 @@ test('permanent deletion removes exactly one complete book graph', async ({
       read('reader-reading-stats', bookId),
       read('reader-cover', bookId),
       read('reader-bookmark', `${bookId}-bookmark`),
-      read('reader-annotation', `${bookId}-annotation`),
       read('reader-chapter-cache', `${bookId}/0/current`),
     ];
     const preservedRequests = [
@@ -1598,7 +1583,6 @@ test('permanent deletion removes exactly one complete book graph', async ({
       read('reader-reading-stats', 'other-book'),
       read('reader-cover', 'other-book'),
       read('reader-bookmark', 'other-book-bookmark'),
-      read('reader-annotation', 'other-book-annotation'),
       read('reader-chapter-cache', 'other-book/0/current'),
     ];
     const result = await new Promise<{

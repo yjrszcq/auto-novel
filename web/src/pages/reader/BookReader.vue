@@ -13,7 +13,6 @@ import {
   WbSunnyOutlined,
 } from '@vicons/material';
 import type {
-  ReaderAnnotation,
   ReaderBookmark,
   ReaderBookStyleOverride,
   ReaderChapterContent,
@@ -21,7 +20,14 @@ import type {
   ReaderMode,
   ReaderSettingsRecord,
 } from '@/model/Reader';
-import { TranslateJob, TranslateTaskDescriptor } from '@/model/Translator';
+import {
+  normalizeTranslationConcurrency,
+  TranslateJob,
+  TranslateTaskDescriptor,
+} from '@/model/Translator';
+import type { GptWorker, SakuraWorker } from '@/model/Translator';
+import { Translator } from '@/domain/translate';
+import type { TranslatorConfig } from '@/domain/translate';
 import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { darkTheme, lightTheme } from 'naive-ui';
 import type { GlobalThemeOverrides } from 'naive-ui';
@@ -49,7 +55,6 @@ import {
   resolveReaderPageTurn,
   resolveReaderFlow,
 } from './core/ReaderFlow';
-import { createReaderAnnotation } from './core/ReaderAnnotations';
 import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
 import { createBrowserSpeechController } from './core/ReaderSpeech';
 import type { ReaderSearchResult } from './core/ReaderSearch';
@@ -64,6 +69,7 @@ import {
 import {
   getAvailableReaderModes,
   getReaderModeShortcut,
+  readerModes,
   resolveReaderMode,
 } from './core/ReaderMode';
 import {
@@ -98,8 +104,8 @@ const showModePrompt = ref(false);
 const showCatalog = ref(false);
 const collapsedCatalogEntryIds = ref(new Set<string>());
 const showTools = ref(false);
+const showBookInfo = ref(false);
 const showBookmarks = ref(false);
-const showAnnotations = ref(false);
 const showSearch = ref(false);
 const showInteractiveTranslation = ref(false);
 const interactiveInitialText = ref<string>();
@@ -120,7 +126,6 @@ let viewportResizeFrame: number | undefined;
 const isDesktopReader = useMediaQuery('(min-width: 768px)');
 const usesDoublePageSpread = useMediaQuery('(min-width: 916px)');
 const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)');
-const annotations = ref<ReaderAnnotation[]>([]);
 const bookmarks = ref<ReaderBookmark[]>([]);
 const viewportChapterId = ref<string>();
 const viewportSegmentId = ref<string>();
@@ -147,6 +152,10 @@ const continuousChapterInitialSegments = new Map<string, string | undefined>();
 let continuousLoadGeneration = 0;
 let routeSyncedFromScroll: string | undefined;
 let adjustingContinuousChapters = false;
+const isSpeaking = ref(false);
+const translatingPage = ref<'gpt' | 'sakura'>();
+let pageTranslationController: AbortController | undefined;
+const temporaryTranslations = new Map<string, string>();
 
 const repositoryPromise = useLocalVolumeStore();
 const cachedAdapterPromise = repositoryPromise.then((repository) =>
@@ -156,6 +165,32 @@ const searchControllerPromise = cachedAdapterPromise.then(
   createReaderSearchController,
 );
 const controllerPromise = cachedAdapterPromise.then(createReaderPageController);
+
+const temporaryTranslationKey = (chapterId: string, segmentId: string) =>
+  `${chapterId}\u0000${segmentId}`;
+
+const withTemporaryTranslations = (chapter: ReaderChapterContent) => ({
+  ...chapter,
+  segments: chapter.segments.map((segment) => {
+    const translated = temporaryTranslations.get(
+      temporaryTranslationKey(chapter.chapterId, segment.id),
+    );
+    return translated === undefined ? segment : { ...segment, translated };
+  }),
+});
+
+const hasTemporaryTranslation = (chapter: ReaderChapterContent) =>
+  chapter.segments.some((segment) =>
+    temporaryTranslations.has(
+      temporaryTranslationKey(chapter.chapterId, segment.id),
+    ),
+  );
+
+const enableTemporaryReadingModes = (chapter: ReaderChapterContent) => {
+  if (!hasTemporaryTranslation(chapter)) return;
+  availableModes.value = [...readerModes];
+  readingMode.value = temporaryMode ?? settings.value.defaultMode;
+};
 
 const bookId = computed(() => route.params.bookId as string);
 const requestedChapterId = computed(() =>
@@ -284,8 +319,8 @@ const hasOpenReaderPanel = () =>
   showCatalog.value ||
   showSettings.value ||
   showTools.value ||
+  showBookInfo.value ||
   showBookmarks.value ||
-  showAnnotations.value ||
   showSearch.value ||
   showInteractiveTranslation.value ||
   showModePrompt.value ||
@@ -295,8 +330,8 @@ const closeReaderPanels = () => {
   showCatalog.value = false;
   showSettings.value = false;
   showTools.value = false;
+  showBookInfo.value = false;
   showBookmarks.value = false;
-  showAnnotations.value = false;
   showSearch.value = false;
   showInteractiveTranslation.value = false;
   showModePrompt.value = false;
@@ -591,7 +626,7 @@ const handleReaderKeydown = (event: KeyboardEvent) => {
   const isInteractiveTarget =
     target instanceof Element &&
     target.closest(
-      'input, textarea, select, button, a, [contenteditable="true"], [role="textbox"]',
+      'input, textarea, select, a, [contenteditable="true"], [role="textbox"]',
     ) !== null;
   if (hasOpenReaderPanel() || isInteractiveTarget) return;
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
@@ -862,6 +897,9 @@ const load = async () => {
   if (requestId !== loadUiRequestId) return;
   const loaded = await controller.load(targetBookId, targetChapterId);
   if (requestId !== loadUiRequestId || loaded.kind === 'stale') return;
+  if (loaded.kind === 'ready') {
+    loaded.chapter = withTemporaryTranslations(loaded.chapter);
+  }
   if (loaded.kind === 'ready' && targetChapterId !== loaded.chapter.chapterId) {
     void router.replace(
       `/books/${encodeURIComponent(targetBookId)}/read/${encodeURIComponent(loaded.chapter.chapterId)}`,
@@ -872,11 +910,8 @@ const load = async () => {
     chapterEdge !== undefined &&
     preservesScrolledContent
   ) {
-    await Promise.all([
-      resolveMode(loaded),
-      loadBookmarks(loaded.book.id),
-      loadAnnotations(loaded.book.id),
-    ]);
+    await Promise.all([resolveMode(loaded), loadBookmarks(loaded.book.id)]);
+    enableTemporaryReadingModes(loaded.chapter);
     if (requestId !== loadUiRequestId) return;
     const targetSegment =
       chapterEdge === 'end'
@@ -894,11 +929,8 @@ const load = async () => {
     return;
   }
   if (loaded.kind === 'ready') {
-    await Promise.all([
-      resolveMode(loaded),
-      loadBookmarks(loaded.book.id),
-      loadAnnotations(loaded.book.id),
-    ]);
+    await Promise.all([resolveMode(loaded), loadBookmarks(loaded.book.id)]);
+    enableTemporaryReadingModes(loaded.chapter);
     if (requestId !== loadUiRequestId) return;
     initializeContinuousChapters(loaded.chapter);
     result.value = loaded;
@@ -1443,7 +1475,12 @@ const getSpeechController = () =>
       : (text) => new SpeechSynthesisUtterance(text),
   );
 
-const speakCurrentSegment = () => {
+const toggleCurrentSegmentSpeech = () => {
+  if (isSpeaking.value) {
+    getSpeechController().stop();
+    isSpeaking.value = false;
+    return;
+  }
   if (result.value?.kind !== 'ready') {
     return;
   }
@@ -1457,13 +1494,22 @@ const speakCurrentSegment = () => {
   const spoken = getSpeechController().speak(
     text ?? '',
     renderedMode.value === 'original' ? 'ja-JP' : 'zh-CN',
+    {
+      onEnd: () => (isSpeaking.value = false),
+      onError: () => (isSpeaking.value = false),
+    },
   );
   if (!spoken) {
     message.warning('当前浏览器不支持朗读，或没有可朗读的段落');
+    return;
   }
+  isSpeaking.value = true;
 };
 
-const stopSpeaking = () => getSpeechController().stop();
+const stopSpeaking = () => {
+  getSpeechController().stop();
+  isSpeaking.value = false;
+};
 
 const openInteractiveTranslation = () => {
   const shouldOpen = !showInteractiveTranslation.value;
@@ -1472,6 +1518,179 @@ const openInteractiveTranslation = () => {
   if (!shouldOpen) return;
   interactiveInitialText.value = text || undefined;
   showInteractiveTranslation.value = true;
+};
+
+type VisibleReaderSegment = {
+  chapterId: string;
+  segmentId: string;
+  original: string;
+};
+
+const getVisibleReaderSegments = (): VisibleReaderSegment[] => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return [];
+  const viewport = readerViewport.value;
+  const bounds =
+    resolvedFlow.value === 'paginated' && viewport !== null
+      ? viewport.getBoundingClientRect()
+      : {
+          top: getReaderVisibleTop(),
+          right: window.innerWidth,
+          bottom: getReaderVisibleBottom(),
+          left: 0,
+        };
+  const chapters = new Map(
+    [ready.chapter, ...continuousChapters.value].map((chapter) => [
+      chapter.chapterId,
+      chapter,
+    ]),
+  );
+  const seen = new Set<string>();
+  return getSegmentElements().flatMap((element) => {
+    if (
+      ![...element.getClientRects()].some(
+        (rect) =>
+          rect.right > bounds.left + 1 &&
+          rect.left < bounds.right - 1 &&
+          rect.bottom > bounds.top + 1 &&
+          rect.top < bounds.bottom - 1,
+      )
+    ) {
+      return [];
+    }
+    const root = element.getRootNode();
+    const chapterId =
+      element.closest<HTMLElement>('[data-reader-chapter-id]')?.dataset
+        .readerChapterId ??
+      (root instanceof ShadowRoot
+        ? root.host.closest<HTMLElement>('[data-reader-chapter-id]')?.dataset
+            .readerChapterId
+        : undefined) ??
+      ready.chapter.chapterId;
+    const segmentId = element.dataset.readerSegmentId;
+    const key =
+      segmentId === undefined
+        ? undefined
+        : temporaryTranslationKey(chapterId, segmentId);
+    if (segmentId === undefined || key === undefined || seen.has(key))
+      return [];
+    const segment = chapters
+      .get(chapterId)
+      ?.segments.find((item) => item.id === segmentId);
+    if (segment === undefined || segment.original.trim().length === 0)
+      return [];
+    seen.add(key);
+    return [{ chapterId, segmentId, original: segment.original }];
+  });
+};
+
+const createVisibleTranslationConfig = (
+  type: 'gpt' | 'sakura',
+  worker: GptWorker | SakuraWorker,
+): TranslatorConfig =>
+  type === 'gpt'
+    ? {
+        id: 'gpt',
+        model: (worker as GptWorker).model,
+        endpoint: worker.endpoint,
+        key: (worker as GptWorker).key,
+      }
+    : {
+        id: 'sakura',
+        endpoint: worker.endpoint,
+        segLength: (worker as SakuraWorker).segLength,
+        prevSegLength: (worker as SakuraWorker).prevSegLength,
+      };
+
+const translateVisiblePage = async (type: 'gpt' | 'sakura') => {
+  if (translatingPage.value !== undefined) return;
+  const worker =
+    type === 'gpt'
+      ? gptWorkspace.ref.value.workers[0]
+      : sakuraWorkspace.ref.value.workers[0];
+  if (worker === undefined) {
+    message.warning(
+      `请先在${type === 'gpt' ? 'GPT' : 'Sakura'}工作区配置翻译器`,
+    );
+    return;
+  }
+  const targets = getVisibleReaderSegments();
+  if (targets.length === 0) {
+    message.warning('当前页面没有可翻译的文字');
+    return;
+  }
+  const anchor = captureReaderPosition();
+  const controller = new AbortController();
+  pageTranslationController = controller;
+  translatingPage.value = type;
+  try {
+    const batchCount = Math.min(
+      normalizeTranslationConcurrency(worker.concurrency),
+      targets.length,
+    );
+    const batches = Array.from({ length: batchCount }, (_, index) =>
+      targets.slice(
+        Math.floor((index * targets.length) / batchCount),
+        Math.floor(((index + 1) * targets.length) / batchCount),
+      ),
+    );
+    const config = createVisibleTranslationConfig(type, worker);
+    const translatedBatches = await Promise.all(
+      batches.map(async (batch) => {
+        const translator = await Translator.create(config, false);
+        const output = await translator.translate(
+          batch.map(({ original }) => original),
+          { force: true, signal: controller.signal },
+          { concurrency: 1 },
+        );
+        return batch.map((target, index) => ({
+          ...target,
+          translated: output[index] ?? '',
+        }));
+      }),
+    );
+    if (controller.signal.aborted) return;
+    translatedBatches
+      .flat()
+      .forEach((target) =>
+        temporaryTranslations.set(
+          temporaryTranslationKey(target.chapterId, target.segmentId),
+          target.translated,
+        ),
+      );
+    continuousChapters.value = continuousChapters.value.map(
+      withTemporaryTranslations,
+    );
+    const ready = result.value;
+    if (ready?.kind === 'ready') {
+      const chapter =
+        continuousChapters.value.find(
+          ({ chapterId }) => chapterId === ready.chapter.chapterId,
+        ) ?? withTemporaryTranslations(ready.chapter);
+      result.value = { ...ready, chapter };
+      temporaryMode = settings.value.defaultMode;
+      enableTemporaryReadingModes(chapter);
+    }
+    await nextTick();
+    await nextTick();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+    restoreReaderPosition(anchor);
+    updateViewportMetrics();
+    showTools.value = false;
+    (document.activeElement as HTMLElement | null)?.blur();
+    message.success('当前页面已临时翻译');
+  } catch (reason) {
+    if (!controller.signal.aborted) {
+      message.error(`翻译失败：${String(reason)}`);
+    }
+  } finally {
+    if (pageTranslationController === controller) {
+      pageTranslationController = undefined;
+      translatingPage.value = undefined;
+    }
+  }
 };
 
 const loadBookmarks = async (targetBookId = bookId.value) => {
@@ -1491,77 +1710,6 @@ const activeViewportBookmark = computed(() =>
         viewportSegmentId.value,
       ),
 );
-
-const loadAnnotations = async (targetBookId = bookId.value) => {
-  const repository = await repositoryPromise;
-  const values = await repository.listReaderAnnotations(targetBookId);
-  if (targetBookId === bookId.value) {
-    annotations.value = values;
-  }
-};
-
-const getSelectedReaderBlock = (node: Node) =>
-  (node.nodeType === Node.ELEMENT_NODE
-    ? (node as Element)
-    : node.parentElement
-  )?.closest<HTMLElement>('[data-reader-language-side]');
-
-const addAnnotation = async () => {
-  if (result.value?.kind !== 'ready') {
-    return;
-  }
-  const selection = window.getSelection();
-  if (selection?.rangeCount !== 1 || selection.isCollapsed) {
-    message.warning('请先在同一段文字中选择要高亮的内容');
-    return;
-  }
-  const range = selection.getRangeAt(0);
-  const paragraph = getSelectedReaderBlock(range.startContainer);
-  if (
-    paragraph == null ||
-    paragraph !== getSelectedReaderBlock(range.endContainer)
-  ) {
-    message.warning('批注暂时只能标记同一段文字');
-    return;
-  }
-  const segmentId = paragraph.closest<HTMLElement>('[data-reader-segment-id]')
-    ?.dataset.readerSegmentId;
-  const languageSide = paragraph.dataset.readerLanguageSide;
-  const quote = range.toString();
-  if (
-    segmentId === undefined ||
-    (languageSide !== 'original' && languageSide !== 'translated') ||
-    quote.length === 0
-  ) {
-    return;
-  }
-  const before = range.cloneRange();
-  before.selectNodeContents(paragraph);
-  before.setEnd(range.startContainer, range.startOffset);
-  const startOffset = before.toString().length;
-  const repository = await repositoryPromise;
-  await repository.putReaderAnnotation(
-    createReaderAnnotation({
-      bookId: result.value.book.id,
-      chapterId: result.value.chapter.chapterId,
-      segmentId,
-      languageSide,
-      startOffset,
-      endOffset: startOffset + quote.length,
-      quote,
-      style: 'highlight',
-    }),
-  );
-  selection.removeAllRanges();
-  await loadAnnotations(result.value.book.id);
-  message.success('已添加高亮批注');
-};
-
-const deleteAnnotation = async (annotation: ReaderAnnotation) => {
-  const repository = await repositoryPromise;
-  await repository.deleteReaderAnnotation(annotation.id);
-  await loadAnnotations(annotation.bookId);
-};
 
 const toggleBookmark = async () => {
   if (result.value?.kind !== 'ready') {
@@ -1779,8 +1927,6 @@ const navigateToEpubHref = (href: string, preservePanels = false) => {
 const backHome = () => void router.push('/');
 const openDetails = () =>
   void router.push('/books/' + encodeURIComponent(bookId.value) + '/details');
-const backToWorkspace = () => void router.push('/workspace/toolbox');
-
 const chapterSummaryById = computed(() => {
   const chapters = new Map<string, ReaderChapterSummary>();
   if (result.value?.kind === 'ready') {
@@ -1950,10 +2096,12 @@ const loadContinuousChapter = async (direction: 'previous' | 'next') => {
   continuousChapterLoads.add(summary.id);
   try {
     const adapter = await cachedAdapterPromise;
-    const chapter = await adapter.getChapter({
-      bookId: bookId.value,
-      chapterId: summary.id,
-    });
+    const chapter = withTemporaryTranslations(
+      await adapter.getChapter({
+        bookId: bookId.value,
+        chapterId: summary.id,
+      }),
+    );
     if (
       generation !== continuousLoadGeneration ||
       continuousChapters.value.some(
@@ -2206,6 +2354,7 @@ onBeforeUnmount(() => {
   searchUiRequestId += 1;
   void controllerPromise.then((controller) => controller.cancel());
   void searchControllerPromise.then((controller) => controller.cancel());
+  pageTranslationController?.abort();
   window.removeEventListener('scroll', handleViewportScroll);
   window.removeEventListener('resize', handleViewportResize);
   if (viewportResizeFrame !== undefined) {
@@ -2403,7 +2552,6 @@ onBeforeUnmount(() => {
               :epub="chapter.epub"
               :segments="chapter.segments"
               :mode="getChapterRenderedMode(chapter)"
-              :annotations="annotations"
               :flow="resolvedFlow"
               :double-spread="usesDoublePageSpread"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
@@ -2414,7 +2562,6 @@ onBeforeUnmount(() => {
               v-else
               :segments="chapter.segments"
               :mode="getChapterRenderedMode(chapter)"
-              :annotations="annotations"
               :initial-segment-id="
                 continuousChapterInitialSegments.get(chapter.chapterId)
               "
@@ -2429,7 +2576,6 @@ onBeforeUnmount(() => {
           :epub="result.chapter.epub"
           :segments="result.chapter.segments"
           :mode="renderedMode"
-          :annotations="annotations"
           :flow="resolvedFlow"
           :double-spread="usesDoublePageSpread"
           :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
@@ -2441,7 +2587,6 @@ onBeforeUnmount(() => {
           ref="readerSegments"
           :segments="result.chapter.segments"
           :mode="renderedMode"
-          :annotations="annotations"
           :initial-segment-id="initialSegmentId"
           :flow="resolvedFlow"
           :scroll-root="readerViewport"
@@ -2564,16 +2709,6 @@ onBeforeUnmount(() => {
     <ReaderBottomSheet v-model:show="showTools" title="阅读工具" wide>
       <div class="book-reader__tool-grid">
         <n-button @click="openSearch">全文搜索</n-button>
-        <n-button @click="toggleBookmark">添加书签</n-button>
-        <n-button @click="addAnnotation">高亮选中</n-button>
-        <n-button
-          @click="
-            showTools = false;
-            showAnnotations = true;
-          "
-        >
-          批注 ({{ annotations.length }})
-        </n-button>
         <n-button
           @click="
             showTools = false;
@@ -2591,23 +2726,38 @@ onBeforeUnmount(() => {
         >
           阅读版本
         </n-button>
-        <n-button @click="speakCurrentSegment">朗读当前段</n-button>
-        <n-button @click="stopSpeaking">停止朗读</n-button>
-        <n-button @click="openInteractiveTranslation">查词 / AI</n-button>
         <n-button
-          v-if="requiresWholeChapterTranslation"
-          @click="queueChapterTranslation('gpt')"
+          :type="isSpeaking ? 'primary' : 'default'"
+          @click="toggleCurrentSegmentSpeech"
         >
-          GPT 翻译本章
+          朗读当前段
         </n-button>
         <n-button
           v-if="requiresWholeChapterTranslation"
-          @click="queueChapterTranslation('sakura')"
+          :loading="translatingPage === 'gpt'"
+          :disabled="translatingPage !== undefined && translatingPage !== 'gpt'"
+          @click="translateVisiblePage('gpt')"
         >
-          Sakura 翻译本章
+          GPT 翻译本页
         </n-button>
-        <n-button @click="openDetails">书籍详情</n-button>
-        <n-button @click="backToWorkspace">工作区</n-button>
+        <n-button
+          v-if="requiresWholeChapterTranslation"
+          :loading="translatingPage === 'sakura'"
+          :disabled="
+            translatingPage !== undefined && translatingPage !== 'sakura'
+          "
+          @click="translateVisiblePage('sakura')"
+        >
+          Sakura 翻译本页
+        </n-button>
+        <n-button
+          @click="
+            showTools = false;
+            showBookInfo = true;
+          "
+        >
+          书籍信息
+        </n-button>
         <n-button
           :disabled="previousChapterId === undefined"
           @click="previousChapterId && navigate(previousChapterId)"
@@ -2621,6 +2771,31 @@ onBeforeUnmount(() => {
           下一章
         </n-button>
       </div>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet v-model:show="showBookInfo" title="书籍信息">
+      <dl v-if="result?.kind === 'ready'" class="book-reader__book-info">
+        <div>
+          <dt>书名</dt>
+          <dd>{{ result.book.title }}</dd>
+        </div>
+        <div>
+          <dt>作者</dt>
+          <dd>{{ result.book.author || '—' }}</dd>
+        </div>
+        <div>
+          <dt>章节</dt>
+          <dd>{{ result.book.chapterCount }} 章</dd>
+        </div>
+        <div>
+          <dt>当前章节</dt>
+          <dd>{{ result.chapter.title }}</dd>
+        </div>
+        <div>
+          <dt>阅读进度</dt>
+          <dd>{{ Math.round(chapterProgressPercent) }}%</dd>
+        </div>
+      </dl>
     </ReaderBottomSheet>
 
     <ReaderBottomSheet
@@ -2690,23 +2865,6 @@ onBeforeUnmount(() => {
               </n-tag>
             </template>
           </n-thing>
-        </n-list-item>
-      </n-list>
-    </ReaderBottomSheet>
-
-    <ReaderBottomSheet v-model:show="showAnnotations" title="批注">
-      <n-empty v-if="annotations.length === 0" description="本书还没有批注" />
-      <n-list v-else>
-        <n-list-item v-for="annotation in annotations" :key="annotation.id">
-          <n-thing
-            :title="annotation.quote"
-            :description="annotation.note ?? annotation.style"
-          />
-          <template #suffix>
-            <n-button text type="error" @click="deleteAnnotation(annotation)">
-              删除
-            </n-button>
-          </template>
         </n-list-item>
       </n-list>
     </ReaderBottomSheet>
@@ -3156,6 +3314,28 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.book-reader__book-info {
+  display: grid;
+  margin: 0;
+  gap: 10px;
+}
+
+.book-reader__book-info > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.book-reader__book-info dt {
+  color: var(--reader-muted-color);
+}
+
+.book-reader__book-info dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .book-reader__embedded-loading {

@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type {
-  ReaderAnnotation,
   ReaderEpubChapterContent,
   ReaderEpubDocumentSlice,
   ReaderFlow,
@@ -16,7 +15,6 @@ const props = defineProps<{
   epub: ReaderEpubChapterContent;
   segments: ReaderSegment[];
   mode: RenderedReaderMode;
-  annotations: ReaderAnnotation[];
   flow: ReaderFlow;
   doubleSpread?: boolean;
   layoutRevision: string;
@@ -197,75 +195,10 @@ const createTranslatedBlock = (original: Element, segment: ReaderSegment) => {
   return translated;
 };
 
-const findTextRange = (element: Element, quote: string) => {
-  if (!quote) return undefined;
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  let text = '';
-  let node = walker.nextNode();
-  while (node !== null) {
-    nodes.push(node as Text);
-    text += node.textContent ?? '';
-    node = walker.nextNode();
-  }
-  const start = text.indexOf(quote);
-  if (start < 0) return undefined;
-  const end = start + quote.length;
-  let offset = 0;
-  let startNode: Text | undefined;
-  let endNode: Text | undefined;
-  let startOffset = 0;
-  let endOffset = 0;
-  for (const textNode of nodes) {
-    const nextOffset = offset + (textNode.textContent?.length ?? 0);
-    if (startNode === undefined && start >= offset && start <= nextOffset) {
-      startNode = textNode;
-      startOffset = start - offset;
-    }
-    if (end >= offset && end <= nextOffset) {
-      endNode = textNode;
-      endOffset = end - offset;
-      break;
-    }
-    offset = nextOffset;
-  }
-  if (startNode === undefined || endNode === undefined) return undefined;
-  const range = document.createRange();
-  range.setStart(startNode, startOffset);
-  range.setEnd(endNode, endOffset);
-  return range;
-};
-
-const applyAnnotations = (
-  element: Element,
-  annotations: readonly ReaderAnnotation[],
-) => {
-  for (const annotation of annotations) {
-    const range = findTextRange(element, annotation.quote);
-    if (range === undefined) continue;
-    const mark = document.createElement('mark');
-    mark.className = `epub-annotation epub-annotation--${annotation.style}`;
-    mark.dataset.readerAnnotationId = annotation.id;
-    try {
-      range.surroundContents(mark);
-    } catch {
-      mark.append(range.extractContents());
-      range.insertNode(mark);
-    }
-  }
-};
-
 const applyReaderMode = (wrapper: HTMLElement) => {
   const segmentById = new Map(
     props.segments.map((segment) => [segment.id, segment]),
   );
-  const annotationsByTarget = new Map<string, ReaderAnnotation[]>();
-  for (const annotation of props.annotations) {
-    const key = `${annotation.segmentId}/${annotation.languageSide}`;
-    const values = annotationsByTarget.get(key) ?? [];
-    values.push(annotation);
-    annotationsByTarget.set(key, values);
-  }
   wrapper
     .querySelectorAll<HTMLElement>('[data-reader-segment-id]')
     .forEach((original) => {
@@ -286,16 +219,6 @@ const applyReaderMode = (wrapper: HTMLElement) => {
         original.after(translated);
         original.classList.add('epub-bilingual-block');
         translated.classList.add('epub-bilingual-block');
-      }
-      applyAnnotations(
-        original,
-        annotationsByTarget.get(`${segment.id}/original`) ?? [],
-      );
-      if (props.mode !== 'original') {
-        applyAnnotations(
-          translated,
-          annotationsByTarget.get(`${segment.id}/translated`) ?? [],
-        );
       }
     });
 };
@@ -403,11 +326,6 @@ const renderSlice = async (
     .epub-document a { color: #2faf86; text-decoration: underline; }
     .epub-translated-block { color: var(--reader-translation-color, inherit); }
     .epub-missing-translation { opacity: .64; font-style: italic; }
-    .epub-annotation { color: inherit; background: transparent; }
-    .epub-annotation--highlight { background: #f4df78; }
-    .epub-annotation--underline { text-decoration: underline 2px #d68d1a; }
-    .epub-annotation--strike { text-decoration: line-through; }
-    .epub-annotation--wavy { text-decoration: underline wavy #d66; }
     @media (min-width: 760px) {
       .epub-bilingual-block {
         box-sizing: border-box; display: inline-block !important;
@@ -514,7 +432,6 @@ watch(
       props.epub,
       props.segments,
       props.mode,
-      props.annotations,
       props.flow,
       props.doubleSpread,
       props.layoutRevision,

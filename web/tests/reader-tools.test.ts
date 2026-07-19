@@ -35,15 +35,18 @@ describe('local reader tools', () => {
 
     const cancel = vi.fn();
     const speak = vi.fn();
+    const onEnd = vi.fn();
     const utterance = { lang: '' } as SpeechSynthesisUtterance;
     const available = createBrowserSpeechController(
       { cancel, speak },
       () => utterance,
     );
-    expect(available.speak('text', 'ja-JP')).toBe(true);
+    expect(available.speak('text', 'ja-JP', { onEnd })).toBe(true);
     expect(utterance.lang).toBe('ja-JP');
     expect(cancel).toHaveBeenCalledOnce();
     expect(speak).toHaveBeenCalledWith(utterance);
+    utterance.onend?.({} as SpeechSynthesisEvent);
+    expect(onEnd).toHaveBeenCalledOnce();
     available.stop();
     expect(cancel).toHaveBeenCalledTimes(2);
   });

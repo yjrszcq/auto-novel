@@ -37,6 +37,7 @@ describe('reader storage', () => {
     expect(current.version).toBe(LOCAL_VOLUME_DATABASE_VERSION);
     expect(current.objectStoreNames.contains('legacy')).toBe(false);
     expect(current.objectStoreNames.contains('metadata')).toBe(true);
+    expect(current.objectStoreNames.contains('reader-annotation')).toBe(false);
     current.close();
   });
 
@@ -46,15 +47,12 @@ describe('reader storage', () => {
 
     const db = await openDB(databaseName);
     const tx = db.transaction(
-      ['reader-bookmark', 'reader-annotation', 'reader-chapter-cache'],
+      ['reader-bookmark', 'reader-chapter-cache'],
       'readonly',
     );
 
     expect(
       tx.objectStore('reader-bookmark').indexNames.contains('byBookId'),
-    ).toBe(true);
-    expect(
-      tx.objectStore('reader-annotation').indexNames.contains('byBookId'),
     ).toBe(true);
     expect(
       tx.objectStore('reader-chapter-cache').indexNames.contains('byBookId'),
@@ -210,49 +208,6 @@ describe('reader storage', () => {
       updatedAt: 1,
     });
 
-    await reopened.putReaderAnnotation({
-      id: 'annotation',
-      bookId: 'book',
-      chapterId: '0',
-      segmentId: initialSegmentIds[0],
-      languageSide: 'original',
-      startOffset: 0,
-      endOffset: 5,
-      quote: 'first',
-      style: 'highlight',
-      createdAt: 1,
-      updatedAt: 1,
-    });
-    await reopened.putReaderAnnotation({
-      id: 'other-annotation',
-      bookId: 'other-book',
-      chapterId: '0',
-      segmentId: 'other-segment',
-      languageSide: 'original',
-      startOffset: 0,
-      endOffset: 1,
-      quote: 'other',
-      style: 'highlight',
-      createdAt: 1,
-      updatedAt: 1,
-    });
-    expect(await reopened.listReaderAnnotations('book')).toHaveLength(1);
-    await reopened.deleteReaderAnnotation('annotation');
-    expect(await reopened.listReaderAnnotations('book')).toEqual([]);
-    await reopened.putReaderAnnotation({
-      id: 'annotation',
-      bookId: 'book',
-      chapterId: '0',
-      segmentId: initialSegmentIds[0],
-      languageSide: 'original',
-      startOffset: 0,
-      endOffset: 5,
-      quote: 'first',
-      style: 'highlight',
-      createdAt: 1,
-      updatedAt: 1,
-    });
-
     await reopened.putReaderChapterCache({
       key: 'book/0/current',
       bookId: 'book',
@@ -290,9 +245,7 @@ describe('reader storage', () => {
     expect(await reopened.getReaderReadingStats('book')).toBeUndefined();
     expect(await reopened.listReaderBookmarks('book')).toEqual([]);
     expect(await reopened.getReaderCover('book')).toBeUndefined();
-    expect(await reopened.listReaderAnnotations('book')).toEqual([]);
     expect(await reopened.listReaderBookmarks('other-book')).toHaveLength(1);
-    expect(await reopened.listReaderAnnotations('other-book')).toHaveLength(1);
     expect(await reopened.listReaderChapterCaches('other-book')).toHaveLength(
       1,
     );

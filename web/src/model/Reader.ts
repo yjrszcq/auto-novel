@@ -66,21 +66,6 @@ export interface ReaderBookmark {
   createdAt: number;
 }
 
-export interface ReaderAnnotation {
-  id: string;
-  bookId: string;
-  chapterId: string;
-  segmentId: string;
-  languageSide: 'original' | 'translated';
-  startOffset: number;
-  endOffset: number;
-  quote: string;
-  note?: string;
-  style: 'highlight' | 'underline' | 'strike' | 'wavy';
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface ReaderCover {
   bookId: string;
   blob: Blob;
