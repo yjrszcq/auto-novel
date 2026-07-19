@@ -511,6 +511,9 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   await catalog.getByRole('button', { name: '第一卷' }).click();
   await expect(catalog.getByText('第一篇', { exact: true })).toHaveCount(0);
   await expect(catalog.getByText('第一章', { exact: true })).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get('epub')).toBe(
+    'OPS/Text/cover.xhtml',
+  );
   await catalog.getByRole('button', { name: '第一卷' }).click();
   await expect(catalog.getByText('第一章', { exact: true })).toBeVisible();
   await catalog.getByRole('button', { name: /第一章/ }).click();
