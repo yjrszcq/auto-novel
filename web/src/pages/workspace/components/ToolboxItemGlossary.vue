@@ -338,34 +338,53 @@ onBeforeUnmount(() => {
       <n-p>阈值包含等于该次数的词语；自动翻译不会覆盖任何手工编辑。</n-p>
     </bulletin>
 
-    <n-flex align="center">
-      <c-action-wrapper title="最低次数">
-        <n-input-number
-          v-model:value="minimumCount"
+    <div class="glossary-toolbar">
+      <div class="glossary-toolbar__row glossary-toolbar__row--primary">
+        <c-action-wrapper title="最低次数" class="glossary-toolbar__minimum">
+          <n-input-number
+            v-model:value="minimumCount"
+            class="glossary-toolbar__minimum-input"
+            size="small"
+            :min="1"
+            :precision="0"
+          />
+        </c-action-wrapper>
+        <n-input
+          v-model:value="query"
+          class="glossary-toolbar__search"
+          clearable
           size="small"
-          style="width: 120px"
-          :min="1"
-          :precision="0"
+          placeholder="搜索候选词"
         />
-      </c-action-wrapper>
-      <n-input
-        v-model:value="query"
-        clearable
-        size="small"
-        placeholder="搜索候选词"
-        style="width: min(240px, 100%)"
-      />
-      <n-select
-        v-model:value="sort"
-        size="small"
-        :options="sortOptions"
-        style="width: 130px"
-      />
-      <n-text depth="3">
-        候选 {{ activeCandidates.length }} 个 / 当前显示
-        {{ visibleCandidates.length }} 个
-      </n-text>
-    </n-flex>
+      </div>
+      <div class="glossary-toolbar__row glossary-toolbar__row--secondary">
+        <n-select
+          v-model:value="sort"
+          class="glossary-toolbar__sort"
+          size="small"
+          :options="sortOptions"
+        />
+        <n-text depth="3" class="glossary-toolbar__summary">
+          <span class="glossary-toolbar__summary--desktop">
+            候选 {{ activeCandidates.length }} 个 / 当前显示
+            {{ visibleCandidates.length }} 个
+          </span>
+          <span class="glossary-toolbar__summary--mobile">
+            候选 {{ activeCandidates.length }} / 显示
+            {{ visibleCandidates.length }}
+          </span>
+        </n-text>
+        <c-button
+          label="翻译器配置"
+          :type="showTranslatorConfigModal ? 'primary' : 'default'"
+          :aria-expanded="showTranslatorConfigModal"
+          aria-haspopup="dialog"
+          size="small"
+          :round="false"
+          @action="showTranslatorConfigModal = true"
+        />
+      </div>
+    </div>
 
     <n-flex align="center">
       <c-button
@@ -388,15 +407,6 @@ onBeforeUnmount(() => {
         size="small"
         :round="false"
         @action="undoDelete"
-      />
-      <c-button
-        label="翻译器配置"
-        :type="showTranslatorConfigModal ? 'primary' : 'default'"
-        :aria-expanded="showTranslatorConfigModal"
-        aria-haspopup="dialog"
-        size="small"
-        :round="false"
-        @action="showTranslatorConfigModal = true"
       />
       <n-text v-if="lastDeletedHint" depth="3">
         最近删除：{{ lastDeletedHint }}
@@ -576,7 +586,7 @@ onBeforeUnmount(() => {
   <c-modal
     v-model:show="showTranslatorConfigModal"
     title="翻译器配置"
-    style="width: min(680px, calc(100vw - 16px))"
+    style="width: min(440px, calc(100vw - 16px))"
   >
     <n-flex align="center" class="glossary-translator-selectors">
       <label class="glossary-translator-selector">
@@ -615,6 +625,42 @@ onBeforeUnmount(() => {
   min-width: 220px;
 }
 
+.glossary-toolbar,
+.glossary-toolbar__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.glossary-toolbar__row--secondary {
+  min-width: 0;
+  flex: 1;
+}
+
+.glossary-toolbar__minimum-input {
+  width: 120px;
+}
+
+.glossary-toolbar__search {
+  width: min(240px, 100%);
+}
+
+.glossary-toolbar__sort {
+  width: 130px;
+}
+
+.glossary-toolbar__summary {
+  white-space: nowrap;
+}
+
+.glossary-toolbar__summary--mobile {
+  display: none;
+}
+
+.glossary-toolbar__row--secondary > :last-child {
+  margin-left: auto;
+}
+
 .glossary-translator-selector {
   display: flex;
   width: min(300px, 100%);
@@ -651,6 +697,56 @@ onBeforeUnmount(() => {
 
   .glossary-translator-selector {
     width: 100%;
+  }
+
+  .glossary-toolbar {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .glossary-toolbar__row {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .glossary-toolbar__row--primary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .glossary-toolbar__row--secondary {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr) auto;
+  }
+
+  .glossary-toolbar__minimum-input {
+    width: 100px;
+  }
+
+  .glossary-toolbar__search,
+  .glossary-toolbar__sort {
+    width: 100%;
+  }
+
+  .glossary-toolbar__summary {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: clip;
+  }
+
+  .glossary-toolbar__summary--desktop {
+    display: none;
+  }
+
+  .glossary-toolbar__summary--mobile {
+    display: inline;
+  }
+
+  .glossary-toolbar__row--secondary > :last-child {
+    margin-left: 0;
+    justify-self: end;
   }
 }
 </style>

@@ -417,7 +417,56 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   const threshold = page.locator('.n-input-number input');
   await threshold.fill('2');
   await threshold.press('Enter');
-  await expect(page.getByText('候选 3 个 / 当前显示 3 个')).toBeVisible();
+  await expect(page.getByText('候选 3 / 显示 3')).toBeVisible();
+  const minimumBounds = await page
+    .locator('.glossary-toolbar__minimum')
+    .boundingBox();
+  const searchBounds = await page
+    .locator('.glossary-toolbar__search')
+    .boundingBox();
+  const sortBounds = await page
+    .locator('.glossary-toolbar__sort')
+    .boundingBox();
+  const summaryBounds = await page
+    .locator('.glossary-toolbar__summary')
+    .boundingBox();
+  const translatorConfigButton = page.getByRole('button', {
+    name: '翻译器配置',
+    exact: true,
+  });
+  const configButtonBounds = await translatorConfigButton.boundingBox();
+  for (const bounds of [
+    minimumBounds,
+    searchBounds,
+    sortBounds,
+    summaryBounds,
+    configButtonBounds,
+  ]) {
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  }
+  const centerY = (bounds: NonNullable<typeof minimumBounds>) =>
+    bounds.y + bounds.height / 2;
+  expect(
+    Math.abs(centerY(minimumBounds!) - centerY(searchBounds!)),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(centerY(sortBounds!) - centerY(summaryBounds!)),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(centerY(sortBounds!) - centerY(configButtonBounds!)),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    await page
+      .locator('.glossary-toolbar__sort .n-base-selection-label')
+      .evaluate((label) => label.scrollWidth <= label.clientWidth),
+  ).toBe(true);
+  expect(
+    (await page.locator('.glossary-toolbar__minimum-input').boundingBox())!
+      .width,
+  ).toBeLessThanOrEqual(100);
+  expect(sortBounds!.width).toBeLessThanOrEqual(120);
   await expect(
     page.getByRole('cell', { name: 'カタカナ', exact: true }),
   ).toBeVisible();
@@ -433,7 +482,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
 
   const search = page.getByPlaceholder('搜索候选词');
   await search.fill('カタ');
-  await expect(page.getByText('候选 3 个 / 当前显示 1 个')).toBeVisible();
+  await expect(page.getByText('候选 3 / 显示 1')).toBeVisible();
   await search.fill('');
 
   const katakanaRow = page.getByRole('row').filter({ hasText: 'カタカナ' });
@@ -460,15 +509,25 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'Sakura 翻译', exact: true }),
   ).toBeVisible();
-  const translatorConfigButton = page.getByRole('button', {
-    name: '翻译器配置',
-    exact: true,
-  });
   await expect(translatorConfigButton).toHaveAttribute(
     'aria-expanded',
     'false',
   );
   await expect(page.getByText('GPT 翻译器', { exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const desktopToolbarBounds = await page
+    .locator('.glossary-toolbar')
+    .boundingBox();
+  const desktopConfigButtonBounds = await translatorConfigButton.boundingBox();
+  expect(desktopToolbarBounds).not.toBeNull();
+  expect(desktopConfigButtonBounds).not.toBeNull();
+  expect(
+    Math.abs(
+      desktopToolbarBounds!.x +
+        desktopToolbarBounds!.width -
+        (desktopConfigButtonBounds!.x + desktopConfigButtonBounds!.width),
+    ),
+  ).toBeLessThanOrEqual(2);
   await translatorConfigButton.click();
   await expect(translatorConfigButton).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByText('GPT 翻译器', { exact: true })).toBeVisible();
@@ -477,9 +536,17 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(translatorConfigModal).toBeVisible();
   const translatorConfigBounds = await translatorConfigModal.boundingBox();
   expect(translatorConfigBounds).not.toBeNull();
-  expect(translatorConfigBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(translatorConfigBounds!.width).toBeLessThanOrEqual(440);
+  await translatorConfigModal.getByRole('button', { name: 'close' }).click();
+  await expect(translatorConfigModal).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await translatorConfigButton.click();
+  const mobileTranslatorConfigBounds =
+    await translatorConfigModal.boundingBox();
+  expect(mobileTranslatorConfigBounds).not.toBeNull();
+  expect(mobileTranslatorConfigBounds!.x).toBeGreaterThanOrEqual(0);
   expect(
-    translatorConfigBounds!.x + translatorConfigBounds!.width,
+    mobileTranslatorConfigBounds!.x + mobileTranslatorConfigBounds!.width,
   ).toBeLessThanOrEqual(390);
   await translatorConfigModal.getByRole('button', { name: 'close' }).click();
   await expect(translatorConfigModal).toHaveCount(0);
