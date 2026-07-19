@@ -337,3 +337,126 @@ test('reviews OCR changes before generating a result', async ({ page }) => {
     '第一行没有句号继续这一段最后结束。',
   );
 });
+
+test('manages and exports normalized glossary candidates', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/workspace/toolbox');
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'glossary.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('カタカナ ｶﾀｶﾅ ベータ ベータ ガンマ ガンマ アルファ'),
+  });
+
+  const threshold = page.locator('.n-input-number input');
+  await threshold.fill('2');
+  await threshold.press('Enter');
+  await expect(page.getByText('候选 3 个 / 当前显示 3 个')).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: 'カタカナ', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: 'ベータ', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: 'ガンマ', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('cell', { name: 'アルファ', exact: true }),
+  ).toHaveCount(0);
+
+  const search = page.getByPlaceholder('搜索候选词');
+  await search.fill('カタ');
+  await expect(page.getByText('候选 3 个 / 当前显示 1 个')).toBeVisible();
+  await search.fill('');
+
+  const katakanaRow = page.getByRole('row').filter({ hasText: 'カタカナ' });
+  await katakanaRow.getByPlaceholder('请输入中文翻译').fill('片假名');
+  await expect(katakanaRow.getByText('手工', { exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: '选择 カタカナ' }).check();
+  await page.getByRole('button', { name: '移除所选', exact: true }).click();
+  await expect(
+    page.getByRole('cell', { name: 'カタカナ', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '撤销删除', exact: true }).click();
+  await expect(
+    page.getByRole('cell', { name: 'カタカナ', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'カタカナ' })
+      .getByPlaceholder('请输入中文翻译'),
+  ).toHaveValue('片假名');
+
+  const corsHeaders = {
+    'access-control-allow-origin': 'http://127.0.0.1:4173',
+    'access-control-allow-credentials': 'true',
+  };
+  await page.route('https://fanyi.baidu.com/sug', (route) =>
+    route.fulfill({ status: 200, headers: corsHeaders, body: '{}' }),
+  );
+  await page.route(
+    'https://fanyi.baidu.com/ait/text/translate',
+    async (route) => {
+      const query = route.request().postDataJSON()?.query as string;
+      if (query.includes('\n') || query === 'ベータ') {
+        await route.fulfill({
+          status: 500,
+          headers: corsHeaders,
+          body: 'failed',
+        });
+        return;
+      }
+      const event = {
+        errno: 0,
+        errmsg: '',
+        data: {
+          event: 'Translating',
+          message: '',
+          list: [
+            {
+              id: '1',
+              paraIdx: 0,
+              src: query,
+              dst: query === 'ガンマ' ? '伽马' : `译-${query}`,
+              metadata: '',
+            },
+          ],
+        },
+      };
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders, 'content-type': 'text/event-stream' },
+        body: `data: ${JSON.stringify(event)}\n\n`,
+      });
+    },
+  );
+  await page.getByRole('button', { name: '百度翻译', exact: true }).click();
+  await expect(
+    page.getByText('部分词语翻译失败，成功结果和手工编辑已保留'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('row').filter({ hasText: 'ベータ' }).getByText('失败'),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'ガンマ' })
+      .getByPlaceholder('请输入中文翻译'),
+  ).toHaveValue('伽马');
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'カタカナ' })
+      .getByPlaceholder('请输入中文翻译'),
+  ).toHaveValue('片假名');
+
+  const tableBounds = await page.locator('.glossary-table').boundingBox();
+  expect(tableBounds).not.toBeNull();
+  expect(tableBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(tableBounds!.x + tableBounds!.width).toBeLessThanOrEqual(390);
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: '下载术语表', exact: true }).click();
+  expect((await download).suggestedFilename()).toBe('工具箱术语表.txt');
+});
