@@ -8,12 +8,27 @@ import { useLocalStorage } from '@/util';
 
 import { consumeReaderInteractiveSelection } from '../reader/core/ReaderInteractiveHandoff';
 
+const props = withDefaults(
+  defineProps<{
+    embedded?: boolean;
+    initialText?: string;
+  }>(),
+  {
+    embedded: false,
+    initialText: undefined,
+  },
+);
+
 const message = useMessage();
 
 const textJp = ref('');
 const textZh = ref('');
 
 onMounted(() => {
+  if (props.embedded) {
+    textJp.value = props.initialText ?? '';
+    return;
+  }
   const selection = consumeReaderInteractiveSelection(sessionStorage);
   if (selection !== undefined) {
     textJp.value = selection;
@@ -172,8 +187,8 @@ const clearSavedTranslation = () => {
 </script>
 
 <template>
-  <div class="layout-content">
-    <n-h1>交互翻译</n-h1>
+  <div :class="{ 'layout-content': !embedded }">
+    <n-h1 v-if="!embedded">交互翻译</n-h1>
 
     <n-flex vertical>
       <c-action-wrapper title="翻译">
@@ -243,12 +258,12 @@ const clearSavedTranslation = () => {
       </c-action-wrapper>
     </n-flex>
 
-    <n-input-group>
+    <n-input-group class="interactive-translation__inputs">
       <n-input
         v-model:value="textJp"
         placeholder="输入需要翻译的文本"
         type="textarea"
-        :rows="15"
+        :rows="embedded ? 8 : 15"
         show-count
         :maxlength="5000"
         style="flex: 1"
@@ -260,7 +275,7 @@ const clearSavedTranslation = () => {
         readonly
         placeholder="翻译结果"
         type="textarea"
-        :rows="15"
+        :rows="embedded ? 8 : 15"
         show-count
         style="flex: 1"
         :input-props="{ spellcheck: false }"
@@ -312,3 +327,16 @@ const clearSavedTranslation = () => {
     </n-list>
   </div>
 </template>
+
+<style scoped>
+@media only screen and (max-width: 600px) {
+  .interactive-translation__inputs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .interactive-translation__inputs :deep(.n-input) {
+    width: 100%;
+  }
+}
+</style>

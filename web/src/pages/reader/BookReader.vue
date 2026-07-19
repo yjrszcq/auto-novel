@@ -51,7 +51,6 @@ import {
 } from './core/ReaderFlow';
 import { createReaderAnnotation } from './core/ReaderAnnotations';
 import { createCachedReaderContentAdapter } from './core/ReaderContentCache';
-import { storeReaderInteractiveSelection } from './core/ReaderInteractiveHandoff';
 import { createBrowserSpeechController } from './core/ReaderSpeech';
 import type { ReaderSearchResult } from './core/ReaderSearch';
 import { createReaderSearchController } from './core/ReaderSearch';
@@ -85,6 +84,10 @@ import {
 } from '@/stores';
 import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 
+const InteractiveTranslation = defineAsyncComponent(
+  () => import('../workspace/Interactive.vue'),
+);
+
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
@@ -98,6 +101,8 @@ const showTools = ref(false);
 const showBookmarks = ref(false);
 const showAnnotations = ref(false);
 const showSearch = ref(false);
+const showInteractiveTranslation = ref(false);
+const interactiveInitialText = ref<string>();
 const searchQuery = ref('');
 const searchResults = shallowRef<ReaderSearchResult[]>([]);
 const searchLoading = ref(false);
@@ -282,6 +287,7 @@ const hasOpenReaderPanel = () =>
   showBookmarks.value ||
   showAnnotations.value ||
   showSearch.value ||
+  showInteractiveTranslation.value ||
   showModePrompt.value ||
   showMobileTranslationNotice.value;
 
@@ -292,6 +298,7 @@ const closeReaderPanels = () => {
   showBookmarks.value = false;
   showAnnotations.value = false;
   showSearch.value = false;
+  showInteractiveTranslation.value = false;
   showModePrompt.value = false;
   showMobileTranslationNotice.value = false;
 };
@@ -1458,17 +1465,13 @@ const speakCurrentSegment = () => {
 
 const stopSpeaking = () => getSpeechController().stop();
 
-const openSelectedInInteractive = () => {
+const openInteractiveTranslation = () => {
+  const shouldOpen = !showInteractiveTranslation.value;
   const text = window.getSelection()?.toString().trim() ?? '';
-  if (text.length === 0) {
-    message.warning('请先选择要查询的词语或文本');
-    return;
-  }
-  if (!storeReaderInteractiveSelection(sessionStorage, text)) {
-    message.warning('当前浏览器无法临时保存选中文本');
-    return;
-  }
-  void router.push('/workspace/interactive');
+  closeReaderPanels();
+  if (!shouldOpen) return;
+  interactiveInitialText.value = text || undefined;
+  showInteractiveTranslation.value = true;
 };
 
 const loadBookmarks = async (targetBookId = bookId.value) => {
@@ -2470,7 +2473,7 @@ onBeforeUnmount(() => {
         <n-icon :component="BuildOutlined" />
         <span>工具</span>
       </button>
-      <button type="button" @click="openSelectedInInteractive">
+      <button type="button" @click="openInteractiveTranslation">
         <n-icon :component="AutoAwesomeOutlined" />
         <span>AI</span>
       </button>
@@ -2590,7 +2593,7 @@ onBeforeUnmount(() => {
         </n-button>
         <n-button @click="speakCurrentSegment">朗读当前段</n-button>
         <n-button @click="stopSpeaking">停止朗读</n-button>
-        <n-button @click="openSelectedInInteractive">查词 / AI</n-button>
+        <n-button @click="openInteractiveTranslation">查词 / AI</n-button>
         <n-button
           v-if="requiresWholeChapterTranslation"
           @click="queueChapterTranslation('gpt')"
@@ -2618,6 +2621,25 @@ onBeforeUnmount(() => {
           下一章
         </n-button>
       </div>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet
+      v-model:show="showInteractiveTranslation"
+      title="AI 查词"
+      wide
+    >
+      <Suspense>
+        <InteractiveTranslation
+          embedded
+          :initial-text="interactiveInitialText"
+        />
+        <template #fallback>
+          <div class="book-reader__embedded-loading">
+            <n-spin size="medium" />
+            <span>正在加载查词工具…</span>
+          </div>
+        </template>
+      </Suspense>
     </ReaderBottomSheet>
 
     <ReaderBottomSheet v-model:show="showSearch" title="全文搜索" wide>
@@ -3134,6 +3156,15 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.book-reader__embedded-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  gap: 10px;
+  color: var(--reader-muted-color);
 }
 
 .book-reader__settings-grid {

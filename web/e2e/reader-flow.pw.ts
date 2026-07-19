@@ -1864,17 +1864,23 @@ test('keeps reader search, annotations, bookmarks, speech, and handoffs on stabl
 
   await selectQuery();
   await page.getByRole('button', { name: 'AI', exact: true }).click();
-  await expect(page).toHaveURL(/\/workspace\/interactive$/);
-  await expect(page.getByPlaceholder('输入需要翻译的文本')).toHaveValue(
-    '选择词语',
-  );
-  expect(
-    await page.evaluate(() =>
-      sessionStorage.getItem('interactive-reader-selection'),
-    ),
-  ).toBeNull();
+  await expect(page).toHaveURL(/\/books\/reader-tools\.txt\/read\/0$/);
+  const interactiveDialog = page.getByRole('dialog', { name: 'AI 查词' });
+  await expect(interactiveDialog).toBeVisible();
+  await expect(
+    interactiveDialog.getByPlaceholder('输入需要翻译的文本'),
+  ).toHaveValue('选择词语');
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
+  await expect(interactiveDialog).toBeHidden();
 
-  await page.goto(`/books/${toolsBookId}/read/0`);
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
+  await expect(interactiveDialog).toBeVisible();
+  await expect(
+    interactiveDialog.getByPlaceholder('输入需要翻译的文本'),
+  ).toHaveValue('');
+  await page.getByRole('button', { name: '关闭AI 查词' }).click();
+
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await page.getByRole('button', { name: 'GPT 翻译本章', exact: true }).click();
   await page
