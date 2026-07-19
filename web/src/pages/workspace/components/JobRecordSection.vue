@@ -102,17 +102,20 @@ const handleRetryJob = (job: TranslateJobRecord) =>
           :label="retryButtonLabel"
           :icon="RefreshOutlined"
           :round="false"
+          compact-on-mobile
           @action="handleRetryAll"
         />
         <c-button
           label="下载本地小说"
           :icon="FileDownloadOutlined"
+          compact-on-mobile
           @click="downloadVolumes"
         />
         <c-button
           label="清空"
           :icon="DeleteOutlineOutlined"
           :round="false"
+          compact-on-mobile
           @action="workspace.deleteAllJobRecords()"
         />
       </n-button-group>

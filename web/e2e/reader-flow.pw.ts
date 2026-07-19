@@ -2944,6 +2944,52 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   await page.waitForTimeout(1050);
   await expect(sakuraPanel).toHaveCount(0);
   await page.mouse.up();
+
+  await page.setViewportSize({ width: 390, height: 420 });
+  await page.goto('/workspace/gpt');
+  const retryRecords = page.getByRole('button', {
+    name: '重试未完成任务',
+    exact: true,
+  });
+  await retryRecords.scrollIntoViewIfNeeded();
+  const recordActions = retryRecords.locator('xpath=..');
+  const recordActionBounds = await recordActions.boundingBox();
+  expect(recordActionBounds).not.toBeNull();
+  expect(recordActionBounds!.x + recordActionBounds!.width).toBeLessThanOrEqual(
+    390,
+  );
+  await expect(retryRecords.locator('.c-button__label')).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '下载本地小说', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '清空', exact: true }).last(),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: '翻译器运行统计' }).click();
+  const shortPanel = page.getByRole('dialog', { name: '翻译器运行统计' });
+  const shortPanelBounds = await shortPanel.boundingBox();
+  expect(shortPanelBounds).not.toBeNull();
+  expect(shortPanelBounds!.y).toBeGreaterThanOrEqual(8);
+  expect(shortPanelBounds!.y + shortPanelBounds!.height).toBeLessThanOrEqual(
+    420 - 8,
+  );
+  const shortPanelBody = shortPanel.locator('.workspace-metrics-panel__body');
+  await expect
+    .poll(() =>
+      shortPanelBody.evaluate(
+        (element) => element.scrollHeight > element.clientHeight,
+      ),
+    )
+    .toBe(true);
+  await shortPanelBody.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(
+    shortPanel
+      .locator('.workspace-metrics-panel__metric')
+      .filter({ hasText: '背压等待' }),
+  ).toBeVisible();
 });
 
 test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {

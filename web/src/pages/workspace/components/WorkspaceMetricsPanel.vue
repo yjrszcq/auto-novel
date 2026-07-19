@@ -39,6 +39,22 @@ const open = ref(false);
 const positioned = ref(false);
 const hasRememberedPosition = ref(false);
 const position = reactive({ x: 0, y: 0 });
+const viewportHeight = ref(window.visualViewport?.height ?? window.innerHeight);
+
+const syncViewportHeight = () => {
+  viewportHeight.value = window.visualViewport?.height ?? window.innerHeight;
+};
+
+const panelMaxHeight = computed(() =>
+  Math.max(120, Math.floor(viewportHeight.value - 66)),
+);
+
+const panelStyle = computed(() => ({
+  left: `${position.x}px`,
+  top: `${position.y}px`,
+  maxHeight: `${panelMaxHeight.value}px`,
+  '--workspace-metrics-panel-max-height': `${panelMaxHeight.value}px`,
+}));
 
 const clampPosition = (x: number, y: number) => {
   const bounds = panel.value?.getBoundingClientRect();
@@ -53,12 +69,13 @@ const clampPosition = (x: number, y: number) => {
   position.y = Math.round(
     Math.min(
       Math.max(edge, y),
-      Math.max(edge, window.innerHeight - bounds.height - edge),
+      Math.max(edge, viewportHeight.value - bounds.height - edge),
     ),
   );
 };
 
 const placePanel = async () => {
+  syncViewportHeight();
   await nextTick();
   const bounds = panel.value?.getBoundingClientRect();
   if (bounds === undefined) return;
@@ -136,9 +153,15 @@ const startDrag = (event: PointerEvent) => {
   });
 };
 
-useEventListener(window, 'resize', () => {
+const handleViewportResize = () => {
+  syncViewportHeight();
   if (open.value) void placePanel();
-});
+};
+
+useEventListener(window, 'resize', handleViewportResize);
+if (window.visualViewport) {
+  useEventListener(window.visualViewport, 'resize', handleViewportResize);
+}
 onBeforeUnmount(() => {
   finishDrag();
   cancelLongPress();
@@ -159,7 +182,7 @@ onBeforeUnmount(() => {
     ref="panel"
     class="workspace-metrics-panel"
     :class="{ 'workspace-metrics-panel--positioned': positioned }"
-    :style="{ left: `${position.x}px`, top: `${position.y}px` }"
+    :style="panelStyle"
     role="dialog"
     aria-label="翻译器运行统计"
   >
@@ -298,7 +321,7 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 1000;
   width: min(520px, calc(100vw - 24px));
-  max-height: calc(100vh - 72px);
+  max-height: calc(100dvh - 66px);
   overflow: hidden;
   visibility: hidden;
 }
@@ -326,8 +349,9 @@ onBeforeUnmount(() => {
 }
 
 .workspace-metrics-panel__body {
-  max-height: calc(100vh - 116px);
+  max-height: calc(var(--workspace-metrics-panel-max-height) - 44px);
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 16px;
 }
 
@@ -377,12 +401,11 @@ onBeforeUnmount(() => {
 @media (max-width: 639px) {
   .workspace-metrics-panel {
     width: calc(100vw - 24px);
-    max-height: calc(100vh - 66px);
+    max-height: calc(100dvh - 66px);
     border-radius: 10px;
   }
 
   .workspace-metrics-panel__body {
-    max-height: calc(100vh - 110px);
     padding: 12px;
   }
 
