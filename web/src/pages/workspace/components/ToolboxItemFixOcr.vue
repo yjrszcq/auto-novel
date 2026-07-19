@@ -156,17 +156,23 @@ const generateResults = () => {
 
 <style scoped>
 .ocr-analysis {
+  width: 100%;
+  min-width: 0;
+  max-width: calc(100vw - 16px);
   max-height: min(52vh, 560px);
+  box-sizing: border-box;
 }
 
 .ocr-analysis__file {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 8px;
 }
 
 .ocr-change {
   display: grid;
+  min-width: 0;
   gap: 6px;
   padding: 10px;
   border: 1px solid var(--ocr-border);
