@@ -5,7 +5,12 @@ import { Humanize } from '@/util';
 import type { Epub, ParsedFile } from '@/util/file';
 
 import { Toolbox } from './Toolbox';
-import { assertEncodedImageType, resolveImageOutputType } from './ToolboxImage';
+import {
+  encodeImageBatch,
+  resolveImageOutputType,
+  throwIfImageProcessingAborted,
+  type ImageEncodeOptions,
+} from './ToolboxImage';
 import { useToolboxOperation } from './ToolboxOperation';
 
 const props = defineProps<{
@@ -26,62 +31,54 @@ const imageFormatOptions = [
   { label: 'WEBP', value: 'image/webp' },
 ];
 
-const compressImage = async (blob: Blob) => {
-  const canvas = document.createElement('canvas');
-  const img = await createImageBitmap(blob);
-  try {
-    const ctx = canvas.getContext('2d');
-    if (ctx === null) throw new Error('浏览器无法创建图片处理画布');
-    const scaleRatioValue = Math.min(1, scaleRatio.value);
-    canvas.width = Math.max(1, Math.round(img.width * scaleRatioValue));
-    canvas.height = Math.max(1, Math.round(img.height * scaleRatioValue));
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+const selectedOptions = () => ({
+  quality: quality.value,
+  scaleRatio: Math.min(1, scaleRatio.value),
+  selectedType: imageFormat.value,
+});
 
-    const imageFormatValue = resolveImageOutputType(
-      blob.type,
-      imageFormat.value,
-    );
-    const qualityValue = quality.value;
-    const encoded = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (newBlob) =>
-          newBlob === null
-            ? reject(new Error(`压缩 ${blob.type || '图片'} 失败`))
-            : resolve(newBlob),
-        imageFormatValue,
-        qualityValue,
-      );
-    });
-    return assertEncodedImageType(encoded, imageFormatValue);
-  } finally {
-    img.close();
-    canvas.width = 0;
-    canvas.height = 0;
-  }
-};
+type SelectedImageOptions = ReturnType<typeof selectedOptions>;
 
-const compressImagesForEpub = async (epub: Epub) => {
-  for await (const item of epub.iterImage()) {
-    const newBlob = await compressImage(item.blob);
-    if (!newBlob)
-      throw new Error(`压缩失败\n文件:${epub.name}\n图片:${item.href}`);
-    epub.updateImage(item.id, newBlob);
-  }
+const encodeOptions = (
+  blob: Blob,
+  options: SelectedImageOptions,
+): ImageEncodeOptions => ({
+  outputType: resolveImageOutputType(blob.type, options.selectedType),
+  quality: options.quality,
+  scaleRatio: options.scaleRatio,
+});
+
+const compressImagesForEpub = async (
+  epub: Epub,
+  options: SelectedImageOptions,
+  signal?: AbortSignal,
+) => {
+  const images = [...epub.iterImage()];
+  const encoded = await encodeImageBatch(
+    images.map(({ blob }) => blob),
+    (blob) => encodeOptions(blob, options),
+    { signal, concurrency: 2 },
+  );
+  throwIfImageProcessingAborted(signal);
+  images.forEach((image, index) => epub.updateImage(image.id, encoded[index]!));
 };
 
 const compressImages = () => {
   const files = props.files.filter((file) => file.type === 'epub');
-  return operation.run('压缩图片', files.length, (options) =>
-    Toolbox.modifyFiles(files, compressImagesForEpub, options),
+  const imageOptions = selectedOptions();
+  return operation.run('压缩图片', files.length, (batchOptions) =>
+    Toolbox.modifyFiles(
+      files,
+      (epub, signal) => compressImagesForEpub(epub, imageOptions, signal),
+      batchOptions,
+    ),
   );
 };
 
 interface EpubImage {
   id: string;
   href: string;
-  blob: Blob;
   uri: string;
-  blobCompressed: Blob | undefined;
   uriCompressed: string;
 }
 interface EpubDetail {
@@ -89,10 +86,14 @@ interface EpubDetail {
   images: EpubImage[];
   size: number;
   sizeCompressed: number;
-  failed: number;
+  omitted: number;
 }
 
-const getEpubDetailList = async () => {
+const previewImageLimit = 24;
+const getEpubDetailList = async (
+  options: SelectedImageOptions,
+  signal?: AbortSignal,
+) => {
   const detailList: EpubDetail[] = [];
   try {
     for (const file of props.files) {
@@ -102,23 +103,31 @@ const getEpubDetailList = async () => {
           images: [],
           size: 0,
           sizeCompressed: 0,
-          failed: 0,
+          omitted: 0,
         };
         detailList.push(detail);
-        for await (const item of file.iterImage()) {
-          const blobCompressed = await compressImage(item.blob);
-          detail.images.push({
-            id: item.id,
-            href: item.href,
-            blob: item.blob,
-            uri: URL.createObjectURL(item.blob),
-            blobCompressed,
-            uriCompressed: URL.createObjectURL(blobCompressed ?? item.blob),
-          });
+        const images = [...file.iterImage()];
+        const encoded = await encodeImageBatch(
+          images.map(({ blob }) => blob),
+          (blob) => encodeOptions(blob, options),
+          { signal, concurrency: 2 },
+        );
+        throwIfImageProcessingAborted(signal);
+        images.forEach((item, index) => {
+          const blobCompressed = encoded[index]!;
           detail.size += item.blob.size;
-          detail.sizeCompressed += (blobCompressed ?? item.blob).size;
-          if (!blobCompressed) detail.failed += 1;
-        }
+          detail.sizeCompressed += blobCompressed.size;
+          if (detail.images.length < previewImageLimit) {
+            detail.images.push({
+              id: item.id,
+              href: item.href,
+              uri: URL.createObjectURL(item.blob),
+              uriCompressed: URL.createObjectURL(blobCompressed),
+            });
+          } else {
+            detail.omitted += 1;
+          }
+        });
       }
     }
     return detailList;
@@ -129,7 +138,10 @@ const getEpubDetailList = async () => {
 };
 
 const showDetail = ref(false);
+const previewBusy = ref(false);
 const detailList = ref<EpubDetail[]>([]);
+let previewController: AbortController | undefined;
+let previewRequest = 0;
 const revokeDetailList = (details: EpubDetail[]) => {
   for (const detail of details) {
     for (const image of detail.images) {
@@ -145,17 +157,37 @@ const clearDetailList = () => {
   compareImages.value = { old: '', new: '' };
 };
 const toggleShowDetail = async () => {
+  if (previewBusy.value) {
+    previewController?.abort(new DOMException('预览已取消', 'AbortError'));
+    return;
+  }
   if (showDetail.value) {
     showDetail.value = false;
     clearDetailList();
   } else {
+    const request = ++previewRequest;
+    const controller = new AbortController();
+    previewController = controller;
+    previewBusy.value = true;
     try {
-      const details = await getEpubDetailList();
+      const details = await getEpubDetailList(
+        selectedOptions(),
+        controller.signal,
+      );
+      if (request !== previewRequest || controller.signal.aborted) {
+        revokeDetailList(details);
+        return;
+      }
       clearDetailList();
       detailList.value = details;
       showDetail.value = true;
     } catch (error) {
-      message.error(`预览失败：${error}`);
+      if (!controller.signal.aborted) message.error(`预览失败：${error}`);
+    } finally {
+      if (previewController === controller) {
+        previewController = undefined;
+        previewBusy.value = false;
+      }
     }
   }
 };
@@ -168,14 +200,17 @@ const showPreview = (image: EpubImage) => {
   compareImages.value.new = image.uriCompressed;
 };
 
-watch(
-  () => props.files,
-  () => {
-    showDetail.value = false;
-    clearDetailList();
-  },
-);
-onBeforeUnmount(clearDetailList);
+watch([() => props.files, quality, scaleRatio, imageFormat], () => {
+  previewRequest += 1;
+  previewController?.abort(new DOMException('预览条件已变化', 'AbortError'));
+  showDetail.value = false;
+  clearDetailList();
+});
+onBeforeUnmount(() => {
+  previewRequest += 1;
+  previewController?.abort(new DOMException('页面已关闭', 'AbortError'));
+  clearDetailList();
+});
 </script>
 
 <template>
@@ -215,15 +250,19 @@ onBeforeUnmount(clearDetailList);
     <n-button-group>
       <c-button
         label="压缩"
-        :disabled="operation.state.busy"
+        :disabled="operation.state.busy || previewBusy"
         @action="compressImages"
       />
       <c-button
-        label="预览效果"
+        :label="previewBusy ? '取消预览' : '预览效果'"
         :disabled="operation.state.busy"
         @action="toggleShowDetail"
       />
     </n-button-group>
+
+    <n-text v-if="previewBusy" depth="3">
+      正在生成预览（最多同时处理 2 张图片）…
+    </n-text>
 
     <template v-if="showDetail">
       <n-text>点击图片预览压缩效果</n-text>
@@ -234,6 +273,10 @@ onBeforeUnmount(clearDetailList);
           =>
           {{ Humanize.bytes(detail.sizeCompressed) }}]
           {{ detail.name }}
+        </n-text>
+        <n-text v-if="detail.omitted > 0" depth="3">
+          为控制内存，仅展示前 {{ previewImageLimit }} 张，另有
+          {{ detail.omitted }} 张已计入统计。
         </n-text>
         <c-x-scrollbar style="margin-top: 16px">
           <n-image-group show-toolbar-tooltip>

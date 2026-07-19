@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { BlobReader, BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
 
-const createToolboxEpub = async (cover: Buffer) => {
+const createToolboxEpub = async (
+  cover: Buffer,
+  illustration: Buffer = cover,
+) => {
   const output = new BlobWriter('application/epub+zip');
   const writer = new ZipWriter(output);
   await writer.add('mimetype', new TextReader('application/epub+zip'), {
@@ -64,7 +67,7 @@ const createToolboxEpub = async (cover: Buffer) => {
   );
   await writer.add(
     'OEBPS/illustration.png',
-    new BlobReader(new Blob([cover], { type: 'image/png' })),
+    new BlobReader(new Blob([illustration], { type: 'image/png' })),
   );
   await writer.close();
   return Buffer.from(await (await output.getData()).arrayBuffer());
@@ -265,7 +268,7 @@ test('previews compressed EPUB images without leaving the viewport', async ({
   await expect(page.getByText('当前选择中没有 TXT 文件。')).toBeVisible();
 });
 
-test('releases completed image previews when a later image fails', async ({
+test('retains no partial image previews when a later image fails', async ({
   page,
 }) => {
   await page.goto('/workspace/toolbox');
@@ -273,7 +276,7 @@ test('releases completed image previews when a later image fails', async ({
   await page.locator('input[type="file"]').setInputFiles({
     name: 'toolbox-preview-failure.epub',
     mimeType: 'application/epub+zip',
-    buffer: await createToolboxEpub(cover),
+    buffer: await createToolboxEpub(cover, Buffer.from('invalid image')),
   });
   await page.getByText('EPUB：压缩图片', { exact: true }).click();
   await page.getByText('PNG', { exact: true }).click();
@@ -290,16 +293,6 @@ test('releases completed image previews when a later image fails', async ({
     URL.revokeObjectURL = (value) => {
       revoked.push(value);
       revokeObjectURL(value);
-    };
-    const toBlob = HTMLCanvasElement.prototype.toBlob;
-    let encodeCount = 0;
-    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
-      encodeCount += 1;
-      if (encodeCount === 2) {
-        callback(null);
-        return;
-      }
-      toBlob.call(this, callback, type, quality);
     };
     (
       window as typeof window & {
@@ -318,10 +311,8 @@ test('releases completed image previews when a later image fails', async ({
         }
       ).toolboxObjectUrls,
   );
-  expect(urlLifecycle.created.length).toBeGreaterThan(0);
-  expect(urlLifecycle.revoked).toEqual(
-    expect.arrayContaining(urlLifecycle.created),
-  );
+  expect(urlLifecycle.created).toEqual([]);
+  expect(urlLifecycle.revoked).toEqual([]);
   await expect(page.locator('.n-image img')).toHaveCount(0);
 });
 

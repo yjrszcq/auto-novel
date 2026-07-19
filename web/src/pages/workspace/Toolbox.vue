@@ -44,7 +44,7 @@ const operationSummary = computed(() => {
     case 'running':
       return `正在处理 ${state.completed}/${state.total}${state.currentName ? ` · ${state.currentName}` : ''}`;
     case 'cancelling':
-      return '正在取消，当前文件完成后停止';
+      return '正在取消…';
     case 'success':
       return `已完成 ${state.succeeded}/${state.total}`;
     case 'partial':
