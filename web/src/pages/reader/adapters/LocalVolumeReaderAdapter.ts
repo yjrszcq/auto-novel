@@ -49,6 +49,7 @@ const getBook = (volume: LocalVolumeMetadata): ReaderBook => {
   const readingLanguages = languages?.length ? languages : ['ja'];
   return {
     id: volume.id,
+    sourceFormat: volume.sourceFormat,
     title: getLocalVolumeTitle(volume),
     author: metadata.authors?.join('、'),
     authors: metadata.authors,

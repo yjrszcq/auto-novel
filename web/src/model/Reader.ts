@@ -97,6 +97,7 @@ export type ReaderTranslationStatus = 'none' | 'partial' | 'complete';
 
 export interface ReaderBook {
   id: string;
+  sourceFormat?: 'txt' | 'epub' | 'srt';
   title: string;
   author?: string;
   authors?: string[];

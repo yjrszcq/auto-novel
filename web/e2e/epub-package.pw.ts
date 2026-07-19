@@ -56,7 +56,9 @@ const createStandardsFixture = async () => {
 <nav epub:type="landmarks toc"><h1>目录</h1><div><ol>
   <li><a href="../Text/cover.xhtml">封面</a></li>
   <li><span>第一卷</span><ol>
-    <li><a href="../Text/chapter%20one.xhtml#start">第一章</a></li>
+    <li><span>第一篇</span><ol>
+      <li><a href="../Text/chapter%20one.xhtml#start">第一章</a></li>
+    </ol></li>
   </ol></li>
   <li><a href="../Text/fixed.xhtml">固定版式</a></li>
   <li><a href="../Text/notes.xhtml#note-1">附录</a></li>
@@ -181,9 +183,10 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   expect(imported.navigation).toEqual([
     expect.objectContaining({ title: '封面', level: 0 }),
     expect.objectContaining({ title: '第一卷', level: 0 }),
+    expect.objectContaining({ title: '第一篇', level: 1 }),
     expect.objectContaining({
       title: '第一章',
-      level: 1,
+      level: 2,
       href: 'OPS/Text/chapter one.xhtml#start',
     }),
     expect.objectContaining({
@@ -490,6 +493,18 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '目录' }).click();
+  const catalog = page.getByRole('dialog', { name: '目录' });
+  await expect(catalog.getByText('第一卷', { exact: true })).toBeVisible();
+  await expect(catalog.getByText('第一篇', { exact: true })).toHaveCount(0);
+  await expect(catalog.getByText('第一章', { exact: true })).toHaveCount(0);
+  await catalog.getByRole('button', { name: '展开 第一卷' }).click();
+  await expect(catalog.getByText('第一篇', { exact: true })).toBeVisible();
+  await expect(catalog.getByText('第一章', { exact: true })).toHaveCount(0);
+  await catalog.getByRole('button', { name: '展开 第一篇' }).click();
+  await expect(catalog.getByText('第一章', { exact: true })).toBeVisible();
+  await catalog.getByRole('button', { name: '折叠 第一卷' }).click();
+  await expect(catalog.getByText('第一篇', { exact: true })).toHaveCount(0);
+  await expect(catalog.getByText('第一章', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: /附录/ }).click();
   await page.waitForFunction(
     () =>

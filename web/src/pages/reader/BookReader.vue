@@ -3,6 +3,7 @@ import {
   ArrowBackOutlined,
   AutoAwesomeOutlined,
   BuildOutlined,
+  ChevronRightOutlined,
   DarkModeOutlined,
   MenuBookOutlined,
   MoreVertOutlined,
@@ -91,6 +92,7 @@ const initialSegmentId = ref<string>();
 const showSettings = ref(false);
 const showModePrompt = ref(false);
 const showCatalog = ref(false);
+const collapsedCatalogEntryIds = ref(new Set<string>());
 const showTools = ref(false);
 const showBookInfo = ref(false);
 const showBookmarks = ref(false);
@@ -160,6 +162,41 @@ const requestedSegmentId = computed(() =>
 const requestedEpubHref = computed(() =>
   typeof route.query.epub === 'string' ? route.query.epub : undefined,
 );
+
+const catalogParentIds = computed(() => {
+  if (result.value?.kind !== 'ready') return new Set<string>();
+  return new Set(
+    result.value.navigation.flatMap(({ parentId }) =>
+      parentId === undefined ? [] : [parentId],
+    ),
+  );
+});
+const visibleCatalogEntries = computed(() => {
+  if (result.value?.kind !== 'ready') return [];
+  if (result.value.book.sourceFormat !== 'epub') {
+    return result.value.navigation;
+  }
+  const entryById = new Map(
+    result.value.navigation.map((entry) => [entry.id, entry]),
+  );
+  return result.value.navigation.filter((entry) => {
+    const visited = new Set<string>();
+    let parentId = entry.parentId;
+    while (parentId !== undefined && !visited.has(parentId)) {
+      if (collapsedCatalogEntryIds.value.has(parentId)) return false;
+      visited.add(parentId);
+      parentId = entryById.get(parentId)?.parentId;
+    }
+    return true;
+  });
+});
+
+const toggleCatalogEntry = (entryId: string) => {
+  const collapsed = new Set(collapsedCatalogEntryIds.value);
+  if (collapsed.has(entryId)) collapsed.delete(entryId);
+  else collapsed.add(entryId);
+  collapsedCatalogEntryIds.value = collapsed;
+};
 
 const currentChapterSummary = computed(() =>
   result.value?.kind === 'ready'
@@ -1846,6 +1883,21 @@ const refreshCurrentChapter = async () => {
 };
 
 watch(
+  result,
+  (loaded) => {
+    collapsedCatalogEntryIds.value =
+      loaded?.kind === 'ready' && loaded.book.sourceFormat === 'epub'
+        ? new Set(
+            loaded.navigation.flatMap(({ parentId }) =>
+              parentId === undefined ? [] : [parentId],
+            ),
+          )
+        : new Set();
+  },
+  { immediate: true },
+);
+
+watch(
   () => [bookId.value, requestedChapterId.value],
   ([nextBookId, nextChapterId], previous) => {
     if (previous !== undefined && nextBookId !== previous[0]) {
@@ -2306,42 +2358,65 @@ onBeforeUnmount(() => {
           <span>共 {{ result.chapters.length }} 章</span>
         </div>
         <div class="book-reader__catalog" role="list">
-          <button
-            v-for="entry in result.navigation"
+          <div
+            v-for="entry in visibleCatalogEntries"
             :key="entry.id"
-            type="button"
-            class="book-reader__catalog-item"
-            :class="{
-              'book-reader__catalog-item--active':
-                entry.chapterId === result.chapter.chapterId,
-              'book-reader__catalog-item--structural':
-                entry.chapterId === undefined,
-            }"
-            :style="{ '--catalog-indent': `${10 + entry.level * 22}px` }"
-            :disabled="entry.chapterId === undefined"
-            @click="navigateFromCatalog(entry)"
+            class="book-reader__catalog-row"
+            :style="{ '--catalog-indent': `${entry.level * 22}px` }"
+            role="listitem"
           >
-            <span class="book-reader__catalog-title">{{ entry.title }}</span>
-            <n-tag
-              v-if="
-                entry.chapterId !== undefined && requiresWholeChapterTranslation
-              "
-              size="small"
-              :type="
-                chapterSummaryById.get(entry.chapterId)?.translationStatus ===
-                'complete'
-                  ? 'success'
-                  : 'default'
-              "
+            <button
+              v-if="catalogParentIds.has(entry.id)"
+              type="button"
+              class="book-reader__catalog-toggle"
+              :class="{
+                'book-reader__catalog-toggle--expanded':
+                  !collapsedCatalogEntryIds.has(entry.id),
+              }"
+              :aria-label="`${
+                collapsedCatalogEntryIds.has(entry.id) ? '展开' : '折叠'
+              } ${entry.title}`"
+              :aria-expanded="!collapsedCatalogEntryIds.has(entry.id)"
+              @click="toggleCatalogEntry(entry.id)"
             >
-              {{
-                getTranslationStatusLabel(
-                  chapterSummaryById.get(entry.chapterId)?.translationStatus ??
-                    'none',
-                )
-              }}
-            </n-tag>
-          </button>
+              <n-icon :component="ChevronRightOutlined" />
+            </button>
+            <span v-else class="book-reader__catalog-toggle-spacer" />
+            <button
+              type="button"
+              class="book-reader__catalog-item"
+              :class="{
+                'book-reader__catalog-item--active':
+                  entry.chapterId === result.chapter.chapterId,
+                'book-reader__catalog-item--structural':
+                  entry.chapterId === undefined,
+              }"
+              :disabled="entry.chapterId === undefined"
+              @click="navigateFromCatalog(entry)"
+            >
+              <span class="book-reader__catalog-title">{{ entry.title }}</span>
+              <n-tag
+                v-if="
+                  entry.chapterId !== undefined &&
+                  requiresWholeChapterTranslation
+                "
+                size="small"
+                :type="
+                  chapterSummaryById.get(entry.chapterId)?.translationStatus ===
+                  'complete'
+                    ? 'success'
+                    : 'default'
+                "
+              >
+                {{
+                  getTranslationStatusLabel(
+                    chapterSummaryById.get(entry.chapterId)
+                      ?.translationStatus ?? 'none',
+                  )
+                }}
+              </n-tag>
+            </button>
+          </div>
         </div>
       </template>
     </ReaderBottomSheet>
@@ -2833,8 +2908,9 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  width: 100%;
   min-height: 48px;
-  padding: 8px 8px 8px var(--catalog-indent);
+  padding: 8px;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -2843,6 +2919,48 @@ onBeforeUnmount(() => {
   border: 0;
   border-bottom: 1px solid var(--reader-chrome-border);
   gap: 12px;
+}
+
+.book-reader__catalog-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: stretch;
+  padding-left: var(--catalog-indent);
+  border-bottom: 1px solid var(--reader-chrome-border);
+}
+
+.book-reader__catalog-row .book-reader__catalog-item {
+  border-bottom: 0;
+}
+
+.book-reader__catalog-toggle,
+.book-reader__catalog-toggle-spacer {
+  width: 28px;
+}
+
+.book-reader__catalog-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--reader-muted-color);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.book-reader__catalog-toggle :deep(.n-icon) {
+  transition: transform 160ms ease;
+}
+
+.book-reader__catalog-toggle--expanded :deep(.n-icon) {
+  transform: rotate(90deg);
+}
+
+.book-reader__catalog-toggle:hover,
+.book-reader__catalog-toggle:focus-visible {
+  color: inherit;
+  background: rgb(127 127 127 / 12%);
+  outline: none;
 }
 
 .book-reader__catalog-item:hover,
