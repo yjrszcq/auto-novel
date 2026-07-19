@@ -144,6 +144,30 @@ describe('native EPUB chapter plan', () => {
     ]);
   });
 
+  it('keeps fragment navigation actionable when a non-monotonic toc falls back', () => {
+    const navigation = [
+      { text: '附录', href: 'Text/notes.xhtml#note', children: [] },
+      { text: '正文', href: 'Text/chapter.xhtml#start', children: [] },
+    ];
+    const chapters = buildEpubChapterPlan(navigation, [
+      {
+        href: 'Text/chapter.xhtml',
+        paragraphs: ['正文'],
+        anchors: { start: 0 },
+      },
+      {
+        href: 'Text/notes.xhtml',
+        paragraphs: ['附录'],
+        anchors: { note: 0 },
+      },
+    ]);
+
+    expect(buildEpubNavigationPlan(navigation, chapters)).toMatchObject([
+      { href: 'Text/notes.xhtml#note', chapterId: 'Text/notes.xhtml' },
+      { href: 'Text/chapter.xhtml#start', chapterId: 'Text/chapter.xhtml' },
+    ]);
+  });
+
   it('keeps structural native navigation entries alongside readable chapters', () => {
     const navigation = [
       {

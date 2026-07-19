@@ -69,7 +69,10 @@ const createStandardsFixture = async () => {
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title>
 <link rel="stylesheet" href="../Styles/book.css"/></head><body>
-<section id="start"><h1>第一章</h1><p>第一段</p><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>
+<section id="start"><h1 class="chapter-title" style="break-before: page">第一章</h1><p>第一段</p>
+<ul><li>第一项</li><li>第二项 <ruby>字<rt>じ</rt></ruby></li></ul>
+<table><tbody><tr><td>单元格</td></tr></tbody></table>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>
 <math xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math><audio src="../Media/sample.mp3" controls="controls"/></section>
 </body></html>`),
   );
@@ -214,7 +217,13 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   expect(cover?.paragraphs).toEqual([]);
   expect(cover?.rich?.documents[0]?.content).toContain('<img');
   const chapter = richProjection.find((item) => item.id.includes('#start'));
-  expect(chapter?.paragraphs).toEqual(['第一章', '第一段']);
+  expect(chapter?.paragraphs).toEqual([
+    '第一章',
+    '第一段',
+    '第一项',
+    '第二项 字',
+    '单元格',
+  ]);
   expect(chapter?.rich?.documents[0]).toMatchObject({
     sourcePath: 'OPS/Text/chapter one.xhtml',
     stylesheetHrefs: ['../Styles/book.css'],
@@ -222,4 +231,6 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   for (const segmentId of chapter?.segmentIds ?? []) {
     expect(chapter?.rich?.documents[0]?.content).toContain(segmentId);
   }
+  expect(chapter?.rich?.documents[0]?.content).toContain('<ul');
+  expect(chapter?.rich?.documents[0]?.content).toContain('<table');
 });

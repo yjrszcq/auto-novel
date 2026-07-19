@@ -202,6 +202,19 @@ export const buildEpubNavigationPlan = (
   chapters: readonly EpubChapterPlanItem[],
 ): EpubNavigationPlanItem[] => {
   const knownChapterIds = new Set(chapters.map((chapter) => chapter.chapterId));
+  const firstChapterIdBySource = new Map<string, string>();
+  for (const chapter of chapters) {
+    for (const range of chapter.sourceRanges) {
+      if (!firstChapterIdBySource.has(range.href)) {
+        firstChapterIdBySource.set(range.href, chapter.chapterId);
+      }
+    }
+  }
+  const resolveChapterId = (href: string | undefined) => {
+    if (href === undefined) return undefined;
+    if (knownChapterIds.has(href)) return href;
+    return firstChapterIdBySource.get(splitHref(href).href);
+  };
   const result: EpubNavigationPlanItem[] = [];
   let nextId = 0;
   const visit = (
@@ -217,10 +230,7 @@ export const buildEpubNavigationPlan = (
         title: node.text.trim() || '未命名章节',
         level,
         href: node.href,
-        chapterId:
-          node.href !== undefined && knownChapterIds.has(node.href)
-            ? node.href
-            : undefined,
+        chapterId: resolveChapterId(node.href),
         parentId,
       });
       visit(node.children, level + 1, id);
@@ -288,7 +298,7 @@ const createSource = (href: string, doc: Document) => {
       undefined,
     paragraphs: paragraphElements.map(getEpubTextBlockText),
     anchors: createAnchors(doc, paragraphElements),
-    hasContent: doc.body.childNodes.length > 0,
+    hasContent: doc.body.children.length > 0,
   } satisfies EpubChapterPlanSource;
 };
 

@@ -3,6 +3,13 @@ export const injectEpubParagraphTranslations = (
   mode: 'zh' | 'jp-zh' | 'zh-jp',
   translationsByParagraph: readonly (readonly string[])[],
 ) => {
+  const dimOriginal = (element: Element) => {
+    const style = element.getAttribute('style')?.trim() ?? '';
+    element.setAttribute(
+      'style',
+      `${style}${style.length > 0 && !style.endsWith(';') ? ';' : ''}opacity:0.4;`,
+    );
+  };
   getEpubTextBlockElements(doc).forEach((element, index) => {
     const translations = translationsByParagraph[index] ?? [];
     if (translations.length === 0) return;
@@ -18,10 +25,10 @@ export const injectEpubParagraphTranslations = (
       element.replaceWith(...translatedElements);
     } else if (mode === 'jp-zh') {
       element.after(...translatedElements);
-      element.setAttribute('style', 'opacity:0.4;');
+      dimOriginal(element);
     } else {
       element.before(...translatedElements);
-      element.setAttribute('style', 'opacity:0.4;');
+      dimOriginal(element);
     }
   });
   return doc;
@@ -58,14 +65,21 @@ export const getEpubTextBlockText = (element: Element) => {
   return clone.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 };
 
-export const getEpubTextBlockElements = (doc: Document) =>
-  Array.from(doc.body.querySelectorAll(TEXT_BLOCK_SELECTOR)).filter(
-    (element) =>
-      getEpubTextBlockText(element).length > 0 &&
-      !Array.from(element.querySelectorAll(TEXT_BLOCK_SELECTOR)).some(
-        (child) => child !== element && getEpubTextBlockText(child).length > 0,
-      ),
-  );
+export const getEpubTextBlockElements = (doc: Document) => {
+  const candidates = Array.from(
+    doc.body.querySelectorAll(TEXT_BLOCK_SELECTOR),
+  ).filter((element) => getEpubTextBlockText(element).length > 0);
+  const candidateSet = new Set(candidates);
+  const containers = new Set<Element>();
+  for (const candidate of candidates) {
+    let ancestor = candidate.parentElement;
+    while (ancestor !== null && ancestor !== doc.body) {
+      if (candidateSet.has(ancestor)) containers.add(ancestor);
+      ancestor = ancestor.parentElement;
+    }
+  }
+  return candidates.filter((element) => !containers.has(element));
+};
 
 // Kept as an EPUB-export API alias; EPUB text units now include semantic block
 // content rather than silently discarding headings, list items, and tables.
