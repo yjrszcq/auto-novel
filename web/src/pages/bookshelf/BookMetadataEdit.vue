@@ -305,7 +305,7 @@ onBeforeUnmount(clearCoverObjectUrl);
                 v-model:value="form.title"
                 maxlength="200"
                 show-count
-                placeholder="原文件未提供书名"
+                placeholder="请填写书名"
               />
             </n-form-item>
             <n-form-item label="作者">
@@ -318,7 +318,7 @@ onBeforeUnmount(clearCoverObjectUrl);
                 :rows="10"
                 maxlength="5000"
                 show-count
-                placeholder="原文件未提供简介"
+                placeholder="请填写简介"
               />
             </n-form-item>
             <n-form-item label="封面">
