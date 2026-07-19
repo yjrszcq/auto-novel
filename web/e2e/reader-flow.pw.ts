@@ -3071,14 +3071,33 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/workspace/toolbox');
+  const toolboxTitleBounds = await page
+    .getByRole('heading', { name: '小说工具箱', exact: true })
+    .boundingBox();
+  expect(toolboxTitleBounds).not.toBeNull();
+  await page.goto('/workspace/interactive');
+  const interactiveTitleBounds = await page
+    .getByRole('heading', { name: '交互翻译', exact: true })
+    .boundingBox();
+  expect(interactiveTitleBounds).not.toBeNull();
+  expect(interactiveTitleBounds!.y).toBeCloseTo(toolboxTitleBounds!.y, 0);
   await page.goto('/workspace/gpt');
 
   const trigger = page.getByRole('button', { name: '翻译器运行统计' });
   const title = page.getByRole('heading', { name: 'GPT工作区', exact: true });
+  const gptContentBounds = await page.locator('.layout-content').boundingBox();
+  const gptHeadingBounds = await page
+    .locator('.workspace-page-heading')
+    .boundingBox();
+  expect(gptContentBounds).not.toBeNull();
+  expect(gptHeadingBounds).not.toBeNull();
+  expect(gptHeadingBounds!.y - gptContentBounds!.y).toBeCloseTo(28, 0);
   const triggerBounds = await trigger.boundingBox();
   const titleBounds = await title.boundingBox();
   expect(triggerBounds).not.toBeNull();
   expect(titleBounds).not.toBeNull();
+  expect(titleBounds!.y).toBeCloseTo(toolboxTitleBounds!.y, 0);
   expect(
     Math.abs(
       triggerBounds!.y +
@@ -3140,7 +3159,26 @@ test('keeps workspace metrics draggable and local to the current page', async ({
   expect(resetBounds!.y).toBeCloseTo(64, 0);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/workspace/toolbox');
+  const mobileToolboxTitleBounds = await page
+    .getByRole('heading', { name: '小说工具箱', exact: true })
+    .boundingBox();
+  expect(mobileToolboxTitleBounds).not.toBeNull();
   await page.goto('/workspace/sakura');
+  const sakuraContentBounds = await page
+    .locator('.layout-content')
+    .boundingBox();
+  const sakuraHeadingBounds = await page
+    .locator('.workspace-page-heading')
+    .boundingBox();
+  expect(sakuraContentBounds).not.toBeNull();
+  expect(sakuraHeadingBounds).not.toBeNull();
+  expect(sakuraHeadingBounds!.y - sakuraContentBounds!.y).toBeCloseTo(28, 0);
+  const sakuraTitleBounds = await page
+    .getByRole('heading', { name: 'Sakura工作区', exact: true })
+    .boundingBox();
+  expect(sakuraTitleBounds).not.toBeNull();
+  expect(sakuraTitleBounds!.y).toBeCloseTo(mobileToolboxTitleBounds!.y, 0);
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   const sakuraPanel = page.getByRole('dialog', { name: '翻译器运行统计' });
   await expect(sakuraPanel).toBeVisible();

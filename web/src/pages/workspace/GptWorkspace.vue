@@ -342,12 +342,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="layout-content">
+  <div class="layout-content workspace-page">
     <n-flex
+      class="workspace-page-heading"
       align="center"
       justify="space-between"
       :wrap="false"
-      style="margin-bottom: 0.5em"
     >
       <n-h1 style="margin: 0">GPT工作区</n-h1>
       <workspace-metrics-panel

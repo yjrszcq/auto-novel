@@ -204,6 +204,15 @@ watch(
   padding-left: 30px;
   padding-right: 30px;
 }
+
+.workspace-page {
+  padding-top: 28px;
+}
+
+.workspace-page-heading {
+  margin-bottom: 0.5em;
+}
+
 @media only screen and (max-width: 600px) {
   .layout-content {
     padding-left: 12px;
