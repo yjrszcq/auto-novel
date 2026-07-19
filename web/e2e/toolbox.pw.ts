@@ -439,6 +439,12 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       .filter({ hasText: 'カタカナ' })
       .getByPlaceholder('请输入中文翻译'),
   ).toHaveValue('片假名');
+  await expect(
+    page.getByRole('button', { name: 'GPT 翻译', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sakura 翻译', exact: true }),
+  ).toBeVisible();
 
   const corsHeaders = {
     'access-control-allow-origin': 'http://127.0.0.1:4173',
