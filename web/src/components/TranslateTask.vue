@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type {
   GptWorkerPipeline,
+  SakuraWorkerPipeline,
   SegmentProgressInfo,
   TranslatorConfig,
 } from '@/domain/translate';
@@ -340,10 +341,32 @@ const startGptPipelineTask = (
     callback,
   );
 
+const startSakuraPipelineTask = (
+  desc: TranslateTaskDesc,
+  params: TranslateTaskParams,
+  pipeline: SakuraWorkerPipeline,
+  callback?: ProgressCallback,
+  signal?: AbortSignal,
+) =>
+  runTask(
+    params,
+    'sakura',
+    (taskCallback, onSegmentProgress) =>
+      pipeline.translateLocal(desc, params, taskCallback, signal, {
+        onSegmentProgress,
+      }),
+    callback,
+  );
+
 const pushLog = (line: { message: string; detail?: string[] }) =>
   cardRef.value?.pushLog(line);
 
-defineExpose({ startTask, startGptPipelineTask, pushLog });
+defineExpose({
+  startTask,
+  startGptPipelineTask,
+  startSakuraPipelineTask,
+  pushLog,
+});
 </script>
 
 <template>

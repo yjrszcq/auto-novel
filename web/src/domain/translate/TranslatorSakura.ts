@@ -14,6 +14,7 @@ export class SakuraTranslator implements SegmentTranslator {
   cacheIdentity: Readonly<Record<string, unknown>>;
   log: (message: string, detail?: string[]) => void;
   private api;
+  private readonly endpoint: string;
   version: string = '0.9';
   model?: {
     id: string;
@@ -27,7 +28,13 @@ export class SakuraTranslator implements SegmentTranslator {
     { endpoint, segLength, prevSegLength }: SakuraTranslator.Config,
   ) {
     this.log = log;
-    this.cacheIdentity = { endpoint, version: this.version };
+    this.endpoint = endpoint;
+    this.cacheIdentity = {
+      provider: 'sakura',
+      prompt: 'sakura-light-novel-v1',
+      model: `未知@${endpoint}`,
+      version: this.version,
+    };
     this.api = createOpenAiApi(endpoint, 'no-key');
     this.segLength = normalizeSakuraSegmentLength(segLength);
     this.segmentor = createBudgetSegmentor(this.segLength);
@@ -44,8 +51,9 @@ export class SakuraTranslator implements SegmentTranslator {
       else if (id.includes('1.0')) this.version = '1.0';
     }
     this.cacheIdentity = {
-      ...this.cacheIdentity,
-      model: this.model?.id,
+      provider: 'sakura',
+      prompt: 'sakura-light-novel-v1',
+      model: this.model?.id ?? `未知@${this.endpoint}`,
       version: this.version,
     };
     this.log(`模型：${this.model?.id ?? '未知'}`);
@@ -54,7 +62,7 @@ export class SakuraTranslator implements SegmentTranslator {
 
   profile(): SakuraTranslator.Profile {
     return {
-      model: this.model?.id ?? '未知',
+      model: this.model?.id ?? `未知@${this.endpoint}`,
       version: this.version,
       segLength: this.segLength,
       prevSegLength: this.prevSegLength,

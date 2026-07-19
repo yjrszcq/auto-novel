@@ -74,8 +74,8 @@ const seedVolume = async (volumeId: string, chapterParagraphs: string[][]) => {
   return toc.map(({ chapterId }) => chapterId);
 };
 
-const taskParams = () => ({
-  level: 'all' as const,
+const taskParams = (level: 'normal' | 'all' = 'all') => ({
+  level,
   forceMetadata: false,
   startIndex: 0,
   endIndex: 65_535,
@@ -96,6 +96,21 @@ const createCallback = () => {
     log: () => {},
   };
   return { callback, state };
+};
+
+const createResumeCallback = () => {
+  const remainingChapterIds = new Set<string>();
+  const callback: TranslateTaskCallback = {
+    onStart: (_total, chapterIds) => {
+      chapterIds.forEach((chapterId) => remainingChapterIds.add(chapterId));
+    },
+    onChapterSuccess: ({ chapterId }) => {
+      remainingChapterIds.delete(chapterId);
+    },
+    onChapterFailure: () => {},
+    log: () => {},
+  };
+  return { callback, remainingChapterIds };
 };
 
 const createTranslator = async (
@@ -280,6 +295,106 @@ describe('Sakura shared worker pipeline', () => {
     expect(pipeline.snapshot().workers).toEqual([
       expect.objectContaining({ id: 'second', errors: 0 }),
     ]);
+    pipeline.close();
+  });
+
+  it('persists completed chapters and reports only unfinished work on abort', async () => {
+    const volumeId = 'sakura-resume.epub';
+    const chapterIds = await seedVolume(volumeId, [['先完成'], ['后中止']]);
+    const secondStarted = deferred();
+    const segmentTranslator = new SakuraTranslator(() => {}, {
+      endpoint: 'http://127.0.0.1:3',
+      segLength: 100,
+      prevSegLength: 100,
+    });
+    segmentTranslator.model = { id: 'sakura-1.0' };
+    segmentTranslator.version = '1.0';
+    segmentTranslator.segmentor = createBudgetSegmentor(100, 1);
+    segmentTranslator.translate = async (segment, context) => {
+      if (segment[0] === '先完成') return ['已完成'];
+      secondStarted.resolve();
+      await new Promise<void>((_resolve, reject) => {
+        context.signal?.addEventListener(
+          'abort',
+          () => reject(context.signal?.reason),
+          { once: true },
+        );
+      });
+      return [];
+    };
+    const pipeline = new SakuraWorkerPipeline({ highWaterMark: 1 });
+    pipeline.register({
+      id: 'worker',
+      translator: new Translator(segmentTranslator),
+      concurrency: 1,
+    });
+    const controller = new AbortController();
+    const { callback, remainingChapterIds } = createResumeCallback();
+
+    const translation = pipeline.translateLocal(
+      { type: 'local', volumeId },
+      taskParams(),
+      callback,
+      controller.signal,
+    );
+    await secondStarted.promise;
+    controller.abort();
+
+    await expect(translation).resolves.toBe('abort');
+    expect([...remainingChapterIds]).toEqual([chapterIds[1]]);
+    const dao = await createLocalVolumeDao();
+    const [completed, unfinished] = await Promise.all(
+      chapterIds.map((chapterId) => dao.getChapter(volumeId, chapterId)),
+    );
+    dao.close();
+    expect(completed?.sakura?.paragraphs).toEqual(['已完成']);
+    expect(unfinished?.sakura).toBeUndefined();
+    pipeline.close();
+  });
+
+  it('deduplicates equivalent requests across deployment endpoints', async () => {
+    const volumeId = 'sakura-shared-cache.epub';
+    await seedVolume(volumeId, [['相同原文'], ['相同原文']]);
+    const firstServer = await startOpenAiTestServer({
+      model: 'sakura-1.0.gguf',
+      onChat: () => ({ content: '共享译文' }),
+    });
+    const secondServer = await startOpenAiTestServer({
+      model: 'sakura-1.0.gguf',
+      onChat: () => ({ content: '共享译文' }),
+    });
+    cleanupCallbacks.push(firstServer.close, secondServer.close);
+    const first = await Translator.create(
+      {
+        id: 'sakura',
+        endpoint: firstServer.endpoint,
+        segLength: 100,
+        prevSegLength: 100,
+      },
+      true,
+    );
+    const second = await Translator.create(
+      {
+        id: 'sakura',
+        endpoint: secondServer.endpoint,
+        segLength: 100,
+        prevSegLength: 100,
+      },
+      true,
+    );
+    const pipeline = new SakuraWorkerPipeline({ highWaterMark: 2 });
+    pipeline.register({ id: 'first', translator: first, concurrency: 1 });
+    pipeline.register({ id: 'second', translator: second, concurrency: 1 });
+
+    await pipeline.translateLocal(
+      { type: 'local', volumeId },
+      taskParams('normal'),
+      createCallback().callback,
+    );
+
+    expect(firstServer.requests.length + secondServer.requests.length).toBe(1);
+    const metrics = await TranslationCacheRepo.metrics('sakura-seg-cache');
+    expect(metrics.deduplicated).toBe(1);
     pipeline.close();
   });
 });
