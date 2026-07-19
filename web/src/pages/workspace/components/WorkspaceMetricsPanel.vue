@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { CloseOutlined } from '@vicons/material';
-import { useEventListener } from '@vueuse/core';
+import { useEventListener, useMediaQuery } from '@vueuse/core';
 
 type CacheMetrics = {
   entryCount: number;
@@ -28,11 +28,31 @@ type WorkerMetrics = {
   errors: number;
 };
 
-defineProps<{
+const props = defineProps<{
   cacheMetrics?: CacheMetrics;
   pipelineMetrics?: PipelineMetrics;
   workerMetrics?: WorkerMetrics;
 }>();
+
+type MetricsPage = 'cache' | 'workers' | 'pipeline';
+
+const isMobile = useMediaQuery('(max-width: 639px)');
+const activePage = ref<MetricsPage>('cache');
+const metricPages = computed(() => [
+  { key: 'cache' as const, label: '翻译缓存' },
+  ...(props.workerMetrics === undefined
+    ? []
+    : [{ key: 'workers' as const, label: '翻译器总览' }]),
+  ...(props.pipelineMetrics === undefined
+    ? []
+    : [{ key: 'pipeline' as const, label: '共享池' }]),
+]);
+
+watch(metricPages, (pages) => {
+  if (!pages.some((page) => page.key === activePage.value)) {
+    activePage.value = pages[0]?.key ?? 'cache';
+  }
+});
 
 const panel = useTemplateRef('panel');
 const open = ref(false);
@@ -94,6 +114,11 @@ const placePanel = async () => {
 const toggle = () => {
   open.value = !open.value;
   if (open.value) void placePanel();
+};
+
+const selectPage = (page: MetricsPage) => {
+  activePage.value = page;
+  void placePanel();
 };
 
 const close = () => {
@@ -207,13 +232,41 @@ onBeforeUnmount(() => {
 
       <div
         class="workspace-metrics-panel__body"
+        :class="{
+          'workspace-metrics-panel__body--paged':
+            isMobile && metricPages.length > 1,
+        }"
         @pointerdown.passive="startLongPress"
         @pointermove.passive="trackLongPress"
         @pointerup.passive="cancelLongPress"
         @pointercancel.passive="cancelLongPress"
         @pointerleave.passive="cancelLongPress"
       >
-        <section aria-label="翻译缓存统计">
+        <nav
+          v-if="isMobile && metricPages.length > 1"
+          class="workspace-metrics-panel__pages"
+          :style="{
+            gridTemplateColumns: `repeat(${metricPages.length}, minmax(0, 1fr))`,
+          }"
+          aria-label="运行统计分页"
+          @pointerdown.stop
+        >
+          <n-button
+            v-for="page of metricPages"
+            :key="page.key"
+            size="small"
+            :type="activePage === page.key ? 'primary' : 'default'"
+            :aria-pressed="activePage === page.key"
+            @click="selectPage(page.key)"
+          >
+            {{ page.label }}
+          </n-button>
+        </nav>
+
+        <section
+          v-if="!isMobile || activePage === 'cache'"
+          aria-label="翻译缓存统计"
+        >
           <n-text depth="3" class="workspace-metrics-panel__section-title">
             翻译缓存
           </n-text>
@@ -252,7 +305,10 @@ onBeforeUnmount(() => {
           <n-skeleton v-else text :repeat="2" />
         </section>
 
-        <section v-if="workerMetrics" aria-label="翻译器总览">
+        <section
+          v-if="workerMetrics && (!isMobile || activePage === 'workers')"
+          aria-label="翻译器总览"
+        >
           <n-divider />
           <n-text depth="3" class="workspace-metrics-panel__section-title">
             翻译器总览
@@ -287,7 +343,10 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section v-if="pipelineMetrics" aria-label="共享池统计">
+        <section
+          v-if="pipelineMetrics && (!isMobile || activePage === 'pipeline')"
+          aria-label="共享池统计"
+        >
           <n-divider />
           <n-text depth="3" class="workspace-metrics-panel__section-title">
             共享池
@@ -363,6 +422,17 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.workspace-metrics-panel__pages {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.workspace-metrics-panel__pages :deep(.n-button) {
+  width: 100%;
+  padding: 0 6px;
+}
+
 .workspace-metrics-panel__grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -408,15 +478,23 @@ onBeforeUnmount(() => {
   }
 
   .workspace-metrics-panel__body {
+    overflow: hidden;
     padding: 12px;
+    touch-action: none;
+  }
+
+  .workspace-metrics-panel__body--paged .workspace-metrics-panel__section-title,
+  .workspace-metrics-panel__body--paged :deep(.n-divider) {
+    display: none;
   }
 
   .workspace-metrics-panel__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .workspace-metrics-panel__metric {
-    padding: 8px 10px;
+    padding: 6px 10px;
   }
 }
 </style>

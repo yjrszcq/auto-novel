@@ -2975,24 +2975,50 @@ test('keeps workspace metrics draggable and local to the current page', async ({
     420 - 8,
   );
   const shortPanelBody = shortPanel.locator('.workspace-metrics-panel__body');
-  await expect(shortPanelBody).toHaveCSS('touch-action', 'pan-y');
+  await expect(shortPanelBody).toHaveCSS('touch-action', 'none');
   await expect
     .poll(() =>
       shortPanelBody.evaluate(
-        (element) => element.scrollHeight > element.clientHeight,
+        (element) => element.scrollHeight <= element.clientHeight,
       ),
     )
     .toBe(true);
-  await shortPanelBody.hover();
-  await page.mouse.wheel(0, 800);
-  await expect
-    .poll(() => shortPanelBody.evaluate((element) => element.scrollTop))
-    .toBeGreaterThan(0);
+  const cachePage = shortPanel.getByRole('button', {
+    name: '翻译缓存',
+    exact: true,
+  });
+  const workerPage = shortPanel.getByRole('button', {
+    name: '翻译器总览',
+    exact: true,
+  });
+  const pipelinePage = shortPanel.getByRole('button', {
+    name: '共享池',
+    exact: true,
+  });
+  await expect(cachePage).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    shortPanel.getByRole('region', { name: '翻译缓存统计' }),
+  ).toBeVisible();
+  await expect(
+    shortPanel.getByRole('region', { name: '翻译器总览' }),
+  ).toHaveCount(0);
+  await workerPage.click();
+  await expect(workerPage).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    shortPanel.getByRole('region', { name: '翻译器总览' }),
+  ).toBeVisible();
+  await pipelinePage.click();
+  await expect(pipelinePage).toHaveAttribute('aria-pressed', 'true');
   await expect(
     shortPanel
       .locator('.workspace-metrics-panel__metric')
       .filter({ hasText: '背压等待' }),
   ).toBeVisible();
+  const pagedPanelBounds = await shortPanel.boundingBox();
+  expect(pagedPanelBounds).not.toBeNull();
+  expect(pagedPanelBounds!.y + pagedPanelBounds!.height).toBeLessThanOrEqual(
+    420 - 8,
+  );
 });
 
 test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
