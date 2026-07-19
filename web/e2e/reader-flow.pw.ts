@@ -2975,6 +2975,7 @@ test('keeps workspace metrics draggable and local to the current page', async ({
     420 - 8,
   );
   const shortPanelBody = shortPanel.locator('.workspace-metrics-panel__body');
+  await expect(shortPanelBody).toHaveCSS('touch-action', 'pan-y');
   await expect
     .poll(() =>
       shortPanelBody.evaluate(
@@ -2982,9 +2983,11 @@ test('keeps workspace metrics draggable and local to the current page', async ({
       ),
     )
     .toBe(true);
-  await shortPanelBody.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
+  await shortPanelBody.hover();
+  await page.mouse.wheel(0, 800);
+  await expect
+    .poll(() => shortPanelBody.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
   await expect(
     shortPanel
       .locator('.workspace-metrics-panel__metric')
@@ -3083,16 +3086,19 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     exact: true,
   });
   await expect(gptLocalAdd).toBeVisible();
+  await expect(gptLocalAdd.locator('.c-button__label')).toBeHidden();
   await gptLocalAdd.hover();
   await expect(
     page.getByText('支持拖拽上传 EPUB/TXT/SRT 文件', { exact: true }),
   ).toBeHidden();
-  await expect(
-    gptLocalDrawer.getByRole('button', {
-      name: '下载选中的书',
-      exact: true,
-    }),
-  ).toBeVisible();
+  const gptLocalDownload = gptLocalDrawer.getByRole('button', {
+    name: '下载选中的书',
+    exact: true,
+  });
+  await expect(gptLocalDownload).toBeVisible();
+  await expect(gptLocalDownload.locator('.c-button__label')).toBeHidden();
+  await expectButtonIconCentered(gptLocalAdd);
+  await expectButtonIconCentered(gptLocalDownload);
   await expect(
     gptLocalDrawer.getByText('已选择 0 本', { exact: true }),
   ).toBeVisible();

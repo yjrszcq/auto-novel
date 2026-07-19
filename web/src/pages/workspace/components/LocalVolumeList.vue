@@ -132,13 +132,17 @@ const handleDrawerVisibility = (show: boolean) => {
 <template>
   <c-drawer-right title="本地小说" @update:show="handleDrawerVisibility">
     <template #action>
-      <local-volume-upload-button @done="emit('volumeAdd', $event)" />
+      <local-volume-upload-button
+        compact-on-mobile
+        @done="emit('volumeAdd', $event)"
+      />
       <slot name="selected-action" :volumes="selectedVolumes">
         <c-button
           label="下载"
           aria-label="下载选中的书"
           :icon="FileDownloadOutlined"
           :disabled="selectedVolumes.length === 0"
+          compact-on-mobile
           @action="downloadVolumes"
         />
       </slot>

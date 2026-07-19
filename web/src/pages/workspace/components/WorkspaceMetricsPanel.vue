@@ -207,11 +207,11 @@ onBeforeUnmount(() => {
 
       <div
         class="workspace-metrics-panel__body"
-        @pointerdown="startLongPress"
-        @pointermove="trackLongPress"
-        @pointerup="cancelLongPress"
-        @pointercancel="cancelLongPress"
-        @pointerleave="cancelLongPress"
+        @pointerdown.passive="startLongPress"
+        @pointermove.passive="trackLongPress"
+        @pointerup.passive="cancelLongPress"
+        @pointercancel.passive="cancelLongPress"
+        @pointerleave.passive="cancelLongPress"
       >
         <section aria-label="翻译缓存统计">
           <n-text depth="3" class="workspace-metrics-panel__section-title">
@@ -351,8 +351,10 @@ onBeforeUnmount(() => {
 .workspace-metrics-panel__body {
   max-height: calc(var(--workspace-metrics-panel-max-height) - 44px);
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 16px;
+  touch-action: pan-y;
 }
 
 .workspace-metrics-panel__section-title {
