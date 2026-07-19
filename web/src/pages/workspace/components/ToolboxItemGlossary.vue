@@ -632,6 +632,11 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.glossary-toolbar {
+  box-sizing: border-box;
+  width: 100%;
+}
+
 .glossary-toolbar__row--secondary {
   min-width: 0;
   flex: 1;
