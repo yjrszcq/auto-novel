@@ -6,12 +6,15 @@ import type {
 
 import { EpubResourceSession } from '../core/EpubResources';
 
+import { resolveEpubArchiveHref } from '@/util/file/epub';
+
 const props = defineProps<{
   epub: ReaderEpubChapterContent;
 }>();
 
 const emit = defineEmits<{
   'content-change': [];
+  'link-activate': [href: string];
 }>();
 
 const layout = ref<HTMLElement>();
@@ -205,6 +208,23 @@ const renderSlice = async (
   wrapper.className = 'epub-document';
   applySafeAttributes(wrapper, slice.documentAttributes);
   applySafeAttributes(wrapper, slice.bodyAttributes);
+  wrapper.addEventListener('click', (event) => {
+    const link = event
+      .composedPath()
+      .find(
+        (node): node is Element =>
+          node instanceof Element && node.localName.toLowerCase() === 'a',
+      );
+    if (link === undefined) return;
+    event.stopPropagation();
+    if (!link.hasAttribute('data-epub-href')) return;
+    event.preventDefault();
+    const href = resolveEpubArchiveHref(
+      slice.sourcePath,
+      link.getAttribute('data-epub-href') ?? '',
+    );
+    if (href !== undefined) emit('link-activate', href);
+  });
   const parsed = parseSlice(slice);
   if (parsed === undefined) {
     wrapper.textContent = '此 EPUB 章节的 XHTML 无法解析。';

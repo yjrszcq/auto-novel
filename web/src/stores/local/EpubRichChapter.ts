@@ -2,6 +2,7 @@ import type { LocalVolumeChapter } from '@/model/LocalVolume';
 import type {
   ReaderEpubChapterContent,
   ReaderEpubDocumentSlice,
+  ReaderEpubLinkTarget,
 } from '@/model/Reader';
 import type { Epub } from '@/util/file/epub';
 
@@ -69,6 +70,70 @@ const serializeFragment = (fragment: DocumentFragment) => {
     .join('');
 };
 
+const getAnchorBlockIndex = (anchor: Element, blocks: readonly Element[]) => {
+  const containing = blocks.findIndex(
+    (block) => block === anchor || block.contains(anchor),
+  );
+  if (containing >= 0) return containing;
+  const following = blocks.findIndex(
+    (block) =>
+      (anchor.compareDocumentPosition(block) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+      0,
+  );
+  return following >= 0 ? following : Math.max(0, blocks.length - 1);
+};
+
+export const createEpubLinkTargets = (
+  epub: Epub,
+  chapters: readonly LocalVolumeChapter[],
+) => {
+  const targets = new Map<string, ReaderEpubLinkTarget>();
+  for (const chapter of chapters) {
+    const chapterId = chapter.id.startsWith(`${chapter.volumeId}/`)
+      ? chapter.id.slice(chapter.volumeId.length + 1)
+      : chapter.id;
+    let segmentOffset = 0;
+    for (const range of chapter.sourceRanges ?? []) {
+      const resource = epub.getResourceByPath(range.href);
+      if (resource === undefined || !('doc' in resource)) continue;
+      const blocks = getEpubTextBlockElements(resource.doc);
+      const baseSegmentId = chapter.segmentIds[segmentOffset];
+      if (!targets.has(resource.path)) {
+        targets.set(resource.path, {
+          href: resource.path,
+          chapterId,
+          ...(baseSegmentId === undefined ? {} : { segmentId: baseSegmentId }),
+        });
+      }
+      const anchors = Array.from(
+        resource.doc.body.querySelectorAll<HTMLElement>('[id], a[name]'),
+      );
+      for (const anchor of anchors) {
+        const fragment = anchor.id || anchor.getAttribute('name');
+        if (!fragment) continue;
+        const blockIndex = getAnchorBlockIndex(anchor, blocks);
+        const belongsToRange =
+          range.start === range.end
+            ? blocks.length === 0
+            : blockIndex >= range.start && blockIndex < range.end;
+        if (!belongsToRange) continue;
+        const href = `${resource.path}#${fragment}`;
+        if (targets.has(href)) continue;
+        const segmentId =
+          chapter.segmentIds[segmentOffset + blockIndex - range.start];
+        targets.set(href, {
+          href,
+          chapterId,
+          ...(segmentId === undefined ? {} : { segmentId }),
+        });
+      }
+      segmentOffset += range.end - range.start;
+    }
+  }
+  return Array.from(targets.values());
+};
+
 const createDocumentSlice = (
   epub: Epub,
   chapter: LocalVolumeChapter,
@@ -124,6 +189,7 @@ const createDocumentSlice = (
 export const createEpubRichChapter = (
   epub: Epub,
   chapter: LocalVolumeChapter,
+  linkTargets: ReaderEpubLinkTarget[] = [],
 ): ReaderEpubChapterContent | undefined => {
   if (!chapter.sourceRanges?.length) return undefined;
   const documents: ReaderEpubDocumentSlice[] = [];
@@ -147,6 +213,7 @@ export const createEpubRichChapter = (
               ]
             : [],
         ),
+        linkTargets,
       }
     : undefined;
 };

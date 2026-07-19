@@ -129,6 +129,7 @@ export interface ReaderNavigationEntry {
   level: number;
   chapterId?: string;
   parentId?: string;
+  href?: string;
 }
 
 export interface ReaderSegment {
@@ -153,9 +154,16 @@ export interface ReaderEpubResource {
   blob: Blob;
 }
 
+export interface ReaderEpubLinkTarget {
+  href: string;
+  chapterId: string;
+  segmentId?: string;
+}
+
 export interface ReaderEpubChapterContent {
   documents: ReaderEpubDocumentSlice[];
   resources: ReaderEpubResource[];
+  linkTargets: ReaderEpubLinkTarget[];
 }
 
 export interface ReaderChapterContent {

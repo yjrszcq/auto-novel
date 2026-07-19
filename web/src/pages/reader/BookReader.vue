@@ -157,6 +157,9 @@ const requestedChapterId = computed(() =>
 const requestedSegmentId = computed(() =>
   typeof route.query.segment === 'string' ? route.query.segment : undefined,
 );
+const requestedEpubHref = computed(() =>
+  typeof route.query.epub === 'string' ? route.query.epub : undefined,
+);
 
 const currentChapterSummary = computed(() =>
   result.value?.kind === 'ready'
@@ -1118,6 +1121,74 @@ const scrollToSegment = (segmentId: string | undefined) => {
   void nextTick().then(scroll);
 };
 
+const decodeEpubFragment = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const normalizeEpubHrefKey = (href: string) => {
+  const separator = href.indexOf('#');
+  return separator < 0
+    ? href
+    : `${href.slice(0, separator)}#${decodeEpubFragment(href.slice(separator + 1))}`;
+};
+
+const findEpubTargetElement = (href: string) => {
+  const separator = href.indexOf('#');
+  if (separator < 0) return undefined;
+  const fragment = decodeEpubFragment(href.slice(separator + 1));
+  for (const host of document.querySelectorAll<HTMLElement>(
+    '[data-reader-epub-host]',
+  )) {
+    const target = Array.from(
+      host.shadowRoot?.querySelectorAll<HTMLElement>('[id], a[name]') ?? [],
+    ).find(
+      (element) =>
+        element.id === fragment || element.getAttribute('name') === fragment,
+    );
+    if (target !== undefined) return target;
+  }
+  return undefined;
+};
+
+const scrollToEpubHref = (href: string) => {
+  const target = findEpubTargetElement(href);
+  if (target !== undefined) {
+    if (resolvedFlow.value === 'paginated' && readerViewport.value !== null) {
+      const viewport = readerViewport.value;
+      const rect = target.getClientRects()[0];
+      if (rect === undefined) return false;
+      const viewportRect = viewport.getBoundingClientRect();
+      const absoluteLeft = viewport.scrollLeft + rect.left - viewportRect.left;
+      positionReaderPage(
+        viewport,
+        Math.max(
+          0,
+          Math.floor((absoluteLeft + 1) / Math.max(1, viewport.clientWidth)),
+        ),
+      );
+    } else {
+      target.scrollIntoView({
+        block: 'start',
+        inline: 'nearest',
+        behavior: 'auto',
+      });
+    }
+    return true;
+  }
+  if (result.value?.kind !== 'ready') return false;
+  const key = normalizeEpubHrefKey(href);
+  const linkTarget = result.value.chapter.epub?.linkTargets.find(
+    (item) => normalizeEpubHrefKey(item.href) === key,
+  );
+  if (linkTarget?.segmentId === undefined) return false;
+  scrollToSegment(linkTarget.segmentId);
+  return true;
+};
+
 const scrollToChapterEdge = async (edge: 'start' | 'end') => {
   await nextTick();
   await nextTick();
@@ -1150,6 +1221,13 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
 
 const handleSegmentContentChange = async (anchorId?: string) => {
   await nextTick();
+  if (
+    requestedEpubHref.value !== undefined &&
+    scrollToEpubHref(requestedEpubHref.value)
+  ) {
+    updateViewportMetrics();
+    return;
+  }
   if (anchorId !== undefined && resolvedFlow.value !== 'paginated') {
     scrollToSegment(anchorId);
   }
@@ -1474,6 +1552,27 @@ const navigate = (chapterId: string, edge?: 'start' | 'end') => {
   );
 };
 
+const navigateToEpubHref = (href: string) => {
+  if (result.value?.kind !== 'ready') return;
+  const key = normalizeEpubHrefKey(href);
+  const target = result.value.chapter.epub?.linkTargets.find(
+    (item) => normalizeEpubHrefKey(item.href) === key,
+  );
+  if (target === undefined) {
+    message.warning('此 EPUB 链接没有可读取的目标');
+    return;
+  }
+  pendingChapterEdge = undefined;
+  void saveProgress();
+  void recordReadingTime();
+  stopSpeaking();
+  closeReaderPanels();
+  void router.push({
+    path: `/books/${encodeURIComponent(bookId.value)}/read/${encodeURIComponent(target.chapterId)}`,
+    query: { epub: href },
+  });
+};
+
 const backHome = () => void router.push('/');
 const openDetails = () =>
   void router.push('/books/' + encodeURIComponent(bookId.value) + '/details');
@@ -1489,10 +1588,13 @@ const chapterSummaryById = computed(() => {
   return chapters;
 });
 
-const navigateFromCatalog = (chapterId: string | undefined) => {
-  if (chapterId === undefined) return;
+const navigateFromCatalog = (entry: ReaderNavigationEntry) => {
   showCatalog.value = false;
-  navigate(chapterId);
+  if (entry.href !== undefined && result.value?.chapter.epub !== undefined) {
+    navigateToEpubHref(entry.href);
+  } else if (entry.chapterId !== undefined) {
+    navigate(entry.chapterId);
+  }
 };
 
 const currentChapterIndex = computed(() => {
@@ -1793,6 +1895,11 @@ watch(
   },
   { immediate: true },
 );
+
+watch(requestedEpubHref, (href) => {
+  if (href === undefined) return;
+  void nextTick().then(() => scrollToEpubHref(href));
+});
 watch(searchQuery, () => {
   searchUiRequestId += 1;
   searchResults.value = [];
@@ -2106,6 +2213,7 @@ onBeforeUnmount(() => {
               "
               :epub="chapter.epub"
               @content-change="handleSegmentContentChange"
+              @link-activate="navigateToEpubHref"
             />
             <ReaderSegmentLayout
               v-else
@@ -2127,6 +2235,7 @@ onBeforeUnmount(() => {
           "
           :epub="result.chapter.epub"
           @content-change="handleSegmentContentChange"
+          @link-activate="navigateToEpubHref"
         />
         <ReaderSegmentLayout
           v-else
@@ -2199,7 +2308,7 @@ onBeforeUnmount(() => {
             }"
             :style="{ '--catalog-indent': `${10 + entry.level * 22}px` }"
             :disabled="entry.chapterId === undefined"
-            @click="navigateFromCatalog(entry.chapterId)"
+            @click="navigateFromCatalog(entry)"
           >
             <span class="book-reader__catalog-title">{{ entry.title }}</span>
             <n-tag

@@ -18,7 +18,10 @@ import type { TranslatorId } from '@/model/Translator';
 import type { useLocalVolumeStore } from '@/stores';
 import { Epub } from '@/util/file';
 
-import { createEpubRichChapter } from '@/stores/local/EpubRichChapter';
+import {
+  createEpubLinkTargets,
+  createEpubRichChapter,
+} from '@/stores/local/EpubRichChapter';
 
 import {
   defaultTranslationPriority,
@@ -78,6 +81,10 @@ export const createLocalVolumeReaderAdapter = (
     Promise<Map<string, LocalVolumeChapter>>
   >();
   const epubCache = new Map<string, Promise<Epub | undefined>>();
+  const epubLinkTargetCache = new Map<
+    string,
+    ReturnType<typeof createEpubLinkTargets>
+  >();
   const getVolume = async (bookId: string) => {
     let pending = volumeCache.get(bookId);
     if (pending === undefined) {
@@ -167,12 +174,13 @@ export const createLocalVolumeReaderAdapter = (
       const volume = await getVolume(bookId);
       if (volume.navigation?.length) {
         return volume.navigation.map(
-          ({ id, title, level, chapterId, parentId }) => ({
+          ({ id, title, level, chapterId, parentId, href }) => ({
             id,
             title,
             level,
             chapterId,
             parentId,
+            href,
           }),
         ) satisfies ReaderNavigationEntry[];
       }
@@ -193,9 +201,8 @@ export const createLocalVolumeReaderAdapter = (
 
     async getChapter({ bookId, chapterId }) {
       const volume = await getVolume(bookId);
-      const chapter = (await getVolumeChapters(bookId)).get(
-        `${bookId}/${chapterId}`,
-      );
+      const volumeChapters = await getVolumeChapters(bookId);
+      const chapter = volumeChapters.get(`${bookId}/${chapterId}`);
       if (chapter === undefined) {
         throw new Error('章节不存在');
       }
@@ -209,8 +216,21 @@ export const createLocalVolumeReaderAdapter = (
       const epub = chapter.sourceRanges?.length
         ? await getEpub(bookId, volume)
         : undefined;
+      let linkTargets = epubLinkTargetCache.get(bookId);
+      if (epub !== undefined && linkTargets === undefined) {
+        linkTargets = createEpubLinkTargets(
+          epub,
+          volume.toc.flatMap(({ chapterId: targetChapterId }) => {
+            const target = volumeChapters.get(`${bookId}/${targetChapterId}`);
+            return target === undefined ? [] : [target];
+          }),
+        );
+        epubLinkTargetCache.set(bookId, linkTargets);
+      }
       const richChapter =
-        epub === undefined ? undefined : createEpubRichChapter(epub, chapter);
+        epub === undefined
+          ? undefined
+          : createEpubRichChapter(epub, chapter, linkTargets ?? []);
       return {
         bookId,
         chapterId,
@@ -243,6 +263,7 @@ export const createLocalVolumeReaderAdapter = (
       volumeCache.delete(bookId);
       chapterCache.delete(bookId);
       epubCache.delete(bookId);
+      epubLinkTargetCache.delete(bookId);
     },
   };
 };

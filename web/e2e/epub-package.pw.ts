@@ -69,7 +69,8 @@ const createStandardsFixture = async () => {
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title>
 <link rel="stylesheet" href="../Styles/book.css"/></head><body>
-<section id="start"><h1 class="chapter-title" style="break-before: page">第一章</h1><p>第一段</p>
+<section id="start"><h1 class="chapter-title" style="break-before: page">第一章</h1>
+<p>第一段 <a href="notes.xhtml#note-1">参见附录</a> <a href="https://example.org/author">外部网站</a></p>
 <ul><li>第一项</li><li>第二项 <ruby>字<rt>じ</rt></ruby></li></ul>
 <table><tbody><tr><td>单元格</td></tr></tbody></table>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>
@@ -81,7 +82,7 @@ const createStandardsFixture = async () => {
     'OPS/Text/notes.xhtml',
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>附录</title></head>
-<body><aside id="note-1"><p>附录内容</p></aside></body></html>`),
+<body><aside id="note-1"><p>附录内容 <a href="chapter%20one.xhtml#start">返回正文</a></p></aside></body></html>`),
   );
   await writer.add(
     'OPS/Styles/book.css',
@@ -226,7 +227,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   const chapter = richProjection.find((item) => item.id.includes('#start'));
   expect(chapter?.paragraphs).toEqual([
     '第一章',
-    '第一段',
+    '第一段 参见附录 外部网站',
     '第一项',
     '第二项 字',
     '单元格',
@@ -278,4 +279,40 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
     });
   expect(remotePublicationRequests).toEqual([]);
   expect(await page.evaluate(() => 'epubScriptExecuted' in window)).toBe(false);
+
+  const externalLink = page.getByRole('link', { name: '外部网站' });
+  await expect(externalLink).toHaveAttribute('target', '_blank');
+  await expect(externalLink).toHaveAttribute('rel', 'noopener noreferrer');
+  await page.getByRole('link', { name: '参见附录' }).click();
+  await page.waitForFunction(
+    () =>
+      new URL(location.href).searchParams.get('epub') ===
+      'OPS/Text/notes.xhtml#note-1',
+  );
+  await expect(page.getByText('附录内容')).toBeVisible();
+
+  await page.getByRole('link', { name: '返回正文' }).click();
+  await page.waitForFunction(
+    () =>
+      new URL(location.href).searchParams.get('epub') ===
+      'OPS/Text/chapter one.xhtml#start',
+  );
+  await expect(page.getByRole('heading', { name: '第一章' })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '目录' }).click();
+  await page.getByRole('button', { name: /附录/ }).click();
+  await page.waitForFunction(
+    () =>
+      new URL(location.href).searchParams.get('epub') ===
+      'OPS/Text/notes.xhtml#note-1',
+  );
+  await expect(page.getByText('附录内容')).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth <=
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
 });
