@@ -2109,8 +2109,42 @@ test('uses a configured default cover for a local book without one', async ({
       desktopLayout.returnToShelf.right - desktopLayout.primaryActions.right,
     ),
   ).toBeLessThanOrEqual(1);
-  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  const desktopBookshelfColumnCount = await page
+    .locator('.book-grid')
+    .evaluate(
+      (grid) =>
+        getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/).length,
+    );
+  expect(desktopBookshelfColumnCount).toBe(6);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await expect
+    .poll(() =>
+      page
+        .locator('.book-grid')
+        .evaluate(
+          (grid) =>
+            getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/)
+              .length,
+        ),
+    )
+    .toBe(5);
+  await page.setViewportSize({ width: 800, height: 844 });
+  await expect
+    .poll(() =>
+      page
+        .locator('.book-grid')
+        .evaluate(
+          (grid) =>
+            getComputedStyle(grid).gridTemplateColumns.trim().split(/\s+/)
+              .length,
+        ),
+    )
+    .toBe(4);
+  await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole('heading', { name: '轻小说机翻机器人' }),
   ).toBeVisible();

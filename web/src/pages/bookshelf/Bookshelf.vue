@@ -912,26 +912,11 @@ onMounted(reload);
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(140px, calc((100% - 60px) / 6)), 1fr)
+  );
   gap: 12px;
-}
-
-@media only screen and (min-width: 680px) {
-  .book-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media only screen and (min-width: 1000px) {
-  .book-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media only screen and (min-width: 1440px) {
-  .book-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
 }
 
 @media only screen and (max-width: 600px) {
@@ -989,6 +974,10 @@ onMounted(reload);
 
   .bookshelf-filter-panel__group {
     grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .bookshelf-selection-toolbar {
