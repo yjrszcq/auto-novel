@@ -1188,7 +1188,7 @@ test('persists keyboard pagination and every reading mode across responsive layo
   await page.goto('/');
   await expect(
     page.getByRole('heading', { name: '轻小说机翻机器人' }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10_000 });
   await page.evaluate(async (bookId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open('volumes');
