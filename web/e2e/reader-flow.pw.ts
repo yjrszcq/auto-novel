@@ -1991,6 +1991,15 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
     'color',
     await chapterStatus.evaluate((element) => getComputedStyle(element).color),
   );
+  const statusBars = page.locator('.book-reader__status-bar');
+  await expect(statusBars).toHaveCount(2);
+  for (const statusBar of await statusBars.all()) {
+    await expect(statusBar).toHaveCSS('background-color', 'rgb(250, 250, 250)');
+    const bounds = await statusBar.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeCloseTo(0, 0);
+    expect(bounds!.width).toBeCloseTo(390, 0);
+  }
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await flowSetting.locator('.n-base-selection').click();
   await page.getByText('自动', { exact: true }).click();
@@ -2131,10 +2140,13 @@ test('automatically translates a reader window without persisting a partial chap
       transaction.objectStore('metadata').put({
         id: bookId,
         createAt: 1,
-        toc: [{ chapterId: '0', title: '临时翻译章节' }],
+        toc: [
+          { chapterId: '0', title: '临时翻译章节' },
+          { chapterId: '1', title: '术语所在章节' },
+        ],
         sourceFormat: 'txt',
         glossaryId: 'glossary',
-        glossary: { テスト: '测试' },
+        glossary: { テスト: '测试', ダミー: '过期术语' },
         favoredId: 'default',
         sourceBookMetadata: {
           title: '临时翻译测试',
@@ -2154,9 +2166,15 @@ test('automatically translates a reader window without persisting a partial chap
           (_, index) => `temporary-segment-${index}`,
         ),
       });
+      transaction.objectStore('chapter').put({
+        id: `${bookId}/1`,
+        volumeId: bookId,
+        paragraphs: ['テスト'],
+        segmentIds: ['glossary-segment'],
+      });
       transaction.objectStore('file').put({
         id: bookId,
-        file: new File(['テスト\n'.repeat(12)], bookId, {
+        file: new File(['ダミー\n'.repeat(12)], bookId, {
           type: 'text/plain',
         }),
       });
@@ -2273,6 +2291,9 @@ test('automatically translates a reader window without persisting a partial chap
       hasText: 'テスト',
     });
     await expect(glossaryRow).toBeVisible();
+    await expect(
+      glossaryDialog.locator('tbody tr').filter({ hasText: 'ダミー' }),
+    ).toHaveCount(0);
     await glossaryRow.locator('input').fill('测试词');
     await glossaryDialog
       .getByRole('button', { name: '应用到本书', exact: true })
@@ -2298,9 +2319,9 @@ test('automatically translates a reader window without persisting a partial chap
       'true',
     );
     await expect(source).toContainText('译文第1行', { timeout: 15_000 });
-    await expect(page.locator('.reader-segment-layout')).toHaveClass(
-      /reader-segment-layout--original-translated/,
-    );
+    await expect(
+      page.locator('.reader-segment-layout').filter({ has: source }),
+    ).toHaveClass(/reader-segment-layout--original-translated/);
     await page.keyboard.press('4');
     await expect(source).toContainText('临时原文第 1 段');
     await page.keyboard.press('1');

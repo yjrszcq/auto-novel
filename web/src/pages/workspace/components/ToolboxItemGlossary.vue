@@ -162,11 +162,7 @@ watch(
         }),
       );
       if (request !== extractionRequest) return;
-      const merged = mergeGlossaryCounts(counts);
-      Object.keys(props.initialGlossary ?? {}).forEach((word) => {
-        if (!merged.has(word)) merged.set(word, 1);
-      });
-      sourceCounts.value = merged;
+      sourceCounts.value = mergeGlossaryCounts(counts);
     } catch (error) {
       if (request === extractionRequest) extractionError.value = String(error);
     } finally {

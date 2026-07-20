@@ -37,7 +37,7 @@ import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { darkTheme, lightTheme } from 'naive-ui';
 import type { GlobalThemeOverrides } from 'naive-ui';
 import { useRouter } from 'vue-router';
-import { parseFile, type ParsedFile } from '@/util/file';
+import { Txt, type ParsedFile } from '@/util/file';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
 import ReaderEpubLayout from './components/ReaderEpubLayout.vue';
@@ -451,14 +451,15 @@ const openReaderGlossary = async () => {
   readerGlossaryFiles.value = [];
   try {
     const repository = await repositoryPromise;
-    const [stored, volume] = await Promise.all([
-      repository.getFile(bookId.value),
+    const [chapters, volume] = await Promise.all([
+      repository.listChapter(bookId.value),
       repository.getVolume(bookId.value),
     ]);
-    if (stored === undefined || volume === undefined) {
-      throw new Error('原始书籍文件不存在');
-    }
-    const parsed = await parseFile(stored.file);
+    if (volume === undefined) throw new Error('小说不存在');
+    const parsed = await Txt.fromText(
+      `${volume.id}.txt`,
+      chapters.flatMap((chapter) => chapter.paragraphs).join('\n'),
+    );
     if (request !== readerGlossaryRequest || !showReaderGlossary.value) return;
     readerGlossaryInitial.value = { ...volume.glossary };
     readerGlossaryFiles.value = [parsed];
@@ -3566,32 +3567,34 @@ onBeforeUnmount(() => {
 
     <div
       v-if="result?.kind === 'ready' && !showMobileTranslationNotice"
-      class="book-reader__corner-status book-reader__chapter-status"
-      :title="result.chapter.title"
+      class="book-reader__status-bar book-reader__status-bar--top"
     >
-      {{ result.chapter.title }}
-    </div>
-
-    <div
-      v-if="result?.kind === 'ready' && !showMobileTranslationNotice"
-      class="book-reader__corner-status book-reader__time-status"
-    >
-      {{ currentTime }}
-    </div>
-
-    <div
-      v-if="result?.kind === 'ready'"
-      class="book-reader__corner-status book-reader__book-status"
-      :title="result.book.title"
-    >
-      {{ result.book.title }}
+      <span
+        class="book-reader__corner-status book-reader__chapter-status"
+        :title="result.chapter.title"
+      >
+        {{ result.chapter.title }}
+      </span>
+      <span class="book-reader__corner-status book-reader__time-status">
+        {{ currentTime }}
+      </span>
     </div>
 
     <div
       v-if="result?.kind === 'ready'"
-      class="book-reader__corner-status book-reader__reading-progress-status"
+      class="book-reader__status-bar book-reader__status-bar--bottom"
     >
-      {{ Math.round(chapterProgressPercent) }}%
+      <span
+        class="book-reader__corner-status book-reader__book-status"
+        :title="result.book.title"
+      >
+        {{ result.book.title }}
+      </span>
+      <span
+        class="book-reader__corner-status book-reader__reading-progress-status"
+      >
+        {{ Math.round(chapterProgressPercent) }}%
+      </span>
     </div>
 
     <div
@@ -4432,8 +4435,6 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__corner-status {
-  position: fixed;
-  z-index: 20;
   overflow: hidden;
   color: var(--reader-muted-color);
   font-size: 12px;
@@ -4443,26 +4444,42 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.book-reader__chapter-status {
-  top: 3px;
-  left: 8px;
+.book-reader__status-bar {
+  position: fixed;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  box-sizing: border-box;
+  height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  pointer-events: none;
+  gap: 16px;
+}
+
+.book-reader--scrolled .book-reader__status-bar {
+  background: var(--reader-background);
+}
+
+.book-reader__status-bar--top {
+  top: 0;
+}
+
+.book-reader__status-bar--bottom {
+  bottom: 0;
+}
+
+.book-reader__chapter-status,
+.book-reader__book-status {
+  min-width: 0;
   max-width: calc(100vw - 96px);
 }
 
-.book-reader__time-status {
-  top: 3px;
-  right: 8px;
-}
-
-.book-reader__book-status {
-  bottom: 6px;
-  left: 8px;
-  max-width: calc(50vw - 16px);
-}
-
+.book-reader__time-status,
 .book-reader__reading-progress-status {
-  right: 8px;
-  bottom: 6px;
+  flex: 0 0 auto;
 }
 
 .book-reader__translation-panel {
@@ -4921,27 +4938,17 @@ onBeforeUnmount(() => {
     display: grid;
   }
 
+  .book-reader__status-bar {
+    height: 26px;
+    padding: 4px 14px;
+  }
+
   .book-reader__chapter-status {
-    top: 6px;
-    left: 14px;
-    max-width: calc(100vw - 104px);
     font-size: 12px;
   }
 
-  .book-reader__time-status {
-    top: 6px;
-    right: 14px;
-  }
-
   .book-reader__book-status {
-    bottom: 6px;
-    left: 14px;
     max-width: calc(65vw - 20px);
-  }
-
-  .book-reader__reading-progress-status {
-    right: 14px;
-    bottom: 6px;
   }
 
   .book-reader__content {
