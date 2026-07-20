@@ -211,9 +211,6 @@ const catalogParentIds = computed(() => {
 });
 const visibleCatalogEntries = computed(() => {
   if (result.value?.kind !== 'ready') return [];
-  if (result.value.book.sourceFormat !== 'epub') {
-    return result.value.navigation;
-  }
   const entryById = new Map(
     result.value.navigation.map((entry) => [entry.id, entry]),
   );
@@ -2219,14 +2216,11 @@ watch(
     if (loaded?.kind !== 'ready') return;
     if (initializedCatalogBookId === loaded.book.id) return;
     initializedCatalogBookId = loaded.book.id;
-    collapsedCatalogEntryIds.value =
-      loaded.book.sourceFormat === 'epub'
-        ? new Set(
-            loaded.navigation.flatMap(({ parentId }) =>
-              parentId === undefined ? [] : [parentId],
-            ),
-          )
-        : new Set();
+    collapsedCatalogEntryIds.value = new Set(
+      loaded.navigation.flatMap(({ parentId }) =>
+        parentId === undefined ? [] : [parentId],
+      ),
+    );
   },
   { immediate: true },
 );

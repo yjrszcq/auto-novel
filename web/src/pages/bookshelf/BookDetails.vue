@@ -3,14 +3,18 @@ import type {
   ReaderBook,
   ReaderBookStyleOverride,
   ReaderChapterSummary,
+  ReaderNavigationEntry,
   ReaderProgress,
   ReaderReadingStats,
 } from '@/model/Reader';
+import type { TxtImportPlan } from '@/model/TxtCatalog';
 import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
+import { ChevronRightOutlined } from '@vicons/material';
 import { useKeyModifier } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 
 import BookCover from './components/BookCover.vue';
+import TxtCatalogTitleEditorModal from './components/TxtCatalogTitleEditorModal.vue';
 import { sanitizeBookDescription } from './BookDescription';
 import { getReadingProgress } from './BookshelfPresentation';
 import {
@@ -26,8 +30,10 @@ import {
 import { formatReadingDuration } from '../reader/core/ReaderStats';
 
 import { useLocalVolumeManager } from '../workspace/LocalVolumeManager';
+import TxtCatalogPreviewModal from '../workspace/components/TxtCatalogPreviewModal.vue';
 
 import { useLocalVolumeStore, useSettingStore } from '@/stores';
+import { reconstructTxtVolumeText } from '@/stores/local/RebuildTxtVolume';
 import { downloadFile } from '@/util';
 
 const route = useRoute();
@@ -42,8 +48,16 @@ const bookTheme = ref<'global' | NonNullable<ReaderBookStyleOverride['theme']>>(
 );
 const showCatalog = ref(false);
 const showBookInfo = ref(false);
+const showCatalogTitleEditor = ref(false);
+const showCatalogRebuild = ref(false);
+const savingCatalogTitles = ref(false);
+const preparingCatalogRebuild = ref(false);
+const rebuildingCatalog = ref(false);
+const rebuildFile = shallowRef<File>();
 const entry = shallowRef<BookshelfEntry>();
 const chapters = ref<ReaderChapterSummary[]>([]);
+const navigation = ref<ReaderNavigationEntry[]>([]);
+const collapsedCatalogEntryIds = ref(new Set<string>());
 const progress = shallowRef<ReaderProgress>();
 const readingStats = shallowRef<ReaderReadingStats>();
 const bookmarkCount = ref(0);
@@ -93,6 +107,42 @@ const translatorCompleted = (type: LocalTranslator) =>
   ).length ?? 0;
 const gptCompleted = computed(() => translatorCompleted('gpt'));
 const sakuraCompleted = computed(() => translatorCompleted('sakura'));
+const isTxt = computed(() => entry.value?.volume.sourceFormat === 'txt');
+const catalogParentIds = computed(
+  () =>
+    new Set(
+      navigation.value.flatMap(({ parentId }) =>
+        parentId === undefined ? [] : [parentId],
+      ),
+    ),
+);
+const visibleCatalogEntries = computed(() => {
+  const byId = new Map(navigation.value.map((item) => [item.id, item]));
+  return navigation.value.filter((item) => {
+    const visited = new Set<string>();
+    let parentId = item.parentId;
+    while (parentId !== undefined && !visited.has(parentId)) {
+      if (collapsedCatalogEntryIds.value.has(parentId)) return false;
+      visited.add(parentId);
+      parentId = byId.get(parentId)?.parentId;
+    }
+    return true;
+  });
+});
+const chapterSummaryById = computed(
+  () => new Map(chapters.value.map((chapter) => [chapter.id, chapter])),
+);
+const catalogTitleEntries = computed(() => {
+  const navigationTitleByChapterId = new Map(
+    navigation.value.flatMap((item) =>
+      item.chapterId === undefined ? [] : [[item.chapterId, item.title]],
+    ),
+  );
+  return (entry.value?.volume.toc ?? []).map((item) => ({
+    ...item,
+    title: item.title ?? navigationTitleByChapterId.get(item.chapterId) ?? '',
+  }));
+});
 
 const modeLabel = (mode: 'global' | SelectableReaderMode) =>
   mode === 'global' ? '跟随全局设置' : readerModeLabels[mode];
@@ -129,6 +179,7 @@ const load = async () => {
       entries,
       loadedBook,
       loadedChapters,
+      loadedNavigation,
       loadedProgress,
       loadedReadingStats,
       preference,
@@ -137,6 +188,7 @@ const load = async () => {
       service.ensureIndex(),
       adapter.getBook(bookId.value),
       adapter.getChapters(bookId.value),
+      adapter.getNavigation?.(bookId.value) ?? Promise.resolve([]),
       repository.getReaderProgress(bookId.value),
       repository.getReaderReadingStats(bookId.value),
       repository.getReaderBookPreference(bookId.value),
@@ -151,6 +203,12 @@ const load = async () => {
     entry.value = loadedEntry;
     book.value = loadedBook;
     chapters.value = loadedChapters;
+    navigation.value = loadedNavigation;
+    collapsedCatalogEntryIds.value = new Set(
+      loadedNavigation.flatMap(({ parentId }) =>
+        parentId === undefined ? [] : [parentId],
+      ),
+    );
     progress.value = loadedProgress;
     readingStats.value = loadedReadingStats;
     bookmarkCount.value = bookmarks.length;
@@ -221,6 +279,80 @@ const openChapter = (chapterId: string) => {
       '/read/' +
       encodeURIComponent(chapterId),
   );
+};
+
+const openCatalogEntry = (catalogEntry: ReaderNavigationEntry) => {
+  if (catalogParentIds.value.has(catalogEntry.id)) {
+    const collapsed = new Set(collapsedCatalogEntryIds.value);
+    if (collapsed.has(catalogEntry.id)) collapsed.delete(catalogEntry.id);
+    else collapsed.add(catalogEntry.id);
+    collapsedCatalogEntryIds.value = collapsed;
+    return;
+  }
+  if (catalogEntry.chapterId !== undefined) openChapter(catalogEntry.chapterId);
+};
+
+const saveCatalogTitles = async (
+  titles: { chapterId: string; title: string }[],
+) => {
+  const volume = entry.value?.volume;
+  if (volume === undefined || savingCatalogTitles.value) return;
+  savingCatalogTitles.value = true;
+  try {
+    const repository = await repositoryPromise;
+    await repository.updateTxtCatalogTitles({
+      bookId: volume.id,
+      expectedChapterIds: volume.toc.map(({ chapterId }) => chapterId),
+      titles,
+    });
+    showCatalogTitleEditor.value = false;
+    await load();
+    message.success('目录显示文本已保存');
+  } catch (cause) {
+    message.error(`保存目录失败：${String(cause)}`);
+  } finally {
+    savingCatalogTitles.value = false;
+  }
+};
+
+const prepareCatalogRebuild = async () => {
+  const volume = entry.value?.volume;
+  if (volume === undefined || preparingCatalogRebuild.value) return;
+  preparingCatalogRebuild.value = true;
+  try {
+    const repository = await repositoryPromise;
+    const storedChapters = await repository.listChapter(volume.id);
+    const text = reconstructTxtVolumeText(volume, storedChapters);
+    rebuildFile.value = new File([text], volume.id, { type: 'text/plain' });
+    showCatalogRebuild.value = true;
+  } catch (cause) {
+    message.error(`无法准备目录重建：${String(cause)}`);
+  } finally {
+    preparingCatalogRebuild.value = false;
+  }
+};
+
+const rebuildCatalog = async (plan: TxtImportPlan) => {
+  if (rebuildingCatalog.value) return;
+  rebuildingCatalog.value = true;
+  try {
+    const repository = await repositoryPromise;
+    const result = await repository.rebuildTxtVolume(bookId.value, plan);
+    showCatalogRebuild.value = false;
+    rebuildFile.value = undefined;
+    await load();
+    const preserved = result.preservedTranslations.length;
+    const cleared = result.clearedTranslations.length;
+    message.success(
+      `目录已完整重建；保留 ${preserved} 个完整译文来源，清除 ${cleared} 个不完整来源`,
+    );
+  } catch (cause) {
+    showCatalogRebuild.value = false;
+    rebuildFile.value = undefined;
+    message.error(`重建目录失败：${String(cause)}`);
+  } finally {
+    rebuildingCatalog.value = false;
+  }
 };
 
 const downloadOriginal = async () => {
@@ -441,6 +573,23 @@ onMounted(() => void load());
               {{ progress === undefined ? '开始阅读' : '继续阅读' }}
             </n-button>
             <n-button @click="showCatalog = true">打开目录</n-button>
+            <n-button v-if="isTxt" @click="showCatalogTitleEditor = true">
+              编辑目录
+            </n-button>
+            <n-popconfirm
+              v-if="isTxt"
+              style="max-width: min(340px, calc(100vw - 16px))"
+              positive-text="进入预览"
+              negative-text="取消"
+              @positive-click="prepareCatalogRebuild"
+            >
+              <template #trigger>
+                <n-button :loading="preparingCatalogRebuild">
+                  重新解析目录
+                </n-button>
+              </template>
+              完整重建允许修改目录位置和层级；不完整的译文来源会整套清除，确认预览前不会写入数据。
+            </n-popconfirm>
           </n-flex>
           <n-button class="book-details__return-to-shelf" @click="returnHome">
             返回首页
@@ -539,21 +688,72 @@ onMounted(() => void load());
             </div>
           </template>
           <n-list hoverable>
-            <n-list-item v-for="chapter in chapters" :key="chapter.id">
+            <n-list-item
+              v-for="catalogEntry in visibleCatalogEntries"
+              :key="catalogEntry.id"
+            >
               <n-button
                 block
                 class="book-details__catalog-button"
                 text
-                @click="openChapter(chapter.id)"
+                :class="{
+                  'book-details__catalog-button--structural':
+                    catalogEntry.chapterId === undefined,
+                }"
+                :style="{
+                  '--book-details-catalog-indent': `${Math.max(catalogEntry.level - 1, 0) * 18}px`,
+                }"
+                :disabled="
+                  catalogEntry.chapterId === undefined &&
+                  !catalogParentIds.has(catalogEntry.id)
+                "
+                :aria-expanded="
+                  catalogParentIds.has(catalogEntry.id)
+                    ? !collapsedCatalogEntryIds.has(catalogEntry.id)
+                    : undefined
+                "
+                @click="openCatalogEntry(catalogEntry)"
               >
-                <span class="book-details__catalog-index">
-                  第 {{ chapter.index + 1 }} 章
+                <span
+                  class="book-details__catalog-indicator"
+                  :class="{
+                    'book-details__catalog-indicator--expanded':
+                      catalogParentIds.has(catalogEntry.id) &&
+                      !collapsedCatalogEntryIds.has(catalogEntry.id),
+                  }"
+                  aria-hidden="true"
+                >
+                  <n-icon
+                    v-if="catalogParentIds.has(catalogEntry.id)"
+                    :component="ChevronRightOutlined"
+                  />
                 </span>
+                <span
+                  v-if="catalogEntry.chapterId !== undefined"
+                  class="book-details__catalog-index"
+                >
+                  第
+                  {{
+                    (chapterSummaryById.get(catalogEntry.chapterId)?.index ??
+                      0) + 1
+                  }}
+                  章
+                </span>
+                <span v-else class="book-details__catalog-index">—</span>
                 <span class="book-details__catalog-title">
-                  {{ chapter.title }}
+                  {{ catalogEntry.title }}
                 </span>
-                <n-tag :bordered="false" size="small">
-                  {{ translationStatusLabels[chapter.translationStatus] }}
+                <n-tag
+                  v-if="catalogEntry.chapterId !== undefined"
+                  :bordered="false"
+                  size="small"
+                >
+                  {{
+                    translationStatusLabels[
+                      chapterSummaryById.get(catalogEntry.chapterId)
+                        ?.translationStatus ?? 'none'
+                    ]
+                  }}
                 </n-tag>
               </n-button>
             </n-list-item>
@@ -606,6 +806,23 @@ onMounted(() => void load());
           </dl>
         </n-card>
       </n-modal>
+
+      <TxtCatalogTitleEditorModal
+        v-if="isTxt"
+        v-model:show="showCatalogTitleEditor"
+        :entries="catalogTitleEntries"
+        :saving="savingCatalogTitles"
+        @confirm="saveCatalogTitles"
+      />
+      <TxtCatalogPreviewModal
+        v-if="isTxt"
+        v-model:show="showCatalogRebuild"
+        purpose="rebuild"
+        :file="rebuildFile"
+        :submitting="rebuildingCatalog"
+        @confirm="rebuildCatalog"
+        @cancel="rebuildFile = undefined"
+      />
     </template>
   </main>
 </template>
@@ -902,6 +1119,7 @@ onMounted(() => void load());
 }
 
 .book-details__catalog-close {
+  margin-left: 30px;
   padding: 0;
   border: 0;
   color: inherit;
@@ -918,13 +1136,26 @@ onMounted(() => void load());
 
 .book-details__catalog-button :deep(.n-button__content) {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 20px auto minmax(0, 1fr) auto;
   width: 100%;
+  padding-left: var(--book-details-catalog-indent, 0);
   gap: 10px;
 }
+
 .book-details__catalog-index {
   color: var(--n-text-color-2);
   white-space: nowrap;
+}
+
+.book-details__catalog-indicator {
+  display: inline-grid;
+  color: var(--n-text-color-3);
+  place-items: center;
+  transition: transform 0.16s ease;
+}
+
+.book-details__catalog-indicator--expanded {
+  transform: rotate(90deg);
 }
 
 .book-details__catalog-title {

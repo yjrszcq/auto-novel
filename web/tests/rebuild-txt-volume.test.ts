@@ -64,6 +64,21 @@ const createFixture = () => {
         youdao: 'current-glossary',
       },
     ],
+    navigation: [
+      {
+        id: 'txt:old-a',
+        title: '旧分段一',
+        level: 1,
+        chapterId: 'old-a',
+      },
+      {
+        id: 'txt:old-b',
+        title: '旧分段二',
+        level: 2,
+        chapterId: 'old-b',
+        parentId: 'txt:old-a',
+      },
+    ],
     sourceFormat: 'txt',
     glossaryId: 'current-glossary',
     glossary: { 人名: '译名' },
@@ -121,6 +136,51 @@ afterEach(async () => {
 });
 
 describe('safe TXT catalog rebuild', () => {
+  it('updates only catalog display titles and rejects stale edits', async () => {
+    const dao = await createLocalVolumeDao(databaseName);
+    const fixture = createFixture();
+    await dao.createVolume({
+      metadata: fixture.metadata,
+      file: new File([text], bookId),
+      chapters: fixture.chapters,
+    });
+    await dao.putReaderProgress(fixture.progress);
+    await dao.putReaderBookmark(fixture.bookmarks[0]!);
+
+    const metadata = await dao.updateTxtCatalogTitles({
+      bookId,
+      expectedChapterIds: ['old-a', 'old-b'],
+      titles: [
+        { chapterId: 'old-a', title: ' 新标题一 ' },
+        { chapterId: 'old-b', title: '新标题二' },
+      ],
+    });
+
+    expect(metadata.toc.map(({ title }) => title)).toEqual([
+      '新标题一',
+      '新标题二',
+    ]);
+    expect(metadata.navigation?.map(({ title }) => title)).toEqual([
+      '新标题一',
+      '新标题二',
+    ]);
+    expect(await dao.listChapterByVolumeId(bookId)).toEqual(fixture.chapters);
+    expect(await dao.getReaderProgress(bookId)).toEqual(fixture.progress);
+    expect(await dao.listReaderBookmarks(bookId)).toEqual(fixture.bookmarks);
+    await expect(
+      dao.updateTxtCatalogTitles({
+        bookId,
+        expectedChapterIds: ['old-b', 'old-a'],
+        titles: [
+          { chapterId: 'old-a', title: '不会写入' },
+          { chapterId: 'old-b', title: '不会写入' },
+        ],
+      }),
+    ).rejects.toThrow('目录已在其他位置更新');
+    expect((await dao.getMetadata(bookId))?.toc).toEqual(metadata.toc);
+    dao.close();
+  });
+
   it('resegments losslessly, preserves complete sources and remaps anchors', () => {
     const fixture = createFixture();
     const plan = parseTxtCatalog(decodeTxtText(text));

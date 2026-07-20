@@ -425,6 +425,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
     page.getByRole('button', { name: '目录', exact: true }),
   ).toBeVisible();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
+  await page
+    .locator('.book-details__catalog-button')
+    .filter({ hasText: '第一部' })
+    .click();
   const expectCatalogAlignment = async () => {
     const catalogLayout = await page.evaluate(() => {
       const bounds = (selector: string) => {
@@ -515,6 +519,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page.getByText('第一部', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '目录' })).toBeVisible();
   await expect(page.getByRole('button', { name: '关闭目录' })).toBeFocused();
+  await page
+    .locator('.book-reader__catalog-item')
+    .filter({ hasText: '第一部' })
+    .click();
   await expect(
     page
       .getByRole('dialog', { name: '目录' })
@@ -554,7 +562,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(
     readerTop
-      .getByRole('button', { name: 'GPT 翻译本章' })
+      .getByRole('button', { name: 'GPT 翻译本页' })
       .locator('.n-button__content'),
   ).toHaveCSS('color', 'rgb(51, 54, 57)');
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);

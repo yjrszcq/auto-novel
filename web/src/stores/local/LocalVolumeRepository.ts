@@ -141,6 +141,7 @@ export const createLocalVolumeStore = async () => {
     createVolume: bind(createVolume),
     createReviewedTxtVolume: bind(createReviewedTxtVolume),
     rebuildTxtVolume: bind(rebuildTxtVolume),
+    updateTxtCatalogTitles: dao.updateTxtCatalogTitles,
     deleteVolume,
     updateGlossary,
     updateReadAt,

@@ -22,8 +22,12 @@ import {
 } from '@/util/file';
 
 const props = withDefaults(
-  defineProps<{ file?: File; submitting?: boolean }>(),
-  { file: undefined, submitting: false },
+  defineProps<{
+    file?: File;
+    submitting?: boolean;
+    purpose?: 'import' | 'rebuild';
+  }>(),
+  { file: undefined, submitting: false, purpose: 'import' },
 );
 const emit = defineEmits<{
   confirm: [plan: TxtImportPlan];
@@ -106,6 +110,12 @@ const levelOptions = Array.from({ length: 6 }, (_, index) => ({
   label: `${index + 1} 级`,
   value: index + 1,
 }));
+const modalTitle = computed(() =>
+  props.purpose === 'rebuild' ? '重新解析 TXT 目录' : 'TXT 目录预览',
+);
+const confirmText = computed(() =>
+  props.purpose === 'rebuild' ? '确认并完整重建' : '确认目录并导入',
+);
 
 const replaceDrafts = (drafts: readonly TxtHeadingDraft[]) => {
   editor.reset(drafts);
@@ -324,8 +334,8 @@ onBeforeUnmount(disposeSession);
   <n-modal
     :show="show"
     preset="card"
-    title="TXT 目录预览"
-    aria-label="TXT 目录预览"
+    :title="modalTitle"
+    :aria-label="modalTitle"
     :bordered="false"
     :auto-focus="false"
     :block-scroll="true"
@@ -542,10 +552,17 @@ onBeforeUnmount(disposeSession);
 
     <template #action>
       <n-flex justify="space-between" :wrap="false">
-        <n-button :disabled="loading || busy" @click="skip">跳过此书</n-button>
+        <n-button
+          v-if="props.purpose === 'import'"
+          :disabled="loading || busy"
+          @click="skip"
+        >
+          跳过此书
+        </n-button>
+        <span v-else />
         <n-flex :wrap="false">
           <n-button :disabled="busy" @click="handleShowUpdate(false)">
-            取消批次
+            {{ props.purpose === 'rebuild' ? '取消' : '取消批次' }}
           </n-button>
           <n-button
             type="primary"
@@ -553,7 +570,7 @@ onBeforeUnmount(disposeSession);
             :disabled="loading || busy || snapshot === undefined"
             @click="confirmPlan"
           >
-            确认目录并导入
+            {{ confirmText }}
           </n-button>
         </n-flex>
       </n-flex>

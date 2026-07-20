@@ -27,6 +27,12 @@ export interface ReplaceTxtCatalogInput {
   bookmarks: ReaderBookmark[];
 }
 
+export interface UpdateTxtCatalogTitlesInput {
+  bookId: string;
+  expectedChapterIds: string[];
+  titles: { chapterId: string; title: string }[];
+}
+
 interface VolumesDBSchema extends DBSchema {
   metadata: {
     key: string;
@@ -213,6 +219,66 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   };
   const listChapterByVolumeId = (id: string) =>
     db.getAllFromIndex('chapter', 'byVolumeId', id);
+
+  const updateTxtCatalogTitles = async ({
+    bookId,
+    expectedChapterIds,
+    titles,
+  }: UpdateTxtCatalogTitlesInput) => {
+    const tx = db.transaction('metadata', 'readwrite');
+    try {
+      const current = await tx.store.get(bookId);
+      if (current === undefined) throw new Error('小说不存在');
+      if (current.sourceFormat !== 'txt')
+        throw new Error('只有 TXT 书籍可以编辑目录');
+      if (
+        current.toc.length !== expectedChapterIds.length ||
+        current.toc.some(
+          (entry, index) => entry.chapterId !== expectedChapterIds[index],
+        )
+      )
+        throw new Error('目录已在其他位置更新，请重新打开编辑器');
+      const titleByChapterId = new Map(
+        titles.map(({ chapterId, title }) => [chapterId, title.trim()]),
+      );
+      if (
+        titleByChapterId.size !== current.toc.length ||
+        current.toc.some(
+          ({ chapterId }) => !titleByChapterId.get(chapterId)?.length,
+        )
+      )
+        throw new Error('目录标题不能为空或缺失');
+      const metadata: LocalVolumeMetadata = {
+        ...current,
+        toc: current.toc.map((entry) => ({
+          ...entry,
+          title: titleByChapterId.get(entry.chapterId)!,
+        })),
+        navigation: current.navigation?.map((entry) => ({
+          ...entry,
+          title:
+            entry.chapterId === undefined
+              ? entry.title
+              : (titleByChapterId.get(entry.chapterId) ?? entry.title),
+        })),
+      };
+      await tx.store.put(metadata);
+      await tx.done;
+      return metadata;
+    } catch (cause) {
+      try {
+        tx.abort();
+      } catch {
+        // The transaction may already be inactive after a failed request.
+      }
+      try {
+        await tx.done;
+      } catch {
+        // Preserve the validation or request error below.
+      }
+      throw cause;
+    }
+  };
 
   const replaceTxtCatalog = async ({
     bookId,
@@ -414,6 +480,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     createChapter,
     updateChapter,
     listChapterByVolumeId,
+    updateTxtCatalogTitles,
     replaceTxtCatalog,
     //
     getReaderSettings,
