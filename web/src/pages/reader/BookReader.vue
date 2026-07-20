@@ -37,7 +37,7 @@ import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { darkTheme, lightTheme } from 'naive-ui';
 import type { GlobalThemeOverrides } from 'naive-ui';
 import { useRouter } from 'vue-router';
-import { Txt, type ParsedFile } from '@/util/file';
+import { parseFile, type ParsedFile } from '@/util/file';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
 import ReaderEpubLayout from './components/ReaderEpubLayout.vue';
@@ -451,15 +451,14 @@ const openReaderGlossary = async () => {
   readerGlossaryFiles.value = [];
   try {
     const repository = await repositoryPromise;
-    const [chapters, volume] = await Promise.all([
-      repository.listChapter(bookId.value),
+    const [stored, volume] = await Promise.all([
+      repository.getFile(bookId.value),
       repository.getVolume(bookId.value),
     ]);
-    if (volume === undefined) throw new Error('小说不存在');
-    const parsed = await Txt.fromText(
-      `${volume.id}.txt`,
-      chapters.flatMap((chapter) => chapter.paragraphs).join('\n'),
-    );
+    if (stored === undefined || volume === undefined) {
+      throw new Error('原始书籍文件不存在');
+    }
+    const parsed = await parseFile(stored.file);
     if (request !== readerGlossaryRequest || !showReaderGlossary.value) return;
     readerGlossaryInitial.value = { ...volume.glossary };
     readerGlossaryFiles.value = [parsed];

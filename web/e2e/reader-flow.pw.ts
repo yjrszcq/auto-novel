@@ -2140,10 +2140,7 @@ test('automatically translates a reader window without persisting a partial chap
       transaction.objectStore('metadata').put({
         id: bookId,
         createAt: 1,
-        toc: [
-          { chapterId: '0', title: '临时翻译章节' },
-          { chapterId: '1', title: '术语所在章节' },
-        ],
+        toc: [{ chapterId: '0', title: '临时翻译章节' }],
         sourceFormat: 'txt',
         glossaryId: 'glossary',
         glossary: { テスト: '测试', ダミー: '过期术语' },
@@ -2166,15 +2163,9 @@ test('automatically translates a reader window without persisting a partial chap
           (_, index) => `temporary-segment-${index}`,
         ),
       });
-      transaction.objectStore('chapter').put({
-        id: `${bookId}/1`,
-        volumeId: bookId,
-        paragraphs: ['テスト'],
-        segmentIds: ['glossary-segment'],
-      });
       transaction.objectStore('file').put({
         id: bookId,
-        file: new File(['ダミー\n'.repeat(12)], bookId, {
+        file: new File(['テスト\n'.repeat(12)], bookId, {
           type: 'text/plain',
         }),
       });

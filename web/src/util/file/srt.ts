@@ -45,6 +45,13 @@ export class Srt extends BaseFile {
     });
   }
 
+  getText() {
+    return this.subtitles
+      .flatMap((subtitle) => subtitle.text)
+      .map(Srt.cleanFormat)
+      .join('\n');
+  }
+
   // There are extenions that are supported in some applications that allow the formatting of the "subtitle text".
   // One could use various html formatting tags in the following manner:
   //  ___________________________________________________
