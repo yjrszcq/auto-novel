@@ -2,8 +2,8 @@ import type { LocalVolumeChapter } from '@/model/LocalVolume';
 import type { TranslatorId } from '@/model/Translator';
 
 export const chapterTranslationSources: TranslatorId[] = [
-  'gpt',
   'sakura',
+  'gpt',
   'youdao',
   'baidu',
 ];

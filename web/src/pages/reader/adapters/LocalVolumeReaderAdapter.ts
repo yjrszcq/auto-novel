@@ -3,7 +3,6 @@ import type {
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import {
-  chapterTranslationSources,
   getLocalBookMetadata,
   getLocalVolumeTitle,
   requiresWholeChapterTranslation,
@@ -18,6 +17,7 @@ import type {
 import type { TranslatorId } from '@/model/Translator';
 import type { useLocalVolumeStore } from '@/stores';
 import { Epub } from '@/util/file';
+import { chapterTranslationSources } from '@/domain/translate/ChapterTranslationCompletion';
 
 import {
   createEpubLinkTargets,

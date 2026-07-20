@@ -5,10 +5,7 @@ import type {
   ReaderChapterSummary,
   ReaderTranslationStatus,
 } from '@/model/Reader';
-import {
-  chapterTranslationSources,
-  isChapterTranslationComplete,
-} from '@/domain/translate/ChapterTranslationCompletion';
+import { isChapterTranslationComplete } from '@/domain/translate/ChapterTranslationCompletion';
 
 export const defaultTranslationPriority: TranslatorId[] = [
   'gpt',
@@ -59,8 +56,6 @@ export const getTranslationStatus = (
   }
   return { status: 'partial', translatedSegmentCount };
 };
-
-export { chapterTranslationSources };
 
 export const getReadingCapabilities = (
   chapters: ReaderChapterSummary[],
