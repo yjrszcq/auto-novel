@@ -5,6 +5,7 @@ import {
   BookmarkBorderOutlined,
   BookmarkOutlined,
   BuildOutlined,
+  ChevronLeftOutlined,
   ChevronRightOutlined,
   DarkModeOutlined,
   MenuBookOutlined,
@@ -3674,27 +3675,47 @@ onBeforeUnmount(() => {
       class="book-reader__bottom-navigation"
       aria-label="阅读器导航"
     >
-      <button type="button" @click="openCatalog">
-        <n-icon :component="MenuBookOutlined" />
-        <span>目录</span>
+      <button
+        class="book-reader__chapter-navigation"
+        type="button"
+        aria-label="上一章"
+        :disabled="previousChapterId === undefined"
+        @click="previousChapterId && navigate(previousChapterId, 'end')"
+      >
+        <n-icon :component="ChevronLeftOutlined" />
       </button>
-      <button type="button" @click="toggleQuickTheme">
-        <n-icon
-          :component="isDarkReaderTheme ? WbSunnyOutlined : DarkModeOutlined"
-        />
-        <span>{{ isDarkReaderTheme ? '白天' : '夜晚' }}</span>
-      </button>
-      <button type="button" @click="openSettings">
-        <n-icon :component="SettingsOutlined" />
-        <span>设置</span>
-      </button>
-      <button type="button" @click="openTools">
-        <n-icon :component="BuildOutlined" />
-        <span>工具</span>
-      </button>
-      <button type="button" @click="openInteractiveTranslation">
-        <n-icon :component="AutoAwesomeOutlined" />
-        <span>AI</span>
+      <div class="book-reader__bottom-actions">
+        <button type="button" @click="openCatalog">
+          <n-icon :component="MenuBookOutlined" />
+          <span>目录</span>
+        </button>
+        <button type="button" @click="toggleQuickTheme">
+          <n-icon
+            :component="isDarkReaderTheme ? WbSunnyOutlined : DarkModeOutlined"
+          />
+          <span>{{ isDarkReaderTheme ? '白天' : '夜晚' }}</span>
+        </button>
+        <button type="button" @click="openSettings">
+          <n-icon :component="SettingsOutlined" />
+          <span>设置</span>
+        </button>
+        <button type="button" @click="openTools">
+          <n-icon :component="BuildOutlined" />
+          <span>工具</span>
+        </button>
+        <button type="button" @click="openInteractiveTranslation">
+          <n-icon :component="AutoAwesomeOutlined" />
+          <span>AI</span>
+        </button>
+      </div>
+      <button
+        class="book-reader__chapter-navigation"
+        type="button"
+        aria-label="下一章"
+        :disabled="nextChapterId === undefined"
+        @click="nextChapterId && navigate(nextChapterId, 'start')"
+      >
+        <n-icon :component="ChevronRightOutlined" />
       </button>
     </nav>
 
@@ -3835,18 +3856,6 @@ onBeforeUnmount(() => {
           @click="openRetranslationSelection"
         >
           重翻当前章
-        </n-button>
-        <n-button
-          :disabled="previousChapterId === undefined"
-          @click="previousChapterId && navigate(previousChapterId)"
-        >
-          上一章
-        </n-button>
-        <n-button
-          :disabled="nextChapterId === undefined"
-          @click="nextChapterId && navigate(nextChapterId)"
-        >
-          下一章
         </n-button>
       </div>
     </ReaderBottomSheet>
@@ -4680,13 +4689,20 @@ onBeforeUnmount(() => {
   bottom: 0;
   left: 0;
   z-index: 100;
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
   height: var(--reader-bottom-navigation-height);
   color: inherit;
   background: var(--reader-chrome-background, var(--reader-background));
   border-top: 1px solid var(--reader-chrome-border);
   box-shadow: 0 -2px 8px rgb(0 0 0 / 14%);
+}
+
+.book-reader__bottom-actions {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  justify-content: center;
 }
 
 .book-reader__bottom-navigation button {
@@ -4713,6 +4729,24 @@ onBeforeUnmount(() => {
 .book-reader__bottom-navigation span {
   font-size: 11px;
   line-height: 14px;
+}
+
+.book-reader__bottom-navigation .book-reader__chapter-navigation {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+.book-reader__bottom-navigation .book-reader__chapter-navigation:disabled {
+  color: var(--reader-muted-color);
+  cursor: default;
+  opacity: 0.38;
+}
+
+.book-reader__bottom-navigation
+  .book-reader__chapter-navigation
+  :deep(.n-icon) {
+  font-size: 34px;
 }
 
 .book-reader__progress-track {
@@ -4809,9 +4843,17 @@ onBeforeUnmount(() => {
     column-gap: calc(var(--reader-page-padding) * 2);
   }
 
-  .book-reader__bottom-navigation button {
+  .book-reader__bottom-actions button {
     width: 20%;
     min-width: 0;
+    padding-bottom: max(5px, env(safe-area-inset-bottom));
+  }
+
+  .book-reader__bottom-navigation {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+  }
+
+  .book-reader__bottom-navigation .book-reader__chapter-navigation {
     padding-bottom: max(5px, env(safe-area-inset-bottom));
   }
 

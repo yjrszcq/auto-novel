@@ -484,6 +484,30 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.goto('/books/reader-flow.txt/read/0');
   await expect(page.getByText(unsafeText, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.__readerXss)).toBeUndefined();
+  const chapterNavigation = page.locator('.book-reader__bottom-navigation');
+  const previousChapterButton = chapterNavigation.getByRole('button', {
+    name: '上一章',
+  });
+  const nextChapterButton = chapterNavigation.getByRole('button', {
+    name: '下一章',
+  });
+  await expect(previousChapterButton).toBeDisabled();
+  await expect(nextChapterButton).toBeEnabled();
+  await chapterNavigation.getByRole('button', { name: '工具' }).click();
+  const readerTools = page.getByRole('dialog', { name: '阅读工具' });
+  await expect(readerTools.getByRole('button', { name: '上一章' })).toHaveCount(
+    0,
+  );
+  await expect(readerTools.getByRole('button', { name: '下一章' })).toHaveCount(
+    0,
+  );
+  await chapterNavigation.getByRole('button', { name: '工具' }).click();
+  await nextChapterButton.click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
+  await chapterNavigation.getByRole('button', { name: '上一章' }).click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await page.goto('/books/reader-flow.txt/read/0?segment=segment-0');
+  await page.goto('/books/reader-flow.txt/read/0');
   const readerContent = page.locator('.book-reader__content');
   const expectPaginatedVerticalAlignment = async (paddingTop: number) => {
     await expect
