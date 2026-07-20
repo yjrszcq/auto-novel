@@ -2148,6 +2148,107 @@ test('automatically translates a reader window without persisting a partial chap
     await page.reload();
     await expect(source).toContainText('临时原文第 1 段');
     await expect(source).not.toContainText('译文第1行');
+
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    const readerSettingsDialog = page.getByRole('dialog', {
+      name: '阅读设置',
+    });
+    const readerPreloadInput = readerSettingsDialog.getByRole('textbox', {
+      name: '自动翻译预翻译页数',
+    });
+    await expect(readerPreloadInput).toHaveValue('0');
+    await readerPreloadInput.fill('20');
+    await readerPreloadInput.press('Tab');
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('volumes');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          const setting = await new Promise<
+            { autoTranslationPreloadPages?: number } | undefined
+          >((resolve, reject) => {
+            const transaction = database.transaction(
+              'reader-settings',
+              'readonly',
+            );
+            const request = transaction
+              .objectStore('reader-settings')
+              .get('default');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          database.close();
+          return setting?.autoTranslationPreloadPages;
+        }),
+      )
+      .toBe(20);
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await automaticTranslationButton.click();
+    await expect(page.getByText('全书翻译已完成', { exact: true })).toBeVisible(
+      { timeout: 15_000 },
+    );
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async (bookId) => {
+            const database = await new Promise<IDBDatabase>(
+              (resolve, reject) => {
+                const request = indexedDB.open('volumes');
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+              },
+            );
+            const transaction = database.transaction(
+              ['metadata', 'chapter'],
+              'readonly',
+            );
+            const chapterRequest = transaction
+              .objectStore('chapter')
+              .get(`${bookId}/0`);
+            const metadataRequest = transaction
+              .objectStore('metadata')
+              .get(bookId);
+            const persisted = await new Promise<{
+              chapter?: {
+                gpt?: { glossaryId?: string; paragraphs?: string[] };
+              };
+              metadata?: {
+                glossaryId?: string;
+                toc?: Array<{ gpt?: string }>;
+              };
+            }>((resolve, reject) => {
+              transaction.oncomplete = () =>
+                resolve({
+                  chapter: chapterRequest.result,
+                  metadata: metadataRequest.result,
+                });
+              transaction.onerror = () => reject(transaction.error);
+            });
+            database.close();
+            const glossaryId = persisted.metadata?.glossaryId;
+            return {
+              paragraphCount: persisted.chapter?.gpt?.paragraphs?.length,
+              usesCurrentGlossary:
+                glossaryId !== undefined &&
+                persisted.chapter?.gpt?.glossaryId === glossaryId &&
+                persisted.metadata?.toc?.[0]?.gpt === glossaryId,
+            };
+          }, temporaryBookId),
+        { timeout: 15_000 },
+      )
+      .toEqual({
+        paragraphCount: 24,
+        usesCurrentGlossary: true,
+      });
+
+    await page.reload();
+    await expect(source).toContainText('译文第1行');
   } finally {
     await server.close();
   }
@@ -2697,6 +2798,14 @@ test('persists the global reading version selected in Settings', async ({
   await selector.getByText('日中', { exact: true }).click();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
 
+  const preloadInput = page.getByRole('textbox', {
+    name: '自动翻译预翻译页数',
+  });
+  await expect(preloadInput).toHaveValue('3');
+  await expect(preloadInput).toBeEnabled();
+  await preloadInput.fill('7');
+  await preloadInput.press('Tab');
+
   await expect
     .poll(() =>
       page.evaluate(async () => {
@@ -2709,20 +2818,33 @@ test('persists the global reading version selected in Settings', async ({
         const request = transaction
           .objectStore('reader-settings')
           .get('default');
-        const setting = await new Promise<{ defaultMode?: string } | undefined>(
-          (resolve, reject) => {
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-          },
-        );
+        const setting = await new Promise<
+          | {
+              defaultMode?: string;
+              autoTranslationPreloadPages?: number;
+            }
+          | undefined
+        >((resolve, reject) => {
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
         database.close();
-        return setting?.defaultMode;
+        return setting === undefined
+          ? undefined
+          : {
+              defaultMode: setting.defaultMode,
+              autoTranslationPreloadPages: setting.autoTranslationPreloadPages,
+            };
       }),
     )
-    .toBe('original-translated');
+    .toEqual({
+      defaultMode: 'original-translated',
+      autoTranslationPreloadPages: 7,
+    });
 
   await page.reload();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
+  await expect(preloadInput).toHaveValue('7');
 });
 
 test('completes, persists, exports, and reads a concurrent GPT job', async ({

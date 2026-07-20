@@ -3,6 +3,7 @@ import type { ReaderMode, ReaderSettingsRecord } from '@/model/Reader';
 import { readerModeLabels } from '../reader/core/ReaderMode';
 import {
   defaultReaderSettings,
+  normalizeReaderAutoTranslationPreloadPages,
   normalizeReaderSettings,
   serializeReaderSettings,
 } from '../reader/core/ReaderSettings';
@@ -45,20 +46,12 @@ const loadReaderSettings = async () => {
 const isReaderMode = (value: string | number): value is ReaderMode =>
   typeof value === 'string' && value in readerModeLabels;
 
-const updateDefaultReaderMode = async (value: string | number) => {
-  if (
-    !isReaderMode(value) ||
-    readerSettingsLoading.value ||
-    readerSettingsSaving.value
-  ) {
-    return;
-  }
+const persistReaderSettings = async (
+  update: (current: ReaderSettingsRecord) => ReaderSettingsRecord,
+) => {
+  if (readerSettingsLoading.value || readerSettingsSaving.value) return;
   const previous = readerSettings.value;
-  const next = {
-    ...previous,
-    defaultMode: value,
-    updatedAt: Date.now(),
-  };
+  const next = { ...update(previous), updatedAt: Date.now() };
   readerSettings.value = next;
   readerSettingsSaving.value = true;
   try {
@@ -70,6 +63,22 @@ const updateDefaultReaderMode = async (value: string | number) => {
   } finally {
     readerSettingsSaving.value = false;
   }
+};
+
+const updateDefaultReaderMode = (value: string | number) => {
+  if (!isReaderMode(value)) return;
+  void persistReaderSettings((current) => ({
+    ...current,
+    defaultMode: value,
+  }));
+};
+
+const updateAutoTranslationPreloadPages = (value: number | null) => {
+  void persistReaderSettings((current) => ({
+    ...current,
+    autoTranslationPreloadPages:
+      normalizeReaderAutoTranslationPreloadPages(value),
+  }));
 };
 
 onMounted(() => {
@@ -181,6 +190,24 @@ onMounted(() => {
               :options="readerModeOptions"
               @update:value="updateDefaultReaderMode"
             />
+          </c-action-wrapper>
+          <c-action-wrapper title="自动翻译预翻译">
+            <n-flex vertical :size="4">
+              <n-input-number
+                :value="readerSettings.autoTranslationPreloadPages"
+                :min="0"
+                :max="20"
+                :precision="0"
+                :input-props="{
+                  'aria-label': '自动翻译预翻译页数',
+                }"
+                :disabled="readerSettingsLoading || readerSettingsSaving"
+                @update:value="updateAutoTranslationPreloadPages"
+              />
+              <n-text depth="3">
+                提前翻译当前页之后的页数；0 表示只处理当前可见页。
+              </n-text>
+            </n-flex>
           </c-action-wrapper>
         </n-flex>
       </n-list-item>

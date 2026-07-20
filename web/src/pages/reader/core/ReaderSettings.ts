@@ -17,6 +17,19 @@ export const defaultReaderSettings: ReaderSettingsRecord = {
   updatedAt: 0,
 };
 
+export const normalizeReaderAutoTranslationPreloadPages = (
+  value: number | null | undefined,
+) =>
+  Math.max(
+    0,
+    Math.min(
+      Number.isFinite(value)
+        ? Math.floor(value!)
+        : defaultReaderSettings.autoTranslationPreloadPages,
+      20,
+    ),
+  );
+
 export const normalizeReaderSettings = (
   value: Partial<ReaderSettingsRecord> | undefined,
 ): ReaderSettingsRecord => ({
@@ -24,14 +37,8 @@ export const normalizeReaderSettings = (
   ...value,
   id: 'default',
   defaultMode: value?.defaultMode ?? defaultReaderSettings.defaultMode,
-  autoTranslationPreloadPages: Math.max(
-    0,
-    Math.min(
-      Number.isFinite(value?.autoTranslationPreloadPages)
-        ? Math.floor(value!.autoTranslationPreloadPages!)
-        : defaultReaderSettings.autoTranslationPreloadPages,
-      20,
-    ),
+  autoTranslationPreloadPages: normalizeReaderAutoTranslationPreloadPages(
+    value?.autoTranslationPreloadPages,
   ),
   fontSize: Math.max(12, Math.min(value?.fontSize ?? 18, 32)),
   lineHeight: Math.max(1.2, Math.min(value?.lineHeight ?? 1.9, 2.8)),

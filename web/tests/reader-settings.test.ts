@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyReaderStyleOverride,
   defaultReaderSettings,
+  normalizeReaderAutoTranslationPreloadPages,
   normalizeReaderSettings,
   serializeReaderSettings,
 } from '../src/pages/reader/core/ReaderSettings';
@@ -17,6 +18,8 @@ describe('reader settings', () => {
   });
 
   it('normalizes automatic translation preloading to whole pages', () => {
+    expect(normalizeReaderAutoTranslationPreloadPages(null)).toBe(3);
+    expect(normalizeReaderAutoTranslationPreloadPages(7.8)).toBe(7);
     expect(
       normalizeReaderSettings({ autoTranslationPreloadPages: 4.9 })
         .autoTranslationPreloadPages,

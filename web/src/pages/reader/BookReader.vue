@@ -86,6 +86,7 @@ import { ReaderAutomaticTranslationCoordinator } from './core/ReaderAutomaticTra
 import {
   applyReaderStyleOverride,
   defaultReaderSettings,
+  normalizeReaderAutoTranslationPreloadPages,
   normalizeReaderSettings,
   serializeReaderSettings,
 } from './core/ReaderSettings';
@@ -938,6 +939,11 @@ const readerNaiveThemeOverrides = computed<GlobalThemeOverrides | undefined>(
 
 const toggleQuickTheme = () => {
   settings.value.theme = isDarkReaderTheme.value ? 'light' : 'dark';
+};
+
+const updateAutoTranslationPreloadPages = (value: number | null) => {
+  settings.value.autoTranslationPreloadPages =
+    normalizeReaderAutoTranslationPreloadPages(value);
 };
 
 const readerStyle = computed(() => ({
@@ -3528,6 +3534,23 @@ onBeforeUnmount(() => {
               ]"
             />
           </n-form-item>
+        </div>
+        <div class="book-reader__settings-theme">
+          <n-form-item label="自动翻译预翻译页数">
+            <n-input-number
+              :value="settings.autoTranslationPreloadPages"
+              :min="0"
+              :max="20"
+              :precision="0"
+              :input-props="{
+                'aria-label': '自动翻译预翻译页数',
+              }"
+              @update:value="updateAutoTranslationPreloadPages"
+            />
+          </n-form-item>
+          <n-text depth="3">
+            提前翻译当前页之后的页数；0 表示只处理当前可见页。
+          </n-text>
         </div>
       </n-form>
     </ReaderBottomSheet>
