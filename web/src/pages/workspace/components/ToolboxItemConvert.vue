@@ -100,8 +100,8 @@ const generateResults = () => {
       先按当前选项生成受限预览并检查目录/空章节警告，确认后才会生成独立 TXT
       结果。
     </n-text>
-    <n-flex align="center" :size="4" class="txt-to-epub-help">
-      <n-text depth="3">关于 TXT 转 EPUB</n-text>
+    <n-text depth="3" class="txt-to-epub-help">
+      <span>关于 TXT 转 EPUB</span>
       <n-popover
         v-if="!isMobile"
         trigger="click"
@@ -117,7 +117,7 @@ const generateResults = () => {
             class="txt-to-epub-help__trigger"
             aria-label="TXT 转 EPUB 说明"
           >
-            <n-icon :component="InfoOutlined" size="18" />
+            <n-icon :component="InfoOutlined" size="1em" />
           </button>
         </template>
         <div class="txt-to-epub-help__content">
@@ -133,9 +133,9 @@ const generateResults = () => {
         aria-label="TXT 转 EPUB 说明"
         @click="showTxtToEpubHelp = true"
       >
-        <n-icon :component="InfoOutlined" size="18" />
+        <n-icon :component="InfoOutlined" size="1em" />
       </button>
-    </n-flex>
+    </n-text>
     <c-modal v-model:show="showTxtToEpubHelp" title="TXT 转 EPUB">
       如需将 TXT 保存为 EPUB，请先在首页上传 TXT
       并确认目录，再进入该书的“编辑展示信息”，勾选“下载时保存为
@@ -216,10 +216,18 @@ const generateResults = () => {
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: var(--n-text-color-3);
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
   background: none;
   border: 0;
   cursor: pointer;
+}
+
+.txt-to-epub-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .txt-to-epub-help__content {
