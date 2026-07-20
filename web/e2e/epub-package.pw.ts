@@ -536,10 +536,8 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   await expect(catalog.getByText('第一章', { exact: true })).toHaveCount(0);
   await catalog.getByRole('button', { name: '第一卷' }).click();
   await expect(catalog).toBeVisible();
-  await page.waitForFunction(
-    () =>
-      new URL(location.href).searchParams.get('epub') ===
-      'OPS/Text/cover.xhtml',
+  expect(new URL(page.url()).searchParams.get('epub')).toBe(
+    'OPS/Text/chapter one.xhtml#start',
   );
   await expect(catalog.getByText('第一篇', { exact: true })).toBeVisible();
   await expect(catalog.getByText('第一章', { exact: true })).toHaveCount(0);
@@ -549,30 +547,29 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   await expect(catalog.getByText('第一篇', { exact: true })).toHaveCount(0);
   await expect(catalog.getByText('第一章', { exact: true })).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get('epub')).toBe(
-    'OPS/Text/cover.xhtml',
+    'OPS/Text/chapter one.xhtml#start',
   );
   await catalog.getByRole('button', { name: '第一卷' }).click();
   await expect(catalog.getByText('第一章', { exact: true })).toBeVisible();
   await catalog.getByRole('button', { name: /第一章/ }).click();
-  await expect(catalog).toBeVisible();
+  await expect(catalog).toHaveCount(0);
   await page.waitForFunction(
     () =>
       new URL(location.href).searchParams.get('epub') ===
       'OPS/Text/chapter one.xhtml#start',
   );
+  await page.getByRole('button', { name: '目录', exact: true }).click();
   await catalog.getByRole('button', { name: /附录/ }).click();
-  await expect(catalog).toBeVisible();
+  await expect(catalog).toHaveCount(0);
   await page.waitForFunction(
     () =>
       new URL(location.href).searchParams.get('epub') ===
       'OPS/Text/notes.xhtml#note-1',
   );
-  await page.getByRole('button', { name: '关闭目录' }).click();
   await expect(page.getByText('附录内容')).toBeVisible();
   await page.getByRole('button', { name: '目录', exact: true }).click();
   await catalog.getByRole('button', { name: /固定版式/ }).click();
-  await expect(catalog).toBeVisible();
-  await page.getByRole('button', { name: '关闭目录' }).click();
+  await expect(catalog).toHaveCount(0);
   const fixedHost = page
     .locator('[data-reader-epub-host]')
     .filter({ hasText: '固定版式页面' });

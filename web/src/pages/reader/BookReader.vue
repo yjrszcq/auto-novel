@@ -2981,9 +2981,9 @@ const navigateFromCatalog = (entry: ReaderNavigationEntry) => {
     return;
   }
   if (entry.href !== undefined && result.value?.chapter.epub !== undefined) {
-    navigateToEpubHref(entry.href, true);
+    navigateToEpubHref(entry.href);
   } else if (entry.chapterId !== undefined) {
-    navigate(entry.chapterId, undefined, true);
+    navigate(entry.chapterId);
   }
 };
 
