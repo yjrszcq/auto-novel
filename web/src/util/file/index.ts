@@ -5,6 +5,27 @@ import { StandardNovel } from './standard';
 
 export { Epub, Srt, Txt, StandardNovel };
 export type { StandardChapter, StandardTxtOptions } from './standard';
+export {
+  buildTxtSourceLines,
+  decodeTxtBuffer,
+  decodeTxtText,
+  normalizeTxtHeadingText,
+} from './TxtDecode';
+export {
+  collectExplicitTxtHeadingMatches,
+  matchTxtHeadingRule,
+  parseTxtHeadingNumber,
+  stripTxtHeadingDecoration,
+} from './TxtHeadingRules';
+export type { TxtHeadingKind, TxtHeadingRuleMatch } from './TxtHeadingRules';
+export type {
+  TxtDecodedDocument,
+  TxtDecodeCandidate,
+  TxtEncoding,
+  TxtHeadingDraft,
+  TxtParseMode,
+  TxtSourceLine,
+} from '../../model/TxtCatalog';
 export type ParsedFile = Epub | Srt | Txt;
 
 export const parseFile = async (

@@ -1,36 +1,25 @@
 import { BaseFile } from './base';
+import type {
+  TxtDecodeCandidate,
+  TxtEncoding,
+  TxtSourceLine,
+} from '../../model/TxtCatalog';
+import { decodeTxtBuffer, decodeTxtText } from './TxtDecode';
 
 export class Txt extends BaseFile {
   type = 'txt' as const;
   text: string = '';
+  encoding: TxtEncoding = 'utf-8';
+  lines: TxtSourceLine[] = [];
+  decodeCandidates: TxtDecodeCandidate[] = [];
 
   private async parseFile(file: File) {
     const buffer = await file.arrayBuffer();
-
-    const tryDecode = async (label: string) => {
-      const decoder = new TextDecoder(label, { fatal: true });
-      try {
-        const decoded = decoder.decode(buffer);
-        return decoded;
-      } catch (e) {
-        if (e instanceof TypeError) return undefined;
-        throw e;
-      }
-    };
-
-    let text: string | undefined;
-    for (const label of ['utf-8', 'gbk']) {
-      text = await tryDecode(label);
-      if (text !== undefined) break;
-    }
-    if (text === undefined) {
-      throw '未知编码';
-    }
-
-    // 修复换行符格式
-    text = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-
-    this.text = text;
+    const decoded = decodeTxtBuffer(buffer);
+    this.text = decoded.text;
+    this.encoding = decoded.encoding;
+    this.lines = decoded.lines;
+    this.decodeCandidates = decoded.candidates;
   }
 
   static async fromFile(file: File) {
@@ -41,7 +30,11 @@ export class Txt extends BaseFile {
 
   static async fromText(name: string, text: string) {
     const txt = new Txt(name);
-    txt.text = text;
+    const decoded = decodeTxtText(text);
+    txt.text = decoded.text;
+    txt.encoding = decoded.encoding;
+    txt.lines = decoded.lines;
+    txt.decodeCandidates = decoded.candidates;
     return txt;
   }
 

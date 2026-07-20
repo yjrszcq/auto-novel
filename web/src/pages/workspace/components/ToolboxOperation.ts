@@ -1,5 +1,5 @@
 import { inject, markRaw, reactive, readonly } from 'vue';
-import type { InjectionKey } from 'vue';
+import type { DeepReadonly, InjectionKey } from 'vue';
 
 import type { ParsedFile } from '@/util/file';
 
@@ -26,7 +26,7 @@ type ToolboxTask = (
 ) => Promise<Toolbox.BatchResult<ParsedFile>>;
 
 export interface ToolboxOperationController {
-  state: Readonly<ToolboxOperationState>;
+  state: DeepReadonly<ToolboxOperationState>;
   run: (label: string, total: number, task: ToolboxTask) => Promise<void>;
   cancel: () => void;
   setOutputs: (outputs: Toolbox.BatchOutput[]) => void;
