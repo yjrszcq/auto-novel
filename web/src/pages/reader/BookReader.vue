@@ -3535,14 +3535,6 @@ onBeforeUnmount(() => {
       {{ result.chapter.title }}
     </div>
 
-    <section v-if="controlsVisible" class="book-reader__notices">
-      <template v-if="result?.kind === 'ready'">
-        <n-alert v-if="readingMode !== renderedMode" type="info">
-          本章尚无可用译文，已显示原文。
-        </n-alert>
-      </template>
-    </section>
-
     <div
       v-if="loading"
       class="book-reader__loading"
@@ -4351,25 +4343,6 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.book-reader__notices {
-  position: fixed;
-  top: calc(var(--reader-app-bar-height) + 8px);
-  right: 0;
-  left: 0;
-  z-index: 90;
-  display: grid;
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 0 max(16px, var(--reader-padding));
-  gap: 8px;
-}
-
-.book-reader__notices :deep(.n-alert-body),
-.book-reader__notices :deep(.n-alert-content),
-.book-reader__notices :deep(.n-space) {
-  width: 100%;
-}
-
 .book-reader__translation-popover-layer {
   display: none;
 }
@@ -4808,11 +4781,6 @@ onBeforeUnmount(() => {
     left: 14px;
     max-width: calc(100vw - 28px);
     font-size: 12px;
-  }
-
-  .book-reader__notices {
-    top: calc(var(--reader-app-bar-height) + 8px);
-    padding: 0 14px;
   }
 
   .book-reader__content {
