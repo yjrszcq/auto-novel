@@ -21,6 +21,7 @@ import type {
   ReaderSettingsRecord,
 } from '@/model/Reader';
 import type { Glossary } from '@/model/Glossary';
+import type { ChapterTranslation } from '@/model/LocalVolume';
 import {
   normalizeTranslationConcurrency,
   TranslateJob,
@@ -29,6 +30,7 @@ import {
 import type { GptWorker, SakuraWorker } from '@/model/Translator';
 import { Translator } from '@/domain/translate';
 import type { TranslatorConfig } from '@/domain/translate';
+import { getChapterFormalTranslationRevision } from '@/domain/translate/ChapterTranslationCompletion';
 import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { darkTheme, lightTheme } from 'naive-ui';
 import type { GlobalThemeOverrides } from 'naive-ui';
@@ -85,7 +87,10 @@ import {
   type ReaderAutomaticTranslationSelection,
   type ReaderAutomaticTranslationSource,
 } from './core/ReaderAutoTranslation';
-import { ReaderAutomaticTranslationCoordinator } from './core/ReaderAutomaticTranslationCoordinator';
+import {
+  buildCompleteReaderChapterTranslation,
+  ReaderAutomaticTranslationCoordinator,
+} from './core/ReaderAutomaticTranslationCoordinator';
 import {
   applyReaderStyleOverride,
   defaultReaderSettings,
@@ -122,6 +127,8 @@ const showBookmarks = ref(false);
 const showSearch = ref(false);
 const showInteractiveTranslation = ref(false);
 const showAutomaticTranslatorSelection = ref(false);
+const showRetranslationSelection = ref(false);
+const showRetranslationDecision = ref(false);
 const showReaderGlossary = ref(false);
 const readerGlossaryLoading = ref(false);
 const readerGlossaryApplying = ref(false);
@@ -176,6 +183,7 @@ let routeSyncedFromScroll: string | undefined;
 let adjustingContinuousChapters = false;
 const isSpeaking = ref(false);
 const automaticTranslationSource = ref<ReaderAutomaticTranslationSource>();
+const retranslationChapterId = ref<string>();
 const selectedAutomaticGptWorkerId = ref<string>();
 const selectedAutomaticSakuraWorkerId = ref<string>();
 const automaticTranslationSession = new ReaderAutomaticTranslationSession();
@@ -184,6 +192,11 @@ let automaticTranslationTimer: number | undefined;
 let automaticTranslationRunning = false;
 let automaticTranslationQueued = false;
 const temporaryTranslations = new Map<string, string>();
+const pendingRetranslation = shallowRef<{
+  selection: ReaderAutomaticTranslationSelection;
+  chapterId: string;
+  translation: ChapterTranslation;
+}>();
 
 const repositoryPromise = useLocalVolumeStore();
 const cachedAdapterPromise = repositoryPromise.then((repository) =>
@@ -203,7 +216,10 @@ const withTemporaryTranslations = (chapter: ReaderChapterContent) => ({
     const translated = temporaryTranslations.get(
       temporaryTranslationKey(chapter.chapterId, segment.id),
     );
-    return translated === undefined ? segment : { ...segment, translated };
+    if (translated !== undefined) return { ...segment, translated };
+    return retranslationChapterId.value === chapter.chapterId
+      ? { ...segment, translated: undefined }
+      : segment;
   }),
 });
 
@@ -296,6 +312,11 @@ const showsAutomaticTranslationControls = computed(
     hasIncompleteChapter.value ||
     automaticTranslationSource.value !== undefined,
 );
+const ordinaryAutomaticTranslationSource = computed(() =>
+  retranslationChapterId.value === undefined
+    ? automaticTranslationSource.value
+    : undefined,
+);
 const automaticGptWorkerOptions = computed(() =>
   gptWorkspace.ref.value.workers.map((worker) => ({
     label: `${worker.model} · ${worker.endpoint}`,
@@ -351,11 +372,16 @@ const hasOpenReaderPanel = () =>
   showSearch.value ||
   showInteractiveTranslation.value ||
   showAutomaticTranslatorSelection.value ||
+  showRetranslationSelection.value ||
+  showRetranslationDecision.value ||
   showReaderGlossary.value ||
   showModePrompt.value ||
   showMobileTranslationNotice.value;
 
 const closeReaderPanels = () => {
+  if (showRetranslationDecision.value && pendingRetranslation.value) {
+    void applyRetranslationDecision(false);
+  }
   showCatalog.value = false;
   showSettings.value = false;
   showTools.value = false;
@@ -364,6 +390,10 @@ const closeReaderPanels = () => {
   showSearch.value = false;
   showInteractiveTranslation.value = false;
   showAutomaticTranslatorSelection.value = false;
+  showRetranslationSelection.value = false;
+  if (pendingRetranslation.value === undefined) {
+    showRetranslationDecision.value = false;
+  }
   showReaderGlossary.value = false;
   showModePrompt.value = false;
   showMobileTranslationNotice.value = false;
@@ -434,7 +464,7 @@ const applyReaderGlossary = async (glossary: Glossary) => {
   try {
     const anchor = captureReaderPosition();
     await saveProgress();
-    stopAutomaticTranslation(false);
+    stopAutomaticTranslation(false, false);
     automaticTranslationSession.clearDrafts();
     temporaryTranslations.clear();
     const repository = await repositoryPromise;
@@ -462,7 +492,7 @@ const clearReaderAutomaticTranslationCache = async () => {
   try {
     const anchor = captureReaderPosition();
     await saveProgress();
-    stopAutomaticTranslation(false);
+    stopAutomaticTranslation(false, false);
     automaticTranslationSession.clearDrafts();
     temporaryTranslations.clear();
     const repository = await repositoryPromise;
@@ -1776,6 +1806,7 @@ type ActiveAutomaticTranslationRuntime = {
   config: TranslatorConfig;
   concurrency: number;
   glossary: Record<string, string>;
+  targetChapterId?: string;
 };
 
 let activeAutomaticTranslationRuntime:
@@ -1963,17 +1994,60 @@ const runAutomaticTranslationOnce = async () => {
   ) {
     return;
   }
-  const visible = getVisibleReaderSegments();
-  if (visible.length === 0) return;
-  const chapters = await collectAutomaticTranslationChapters(visible);
-  if (controller.signal.aborted) return;
-  const planned = planReaderAutomaticTranslationWindow({
-    chapters,
-    visible,
-    preloadPages: settings.value.autoTranslationPreloadPages,
-  });
-  if (planned.all.length === 0) return;
+  const isRetranslation =
+    (runtime.selection.purpose ?? 'automatic') === 'retranslate';
   const repository = await repositoryPromise;
+  let planned: ReturnType<typeof planReaderAutomaticTranslationWindow>;
+  if (isRetranslation) {
+    const chapterId = runtime.targetChapterId;
+    if (chapterId === undefined) return;
+    const chapter = await repository.getChapter(bookId.value, chapterId);
+    if (chapter === undefined) throw new Error('章节不存在');
+    const complete = buildCompleteReaderChapterTranslation({
+      chapter,
+      chapterId,
+      selection: runtime.selection,
+      session: automaticTranslationSession,
+    });
+    if (complete !== undefined) {
+      complete.glossary = { ...runtime.glossary };
+      await handleRetranslationComplete(runtime.selection, chapterId, complete);
+      return;
+    }
+    const targets = chapter.paragraphs.flatMap((original, segmentIndex) =>
+      original.trim().length === 0
+        ? []
+        : [
+            {
+              chapterId,
+              segmentId: chapter.segmentIds[segmentIndex]!,
+              segmentIndex,
+              original,
+            },
+          ],
+    );
+    planned = {
+      current: targets,
+      prefetch: [],
+      all: targets,
+      visibleCharacterCount: targets.reduce(
+        (total, target) => total + target.original.trim().length,
+        0,
+      ),
+      prefetchCharacterBudget: 0,
+    };
+  } else {
+    const visible = getVisibleReaderSegments();
+    if (visible.length === 0) return;
+    const chapters = await collectAutomaticTranslationChapters(visible);
+    if (controller.signal.aborted) return;
+    planned = planReaderAutomaticTranslationWindow({
+      chapters,
+      visible,
+      preloadPages: settings.value.autoTranslationPreloadPages,
+    });
+  }
+  if (planned.all.length === 0) return;
   const coordinator = new ReaderAutomaticTranslationCoordinator(
     automaticTranslationSession,
     {
@@ -2008,6 +2082,7 @@ const runAutomaticTranslationOnce = async () => {
               segmentIds: chapter.segmentIds,
               paragraphs: chapter.paragraphs,
             }),
+            chapter,
             values,
           }),
         );
@@ -2018,6 +2093,7 @@ const runAutomaticTranslationOnce = async () => {
       onCommitted: (selection, chapterId) => {
         void markAutomaticTranslationCommitted(selection, chapterId);
       },
+      onRetranslationComplete: handleRetranslationComplete,
     },
   );
   await coordinator.translateTargets({
@@ -2071,7 +2147,7 @@ const scheduleAutomaticTranslation = () => {
   }, 140);
 };
 
-const stopAutomaticTranslation = (notify = true) => {
+const haltAutomaticTranslationRuntime = () => {
   automaticTranslationStartRequest += 1;
   if (automaticTranslationTimer !== undefined) {
     window.clearTimeout(automaticTranslationTimer);
@@ -2083,7 +2159,106 @@ const stopAutomaticTranslation = (notify = true) => {
   activeAutomaticTranslationRuntime = undefined;
   automaticTranslationSource.value = undefined;
   automaticTranslationQueued = false;
+};
+
+const restoreRetranslationChapterDisplay = async (chapterId: string) => {
+  const prefix = `${chapterId}\u0000`;
+  [...temporaryTranslations.keys()]
+    .filter((key) => key.startsWith(prefix))
+    .forEach((key) => temporaryTranslations.delete(key));
+  if (retranslationChapterId.value === chapterId) {
+    retranslationChapterId.value = undefined;
+  }
+  const ready = result.value;
+  if (
+    ready?.kind !== 'ready' ||
+    !loadedReaderChapters().some((chapter) => chapter.chapterId === chapterId)
+  ) {
+    return;
+  }
+  const anchor = captureReaderPosition();
+  const adapter = await cachedAdapterPromise;
+  adapter.invalidateChapter({ bookId: bookId.value, chapterId });
+  const [chapter, chapters] = await Promise.all([
+    adapter.getChapter({ bookId: bookId.value, chapterId }),
+    adapter.getChapters(bookId.value),
+  ]);
+  continuousChapters.value = continuousChapters.value.map((loaded) =>
+    loaded.chapterId === chapterId ? chapter : loaded,
+  );
+  result.value = {
+    ...ready,
+    chapters,
+    chapter: ready.chapter.chapterId === chapterId ? chapter : ready.chapter,
+  };
+  await nextTick();
+  await nextTick();
+  restoreReaderPosition(anchor);
+  updateViewportMetrics();
+};
+
+const stopAutomaticTranslation = (notify = true, restoreDisplay = true) => {
+  const targetChapterId = retranslationChapterId.value;
+  haltAutomaticTranslationRuntime();
+  if (restoreDisplay && targetChapterId !== undefined) {
+    void restoreRetranslationChapterDisplay(targetChapterId);
+  } else if (targetChapterId !== undefined) {
+    retranslationChapterId.value = undefined;
+  }
   if (notify) message.info('已停止自动翻译');
+};
+
+const applyRetranslationDecision = async (replace: boolean) => {
+  const pending = pendingRetranslation.value;
+  if (pending === undefined) return;
+  pendingRetranslation.value = undefined;
+  showRetranslationDecision.value = false;
+  try {
+    if (replace) {
+      const repository = await repositoryPromise;
+      await repository.updateTranslation(
+        bookId.value,
+        pending.chapterId,
+        pending.selection.source,
+        pending.translation,
+      );
+      automaticTranslationSession.clearChapter(
+        pending.selection,
+        pending.chapterId,
+      );
+    }
+    await restoreRetranslationChapterDisplay(pending.chapterId);
+    message.success(
+      replace ? '当前章译文已替换' : '已保留原译文，重翻结果仍在缓存中',
+    );
+  } catch (reason) {
+    message.error(`无法处理重翻结果：${String(reason)}`);
+    await restoreRetranslationChapterDisplay(pending.chapterId);
+  }
+};
+
+const handleRetranslationComplete = async (
+  selection: ReaderAutomaticTranslationSelection,
+  chapterId: string,
+  translation: ChapterTranslation,
+) => {
+  if (
+    !automaticTranslationSession.isActive(selection) ||
+    pendingRetranslation.value !== undefined
+  ) {
+    return;
+  }
+  haltAutomaticTranslationRuntime();
+  pendingRetranslation.value = { selection, chapterId, translation };
+  if (settings.value.retranslationPolicy === 'replace') {
+    await applyRetranslationDecision(true);
+    return;
+  }
+  if (settings.value.retranslationPolicy === 'keep') {
+    await applyRetranslationDecision(false);
+    return;
+  }
+  showRetranslationDecision.value = true;
 };
 
 const restoreAutomaticTranslationDraft = async (
@@ -2173,7 +2348,10 @@ const hydrateAutomaticTranslationDrafts = async (
         getReaderAutomaticTranslationContentRevision({
           segmentIds: chapter.segmentIds,
           paragraphs: chapter.paragraphs,
-        }) !== cache.contentRevision
+        }) !== cache.contentRevision ||
+        (cache.purpose === 'retranslate' &&
+          cache.formalTranslationRevision !==
+            getChapterFormalTranslationRevision(chapter))
       ) {
         return;
       }
@@ -2191,6 +2369,8 @@ const hydrateAutomaticTranslationDrafts = async (
 const startAutomaticTranslation = async (
   source: ReaderAutomaticTranslationSource,
   notify = true,
+  purpose: ReaderAutomaticTranslationSelection['purpose'] = 'automatic',
+  targetChapterId?: string,
 ) => {
   const request = ++automaticTranslationStartRequest;
   const worker = resolveConfiguredAutomaticTranslationWorker(source);
@@ -2202,10 +2382,16 @@ const startAutomaticTranslation = async (
     return false;
   }
   try {
+    const previousRetranslationChapterId = retranslationChapterId.value;
+    automaticTranslationController?.abort();
+    automaticTranslationSession.stop();
+    if (previousRetranslationChapterId !== undefined) {
+      await restoreRetranslationChapterDisplay(previousRetranslationChapterId);
+    }
+    if (request !== automaticTranslationStartRequest) return false;
     const volume = await (await repositoryPromise).getVolume(bookId.value);
     if (request !== automaticTranslationStartRequest) return false;
     if (volume === undefined) throw new Error('书籍不存在');
-    automaticTranslationController?.abort();
     const config = createVisibleTranslationConfig(source, worker);
     const selection: ReaderAutomaticTranslationSelection = {
       source,
@@ -2224,6 +2410,7 @@ const startAutomaticTranslation = async (
             },
       ),
       glossaryId: volume.glossaryId,
+      purpose,
     };
     automaticTranslationSession.start(selection);
     automaticTranslationController = new AbortController();
@@ -2232,8 +2419,11 @@ const startAutomaticTranslation = async (
       config,
       concurrency: normalizeTranslationConcurrency(worker.concurrency),
       glossary: { ...volume.glossary },
+      targetChapterId,
     };
     automaticTranslationSource.value = source;
+    retranslationChapterId.value =
+      purpose === 'retranslate' ? targetChapterId : undefined;
     temporaryMode = settings.value.defaultMode;
     await hydrateAutomaticTranslationDrafts(selection);
     if (
@@ -2252,7 +2442,11 @@ const startAutomaticTranslation = async (
     showMobileTranslationNotice.value = false;
     (document.activeElement as HTMLElement | null)?.blur();
     if (notify) {
-      message.success(`已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`);
+      message.success(
+        purpose === 'retranslate'
+          ? `已开始使用 ${source === 'gpt' ? 'GPT' : 'Sakura'} 重翻当前章`
+          : `已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`,
+      );
     }
     await nextTick();
     scheduleAutomaticTranslation();
@@ -2265,10 +2459,25 @@ const startAutomaticTranslation = async (
   }
 };
 
+const openRetranslationSelection = () => {
+  if (result.value?.kind !== 'ready') return;
+  showTools.value = false;
+  showRetranslationSelection.value = true;
+};
+
+const startCurrentChapterRetranslation = async (
+  source: ReaderAutomaticTranslationSource,
+) => {
+  if (result.value?.kind !== 'ready') return;
+  const chapterId = result.value.chapter.chapterId;
+  showRetranslationSelection.value = false;
+  await startAutomaticTranslation(source, true, 'retranslate', chapterId);
+};
+
 const toggleAutomaticTranslation = async (
   source: ReaderAutomaticTranslationSource,
 ) => {
-  if (automaticTranslationSource.value === source) {
+  if (ordinaryAutomaticTranslationSource.value === source) {
     stopAutomaticTranslation();
     return;
   }
@@ -2282,7 +2491,15 @@ const selectAutomaticTranslationWorker = async (
   if (source === 'gpt') selectedAutomaticGptWorkerId.value = workerId;
   else selectedAutomaticSakuraWorkerId.value = workerId;
   if (automaticTranslationSource.value !== source) return;
-  if (await startAutomaticTranslation(source, false)) {
+  const runtime = activeAutomaticTranslationRuntime;
+  if (
+    await startAutomaticTranslation(
+      source,
+      false,
+      runtime?.selection.purpose,
+      runtime?.targetChapterId,
+    )
+  ) {
     message.success(`已切换 ${source === 'gpt' ? 'GPT' : 'Sakura'} 翻译器`);
   }
 };
@@ -2833,7 +3050,7 @@ watch(
   () => [bookId.value, requestedChapterId.value],
   ([nextBookId, nextChapterId], previous) => {
     if (previous !== undefined && nextBookId !== previous[0]) {
-      stopAutomaticTranslation(false);
+      stopAutomaticTranslation(false, false);
       automaticTranslationSession.clearDrafts();
       temporaryTranslations.clear();
       searchUiRequestId += 1;
@@ -2972,6 +3189,7 @@ watch(
   () => {
     const source = automaticTranslationSource.value;
     if (source === undefined) return;
+    const runtime = activeAutomaticTranslationRuntime;
     const worker = resolveConfiguredAutomaticTranslationWorker(source);
     const fingerprint =
       worker === undefined
@@ -2983,7 +3201,12 @@ watch(
       activeAutomaticTranslationRuntime.selection.workerFingerprint !==
         fingerprint
     ) {
-      void startAutomaticTranslation(source, false);
+      void startAutomaticTranslation(
+        source,
+        false,
+        runtime?.selection.purpose,
+        runtime?.targetChapterId,
+      );
     }
   },
 );
@@ -3015,7 +3238,7 @@ onBeforeUnmount(() => {
   searchUiRequestId += 1;
   void controllerPromise.then((controller) => controller.cancel());
   void searchControllerPromise.then((controller) => controller.cancel());
-  stopAutomaticTranslation(false);
+  stopAutomaticTranslation(false, false);
   automaticTranslationSession.clearDrafts();
   window.removeEventListener('scroll', handleViewportScroll);
   window.removeEventListener('resize', handleViewportResize);
@@ -3069,9 +3292,11 @@ onBeforeUnmount(() => {
         <span>{{ currentTranslationStatusLabel }}</span>
         <n-button
           size="tiny"
-          :type="automaticTranslationSource === 'gpt' ? 'primary' : 'default'"
-          :secondary="automaticTranslationSource !== 'gpt'"
-          :aria-pressed="automaticTranslationSource === 'gpt'"
+          :type="
+            ordinaryAutomaticTranslationSource === 'gpt' ? 'primary' : 'default'
+          "
+          :secondary="ordinaryAutomaticTranslationSource !== 'gpt'"
+          :aria-pressed="ordinaryAutomaticTranslationSource === 'gpt'"
           @click="toggleAutomaticTranslation('gpt')"
         >
           GPT 自动翻译
@@ -3079,10 +3304,12 @@ onBeforeUnmount(() => {
         <n-button
           size="tiny"
           :type="
-            automaticTranslationSource === 'sakura' ? 'primary' : 'default'
+            ordinaryAutomaticTranslationSource === 'sakura'
+              ? 'primary'
+              : 'default'
           "
-          :secondary="automaticTranslationSource !== 'sakura'"
-          :aria-pressed="automaticTranslationSource === 'sakura'"
+          :secondary="ordinaryAutomaticTranslationSource !== 'sakura'"
+          :aria-pressed="ordinaryAutomaticTranslationSource === 'sakura'"
           @click="toggleAutomaticTranslation('sakura')"
         >
           Sakura 自动翻译
@@ -3157,9 +3384,11 @@ onBeforeUnmount(() => {
             <n-button
               size="small"
               :type="
-                automaticTranslationSource === 'gpt' ? 'primary' : 'default'
+                ordinaryAutomaticTranslationSource === 'gpt'
+                  ? 'primary'
+                  : 'default'
               "
-              :aria-pressed="automaticTranslationSource === 'gpt'"
+              :aria-pressed="ordinaryAutomaticTranslationSource === 'gpt'"
               @click="toggleAutomaticTranslation('gpt')"
             >
               GPT 自动翻译
@@ -3167,9 +3396,11 @@ onBeforeUnmount(() => {
             <n-button
               size="small"
               :type="
-                automaticTranslationSource === 'sakura' ? 'primary' : 'default'
+                ordinaryAutomaticTranslationSource === 'sakura'
+                  ? 'primary'
+                  : 'default'
               "
-              :aria-pressed="automaticTranslationSource === 'sakura'"
+              :aria-pressed="ordinaryAutomaticTranslationSource === 'sakura'"
               @click="toggleAutomaticTranslation('sakura')"
             >
               Sakura 自动翻译
@@ -3463,6 +3694,18 @@ onBeforeUnmount(() => {
           清除翻译缓存
         </n-button>
         <n-button
+          v-if="requiresWholeChapterTranslation"
+          :type="
+            activeAutomaticTranslationRuntime?.selection.purpose ===
+            'retranslate'
+              ? 'primary'
+              : 'default'
+          "
+          @click="openRetranslationSelection"
+        >
+          重翻当前章
+        </n-button>
+        <n-button
           @click="
             showTools = false;
             showBookInfo = true;
@@ -3481,6 +3724,50 @@ onBeforeUnmount(() => {
           @click="nextChapterId && navigate(nextChapterId)"
         >
           下一章
+        </n-button>
+      </div>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet
+      v-model:show="showRetranslationSelection"
+      title="重翻当前章"
+    >
+      <p class="book-reader__retranslation-description">
+        将从本章原文开始完整重翻；完成前只保存到阅读缓存，不会修改正式译文。
+      </p>
+      <div class="book-reader__retranslation-actions">
+        <n-button
+          :disabled="automaticGptWorkerOptions.length === 0"
+          @click="startCurrentChapterRetranslation('gpt')"
+        >
+          GPT 自动翻译
+        </n-button>
+        <n-button
+          :disabled="automaticSakuraWorkerOptions.length === 0"
+          @click="startCurrentChapterRetranslation('sakura')"
+        >
+          Sakura 自动翻译
+        </n-button>
+      </div>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet
+      :show="showRetranslationDecision"
+      title="重翻已完成"
+      @update:show="
+        (show) => {
+          showRetranslationDecision = show;
+          if (!show) applyRetranslationDecision(false);
+        }
+      "
+    >
+      <p class="book-reader__retranslation-description">
+        当前章已完整重翻，是否用新结果替换现有译文？不替换时结果仍会保留在阅读缓存中。
+      </p>
+      <div class="book-reader__retranslation-actions">
+        <n-button @click="applyRetranslationDecision(false)">不替换</n-button>
+        <n-button type="primary" @click="applyRetranslationDecision(true)">
+          替换译文
         </n-button>
       </div>
     </ReaderBottomSheet>
@@ -3745,6 +4032,18 @@ onBeforeUnmount(() => {
           <n-text depth="3">
             提前翻译当前页之后的页数；0 表示只处理当前可见页。
           </n-text>
+        </div>
+        <div class="book-reader__settings-theme">
+          <n-form-item label="重翻完成后">
+            <n-select
+              v-model:value="settings.retranslationPolicy"
+              :options="[
+                { label: '询问', value: 'ask' },
+                { label: '替换', value: 'replace' },
+                { label: '不替换', value: 'keep' },
+              ]"
+            />
+          </n-form-item>
         </div>
       </n-form>
     </ReaderBottomSheet>
@@ -4098,6 +4397,18 @@ onBeforeUnmount(() => {
 .book-reader__translator-selection {
   display: grid;
   gap: 2px;
+}
+
+.book-reader__retranslation-description {
+  margin: 0 0 16px;
+  color: var(--reader-muted-color);
+  line-height: 1.7;
+}
+
+.book-reader__retranslation-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .book-reader__book-info {

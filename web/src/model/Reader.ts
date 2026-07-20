@@ -108,6 +108,7 @@ export interface ReaderAutomaticTranslationCache {
   selectionKey: string;
   glossaryId: string;
   contentRevision: string;
+  formalTranslationRevision?: string;
   entries: ReaderAutomaticTranslationCacheEntry[];
   cachedAt: number;
 }

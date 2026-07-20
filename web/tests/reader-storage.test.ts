@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 
 import { deleteDB, openDB } from 'idb';
 import { afterEach, describe, expect, it } from 'vitest';
+import { getChapterFormalTranslationRevision } from '../src/domain/translate/ChapterTranslationCompletion';
 
 import {
   LOCAL_VOLUME_DATABASE_VERSION,
@@ -321,6 +322,8 @@ describe('reader storage', () => {
     ]);
     expect((await dao.getMetadata('book'))?.toc[0]?.gpt).toBe('translated');
     expect(await dao.listReaderAutomaticTranslationCaches('book')).toEqual([]);
+    const translatedChapter = await dao.getChapter('book', '0');
+    expect(translatedChapter).toBeDefined();
     expect(
       await dao.upsertReaderAutomaticTranslationCache({
         kind: 'automatic-translation',
@@ -338,6 +341,28 @@ describe('reader storage', () => {
     ).toBeUndefined();
     expect(await dao.listReaderAutomaticTranslationCaches('book')).toEqual([]);
 
+    expect(
+      await dao.upsertReaderAutomaticTranslationCache({
+        kind: 'automatic-translation',
+        key: 'retranslation-draft',
+        bookId: 'book',
+        chapterId: '0',
+        source: 'gpt',
+        purpose: 'retranslate',
+        selectionKey: 'selection',
+        glossaryId: 'glossary',
+        contentRevision: 'revision',
+        formalTranslationRevision: getChapterFormalTranslationRevision(
+          translatedChapter!,
+        ),
+        entries: [{ segmentId: 'segment', translated: '候选译文' }],
+        cachedAt: 3,
+      }),
+    ).toMatchObject({ key: 'retranslation-draft' });
+    expect(await dao.listReaderAutomaticTranslationCaches('book')).toHaveLength(
+      1,
+    );
+
     await expect(
       dao.putChapterTranslation({
         bookId: 'book',
@@ -352,6 +377,37 @@ describe('reader storage', () => {
     ).rejects.toThrow('翻译段落数量与原文不一致');
     expect((await dao.getChapter('book', '0'))?.sakura).toBeUndefined();
     expect((await dao.getMetadata('book'))?.toc[0]?.sakura).toBeUndefined();
+
+    await dao.putChapterTranslation({
+      bookId: 'book',
+      chapterId: '0',
+      translatorId: 'gpt',
+      translation: {
+        glossaryId: 'replacement',
+        glossary: {},
+        paragraphs: ['替换译文'],
+      },
+    });
+    expect(await dao.listReaderAutomaticTranslationCaches('book')).toEqual([]);
+    expect(
+      await dao.upsertReaderAutomaticTranslationCache({
+        kind: 'automatic-translation',
+        key: 'late-retranslation-draft',
+        bookId: 'book',
+        chapterId: '0',
+        source: 'gpt',
+        purpose: 'retranslate',
+        selectionKey: 'selection',
+        glossaryId: 'glossary',
+        contentRevision: 'revision',
+        formalTranslationRevision: getChapterFormalTranslationRevision(
+          translatedChapter!,
+        ),
+        entries: [{ segmentId: 'segment', translated: '迟到候选' }],
+        cachedAt: 4,
+      }),
+    ).toBeUndefined();
+    expect(await dao.listReaderAutomaticTranslationCaches('book')).toEqual([]);
 
     await dao.createChapter({
       id: 'orphan/0',
@@ -425,6 +481,13 @@ describe('reader storage', () => {
 
   it('keeps legacy chapter caches compatible and selectively clears automatic drafts', async () => {
     const dao = await createLocalVolumeDao(databaseName);
+    const chapter = {
+      id: 'book/chapter',
+      volumeId: 'book',
+      paragraphs: ['原文'],
+      segmentIds: ['segment'],
+    };
+    await dao.createChapter(chapter);
     await dao.putReaderChapterCache({
       key: 'legacy',
       bookId: 'book',
@@ -447,6 +510,12 @@ describe('reader storage', () => {
         selectionKey: 'safe-selection-digest',
         glossaryId: 'glossary',
         contentRevision: 'revision',
+        ...(purpose === 'retranslate'
+          ? {
+              formalTranslationRevision:
+                getChapterFormalTranslationRevision(chapter),
+            }
+          : {}),
         entries: [{ segmentId: 'segment', translated: '译文' }],
         cachedAt: 2,
       });

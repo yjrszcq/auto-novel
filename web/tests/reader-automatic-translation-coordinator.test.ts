@@ -218,6 +218,75 @@ describe('reader automatic translation coordinator', () => {
     });
   });
 
+  it('completes a fully hydrated retranslation draft without another request', async () => {
+    const retranslation = {
+      ...selection,
+      purpose: 'retranslate' as const,
+    };
+    const session = new ReaderAutomaticTranslationSession();
+    session.hydrate(retranslation, [
+      { chapterId: 'chapter', segmentId: 'segment-0', translated: '缓存一' },
+      { chapterId: 'chapter', segmentId: 'segment-1', translated: '缓存二' },
+    ]);
+    const generation = session.start(retranslation);
+    const translate = vi.fn();
+    const candidate = vi.fn();
+    const coordinator = new ReaderAutomaticTranslationCoordinator(session, {
+      loadChapter: async () => createChapter(),
+      translate,
+      commit: vi.fn(),
+      onRetranslationComplete: candidate,
+    });
+
+    await coordinator.translateTargets({
+      generation,
+      selection: retranslation,
+      targets: [target(0), target(1)],
+      glossary: {},
+      concurrency: 1,
+      signal: new AbortController().signal,
+    });
+
+    expect(translate).not.toHaveBeenCalled();
+    expect(candidate).toHaveBeenCalledWith(retranslation, 'chapter', {
+      glossaryId: 'current-glossary',
+      glossary: {},
+      paragraphs: ['缓存一', '缓存二'],
+    });
+  });
+
+  it('commits a fully hydrated ordinary draft after reopening', async () => {
+    const session = new ReaderAutomaticTranslationSession();
+    session.hydrate(selection, [
+      { chapterId: 'chapter', segmentId: 'segment-0', translated: '缓存一' },
+      { chapterId: 'chapter', segmentId: 'segment-1', translated: '缓存二' },
+    ]);
+    const generation = session.start(selection);
+    const translate = vi.fn();
+    const commit = vi.fn();
+    const coordinator = new ReaderAutomaticTranslationCoordinator(session, {
+      loadChapter: async () => createChapter(),
+      translate,
+      commit,
+    });
+
+    await coordinator.translateTargets({
+      generation,
+      selection,
+      targets: [target(0), target(1)],
+      glossary: { 名称: '译名' },
+      concurrency: 1,
+      signal: new AbortController().signal,
+    });
+
+    expect(translate).not.toHaveBeenCalled();
+    expect(commit).toHaveBeenCalledWith(selection, 'chapter', {
+      glossaryId: 'current-glossary',
+      glossary: { 名称: '译名' },
+      paragraphs: ['缓存一', '缓存二'],
+    });
+  });
+
   it('releases failed targets for retry and rejects results after stop', async () => {
     const session = new ReaderAutomaticTranslationSession();
     const generation = session.start(selection);

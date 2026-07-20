@@ -2,6 +2,8 @@ import type {
   ReaderAutomaticTranslationCache,
   ReaderChapterContent,
 } from '@/model/Reader';
+import type { LocalVolumeChapter } from '@/model/LocalVolume';
+import { getChapterFormalTranslationRevision } from '@/domain/translate/ChapterTranslationCompletion';
 
 export type ReaderAutomaticTranslationSource = 'gpt' | 'sakura';
 export type ReaderAutomaticTranslationPurpose = 'automatic' | 'retranslate';
@@ -96,6 +98,7 @@ export const createReaderAutomaticTranslationCache = ({
   chapterId,
   selection,
   contentRevision,
+  chapter,
   values,
   cachedAt = Date.now(),
 }: {
@@ -103,12 +106,17 @@ export const createReaderAutomaticTranslationCache = ({
   chapterId: string;
   selection: ReaderAutomaticTranslationSelection;
   contentRevision: string;
+  chapter?: LocalVolumeChapter;
   values: ReaderAutomaticTranslationResult[];
   cachedAt?: number;
 }): ReaderAutomaticTranslationCache => {
   const selectionCacheKey =
     getReaderAutomaticTranslationSelectionCacheKey(selection);
   const purpose = selection.purpose ?? 'automatic';
+  const formalTranslationRevision =
+    purpose === 'retranslate' && chapter !== undefined
+      ? getChapterFormalTranslationRevision(chapter)
+      : undefined;
   return {
     kind: 'automatic-translation',
     key: [
@@ -120,6 +128,9 @@ export const createReaderAutomaticTranslationCache = ({
       selectionCacheKey,
       selection.glossaryId,
       contentRevision,
+      ...(formalTranslationRevision === undefined
+        ? []
+        : [formalTranslationRevision]),
     ].join('\u0000'),
     bookId,
     chapterId,
@@ -128,6 +139,7 @@ export const createReaderAutomaticTranslationCache = ({
     selectionKey: selectionCacheKey,
     glossaryId: selection.glossaryId,
     contentRevision,
+    formalTranslationRevision,
     entries: values.map(({ segmentId, translated }) => ({
       segmentId,
       translated,

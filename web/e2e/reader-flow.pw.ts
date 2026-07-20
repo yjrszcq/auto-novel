@@ -2249,6 +2249,62 @@ test('automatically translates a reader window without persisting a partial chap
 
     await page.reload();
     await expect(source).toContainText('译文第1行');
+
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '重翻当前章', exact: true })
+      .click();
+    const retranslationSourceDialog = page.getByRole('dialog', {
+      name: '重翻当前章',
+    });
+    await retranslationSourceDialog
+      .getByRole('button', { name: 'GPT 自动翻译', exact: true })
+      .click();
+    await expect(
+      page.getByText('已开始使用 GPT 重翻当前章', { exact: true }),
+    ).toBeVisible();
+    const retranslationDecision = page.getByRole('dialog', {
+      name: '重翻已完成',
+    });
+    await expect(retranslationDecision).toBeVisible({ timeout: 15_000 });
+    await retranslationDecision
+      .getByRole('button', { name: '不替换', exact: true })
+      .click();
+    await expect(
+      page.getByText('已保留原译文，重翻结果仍在缓存中', { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(async (bookId) => {
+          const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('volumes');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          const transaction = database.transaction(
+            'reader-chapter-cache',
+            'readonly',
+          );
+          const request = transaction
+            .objectStore('reader-chapter-cache')
+            .index('byBookId')
+            .getAll(bookId);
+          const values = await new Promise<
+            Array<{ kind?: string; purpose?: string }>
+          >((resolve, reject) => {
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          database.close();
+          return values.filter(
+            (value) =>
+              value.kind === 'automatic-translation' &&
+              value.purpose === 'retranslate',
+          ).length;
+        }, temporaryBookId),
+      )
+      .toBe(1);
   } finally {
     await server.close();
   }

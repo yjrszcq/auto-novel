@@ -169,7 +169,33 @@ export class ReaderAutomaticTranslationCoordinator {
           ({ segmentIndex }) => !hasTranslation(persisted?.[segmentIndex]),
         );
         const claimed = this.session.claim(generation, missingTargets);
-        if (claimed.length === 0) return;
+        if (claimed.length === 0) {
+          const complete = buildCompleteReaderChapterTranslation({
+            chapter,
+            chapterId,
+            selection,
+            session: this.session,
+          });
+          if (
+            complete === undefined ||
+            !this.session.accepts(generation) ||
+            workerSignal.aborted
+          ) {
+            return;
+          }
+          complete.glossary = { ...glossary };
+          if ((selection.purpose ?? 'automatic') === 'retranslate') {
+            await this.dependencies.onRetranslationComplete?.(
+              selection,
+              chapterId,
+              complete,
+            );
+            return;
+          }
+          await this.dependencies.commit(selection, chapterId, complete);
+          this.dependencies.onCommitted?.(selection, chapterId);
+          return;
+        }
         try {
           const translated = await this.dependencies.translate(
             selection,
@@ -188,6 +214,10 @@ export class ReaderAutomaticTranslationCoordinator {
             segmentId: target.segmentId,
             translated: translated[index] ?? '',
           }));
+          if (!this.session.accepts(generation) || workerSignal.aborted) {
+            this.session.release(generation, claimed);
+            return;
+          }
           const persisted = await this.dependencies.persistDraft?.(
             selection,
             chapter,

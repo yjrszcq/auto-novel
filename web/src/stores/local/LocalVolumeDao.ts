@@ -7,7 +7,10 @@ import type {
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import type { TranslatorId } from '@/model/Translator';
-import { hasCompleteChapterTranslation } from '@/domain/translate/ChapterTranslationCompletion';
+import {
+  getChapterFormalTranslationRevision,
+  hasCompleteChapterTranslation,
+} from '@/domain/translate/ChapterTranslationCompletion';
 import type {
   ReaderBookPreference,
   ReaderBookshelfState,
@@ -509,7 +512,11 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     const chapter = await tx
       .objectStore('chapter')
       .get(`${value.bookId}/${value.chapterId}`);
-    if (chapter !== undefined && hasCompleteChapterTranslation(chapter)) {
+    if (
+      value.purpose === 'automatic' &&
+      chapter !== undefined &&
+      hasCompleteChapterTranslation(chapter)
+    ) {
       for await (const cursor of cacheStore
         .index('byBookId')
         .iterate(value.bookId)) {
@@ -523,6 +530,17 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       await tx.done;
       return undefined;
     }
+    if (
+      value.purpose === 'retranslate' &&
+      (chapter === undefined ||
+        value.formalTranslationRevision === undefined ||
+        value.formalTranslationRevision !==
+          getChapterFormalTranslationRevision(chapter))
+    ) {
+      await cacheStore.delete(value.key);
+      await tx.done;
+      return undefined;
+    }
     const existing = await cacheStore.get(value.key);
     const canMerge =
       isReaderAutomaticTranslationCache(existing) &&
@@ -532,7 +550,8 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       existing.purpose === value.purpose &&
       existing.selectionKey === value.selectionKey &&
       existing.glossaryId === value.glossaryId &&
-      existing.contentRevision === value.contentRevision;
+      existing.contentRevision === value.contentRevision &&
+      existing.formalTranslationRevision === value.formalTranslationRevision;
     const entries = new Map(
       (canMerge ? existing.entries : []).map((entry) => [
         entry.segmentId,
