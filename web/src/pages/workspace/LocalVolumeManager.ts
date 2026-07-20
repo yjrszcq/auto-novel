@@ -1,5 +1,6 @@
 import type { LocalVolumeMetadata } from '@/model/LocalVolume';
 import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
+import type { TxtImportPlan } from '@/model/TxtCatalog';
 import { TranslateTaskDescriptor } from '@/model/Translator';
 import {
   useLocalVolumeStore,
@@ -25,6 +26,16 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
     async addVolume(file: File, favoredId: string = 'default') {
       const repo = await useLocalVolumeStore();
       const result = await repo.createVolume(file, favoredId);
+      await this.loadVolumes();
+      return result;
+    },
+    async addReviewedTxtVolume(
+      file: File,
+      plan: TxtImportPlan,
+      favoredId: string = 'default',
+    ) {
+      const repo = await useLocalVolumeStore();
+      const result = await repo.createReviewedTxtVolume(file, favoredId, plan);
       await this.loadVolumes();
       return result;
     },

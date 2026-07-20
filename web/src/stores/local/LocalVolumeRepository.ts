@@ -9,7 +9,7 @@ import type {
 } from '@/model/LocalVolume';
 import type { TranslatorId } from '@/model/Translator';
 
-import { createVolume } from './CreateVolume';
+import { createReviewedTxtVolume, createVolume } from './CreateVolume';
 import { embedEpubDownloadMetadata } from './EpubDownloadMetadata';
 import { getTranslationFile } from './GetTranslationFile';
 import type { LocalVolumeDao } from './LocalVolumeDao';
@@ -138,6 +138,7 @@ export const createLocalVolumeStore = async () => {
     updateBookPresentation,
     getOriginalDownloadFile,
     createVolume: bind(createVolume),
+    createReviewedTxtVolume: bind(createReviewedTxtVolume),
     deleteVolume,
     updateGlossary,
     updateReadAt,

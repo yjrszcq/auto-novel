@@ -21,7 +21,10 @@ import {
   type TxtCatalogSession,
 } from '@/util/file';
 
-const props = defineProps<{ file?: File }>();
+const props = withDefaults(
+  defineProps<{ file?: File; submitting?: boolean }>(),
+  { file: undefined, submitting: false },
+);
 const emit = defineEmits<{
   confirm: [plan: TxtImportPlan];
   skip: [];
@@ -29,7 +32,6 @@ const emit = defineEmits<{
 }>();
 const show = defineModel<boolean>('show', { default: false });
 
-const dialog = useDialog();
 const message = useMessage();
 const isMobile = useMediaQuery('(max-width: 767px)');
 const session = shallowRef<TxtCatalogSession>();
@@ -39,6 +41,7 @@ const headings = ref<TxtHeadingDraft[]>([]);
 const editor = new TxtCatalogDraftEditor();
 const loading = ref(false);
 const building = ref(false);
+const busy = computed(() => building.value || props.submitting);
 const progress = ref(0);
 const progressMessage = ref('准备解析');
 const error = ref<string>();
@@ -199,17 +202,6 @@ const applyMode = async (nextMode: TxtParseMode) => {
   }
 };
 
-const requestModeChange = (nextMode: TxtParseMode) => {
-  if (nextMode === mode.value || loading.value) return;
-  dialog.warning({
-    title: '重新识别目录',
-    content: '切换识别模式会重新解析，并清除当前所有人工增删和修改。',
-    positiveText: '重新解析',
-    negativeText: '取消',
-    onPositiveClick: () => applyMode(nextMode),
-  });
-};
-
 const disposeSession = () => {
   lineRequestVersion += 1;
   session.value?.dispose();
@@ -273,6 +265,7 @@ const confirmPlan = async () => {
 
 const skip = () => emit('skip');
 const handleShowUpdate = (nextShow: boolean) => {
+  if (!nextShow && props.submitting) return;
   show.value = nextShow;
   if (!nextShow) emit('cancel');
 };
@@ -294,9 +287,12 @@ onBeforeUnmount(disposeSession);
     :show="show"
     preset="card"
     title="TXT 目录预览"
+    aria-label="TXT 目录预览"
     :bordered="false"
     :auto-focus="false"
     :block-scroll="true"
+    :mask-closable="false"
+    :closable="!props.submitting"
     class="txt-catalog-modal"
     @update:show="handleShowUpdate"
   >
@@ -306,15 +302,24 @@ onBeforeUnmount(disposeSession);
         <n-text depth="3">{{ summaryText }}</n-text>
       </div>
       <n-button-group>
-        <n-button
+        <n-popconfirm
           v-for="option in modeOptions"
           :key="option.value"
-          :type="mode === option.value ? 'primary' : 'default'"
-          :disabled="loading"
-          @click="requestModeChange(option.value)"
+          :disabled="mode === option.value || loading || busy"
+          positive-text="重新解析"
+          negative-text="取消"
+          @positive-click="applyMode(option.value)"
         >
-          {{ option.label }}
-        </n-button>
+          <template #trigger>
+            <n-button
+              :type="mode === option.value ? 'primary' : 'default'"
+              :disabled="loading || busy"
+            >
+              {{ option.label }}
+            </n-button>
+          </template>
+          切换识别模式会重新解析，并清除当前所有人工增删和修改。
+        </n-popconfirm>
       </n-button-group>
     </div>
 
@@ -379,16 +384,18 @@ onBeforeUnmount(disposeSession);
                 class="txt-visible-lines"
                 :style="{ transform: `translateY(${visibleTextOffset}px)` }"
               >
-                <button
+                <div
                   v-for="line in visibleLines"
                   :key="line.lineIndex"
-                  type="button"
+                  role="button"
+                  tabindex="0"
                   class="txt-source-line"
                   :class="{
                     selected: line.lineIndex === selectedLine,
                     heading: selectedHeadingLines.has(line.lineIndex),
                   }"
                   @click="loadContext(line.lineIndex)"
+                  @keyup.enter="loadContext(line.lineIndex)"
                 >
                   <span class="line-number">{{ line.lineIndex + 1 }}</span>
                   <span class="line-content">{{ line.raw || ' ' }}</span>
@@ -412,7 +419,7 @@ onBeforeUnmount(disposeSession);
                       />
                     </template>
                   </n-button>
-                </button>
+                </div>
               </div>
             </div>
           </div>
@@ -482,15 +489,15 @@ onBeforeUnmount(disposeSession);
 
     <template #action>
       <n-flex justify="space-between" :wrap="false">
-        <n-button :disabled="loading || building" @click="skip">
-          跳过此书
-        </n-button>
+        <n-button :disabled="loading || busy" @click="skip">跳过此书</n-button>
         <n-flex :wrap="false">
-          <n-button @click="handleShowUpdate(false)">取消批次</n-button>
+          <n-button :disabled="busy" @click="handleShowUpdate(false)">
+            取消批次
+          </n-button>
           <n-button
             type="primary"
-            :loading="building"
-            :disabled="loading || snapshot === undefined"
+            :loading="busy"
+            :disabled="loading || busy || snapshot === undefined"
             @click="confirmPlan"
           >
             确认目录并导入

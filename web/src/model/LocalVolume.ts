@@ -19,6 +19,8 @@ export interface LocalVolumeTocEntry {
   title?: string;
   level?: number;
   parentChapterId?: string;
+  sourceStartLine?: number;
+  sourceEndLine?: number;
   baidu?: string;
   youdao?: string;
   gpt?: string;
@@ -144,6 +146,8 @@ export interface LocalVolumeChapter {
   volumeId: string;
   paragraphs: string[];
   segmentIds: string[];
+  sourceStartLine?: number;
+  sourceEndLine?: number;
   sourceRanges?: LocalVolumeChapterSourceRange[];
   baidu?: ChapterTranslation;
   youdao?: ChapterTranslation;

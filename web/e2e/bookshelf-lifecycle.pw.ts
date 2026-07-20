@@ -15,6 +15,15 @@ const alphaText = Array.from(
   (_, index) => `Alpha line ${index + 1}`,
 ).join('\n');
 
+const confirmTxtPreview = async (page: Page, filename: string) => {
+  const preview = page.getByRole('dialog', { name: 'TXT 目录预览' });
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText(filename);
+  await preview
+    .getByRole('button', { name: '确认目录并导入', exact: true })
+    .click();
+};
+
 const uploadBooks = async (page: Page) => {
   const uploadInput = page.locator('input[type="file"]').first();
   await uploadInput.setInputFiles([
@@ -29,7 +38,73 @@ const uploadBooks = async (page: Page) => {
       buffer: Buffer.from('Beta line 1\nBeta line 2'),
     },
   ]);
+  await confirmTxtPreview(page, alphaFilename);
+  await confirmTxtPreview(page, betaFilename);
 };
+
+test('reviews queued TXT catalogs without overflowing a mobile viewport', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles([
+      {
+        name: 'Review One.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('plain line\nbody\nlast line'),
+      },
+      {
+        name: 'Review Two.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('Chapter 1 Start\nbody'),
+      },
+    ]);
+
+  const preview = page.getByRole('dialog', { name: 'TXT 目录预览' });
+  await expect(preview).toContainText('Review One.txt');
+  const bounds = await preview.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+  expect(await preview.locator('.txt-source-line').count()).toBeLessThanOrEqual(
+    120,
+  );
+  await preview.locator('.txt-source-line').first().locator('button').click();
+  await expect(preview.locator('.txt-heading-row')).toHaveCount(1);
+
+  await preview.getByRole('button', { name: '严格', exact: true }).click();
+  await page
+    .locator('.n-popover')
+    .getByRole('button', { name: '重新解析', exact: true })
+    .click();
+  await expect(preview.locator('.txt-heading-row')).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem('auto-novel:txt-parse-mode'),
+    ),
+  ).toBe('strict');
+
+  await preview.getByRole('button', { name: '跳过此书', exact: true }).click();
+  await expect(preview).toContainText('Review Two.txt');
+  await preview.getByRole('button', { name: '取消批次', exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Review One' })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('heading', { name: 'Review Two' })).toHaveCount(
+    0,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
 
 const epubFilename = 'Presentation Lifecycle.epub';
 const sourceCover = Uint8Array.from([1, 2, 3, 4]);
@@ -306,42 +381,43 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
-      const transaction = database.transaction(
-        ['metadata', 'chapter', 'file'],
-        'readonly',
+      const requestResult = <Value>(request: IDBRequest<Value>) =>
+        new Promise<Value>((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      const alphaMetadata = await requestResult(
+        database.transaction('metadata').objectStore('metadata').get(alphaId),
       );
-      const alphaMetadataRequest = transaction
-        .objectStore('metadata')
-        .get(alphaId);
-      const betaMetadataRequest = transaction
-        .objectStore('metadata')
-        .get(betaId);
-      const alphaChapterRequests = ['0', '1000'].map((chapterId) =>
-        transaction.objectStore('chapter').get(`${alphaId}/${chapterId}`),
+      const betaMetadata = await requestResult(
+        database.transaction('metadata').objectStore('metadata').get(betaId),
       );
-      const alphaFileRequest = transaction.objectStore('file').get(alphaId);
-      const result = await new Promise<{
-        alphaMetadata: {
-          toc: unknown[];
-          sourceBookMetadata: { title: string };
-        };
-        betaMetadata: { toc: unknown[]; sourceBookMetadata: { title: string } };
-        alphaChapters: Array<{ paragraphs: string[]; segmentIds: string[] }>;
-        hasFile: boolean;
-      }>((resolve, reject) => {
-        transaction.oncomplete = () =>
-          resolve({
-            alphaMetadata: alphaMetadataRequest.result,
-            betaMetadata: betaMetadataRequest.result,
-            alphaChapters: alphaChapterRequests.map(
-              (request) => request.result,
-            ),
-            hasFile: alphaFileRequest.result !== undefined,
-          });
-        transaction.onerror = () => reject(transaction.error);
-      });
+      const alphaChapters = await Promise.all(
+        alphaMetadata.toc.map(
+          (entry: { chapterId: string }) =>
+            requestResult(
+              database
+                .transaction('chapter')
+                .objectStore('chapter')
+                .get(`${alphaId}/${entry.chapterId}`),
+            ) as Promise<{
+              paragraphs: string[];
+              segmentIds: string[];
+              sourceStartLine: number;
+              sourceEndLine: number;
+            }>,
+        ),
+      );
+      const storedFile = await requestResult(
+        database.transaction('file').objectStore('file').get(alphaId),
+      );
       database.close();
-      return result;
+      return {
+        alphaMetadata,
+        betaMetadata,
+        alphaChapters,
+        hasFile: storedFile !== undefined,
+      };
     },
     { alphaId: alphaFilename, betaId: betaFilename },
   );
@@ -352,6 +428,22 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     imported.alphaChapters.map((chapter) => chapter.paragraphs.length),
   ).toEqual([1000, 1]);
   expect(
+    imported.alphaChapters.map(({ sourceStartLine, sourceEndLine }) => [
+      sourceStartLine,
+      sourceEndLine,
+    ]),
+  ).toEqual([
+    [0, 999],
+    [1000, 1000],
+  ]);
+  expect(
+    imported.alphaMetadata.toc.every(({ chapterId }: { chapterId: string }) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        chapterId,
+      ),
+    ),
+  ).toBe(true);
+  expect(
     imported.alphaChapters
       .flatMap((chapter) => chapter.segmentIds)
       .every((id) =>
@@ -361,6 +453,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
       ),
   ).toBe(true);
   expect(imported.hasFile).toBe(true);
+  const alphaFirstChapterId = imported.alphaMetadata.toc[0].chapterId;
 
   const contextAlphaCard = page
     .locator('.book-card')
@@ -414,7 +507,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   await bookContextMenu.getByText('阅读书籍', { exact: true }).click();
   const readerPopup = await readerPopupPromise;
   await expect(readerPopup).toHaveURL(
-    new RegExp(`/books/${encodeURIComponent(alphaFilename)}/read/0$`),
+    new RegExp(
+      `/books/${encodeURIComponent(alphaFilename)}/read/${alphaFirstChapterId}$`,
+    ),
   );
   await readerPopup.close();
 
@@ -857,6 +952,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
       mimeType: 'text/plain',
       buffer: Buffer.from('Beta line 1\nBeta line 2'),
     });
+  await confirmTxtPreview(page, betaFilename);
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();
@@ -892,7 +988,9 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     workspaceDrawer.getByRole('link', { name: betaFilename, exact: true }),
   ).toHaveAttribute(
     'href',
-    `/books/${encodeURIComponent(betaFilename)}/read/0`,
+    new RegExp(
+      `/books/${encodeURIComponent(betaFilename)}/read/[0-9a-f-]{36}$`,
+    ),
   );
   await expect(
     workspaceDrawer.getByRole('link', { name: betaFilename, exact: true }),
@@ -962,29 +1060,27 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     const metadataRequest = metadataStore.get(bookId);
     metadataRequest.onsuccess = () => {
       const metadata = metadataRequest.result;
-      metadata.toc.forEach((chapter: { gpt?: string }) => {
-        chapter.gpt = metadata.glossaryId;
+      metadata.toc.forEach((entry: { chapterId: string; gpt?: string }) => {
+        entry.gpt = metadata.glossaryId;
+        const chapterStore = transaction.objectStore('chapter');
+        const chapterRequest = chapterStore.get(`${bookId}/${entry.chapterId}`);
+        chapterRequest.onsuccess = () => {
+          const chapter = chapterRequest.result;
+          chapter.gpt = {
+            glossaryId: 'translated',
+            glossary: {},
+            paragraphs: chapter.paragraphs.map(() => '译文'),
+          };
+          chapterStore.put(chapter);
+        };
       });
       metadataStore.put(metadata);
+      transaction.objectStore('reader-progress').put({
+        bookId,
+        chapterId: metadata.toc[0].chapterId,
+        updatedAt: 1,
+      });
     };
-    for (const chapterId of ['0', '1000']) {
-      const chapterStore = transaction.objectStore('chapter');
-      const chapterRequest = chapterStore.get(`${bookId}/${chapterId}`);
-      chapterRequest.onsuccess = () => {
-        const chapter = chapterRequest.result;
-        chapter.gpt = {
-          glossaryId: 'translated',
-          glossary: {},
-          paragraphs: chapter.paragraphs.map(() => '译文'),
-        };
-        chapterStore.put(chapter);
-      };
-    }
-    transaction.objectStore('reader-progress').put({
-      bookId,
-      chapterId: '0',
-      updatedAt: 1,
-    });
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
@@ -1168,6 +1264,7 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
     mimeType: 'text/plain',
     buffer: Buffer.from('duplicate'),
   });
+  await confirmTxtPreview(page, alphaFilename);
   await expect(page.getByText(/上传失败: Error: 小说已经存在/)).toBeVisible();
   await uploadInput.setInputFiles({
     name: 'unsupported.pdf',
@@ -1455,6 +1552,7 @@ test('permanent deletion removes exactly one complete book graph', async ({
       mimeType: 'text/plain',
       buffer: Buffer.from('delete me'),
     });
+  await confirmTxtPreview(page, betaFilename);
   await expect(
     page.getByRole('heading', { name: 'Beta Upload' }),
   ).toBeVisible();

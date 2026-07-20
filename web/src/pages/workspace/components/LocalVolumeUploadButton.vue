@@ -3,7 +3,10 @@ import { PlusOutlined } from '@vicons/material';
 import { useMediaQuery } from '@vueuse/core';
 import type { UploadCustomRequestOptions, UploadFileInfo } from 'naive-ui';
 
+import type { TxtImportPlan } from '@/model/TxtCatalog';
+
 import { useLocalVolumeManager } from '../LocalVolumeManager';
+import TxtCatalogPreviewModal from './TxtCatalogPreviewModal.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -26,6 +29,71 @@ const emit = defineEmits<{
 const message = useMessage();
 const store = useLocalVolumeManager();
 const isMobile = useMediaQuery('(max-width: 639px)');
+
+interface PendingTxtImport {
+  file: File;
+  onFinish: () => void;
+  onError: () => void;
+}
+
+const txtQueue = shallowRef<PendingTxtImport[]>([]);
+const activeTxtImport = shallowRef<PendingTxtImport>();
+const showTxtPreview = ref(false);
+const importingReviewedTxt = ref(false);
+
+const advanceTxtQueue = () => {
+  activeTxtImport.value = txtQueue.value.shift();
+  showTxtPreview.value = activeTxtImport.value !== undefined;
+};
+
+const enqueueTxt = (pending: PendingTxtImport) => {
+  txtQueue.value = [...txtQueue.value, pending];
+  if (activeTxtImport.value === undefined) advanceTxtQueue();
+};
+
+const finishActiveTxt = () => {
+  activeTxtImport.value?.onFinish();
+  activeTxtImport.value = undefined;
+  advanceTxtQueue();
+};
+
+const skipActiveTxt = () => {
+  message.info(`已跳过：${activeTxtImport.value?.file.name ?? 'TXT 文件'}`);
+  finishActiveTxt();
+};
+
+const cancelTxtBatch = () => {
+  const pending = [
+    ...(activeTxtImport.value === undefined ? [] : [activeTxtImport.value]),
+    ...txtQueue.value,
+  ];
+  for (const item of pending) item.onFinish();
+  activeTxtImport.value = undefined;
+  txtQueue.value = [];
+  showTxtPreview.value = false;
+};
+
+const importReviewedTxt = async (plan: TxtImportPlan) => {
+  const pending = activeTxtImport.value;
+  if (pending === undefined || importingReviewedTxt.value) return;
+  importingReviewedTxt.value = true;
+  try {
+    await store.addReviewedTxtVolume(
+      pending.file,
+      plan,
+      props.favoredId ?? 'default',
+    );
+    message.success(`已导入：${pending.file.name}`);
+    finishActiveTxt();
+  } catch (error) {
+    message.error(`上传失败: ${error}\n文件名：${pending.file.name}`);
+    pending.onError();
+    activeTxtImport.value = undefined;
+    advanceTxtQueue();
+  } finally {
+    importingReviewedTxt.value = false;
+  }
+};
 
 const handleFinish = ({ file }: { file: UploadFileInfo }) => {
   if (file.file) {
@@ -55,6 +123,10 @@ const customRequest = ({
   onFinish,
   onError,
 }: UploadCustomRequestOptions) => {
+  if (file.name.toLowerCase().endsWith('.txt')) {
+    enqueueTxt({ file: file.file!, onFinish, onError });
+    return;
+  }
   store
     .addVolume(file.file!, props.favoredId ?? 'default')
     .then((result) => {
@@ -111,4 +183,12 @@ const customRequest = ({
   >
     拖拽文件到这里上传
   </DropZone>
+  <txt-catalog-preview-modal
+    v-model:show="showTxtPreview"
+    :file="activeTxtImport?.file"
+    :submitting="importingReviewedTxt"
+    @confirm="importReviewedTxt"
+    @skip="skipActiveTxt"
+    @cancel="cancelTxtBatch"
+  />
 </template>

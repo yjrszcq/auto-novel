@@ -160,7 +160,7 @@ const progressFilterFunc = computed(() => {
       <n-flex :size="4" vertical>
         <router-link
           class="local-volume-title-link"
-          :to="`/books/${encodeURIComponent(volume.id)}/read/0`"
+          :to="`/books/${encodeURIComponent(volume.id)}/read/${encodeURIComponent(volume.toc[0]?.chapterId ?? '')}`"
           target="_blank"
           rel="noopener noreferrer"
         >

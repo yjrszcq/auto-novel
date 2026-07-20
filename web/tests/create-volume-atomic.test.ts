@@ -3,8 +3,10 @@ import 'fake-indexeddb/auto';
 import { deleteDB } from 'idb';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createVolume } from '../src/stores/local/CreateVolume';
+import { createReviewedTxtVolume } from '../src/stores/local/CreateVolume';
 import { createLocalVolumeDao } from '../src/stores/local/LocalVolumeDao';
+import { parseTxtCatalog } from '../src/util/file/TxtCatalogParser';
+import { decodeTxtText } from '../src/util/file/TxtDecode';
 
 const databaseName = 'create-volume-atomic-test';
 
@@ -21,10 +23,12 @@ describe('local volume creation transaction', () => {
     const second = new File(['replacement'], 'same-book.txt', {
       type: 'text/plain',
     });
+    const firstPlan = parseTxtCatalog(decodeTxtText('first line\nsecond line'));
+    const secondPlan = parseTxtCatalog(decodeTxtText('replacement'));
 
     const results = await Promise.allSettled([
-      createVolume(dao, first, 'default'),
-      createVolume(dao, second, 'default'),
+      createReviewedTxtVolume(dao, first, 'default', firstPlan),
+      createReviewedTxtVolume(dao, second, 'default', secondPlan),
     ]);
 
     expect(
