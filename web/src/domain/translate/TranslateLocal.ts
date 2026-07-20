@@ -125,7 +125,7 @@ export const translateLocal = async (
       } else {
         callback.log(`翻译目录（${plan.sourceTitles.length} 个标题）`);
         const translatedBySource = new Map<string, string>();
-        if (!forceMetadata && level !== 'all') {
+        if (!forceMetadata && level !== 'all' && plan.toc.length > 0) {
           const chapterById = new Map(
             (await listChapters()).map((chapter) => [chapter.id, chapter]),
           );
@@ -194,6 +194,10 @@ export const translateLocal = async (
         );
       }
     } catch (e) {
+      if (e === 'quit') {
+        callback.log('发生错误，结束翻译任务');
+        return;
+      }
       if (e instanceof DOMException && e.name === 'AbortError') return 'abort';
       callback.log(`目录翻译失败，继续翻译正文：${await formatError(e)}`);
     }

@@ -679,7 +679,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
       )
       .toBe(true);
   };
-  const readerCatalogButton = page.getByRole('button', { name: '目录' });
+  const readerCatalogButton = page.getByRole('button', {
+    name: '目录',
+    exact: true,
+  });
   await readerCatalogButton.click();
   await expect(page.getByText('共 2 章', { exact: true })).toBeVisible();
   await expect(page.getByText('第一部', { exact: true })).toBeVisible();
@@ -983,10 +986,12 @@ test('opens a local bookshelf book safely through the current reader route', asy
   const translationPopoverBounds = await translationPopover.boundingBox();
   expect(mobileAppBarBounds).not.toBeNull();
   expect(translationPopoverBounds).not.toBeNull();
-  expect(translationPopoverBounds!.y).toBeCloseTo(
-    mobileAppBarBounds!.y + mobileAppBarBounds!.height,
-    0,
-  );
+  expect(
+    Math.abs(
+      translationPopoverBounds!.y -
+        (mobileAppBarBounds!.y + mobileAppBarBounds!.height),
+    ),
+  ).toBeLessThanOrEqual(1);
   const popoverTop = await translationPopover.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );

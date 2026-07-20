@@ -194,24 +194,27 @@ export const createLocalVolumeReaderAdapter = (
           href: entry.href,
         })) satisfies ReaderNavigationEntry[];
       }
-      return volume.toc.map((entry, index) => ({
-        id: entry.chapterId,
-        title: getChapterTitle(bookId, entry.chapterId, entry.title),
-        translatedTitle: selectCatalogTitleTranslation(
-          entry,
-          translationPriority,
-        ),
-        level: entry.level ?? 0,
-        chapterId: entry.chapterId,
-        parentId:
-          entry.level !== undefined && entry.level > 0
-            ? volume.toc
-                .slice(0, index)
-                .reverse()
-                .find((candidate) => (candidate.level ?? 0) < entry.level!)
-                ?.chapterId
-            : undefined,
-      }));
+      return volume.toc.map((entry, index) => {
+        const level = entry.level;
+        return {
+          id: entry.chapterId,
+          title: getChapterTitle(bookId, entry.chapterId, entry.title),
+          translatedTitle: selectCatalogTitleTranslation(
+            entry,
+            translationPriority,
+          ),
+          level: level ?? 0,
+          chapterId: entry.chapterId,
+          parentId:
+            level !== undefined && level > 0
+              ? volume.toc
+                  .slice(0, index)
+                  .reverse()
+                  .find((candidate) => (candidate.level ?? 0) < level)
+                  ?.chapterId
+              : undefined,
+        };
+      });
     },
 
     async getChapter({ bookId, chapterId }) {

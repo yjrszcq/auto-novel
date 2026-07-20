@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
+import {
+  BlobReader,
+  BlobWriter,
+  TextReader,
+  TextWriter,
+  ZipReader,
+  ZipWriter,
+} from '@zip.js/zip.js';
 import type { Page } from '@playwright/test';
+import type { Epub as ParsedEpub } from '../src/util/file/epub';
 
 const createEpub = async (entries: Record<string, string>) => {
   const output = new BlobWriter('application/epub+zip');
@@ -109,6 +117,40 @@ test('imports EPUB 2 HTML and NCX through manifest fallbacks', async ({
     ]),
   );
   expect(imported.chapters[0]?.paragraphs).toEqual(['第一章', '兼容正文']);
+
+  const exportedBytes = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const storedFile = await new Promise<{ file: File }>((resolve, reject) => {
+      const request = database
+        .transaction('file', 'readonly')
+        .objectStore('file')
+        .get('legacy.epub');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    database.close();
+    const dynamicImport = (path: string) => import(/* @vite-ignore */ path);
+    const { Epub } = (await dynamicImport('/src/util/file/epub.ts')) as {
+      Epub: { fromFile(file: File): Promise<ParsedEpub> };
+    };
+    const epub = await Epub.fromFile(storedFile.file);
+    epub.updateNavigationTitles(['译题：第一卷', '译题：第一章']);
+    return [...new Uint8Array(await (await epub.toBlob()).arrayBuffer())];
+  });
+  const exported = new ZipReader(
+    new BlobReader(new Blob([Uint8Array.from(exportedBytes)])),
+  );
+  const entries = await exported.getEntries();
+  const ncx = entries.find((entry) => entry.filename === 'OPS/toc.ncx');
+  expect(ncx?.getData).toBeDefined();
+  const ncxText = await ncx!.getData!(new TextWriter());
+  await exported.close();
+  expect(ncxText).toContain('译题：第一卷');
+  expect(ncxText).toContain('译题：第一章');
 });
 
 test('recovers malformed XHTML and reports the fallback', async ({ page }) => {

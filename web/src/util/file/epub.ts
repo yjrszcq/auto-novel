@@ -635,6 +635,11 @@ export class Epub extends BaseFile {
             mediaType: 'application/xhtml+xml',
             doc,
           });
+        } else if (item.mediaType === 'application/x-dtbncx+xml') {
+          this.items.set(id, {
+            ...item,
+            doc: await readDoc(item.path),
+          });
         } else {
           const blob = await readBlob(item.path, item.mediaType);
           if (
