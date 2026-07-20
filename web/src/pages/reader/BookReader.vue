@@ -144,6 +144,7 @@ const searchLoading = ref(false);
 const searchTruncated = ref(false);
 let searchUiRequestId = 0;
 const showMobileTranslationNotice = ref(false);
+const showMobilePreloadHelp = ref(false);
 const controlsVisible = ref(true);
 const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
@@ -415,8 +416,13 @@ const openCatalog = async () => {
 const openSettings = () => {
   const shouldOpen = !showSettings.value;
   closeReaderPanels();
+  showMobilePreloadHelp.value = false;
   showSettings.value = shouldOpen;
 };
+
+watch(showSettings, (visible) => {
+  if (!visible) showMobilePreloadHelp.value = false;
+});
 
 const openTools = () => {
   const shouldOpen = !showTools.value;
@@ -3466,54 +3472,43 @@ onBeforeUnmount(() => {
       </button>
     </header>
 
-    <div
-      v-if="
-        controlsVisible &&
-        showsAutomaticTranslationControls &&
-        showMobileTranslationNotice
-      "
-      class="book-reader__translation-popover-layer"
-      @click.self="showMobileTranslationNotice = false"
+    <ReaderBottomSheet
+      v-model:show="showMobileTranslationNotice"
+      title="未翻译"
+      placement="top"
     >
-      <n-alert
-        class="book-reader__translation-popover"
-        type="warning"
-        :show-icon="false"
-      >
-        <div class="book-reader__translation-panel">
-          <strong>{{ currentTranslationStatusLabel }}</strong>
-          <div class="book-reader__translation-panel-actions">
-            <n-button
-              size="small"
-              :type="
-                ordinaryAutomaticTranslationSource === 'gpt'
-                  ? 'primary'
-                  : 'default'
-              "
-              :aria-pressed="ordinaryAutomaticTranslationSource === 'gpt'"
-              @click="toggleAutomaticTranslation('gpt')"
-            >
-              GPT 自动翻译
-            </n-button>
-            <n-button
-              size="small"
-              :type="
-                ordinaryAutomaticTranslationSource === 'sakura'
-                  ? 'primary'
-                  : 'default'
-              "
-              :aria-pressed="ordinaryAutomaticTranslationSource === 'sakura'"
-              @click="toggleAutomaticTranslation('sakura')"
-            >
-              Sakura 自动翻译
-            </n-button>
-          </div>
+      <div class="book-reader__translation-panel">
+        <div class="book-reader__translation-panel-actions">
+          <n-button
+            size="small"
+            :type="
+              ordinaryAutomaticTranslationSource === 'gpt'
+                ? 'primary'
+                : 'default'
+            "
+            :aria-pressed="ordinaryAutomaticTranslationSource === 'gpt'"
+            @click="toggleAutomaticTranslation('gpt')"
+          >
+            GPT 自动翻译
+          </n-button>
+          <n-button
+            size="small"
+            :type="
+              ordinaryAutomaticTranslationSource === 'sakura'
+                ? 'primary'
+                : 'default'
+            "
+            :aria-pressed="ordinaryAutomaticTranslationSource === 'sakura'"
+            @click="toggleAutomaticTranslation('sakura')"
+          >
+            Sakura 自动翻译
+          </n-button>
         </div>
-      </n-alert>
-    </div>
+      </div>
+    </ReaderBottomSheet>
 
     <div
-      v-else-if="result?.kind === 'ready'"
+      v-if="result?.kind === 'ready' && !showMobileTranslationNotice"
       class="book-reader__chapter-status"
       :title="result.chapter.title"
     >
@@ -4096,6 +4091,7 @@ onBeforeUnmount(() => {
               <span class="book-reader__settings-label">
                 自动翻译预翻译页数
                 <n-popover
+                  v-if="isDesktopReader"
                   trigger="click"
                   placement="bottom-start"
                   :style="{
@@ -4114,6 +4110,16 @@ onBeforeUnmount(() => {
                   </template>
                   提前翻译当前页之后的页数；0 表示只处理当前可见页。
                 </n-popover>
+                <button
+                  v-else
+                  class="book-reader__settings-info"
+                  type="button"
+                  aria-label="自动翻译预翻译说明"
+                  :aria-expanded="showMobilePreloadHelp"
+                  @click.stop="showMobilePreloadHelp = !showMobilePreloadHelp"
+                >
+                  <n-icon :component="InfoOutlined" />
+                </button>
               </span>
             </template>
             <n-input-number
@@ -4171,6 +4177,14 @@ onBeforeUnmount(() => {
         </div>
       </n-form>
     </ReaderBottomSheet>
+
+    <div
+      v-if="showSettings && showMobilePreloadHelp && !isDesktopReader"
+      class="book-reader__mobile-preload-help"
+      role="tooltip"
+    >
+      提前翻译当前页之后的页数；0 表示只处理当前可见页。
+    </div>
   </n-config-provider>
 </template>
 
@@ -4353,19 +4367,6 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.book-reader__translation-popover-layer {
-  display: none;
-}
-
-.book-reader__translation-popover {
-  width: min(100%, 720px);
-  margin: 0 auto;
-  color: var(--reader-warning-text);
-  background: var(--reader-warning-background);
-  border: 1px solid var(--reader-warning-border);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
-}
-
 .book-reader__translation-panel {
   display: grid;
   width: 100%;
@@ -4374,23 +4375,10 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-.book-reader__translation-panel strong {
-  font-size: 16px;
-}
-
 .book-reader__translation-panel-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-}
-
-.book-reader__translation-panel-actions :deep(.n-button__content) {
-  color: var(--reader-warning-text);
-}
-
-.book-reader__translation-panel-actions :deep(.n-button__border),
-.book-reader__translation-panel-actions :deep(.n-button__state-border) {
-  border-color: var(--reader-warning-button-border) !important;
 }
 
 .book-reader__catalog {
@@ -4597,6 +4585,24 @@ onBeforeUnmount(() => {
 
 .book-reader__settings-info :deep(.n-icon) {
   font-size: 18px;
+}
+
+.book-reader__mobile-preload-help {
+  position: fixed;
+  top: calc(var(--reader-app-bar-height) + 12px);
+  right: 16px;
+  left: 16px;
+  z-index: 3000;
+  max-width: 420px;
+  padding: 10px 12px;
+  margin: 0 auto;
+  color: var(--reader-text-color);
+  line-height: 1.5;
+  background: var(--reader-chrome-background);
+  border: 1px solid var(--reader-chrome-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+  pointer-events: none;
 }
 
 .book-reader__loading {
@@ -4815,17 +4821,6 @@ onBeforeUnmount(() => {
 
   .book-reader__translation-toggle {
     display: grid;
-  }
-
-  .book-reader__translation-popover-layer {
-    position: fixed;
-    top: var(--reader-app-bar-height);
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 101;
-    display: block;
-    padding: 8px 14px;
   }
 
   .book-reader__chapter-status {

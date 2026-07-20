@@ -853,10 +853,8 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(
     page.getByRole('button', { name: 'GPT 自动翻译' }),
   ).toBeVisible();
-  const translationLayer = page.locator(
-    '.book-reader__translation-popover-layer',
-  );
-  const translationPopover = page.locator('.book-reader__translation-popover');
+  const translationLayer = page.locator('.reader-sheet--top');
+  const translationPopover = translationLayer.locator('.reader-sheet__panel');
   await expect(
     translationPopover.getByRole('button', {
       name: '阅读语言',
@@ -870,29 +868,18 @@ test('opens a local bookshelf book safely through the current reader route', asy
     }),
   ).toHaveCount(0);
   await expect(translationLayer).toHaveCSS('position', 'fixed');
-  await expect(translationPopover).toHaveCSS(
-    'background-color',
-    'rgb(247, 223, 160)',
+  await expect(translationPopover).toHaveCSS('border-top-width', '0px');
+  await expect(translationPopover).toHaveCSS('border-bottom-width', '1px');
+  const mobileAppBarBounds = await page
+    .locator('.book-reader__app-bar')
+    .boundingBox();
+  const translationPopoverBounds = await translationPopover.boundingBox();
+  expect(mobileAppBarBounds).not.toBeNull();
+  expect(translationPopoverBounds).not.toBeNull();
+  expect(translationPopoverBounds!.y).toBeCloseTo(
+    mobileAppBarBounds!.y + mobileAppBarBounds!.height,
+    0,
   );
-  await expect(translationPopover).toHaveCSS(
-    'border-color',
-    'rgb(200, 135, 16)',
-  );
-  await expect(translationPopover).toHaveCSS('border-width', '1px');
-  await expect(translationPopover.locator('strong')).toHaveCSS(
-    'color',
-    'rgb(91, 67, 0)',
-  );
-  await expect(
-    translationPopover
-      .getByRole('button', { name: 'GPT 自动翻译' })
-      .locator('.n-button__content'),
-  ).toHaveCSS('color', 'rgb(91, 67, 0)');
-  await expect(
-    translationPopover
-      .getByRole('button', { name: 'GPT 自动翻译' })
-      .locator('.n-button__border'),
-  ).toHaveCSS('border-color', 'rgb(240, 160, 32)');
   const popoverTop = await translationPopover.evaluate((element) =>
     Math.round(element.getBoundingClientRect().top),
   );
@@ -920,12 +907,12 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(
     mobileReaderSettings.getByText('GPT 翻译器', { exact: true }),
   ).toBeVisible();
+  const mobileSettingsBoundsBeforeHelp =
+    await mobileReaderSettings.boundingBox();
   await mobileReaderSettings
     .getByRole('button', { name: '自动翻译预翻译说明' })
     .click();
-  const preloadExplanation = page
-    .locator('.n-popover')
-    .filter({ hasText: '提前翻译当前页之后的页数' });
+  const preloadExplanation = page.locator('.book-reader__mobile-preload-help');
   await expect(preloadExplanation).toBeVisible();
   const preloadExplanationBounds = await preloadExplanation.boundingBox();
   expect(preloadExplanationBounds).not.toBeNull();
@@ -933,21 +920,16 @@ test('opens a local bookshelf book safely through the current reader route', asy
   expect(
     preloadExplanationBounds!.x + preloadExplanationBounds!.width,
   ).toBeLessThanOrEqual(390);
+  expect(await mobileReaderSettings.boundingBox()).toEqual(
+    mobileSettingsBoundsBeforeHelp,
+  );
   await mobileReaderSettings
     .getByRole('button', { name: '自动翻译预翻译说明' })
     .click();
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '夜晚', exact: true }).click();
   await translationToggle.click();
-  await expect(translationPopover).toHaveCSS(
-    'border-color',
-    'rgb(158, 106, 39)',
-  );
-  await expect(
-    translationPopover
-      .getByRole('button', { name: 'GPT 自动翻译' })
-      .locator('.n-button__border'),
-  ).toHaveCSS('border-color', 'rgb(139, 120, 100)');
+  await expect(translationPopover).toBeVisible();
   await page.getByRole('button', { name: '收起未翻译操作' }).click();
   await page.getByRole('button', { name: '白天', exact: true }).click();
   await expect(page.locator('.book-reader__bottom-navigation')).toHaveCSS(

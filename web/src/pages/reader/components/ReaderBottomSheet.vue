@@ -5,6 +5,7 @@ const props = defineProps<{
   show: boolean;
   title: string;
   wide?: boolean;
+  placement?: 'top' | 'bottom';
 }>();
 
 const emit = defineEmits<{
@@ -57,29 +58,36 @@ onBeforeUnmount(() => returnFocus?.focus());
 </script>
 
 <template>
-  <div v-if="show" class="reader-sheet" @click.self="close">
-    <section
-      ref="panel"
-      class="reader-sheet__panel"
-      :class="{ 'reader-sheet__panel--wide': wide }"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="title"
-      tabindex="-1"
-      @keydown.esc.stop="close"
-      @keydown.tab="trapFocus"
+  <Transition name="reader-sheet">
+    <div
+      v-if="show"
+      class="reader-sheet"
+      :class="`reader-sheet--${placement ?? 'bottom'}`"
+      @click.self="close"
     >
-      <header class="reader-sheet__header">
-        <h2>{{ title }}</h2>
-        <button type="button" :aria-label="`关闭${title}`" @click="close">
-          <n-icon :component="CloseOutlined" />
-        </button>
-      </header>
-      <div class="reader-sheet__content">
-        <slot />
-      </div>
-    </section>
-  </div>
+      <section
+        ref="panel"
+        class="reader-sheet__panel"
+        :class="{ 'reader-sheet__panel--wide': wide }"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="title"
+        tabindex="-1"
+        @keydown.esc.stop="close"
+        @keydown.tab="trapFocus"
+      >
+        <header class="reader-sheet__header">
+          <h2>{{ title }}</h2>
+          <button type="button" :aria-label="`关闭${title}`" @click="close">
+            <n-icon :component="CloseOutlined" />
+          </button>
+        </header>
+        <div class="reader-sheet__content">
+          <slot />
+        </div>
+      </section>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -92,6 +100,19 @@ onBeforeUnmount(() => returnFocus?.focus());
   justify-content: center;
   color: var(--reader-text-color, #ddd);
   background: rgb(0 0 0 / 44%);
+}
+
+.reader-sheet--top {
+  inset: var(--reader-app-bar-height, 32px) 0
+    var(--reader-bottom-navigation-height, 52px);
+  align-items: flex-start;
+}
+
+.reader-sheet--top .reader-sheet__panel {
+  border-top: 0;
+  border-bottom: 1px solid var(--reader-chrome-border, rgb(255 255 255 / 10%));
+  border-radius: 0 0 14px 14px;
+  box-shadow: 0 10px 32px rgb(0 0 0 / 28%);
 }
 
 .reader-sheet__panel {
@@ -181,6 +202,11 @@ onBeforeUnmount(() => returnFocus?.focus());
     border-radius: 12px 12px 0 0;
   }
 
+  .reader-sheet--top .reader-sheet__panel,
+  .reader-sheet--top .reader-sheet__panel--wide {
+    border-radius: 0 0 12px 12px;
+  }
+
   .reader-sheet__content {
     max-height: calc(76dvh - 55px);
     padding: 10px 12px 14px;
@@ -188,15 +214,32 @@ onBeforeUnmount(() => returnFocus?.focus());
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .reader-sheet__panel {
-    animation: reader-sheet-enter 160ms ease-out;
+  .reader-sheet-enter-active,
+  .reader-sheet-leave-active {
+    transition: background-color 160ms ease;
   }
 
-  @keyframes reader-sheet-enter {
-    from {
-      transform: translateY(24px);
-      opacity: 0;
-    }
+  .reader-sheet-enter-active .reader-sheet__panel,
+  .reader-sheet-leave-active .reader-sheet__panel {
+    transition:
+      transform 160ms ease,
+      opacity 160ms ease;
+  }
+
+  .reader-sheet-enter-from,
+  .reader-sheet-leave-to {
+    background-color: transparent;
+  }
+
+  .reader-sheet-enter-from .reader-sheet__panel,
+  .reader-sheet-leave-to .reader-sheet__panel {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+
+  .reader-sheet--top.reader-sheet-enter-from .reader-sheet__panel,
+  .reader-sheet--top.reader-sheet-leave-to .reader-sheet__panel {
+    transform: translateY(-24px);
   }
 }
 </style>

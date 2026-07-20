@@ -789,6 +789,35 @@ onBeforeUnmount(disposeSession);
   height: min(52vh, 560px);
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-color: rgb(127 127 127 / 46%) transparent;
+  scrollbar-width: thin;
+}
+
+.txt-line-viewport::-webkit-scrollbar,
+.txt-heading-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.txt-line-viewport::-webkit-scrollbar-track,
+.txt-line-viewport::-webkit-scrollbar-track-piece,
+.txt-heading-list::-webkit-scrollbar-track,
+.txt-heading-list::-webkit-scrollbar-track-piece {
+  background: transparent;
+}
+
+.txt-line-viewport::-webkit-scrollbar-thumb,
+.txt-heading-list::-webkit-scrollbar-thumb {
+  background: rgb(127 127 127 / 46%);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.txt-line-viewport::-webkit-scrollbar-thumb:hover,
+.txt-heading-list::-webkit-scrollbar-thumb:hover {
+  background: rgb(127 127 127 / 66%);
+  background-clip: padding-box;
 }
 
 .txt-line-space {

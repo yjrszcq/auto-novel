@@ -213,7 +213,20 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
   await titleEditor
     .getByRole('button', { name: '重新解析目录', exact: true })
     .click();
-  const confirmation = page.locator('.n-popconfirm');
+  const confirmation = page.getByRole('dialog', {
+    name: '重新解析目录',
+  });
+  await expect(confirmation).toBeVisible();
+  const confirmationBounds = await confirmation.boundingBox();
+  expect(confirmationBounds).not.toBeNull();
+  expect(confirmationBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(confirmationBounds!.x + confirmationBounds!.width).toBeLessThanOrEqual(
+    390,
+  );
+  expect(confirmationBounds!.y).toBeGreaterThanOrEqual(0);
+  expect(
+    confirmationBounds!.y + confirmationBounds!.height,
+  ).toBeLessThanOrEqual(844);
   await confirmation
     .getByRole('button', { name: '进入预览', exact: true })
     .click();
@@ -227,6 +240,15 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
   expect(previewBounds!.y).toBeCloseTo(0, 0);
   expect(previewBounds!.width).toBeCloseTo(390, 0);
   expect(previewBounds!.height).toBeCloseTo(844, 0);
+  for (const selector of ['.txt-line-viewport', '.txt-heading-list']) {
+    await expect
+      .poll(() =>
+        preview
+          .locator(selector)
+          .evaluate((element) => getComputedStyle(element).scrollbarColor),
+      )
+      .not.toBe('auto');
+  }
   await preview
     .getByRole('button', { name: '确认并完整重建', exact: true })
     .click();

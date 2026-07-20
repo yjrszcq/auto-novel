@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { LocalVolumeTocEntry } from '@/model/LocalVolume';
 import { InfoOutlined } from '@vicons/material';
+import { useMediaQuery } from '@vueuse/core';
 
 interface CatalogTitleDraft {
   chapterId: string;
@@ -22,6 +23,8 @@ const emit = defineEmits<{
 }>();
 const show = defineModel<boolean>('show', { default: false });
 const message = useMessage();
+const isMobile = useMediaQuery('(max-width: 600px)');
+const showRebuildConfirm = ref(false);
 const drafts = ref<CatalogTitleDraft[]>([]);
 
 const resetDrafts = () => {
@@ -52,6 +55,11 @@ const confirm = () => {
       title: title.trim(),
     })),
   );
+};
+
+const rebuild = () => {
+  showRebuildConfirm.value = false;
+  emit('rebuild');
 };
 
 watch(
@@ -116,6 +124,7 @@ watch(
     <template #action>
       <div class="txt-catalog-title-actions">
         <n-popconfirm
+          v-if="!isMobile"
           style="max-width: min(340px, calc(100vw - 16px))"
           positive-text="进入预览"
           negative-text="取消"
@@ -131,6 +140,14 @@ watch(
           </template>
           完整重建允许修改目录位置和层级；不完整的译文来源会整套清除，确认预览前不会写入数据。
         </n-popconfirm>
+        <n-button
+          v-else
+          :disabled="props.saving"
+          :loading="props.preparingRebuild"
+          @click="showRebuildConfirm = true"
+        >
+          重新解析目录
+        </n-button>
         <n-flex justify="end" :wrap="false">
           <n-button :disabled="props.saving" @click="show = false">
             取消
@@ -141,6 +158,18 @@ watch(
         </n-flex>
       </div>
     </template>
+  </n-modal>
+  <n-modal
+    v-model:show="showRebuildConfirm"
+    preset="dialog"
+    aria-label="重新解析目录"
+    title="重新解析目录"
+    positive-text="进入预览"
+    negative-text="取消"
+    style="width: min(420px, calc(100vw - 24px))"
+    @positive-click="rebuild"
+  >
+    完整重建允许修改目录位置和层级；不完整的译文来源会整套清除，确认预览前不会写入数据。
   </n-modal>
 </template>
 
