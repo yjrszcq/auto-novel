@@ -79,12 +79,11 @@ describe('reader open mode', () => {
     }
   });
 
-  it('forces original mode and hides translated choices without translations', () => {
+  it('keeps the preferred mode ready before translations become available', () => {
     const capabilities = { ...translated, hasAnyTranslation: false };
 
-    expect(resolveReaderMode({ settings, capabilities })).toBe('original');
-    expect(getAvailableReaderModes(capabilities)).toEqual(['original']);
-    expect(getAvailableReaderModes(translated)).toEqual([
+    expect(resolveReaderMode({ settings, capabilities })).toBe('translated');
+    expect(getAvailableReaderModes()).toEqual([
       'translated',
       'translated-original',
       'original-translated',

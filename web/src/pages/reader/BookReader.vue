@@ -301,6 +301,9 @@ const hasIncompleteChapter = computed(
     currentChapterSummary.value !== undefined &&
     currentChapterSummary.value.translationStatus !== 'complete',
 );
+const currentChapterAwaitsTranslation = computed(
+  () => currentChapterSummary.value?.translationStatus === 'none',
+);
 const showsAutomaticTranslationControls = computed(
   () =>
     hasIncompleteChapter.value ||
@@ -1144,7 +1147,7 @@ const resolveMode = async (
     showModePrompt.value = false;
     return;
   }
-  availableModes.value = getAvailableReaderModes(capabilities);
+  availableModes.value = getAvailableReaderModes();
   readingMode.value = resolveReaderMode({
     temporaryMode,
     preference,
@@ -1763,24 +1766,7 @@ const openVisiblePageModePrompt = () => {
   const ready = result.value;
   if (ready?.kind !== 'ready') return;
   showTools.value = false;
-  const chapters = new Map(
-    [ready.chapter, ...continuousChapters.value].map((chapter) => [
-      chapter.chapterId,
-      chapter,
-    ]),
-  );
-  const hasVisibleTranslation = getVisibleReaderSegments().some((target) =>
-    chapters
-      .get(target.chapterId)
-      ?.segments.some(
-        (segment) =>
-          segment.id === target.segmentId &&
-          (segment.translated?.trim().length ?? 0) > 0,
-      ),
-  );
-  visiblePageModes.value = hasVisibleTranslation
-    ? [...readerModes]
-    : ['original'];
+  visiblePageModes.value = [...readerModes];
   showModePrompt.value = true;
 };
 
@@ -2557,7 +2543,7 @@ const startAutomaticTranslation = async (
     automaticTranslationSource.value = source;
     retranslationChapterId.value =
       purpose === 'retranslate' ? targetChapterId : undefined;
-    temporaryMode = settings.value.defaultMode;
+    temporaryMode = readingMode.value;
     await hydrateAutomaticTranslationDrafts(selection, request, targetBookId);
     if (
       request !== automaticTranslationStartRequest ||
@@ -4081,6 +4067,8 @@ onBeforeUnmount(() => {
       v-model:show="showModePrompt"
       v-model:remember="rememberModeChoice"
       :modes="visiblePageModes"
+      :selected="readingMode"
+      :translation-pending="currentChapterAwaitsTranslation"
       :source-language="
         result?.kind === 'ready' ? result.book.sourceLanguage : undefined
       "

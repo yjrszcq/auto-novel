@@ -6,7 +6,9 @@ import { getReaderModeLabel } from '../core/ReaderMode';
 const props = defineProps<{
   show: boolean;
   modes: ReaderMode[];
+  selected: ReaderMode;
   remember: boolean;
+  translationPending: boolean;
   sourceLanguage?: string;
 }>();
 
@@ -41,17 +43,34 @@ const emit = defineEmits<{
           v-for="mode in props.modes"
           :key="mode"
           block
+          :type="mode === props.selected ? 'primary' : 'default'"
+          :aria-pressed="mode === props.selected"
           @click="emit('select', mode)"
         >
           {{ getReaderModeLabel(mode, props.sourceLanguage) }}
         </n-button>
-        <n-checkbox
-          :checked="props.remember"
-          @update:checked="emit('update:remember', $event)"
-        >
-          记住本书选择
-        </n-checkbox>
+        <div class="reader-mode-dialog__preference">
+          <n-checkbox
+            :checked="props.remember"
+            @update:checked="emit('update:remember', $event)"
+          >
+            记住本书选择
+          </n-checkbox>
+          <n-text v-if="props.translationPending" type="warning">
+            翻译后生效
+          </n-text>
+        </div>
       </n-space>
     </n-card>
   </n-modal>
 </template>
+
+<style scoped>
+.reader-mode-dialog__preference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  gap: 16px;
+}
+</style>

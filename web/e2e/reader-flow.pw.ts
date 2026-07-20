@@ -2029,7 +2029,13 @@ test('automatically translates a reader window without persisting a partial chap
         request.onsuccess = () => resolve(request.result);
       });
       const transaction = database.transaction(
-        ['metadata', 'file', 'chapter', 'reader-settings'],
+        [
+          'metadata',
+          'file',
+          'chapter',
+          'reader-settings',
+          'reader-book-preference',
+        ],
         'readwrite',
       );
       transaction.objectStore('metadata').put({
@@ -2077,6 +2083,11 @@ test('automatically translates a reader window without persisting a partial chap
         flow: 'scrolled',
         updatedAt: 1,
       });
+      transaction.objectStore('reader-book-preference').put({
+        bookId,
+        preferredMode: 'original-translated',
+        updatedAt: 1,
+      });
       await new Promise<void>((resolve, reject) => {
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
@@ -2106,6 +2117,22 @@ test('automatically translates a reader window without persisting a partial chap
     await expect(
       toolsDialog.getByRole('button', { name: '刷新本页', exact: true }),
     ).toBeVisible();
+    await toolsDialog
+      .getByRole('button', { name: '阅读语言', exact: true })
+      .click();
+    const pendingModeDialog = page.getByText('选择阅读语言', { exact: true });
+    await expect(pendingModeDialog).toBeVisible();
+    for (const label of ['中文', '中日对照', '日中对照', '原文（日文）']) {
+      await expect(
+        page.getByRole('button', { name: label, exact: true }),
+      ).toBeVisible();
+    }
+    await expect(
+      page.getByRole('button', { name: '日中对照', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('翻译后生效', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '关闭阅读语言' }).click();
+    await page.getByRole('button', { name: '工具', exact: true }).click();
     await expect(
       toolsDialog.getByRole('button', { name: '重翻当前章', exact: true }),
     ).toBeDisabled();
@@ -2150,6 +2177,9 @@ test('automatically translates a reader window without persisting a partial chap
       'true',
     );
     await expect(source).toContainText('译文第1行');
+    await expect(page.locator('.reader-segment-layout')).toHaveClass(
+      /reader-segment-layout--original-translated/,
+    );
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await page
       .getByRole('dialog', { name: '阅读工具' })

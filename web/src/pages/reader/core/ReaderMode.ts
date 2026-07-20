@@ -54,24 +54,17 @@ export const getReaderModeLabel = (
   return `原文（${language}）`;
 };
 
-export const getAvailableReaderModes = (
-  capabilities: BookReadingCapabilities,
-): ReaderMode[] =>
-  capabilities.hasAnyTranslation ? readerModes : ['original'];
+export const getAvailableReaderModes = (): ReaderMode[] => [...readerModes];
 
 export const resolveReaderMode = ({
   temporaryMode,
   preference,
   settings,
-  capabilities,
 }: {
   temporaryMode?: SelectableReaderMode;
   preference?: ReaderBookPreference;
   settings: ReaderSettingsRecord;
   capabilities: BookReadingCapabilities;
 }): ReaderMode => {
-  if (!capabilities.hasAnyTranslation) {
-    return 'original';
-  }
   return temporaryMode ?? preference?.preferredMode ?? settings.defaultMode;
 };
