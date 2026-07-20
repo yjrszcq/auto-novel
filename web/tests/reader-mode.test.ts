@@ -6,6 +6,7 @@ import type {
 } from '../src/model/Reader';
 import {
   getAvailableReaderModes,
+  getReaderDisplayTitle,
   getReaderModeShortcut,
   getReaderModeLabel,
   readerModeLabels,
@@ -100,5 +101,17 @@ describe('reader open mode', () => {
     });
     expect(getReaderModeLabel('original', 'zh-Hans')).toBe('原文（中文）');
     expect(getReaderModeLabel('original', 'en')).toBe('原文（英文）');
+  });
+
+  it('uses translated catalog titles only for translated-first modes', () => {
+    const entry = { title: '原题', translatedTitle: '译题' };
+
+    expect(getReaderDisplayTitle(entry, 'translated')).toBe('译题');
+    expect(getReaderDisplayTitle(entry, 'translated-original')).toBe('译题');
+    expect(getReaderDisplayTitle(entry, 'original-translated')).toBe('原题');
+    expect(getReaderDisplayTitle(entry, 'original')).toBe('原题');
+    expect(getReaderDisplayTitle({ title: '回退原题' }, 'translated')).toBe(
+      '回退原题',
+    );
   });
 });

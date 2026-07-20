@@ -140,6 +140,7 @@ export interface ReaderChapterSummary {
   bookId: string;
   index: number;
   title: string;
+  translatedTitle?: string;
   hasOriginal: boolean;
   translationStatus: ReaderTranslationStatus;
   translatedSegmentCount: number;
@@ -150,6 +151,7 @@ export interface ReaderChapterSummary {
 export interface ReaderNavigationEntry {
   id: string;
   title: string;
+  translatedTitle?: string;
   level: number;
   chapterId?: string;
   parentId?: string;
@@ -198,6 +200,7 @@ export interface ReaderChapterContent {
   chapterId: string;
   chapterIndex: number;
   title: string;
+  translatedTitle?: string;
   segments: ReaderSegment[];
   translationSource?: string;
   epub?: ReaderEpubChapterContent;

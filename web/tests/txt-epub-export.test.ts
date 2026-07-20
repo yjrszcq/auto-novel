@@ -75,10 +75,27 @@ describe('TXT EPUB export', () => {
       createAt: 1,
       sourceFormat: 'txt',
       toc: [
-        { chapterId: 'volume', title: '第一卷' },
+        {
+          chapterId: 'volume',
+          title: '第一卷',
+          titleTranslations: {
+            gpt: {
+              text: '第一卷译题',
+              glossaryId: 'glossary',
+              sourceTitle: '第一卷',
+            },
+          },
+        },
         {
           chapterId: 'chapter',
           title: '第一章',
+          titleTranslations: {
+            gpt: {
+              text: '第一章译题',
+              glossaryId: 'glossary',
+              sourceTitle: '第一章',
+            },
+          },
           parentChapterId: 'volume',
         },
       ],
@@ -143,6 +160,10 @@ describe('TXT EPUB export', () => {
       chapter.indexOf('章节原文'),
     );
     expect(chapter).not.toContain('<p>第一章</p>');
+    expect(mixedArchive.text.get('OEBPS/nav.xhtml')).toContain(
+      '第一卷译题 / 第一卷',
+    );
+    expect(chapter).toContain('<h1>第一章译题 / 第一章</h1>');
 
     const original = await getTranslationFile(dao, {
       id: metadata.id,
@@ -158,5 +179,9 @@ describe('TXT EPUB export', () => {
     expect(
       originalArchive.text.get('OEBPS/text/chapter-2.xhtml'),
     ).not.toContain('章节译文');
+    expect(originalArchive.text.get('OEBPS/nav.xhtml')).toContain('第一卷');
+    expect(originalArchive.text.get('OEBPS/nav.xhtml')).not.toContain(
+      '第一卷译题',
+    );
   });
 });

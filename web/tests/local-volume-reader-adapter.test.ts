@@ -22,17 +22,50 @@ const volume: LocalVolumeMetadata = {
   createAt: 10,
   readAt: 20,
   toc: [
-    { chapterId: 'first', title: '第一章：开端' },
+    {
+      chapterId: 'first',
+      title: '第一章：开端',
+      titleTranslations: {
+        gpt: {
+          text: '译题：GPT 开端',
+          glossaryId: 'glossary',
+          sourceTitle: '第一章：开端',
+        },
+        sakura: {
+          text: '译题：Sakura 开端',
+          glossaryId: 'glossary',
+          sourceTitle: '第一章：开端',
+        },
+      },
+    },
     { chapterId: 'second', title: '第二章：结尾' },
   ],
   navigation: [
-    { id: 'part', title: '第一部', level: 0 },
+    {
+      id: 'part',
+      title: '第一部',
+      level: 0,
+      titleTranslations: {
+        gpt: {
+          text: '译题：第一部',
+          glossaryId: 'glossary',
+          sourceTitle: '第一部',
+        },
+      },
+    },
     {
       id: 'native-first',
       title: '第一章：开端',
       level: 1,
       parentId: 'part',
       chapterId: 'first',
+      titleTranslations: {
+        gpt: {
+          text: '译题：GPT 开端',
+          glossaryId: 'glossary',
+          sourceTitle: '第一章：开端',
+        },
+      },
     },
     {
       id: 'native-second',
@@ -164,6 +197,7 @@ describe('LocalVolumeReaderAdapter', () => {
     await expect(adapter.getChapters(volume.id)).resolves.toMatchObject([
       {
         id: 'first',
+        translatedTitle: '译题：GPT 开端',
         translationStatus: 'complete',
         translationSources: ['sakura', 'gpt'],
       },
@@ -172,9 +206,15 @@ describe('LocalVolumeReaderAdapter', () => {
         translationStatus: 'none',
       },
     ]);
-    await expect(adapter.getNavigation?.(volume.id)).resolves.toEqual(
-      volume.navigation,
-    );
+    await expect(adapter.getNavigation?.(volume.id)).resolves.toMatchObject([
+      { id: 'part', title: '第一部', translatedTitle: '译题：第一部' },
+      {
+        id: 'native-first',
+        title: '第一章：开端',
+        translatedTitle: '译题：GPT 开端',
+      },
+      { id: 'native-second', title: '第二章：结尾' },
+    ]);
     await expect(
       adapter.getChapter({ bookId: volume.id, chapterId: 'first' }),
     ).resolves.toEqual({
@@ -182,6 +222,7 @@ describe('LocalVolumeReaderAdapter', () => {
       chapterId: 'first',
       chapterIndex: 0,
       title: '第一章：开端',
+      translatedTitle: '译题：GPT 开端',
       translationSource: 'gpt',
       segments: [
         {

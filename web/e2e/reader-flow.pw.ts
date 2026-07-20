@@ -43,6 +43,113 @@ const expectSheetAboveBottomNavigation = async (
   ).toBeLessThanOrEqual(1);
 };
 
+test('switches translated catalog titles with the reader language mode', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await expect(page.locator('.n-skeleton')).toHaveCount(0);
+  await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'chapter', 'reader-settings'],
+      'readwrite',
+    );
+    const titleTranslations = {
+      gpt: {
+        text: '译题：启程',
+        glossaryId: 'glossary',
+        sourceTitle: '第一章：出发',
+      },
+    };
+    transaction.objectStore('metadata').put({
+      id: 'translated-catalog.txt',
+      createAt: 1,
+      toc: [
+        {
+          chapterId: '0',
+          title: '第一章：出发',
+          titleTranslations,
+        },
+      ],
+      navigation: [
+        {
+          id: 'txt:0',
+          title: '第一章：出发',
+          titleTranslations,
+          level: 1,
+          chapterId: '0',
+        },
+      ],
+      sourceFormat: 'txt',
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceBookMetadata: { title: '目录译题测试', languages: ['ja'] },
+    });
+    transaction.objectStore('chapter').put({
+      id: 'translated-catalog.txt/0',
+      volumeId: 'translated-catalog.txt',
+      paragraphs: ['第一章：出发', '正文'],
+      segmentIds: ['title', 'body'],
+      gpt: {
+        glossaryId: 'glossary',
+        glossary: {},
+        paragraphs: ['译题：启程', '译文'],
+      },
+    });
+    transaction.objectStore('reader-settings').put({
+      id: 'default',
+      defaultMode: 'translated',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      autoTranslationPreloadPages: 3,
+      retranslationPolicy: 'ask',
+      fontSize: 18,
+      lineHeight: 1.9,
+      contentWidth: 840,
+      horizontalPadding: 24,
+      theme: 'system',
+      flow: 'auto',
+      updatedAt: 1,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  });
+
+  await page.goto('/books/translated-catalog.txt/read/0');
+  await expect(page.locator('.book-reader__chapter-status')).toHaveText(
+    '译题：启程',
+  );
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expect(page.locator('.book-reader__catalog-title')).toHaveText(
+    '译题：启程',
+  );
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('4');
+  await expect(page.locator('.book-reader__chapter-status')).toHaveText(
+    '第一章：出发',
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.keyboard.press('1');
+  await expect(page.locator('.book-reader__chapter-status')).toHaveText(
+    '译题：启程',
+  );
+  await page.getByRole('button', { name: '目录', exact: true }).click();
+  await expect(page.locator('.book-reader__catalog-title')).toHaveText(
+    '译题：启程',
+  );
+});
+
 test('keeps inherited reader themes opaque and responsive to system changes', async ({
   page,
 }) => {

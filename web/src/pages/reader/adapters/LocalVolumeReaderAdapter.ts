@@ -18,6 +18,7 @@ import type { TranslatorId } from '@/model/Translator';
 import type { useLocalVolumeStore } from '@/stores';
 import { Epub } from '@/util/file';
 import { chapterTranslationSources } from '@/domain/translate/ChapterTranslationCompletion';
+import { selectCatalogTitleTranslation } from '@/domain/translate/CatalogTitleTranslation';
 
 import {
   createEpubLinkTargets,
@@ -137,7 +138,8 @@ export const createLocalVolumeReaderAdapter = (
     volume: LocalVolumeMetadata,
   ): Promise<ReaderChapterSummary[]> => {
     const chapters = await getVolumeChapters(bookId);
-    return volume.toc.map(({ chapterId, title }, index) => {
+    return volume.toc.map((entry, index) => {
+      const { chapterId, title } = entry;
       const chapter = chapters.get(`${bookId}/${chapterId}`);
       if (chapter === undefined) {
         throw new Error('章节不存在');
@@ -152,6 +154,10 @@ export const createLocalVolumeReaderAdapter = (
         bookId,
         index,
         title: getChapterTitle(bookId, chapterId, title),
+        translatedTitle: selectCatalogTitleTranslation(
+          entry,
+          translationPriority,
+        ),
         hasOriginal: chapter.paragraphs.length > 0,
         translationStatus: status,
         translatedSegmentCount,
@@ -175,28 +181,35 @@ export const createLocalVolumeReaderAdapter = (
     async getNavigation(bookId) {
       const volume = await getVolume(bookId);
       if (volume.navigation?.length) {
-        return volume.navigation.map(
-          ({ id, title, level, chapterId, parentId, href }) => ({
-            id,
-            title,
-            level,
-            chapterId,
-            parentId,
-            href,
-          }),
-        ) satisfies ReaderNavigationEntry[];
+        return volume.navigation.map((entry) => ({
+          id: entry.id,
+          title: entry.title,
+          translatedTitle: selectCatalogTitleTranslation(
+            entry,
+            translationPriority,
+          ),
+          level: entry.level,
+          chapterId: entry.chapterId,
+          parentId: entry.parentId,
+          href: entry.href,
+        })) satisfies ReaderNavigationEntry[];
       }
-      return volume.toc.map(({ chapterId, title, level }, index) => ({
-        id: chapterId,
-        title: getChapterTitle(bookId, chapterId, title),
-        level: level ?? 0,
-        chapterId,
+      return volume.toc.map((entry, index) => ({
+        id: entry.chapterId,
+        title: getChapterTitle(bookId, entry.chapterId, entry.title),
+        translatedTitle: selectCatalogTitleTranslation(
+          entry,
+          translationPriority,
+        ),
+        level: entry.level ?? 0,
+        chapterId: entry.chapterId,
         parentId:
-          level !== undefined && level > 0
+          entry.level !== undefined && entry.level > 0
             ? volume.toc
                 .slice(0, index)
                 .reverse()
-                .find((entry) => (entry.level ?? 0) < level)?.chapterId
+                .find((candidate) => (candidate.level ?? 0) < entry.level!)
+                ?.chapterId
             : undefined,
       }));
     },
@@ -241,6 +254,10 @@ export const createLocalVolumeReaderAdapter = (
           bookId,
           chapterId,
           volume.toc[chapterIndex].title,
+        ),
+        translatedTitle: selectCatalogTitleTranslation(
+          volume.toc[chapterIndex],
+          translationPriority,
         ),
         translationSource: translation?.translatorId,
         segments: chapter.paragraphs.map((original, index) => ({

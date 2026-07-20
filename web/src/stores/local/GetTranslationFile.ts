@@ -3,6 +3,7 @@ import {
   getLocalBookMetadata,
   type LocalDownloadMode,
 } from '@/model/LocalVolume';
+import { formatCatalogTitleForDownload } from '@/domain/translate/CatalogTitleTranslation';
 
 import { injectEpubParagraphTranslations } from './EpubParser';
 import { collectEpubSourceTranslations } from './EpubTranslationExport';
@@ -91,7 +92,7 @@ export const getTranslationFile = async (
     for (const tocItem of metadata.toc) {
       chapters.push({
         id: tocItem.chapterId,
-        title: tocItem.title?.trim() || '未命名章节',
+        title: formatCatalogTitleForDownload(tocItem, mode, translations),
         parentChapterId: tocItem.parentChapterId,
         paragraphs: await getDownloadLines(
           tocItem.chapterId,
@@ -142,6 +143,14 @@ export const getTranslationFile = async (
         injectEpubParagraphTranslations(item.doc, mode, translations);
       }
     }
+    const catalog = metadata.navigation?.length
+      ? metadata.navigation
+      : metadata.toc;
+    myFile.updateNavigationTitles(
+      catalog.map((entry) =>
+        formatCatalogTitleForDownload(entry, mode, translations),
+      ),
+    );
     if (embedMetadata) {
       await embedEpubDownloadMetadata(dao, myFile, metadata);
     }

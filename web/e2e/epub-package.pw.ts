@@ -1,8 +1,17 @@
 import { expect, test } from '@playwright/test';
-import { BlobReader, BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js';
+import {
+  BlobReader,
+  BlobWriter,
+  TextReader,
+  TextWriter,
+  ZipReader,
+  ZipWriter,
+} from '@zip.js/zip.js';
 
 import type { Epub as ParsedEpub } from '../src/util/file/epub';
 import type { createEpubRichChapter as CreateEpubRichChapter } from '../src/stores/local/EpubRichChapter';
+import type { getTranslationFile as GetTranslationFile } from '../src/stores/local/GetTranslationFile';
+import type { createLocalVolumeDao as CreateLocalVolumeDao } from '../src/stores/local/LocalVolumeDao';
 
 const createStandardsFixture = async () => {
   const output = new BlobWriter('application/epub+zip');
@@ -207,6 +216,63 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       expect.objectContaining({ code: 'remote-resource-disabled' }),
     ]),
   );
+
+  const translatedEpubBytes = await page.evaluate(async () => {
+    const dynamicImport = (path: string) => import(/* @vite-ignore */ path);
+    const { createLocalVolumeDao } = (await dynamicImport(
+      '/src/stores/local/LocalVolumeDao.ts',
+    )) as { createLocalVolumeDao: typeof CreateLocalVolumeDao };
+    const { getTranslationFile } = (await dynamicImport(
+      '/src/stores/local/GetTranslationFile.ts',
+    )) as { getTranslationFile: typeof GetTranslationFile };
+    const dao = await createLocalVolumeDao();
+    await dao.updateMetadata('rich fixture.epub', (metadata) => ({
+      ...metadata,
+      toc: metadata.toc.map((entry) => ({
+        ...entry,
+        titleTranslations: {
+          gpt: {
+            text: `译题：${entry.title}`,
+            glossaryId: metadata.glossaryId,
+            sourceTitle: entry.title ?? '',
+          },
+        },
+      })),
+      navigation: metadata.navigation?.map((entry) => ({
+        ...entry,
+        titleTranslations: {
+          gpt: {
+            text: `译题：${entry.title}`,
+            glossaryId: metadata.glossaryId,
+            sourceTitle: entry.title,
+          },
+        },
+      })),
+    }));
+    const { blob } = await getTranslationFile(dao, {
+      id: 'rich fixture.epub',
+      mode: 'zh',
+      translationsMode: 'priority',
+      translations: ['gpt'],
+    });
+    dao.close();
+    return [...new Uint8Array(await blob.arrayBuffer())];
+  });
+  const translatedEpub = new ZipReader(
+    new BlobReader(new Blob([Uint8Array.from(translatedEpubBytes)])),
+  );
+  const translatedEntries = await translatedEpub.getEntries();
+  const translatedNavigation = translatedEntries.find(
+    (entry) => entry.filename === 'OPS/nav/toc.xhtml',
+  );
+  expect(translatedNavigation?.getData).toBeDefined();
+  const translatedNavigationText = await translatedNavigation!.getData!(
+    new TextWriter(),
+  );
+  await translatedEpub.close();
+  expect(translatedNavigationText).toContain('译题：第一卷');
+  expect(translatedNavigationText).toContain('译题：第一篇');
+  expect(translatedNavigationText).toContain('译题：第一章');
 
   const richProjection = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -463,7 +529,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   await expect(page.getByRole('heading', { name: '第一章' })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '目录' }).click();
+  await page.getByRole('button', { name: '目录', exact: true }).click();
   const catalog = page.getByRole('dialog', { name: '目录' });
   await expect(catalog.getByText('第一卷', { exact: true })).toBeVisible();
   await expect(catalog.getByText('第一篇', { exact: true })).toHaveCount(0);
@@ -503,7 +569,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   );
   await page.getByRole('button', { name: '关闭目录' }).click();
   await expect(page.getByText('附录内容')).toBeVisible();
-  await page.getByRole('button', { name: '目录' }).click();
+  await page.getByRole('button', { name: '目录', exact: true }).click();
   await catalog.getByRole('button', { name: /固定版式/ }).click();
   await expect(catalog).toBeVisible();
   await page.getByRole('button', { name: '关闭目录' }).click();

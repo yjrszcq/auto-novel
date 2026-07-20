@@ -72,9 +72,10 @@ export const createReaderPageController = (adapter: ReaderContentAdapter) => {
       });
       const navigation =
         nativeNavigation ??
-        chapters.map(({ id, title }) => ({
+        chapters.map(({ id, title, translatedTitle }) => ({
           id,
           title,
+          translatedTitle,
           level: 0,
           chapterId: id,
         }));

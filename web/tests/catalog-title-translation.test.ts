@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   createCatalogTitleTranslationPlan,
+  formatCatalogTitleForDownload,
   getCatalogTitleTranslation,
   isCatalogTitleTranslationCurrent,
   selectCatalogTitleTranslation,
@@ -18,6 +19,33 @@ afterEach(async () => {
 });
 
 describe('catalog title translations', () => {
+  it('formats translated, bilingual, and original download titles', () => {
+    const entry = {
+      title: '第一章',
+      titleTranslations: {
+        gpt: {
+          text: '第一章译题',
+          glossaryId: 'glossary',
+          sourceTitle: '第一章',
+        },
+      },
+    };
+
+    expect(formatCatalogTitleForDownload(entry, 'zh', ['gpt'])).toBe(
+      '第一章译题',
+    );
+    expect(formatCatalogTitleForDownload(entry, 'zh-jp', ['gpt'])).toBe(
+      '第一章译题 / 第一章',
+    );
+    expect(formatCatalogTitleForDownload(entry, 'jp-zh', ['gpt'])).toBe(
+      '第一章 / 第一章译题',
+    );
+    expect(formatCatalogTitleForDownload(entry, 'jp', ['gpt'])).toBe('第一章');
+    expect(formatCatalogTitleForDownload(entry, 'zh', ['sakura'])).toBe(
+      '第一章',
+    );
+  });
+
   it('plans missing, expired, and forced titles without duplicate requests', () => {
     const metadata = {
       id: 'book',

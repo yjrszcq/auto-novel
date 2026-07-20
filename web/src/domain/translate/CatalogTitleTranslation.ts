@@ -1,6 +1,7 @@
 import type {
   CatalogTitleTranslation,
   CatalogTitleTranslations,
+  LocalDownloadMode,
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import type { TranslateTaskParams, TranslatorId } from '@/model/Translator';
@@ -42,6 +43,25 @@ export const selectCatalogTitleTranslation = (
     if (translation !== undefined) return translation.text.trim();
   }
   return undefined;
+};
+
+export const formatCatalogTitleForDownload = (
+  entry: CatalogTitleEntry,
+  mode: LocalDownloadMode,
+  translationPriority: readonly TranslatorId[],
+) => {
+  const sourceTitle = normalizeTitle(entry.title) || '未命名章节';
+  if (mode === 'jp') return sourceTitle;
+  const translatedTitle = selectCatalogTitleTranslation(
+    entry,
+    translationPriority,
+  );
+  if (translatedTitle === undefined || translatedTitle === sourceTitle) {
+    return sourceTitle;
+  }
+  if (mode === 'zh-jp') return `${translatedTitle} / ${sourceTitle}`;
+  if (mode === 'jp-zh') return `${sourceTitle} / ${translatedTitle}`;
+  return translatedTitle;
 };
 
 export interface CatalogTitleTranslationPlanTarget {

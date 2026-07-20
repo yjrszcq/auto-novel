@@ -73,6 +73,7 @@ import {
 } from './core/ReaderBookmarks';
 import {
   getAvailableReaderModes,
+  getReaderDisplayTitle,
   getReaderModeLabel,
   getReaderModeShortcut,
   readerModes,
@@ -383,6 +384,11 @@ const renderedMode = computed(() =>
       )
     : 'original',
 );
+
+const displayReaderTitle = (entry: {
+  title: string;
+  translatedTitle?: string;
+}) => getReaderDisplayTitle(entry, readingMode.value);
 
 const getChapterRenderedMode = (chapter: ReaderChapterContent) =>
   resolveRenderedReaderMode(readingMode.value, chapter.segments);
@@ -2764,9 +2770,10 @@ const toggleBookmark = async () => {
         languageSide: anchor.languageSide,
         offsetRatio: anchor.offsetRatio,
         viewportTopOffset: anchor.viewportTopOffset,
-        label:
-          result.value.chapters.find(({ id }) => id === anchor.chapterId)
-            ?.title ?? result.value.chapter.title,
+        label: displayReaderTitle(
+          result.value.chapters.find(({ id }) => id === anchor.chapterId) ??
+            result.value.chapter,
+        ),
       }),
     );
     message.success('已添加书签');
@@ -3599,9 +3606,9 @@ onBeforeUnmount(() => {
     >
       <span
         class="book-reader__corner-status book-reader__chapter-status"
-        :title="result.chapter.title"
+        :title="displayReaderTitle(result.chapter)"
       >
-        {{ result.chapter.title }}
+        {{ displayReaderTitle(result.chapter) }}
       </span>
       <span class="book-reader__corner-status book-reader__time-status">
         {{ currentTime }}
@@ -3681,7 +3688,7 @@ onBeforeUnmount(() => {
               v-if="chapterIndex > 0"
               class="book-reader__continuous-chapter-title"
             >
-              {{ chapter.title }}
+              {{ displayReaderTitle(chapter) }}
             </h2>
             <ReaderEpubLayout
               v-if="chapter.epub !== undefined"
@@ -3839,7 +3846,9 @@ onBeforeUnmount(() => {
                   :component="ChevronRightOutlined"
                 />
               </span>
-              <span class="book-reader__catalog-title">{{ entry.title }}</span>
+              <span class="book-reader__catalog-title">
+                {{ displayReaderTitle(entry) }}
+              </span>
               <n-tag
                 v-if="
                   entry.chapterId !== undefined &&
@@ -4016,7 +4025,7 @@ onBeforeUnmount(() => {
         </div>
         <div>
           <dt>当前章节</dt>
-          <dd>{{ result.chapter.title }}</dd>
+          <dd>{{ displayReaderTitle(result.chapter) }}</dd>
         </div>
         <div>
           <dt>阅读进度</dt>

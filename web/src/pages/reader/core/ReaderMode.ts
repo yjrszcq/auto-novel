@@ -56,6 +56,14 @@ export const getReaderModeLabel = (
 
 export const getAvailableReaderModes = (): ReaderMode[] => [...readerModes];
 
+export const getReaderDisplayTitle = (
+  entry: { title: string; translatedTitle?: string },
+  mode: ReaderMode,
+) =>
+  mode === 'translated' || mode === 'translated-original'
+    ? entry.translatedTitle?.trim() || entry.title
+    : entry.title;
+
 export const resolveReaderMode = ({
   temporaryMode,
   preference,

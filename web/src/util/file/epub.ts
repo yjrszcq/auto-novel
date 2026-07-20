@@ -779,6 +779,74 @@ export class Epub extends BaseFile {
     replace('language', metadataValue.languages);
   }
 
+  updateNavigationTitles(titles: readonly string[]) {
+    const updateItems = (items: EpubNavigationItem[], state = { index: 0 }) => {
+      items.forEach((item) => {
+        const title = titles[state.index]?.trim();
+        state.index += 1;
+        if (title) item.text = title;
+        updateItems(item.children, state);
+      });
+    };
+    updateItems(this.navItems);
+
+    const updateNavigationDocument = (doc: Document) => {
+      const navEls = Array.from(doc.getElementsByTagName('nav'));
+      const tocNavEl =
+        navEls.find((navEl) =>
+          [navEl.getAttribute('epub:type'), navEl.getAttribute('type')].some(
+            (value) => value?.trim().toLowerCase().split(/\s+/).includes('toc'),
+          ),
+        ) ?? navEls.find((navEl) => navEl.id === 'toc');
+      const tocOlEl = tocNavEl?.querySelector('ol');
+      if (!tocOlEl) return;
+      let index = 0;
+      const visit = (ol: Element) => {
+        Array.from(ol.children)
+          .filter((element) => element.localName === 'li')
+          .forEach((li) => {
+            const label = li.querySelector(
+              ':scope > a, :scope > span, a, span',
+            );
+            const title = titles[index]?.trim();
+            index += 1;
+            if (label && title) label.textContent = title;
+            const child = li.querySelector(':scope > ol, ol');
+            if (child) visit(child);
+          });
+      };
+      visit(tocOlEl);
+    };
+    const navigation = this.navigationPath
+      ? this.getResourceByPath(this.navigationPath)
+      : undefined;
+    if (navigation && 'doc' in navigation) {
+      updateNavigationDocument(navigation.doc);
+    }
+
+    const ncx = this.ncxPath ? this.getResourceByPath(this.ncxPath) : undefined;
+    if (ncx && 'doc' in ncx) {
+      let index = 0;
+      const visit = (parent: Element) => {
+        Array.from(parent.children)
+          .filter((element) => element.localName === 'navPoint')
+          .forEach((navPoint) => {
+            const label = Array.from(navPoint.children).find(
+              (element) => element.localName === 'navLabel',
+            );
+            const title = titles[index]?.trim();
+            index += 1;
+            if (label && title) label.textContent = title;
+            visit(navPoint);
+          });
+      };
+      const navMap = Array.from(ncx.doc.getElementsByTagName('*')).find(
+        (element) => element.localName === 'navMap',
+      );
+      if (navMap) visit(navMap);
+    }
+  }
+
   setCover(blob: Blob) {
     const extension = imageExtension(blob.type);
     if (!extension) throw new Error('不支持的封面图片格式');
