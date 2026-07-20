@@ -3218,6 +3218,26 @@ test('persists the global reading version selected in Settings', async ({
   const selector = page.locator('#reader-default-mode');
   await expect(selector).toHaveAttribute('aria-busy', 'false');
   await expect(selector.getByRole('radio', { name: '询问' })).toHaveCount(0);
+  const preloadControl = page.locator('.reader-preload-setting__input');
+  const preloadHelp = page.locator('.reader-preload-setting__help');
+  const retranslationSelector = page.locator('#reader-retranslation-policy');
+  const desktopControlBounds = await Promise.all(
+    [selector, preloadControl, retranslationSelector].map((control) =>
+      control.boundingBox(),
+    ),
+  );
+  expect(desktopControlBounds.every((bounds) => bounds !== null)).toBe(true);
+  expect(
+    desktopControlBounds.every(
+      (bounds) => Math.abs(bounds!.x - desktopControlBounds[0]!.x) <= 1,
+    ),
+  ).toBe(true);
+  const desktopPreloadBounds = desktopControlBounds[1]!;
+  const desktopHelpBounds = await preloadHelp.boundingBox();
+  expect(desktopHelpBounds).not.toBeNull();
+  expect(desktopHelpBounds!.x).toBeGreaterThanOrEqual(
+    desktopPreloadBounds.x + desktopPreloadBounds.width,
+  );
   await selector.getByText('日中', { exact: true }).click();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
 
@@ -3268,6 +3288,27 @@ test('persists the global reading version selected in Settings', async ({
   await page.reload();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
   await expect(preloadInput).toHaveValue('7');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobilePreloadBounds = await preloadControl.boundingBox();
+  const mobileHelpBounds = await preloadHelp.boundingBox();
+  const mobilePreloadRowBounds = await page
+    .locator('.reader-preload-setting')
+    .boundingBox();
+  expect(mobilePreloadBounds).not.toBeNull();
+  expect(mobileHelpBounds).not.toBeNull();
+  expect(mobilePreloadRowBounds).not.toBeNull();
+  expect(mobileHelpBounds!.y).toBeGreaterThanOrEqual(
+    mobilePreloadBounds!.y + mobilePreloadBounds!.height,
+  );
+  expect(mobilePreloadBounds!.x).toBeGreaterThanOrEqual(
+    mobilePreloadRowBounds!.x,
+  );
+  expect(
+    mobilePreloadBounds!.x + mobilePreloadBounds!.width,
+  ).toBeLessThanOrEqual(
+    mobilePreloadRowBounds!.x + mobilePreloadRowBounds!.width,
+  );
 });
 
 test('completes, persists, exports, and reads a concurrent GPT job', async ({

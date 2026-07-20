@@ -201,7 +201,11 @@ onMounted(() => {
       <n-list-item>
         <n-flex vertical :size="8">
           <b>阅读</b>
-          <c-action-wrapper title="阅读偏好">
+          <c-action-wrapper
+            title="阅读偏好"
+            align="center"
+            class="reader-setting-row"
+          >
             <c-radio-group
               id="reader-default-mode"
               size="small"
@@ -211,9 +215,14 @@ onMounted(() => {
               @update:value="updateDefaultReaderMode"
             />
           </c-action-wrapper>
-          <c-action-wrapper title="自动翻译预翻译">
-            <n-flex vertical :size="4">
+          <c-action-wrapper
+            title="自动翻译预翻译"
+            align="center"
+            class="reader-setting-row reader-preload-setting"
+          >
+            <div class="reader-preload-setting__content">
               <n-input-number
+                class="reader-preload-setting__input"
                 :value="readerSettings.autoTranslationPreloadPages"
                 :min="0"
                 :max="20"
@@ -224,12 +233,16 @@ onMounted(() => {
                 :disabled="readerSettingsLoading || readerSettingsSaving"
                 @update:value="updateAutoTranslationPreloadPages"
               />
-              <n-text depth="3">
+              <n-text depth="3" class="reader-preload-setting__help">
                 提前翻译当前页之后的页数；0 表示只处理当前可见页。
               </n-text>
-            </n-flex>
+            </div>
           </c-action-wrapper>
-          <c-action-wrapper title="重翻完成后">
+          <c-action-wrapper
+            title="重翻完成后"
+            align="center"
+            class="reader-setting-row"
+          >
             <c-radio-group
               id="reader-retranslation-policy"
               size="small"
@@ -245,3 +258,39 @@ onMounted(() => {
     </n-list>
   </div>
 </template>
+
+<style scoped>
+.reader-setting-row {
+  display: grid !important;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.reader-preload-setting__content {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(240px, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.reader-preload-setting__input {
+  width: 100%;
+}
+
+.reader-preload-setting__help {
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .reader-setting-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .reader-preload-setting__content {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+</style>
