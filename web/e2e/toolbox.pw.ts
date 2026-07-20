@@ -656,6 +656,19 @@ test('previews EPUB conversion options before generating TXT', async ({
     buffer: await createToolboxEpub(cover),
   });
   await page.getByText('EPUB转TXT', { exact: true }).click();
+  const txtToEpubHelpButton = page.getByRole('button', {
+    name: 'TXT 转 EPUB 说明',
+  });
+  await txtToEpubHelpButton.click();
+  const txtToEpubHelp = page.getByText(/如需将 TXT 保存为 EPUB/);
+  await expect(txtToEpubHelp).toBeVisible();
+  const txtToEpubHelpBounds = await txtToEpubHelp.boundingBox();
+  expect(txtToEpubHelpBounds).not.toBeNull();
+  expect(txtToEpubHelpBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(
+    txtToEpubHelpBounds!.x + txtToEpubHelpBounds!.width,
+  ).toBeLessThanOrEqual(390);
+  await page.keyboard.press('Escape');
   let downloadCount = 0;
   page.on('download', () => {
     downloadCount += 1;

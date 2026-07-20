@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { InfoOutlined } from '@vicons/material';
+import { useMediaQuery } from '@vueuse/core';
 import type { Epub, ParsedFile, StandardTxtOptions } from '@/util/file';
 import { StandardNovel } from '@/util/file';
 
@@ -9,6 +11,8 @@ import { truncateToolboxPreview, type ToolboxPreview } from './ToolboxPreview';
 const props = defineProps<{
   files: ParsedFile[];
 }>();
+const isMobile = useMediaQuery('(max-width: 639px)');
+const showTxtToEpubHelp = ref(false);
 
 interface ConversionPreview {
   file: Epub;
@@ -96,6 +100,47 @@ const generateResults = () => {
       先按当前选项生成受限预览并检查目录/空章节警告，确认后才会生成独立 TXT
       结果。
     </n-text>
+    <n-flex align="center" :size="4" class="txt-to-epub-help">
+      <n-text depth="3">关于 TXT 转 EPUB</n-text>
+      <n-popover
+        v-if="!isMobile"
+        trigger="click"
+        placement="bottom"
+        :style="{
+          maxWidth: 'min(380px, calc(100vw - 24px))',
+          whiteSpace: 'normal',
+        }"
+      >
+        <template #trigger>
+          <button
+            type="button"
+            class="txt-to-epub-help__trigger"
+            aria-label="TXT 转 EPUB 说明"
+          >
+            <n-icon :component="InfoOutlined" size="18" />
+          </button>
+        </template>
+        <div class="txt-to-epub-help__content">
+          如需将 TXT 保存为 EPUB，请先在首页上传 TXT
+          并确认目录，再进入该书的“编辑展示信息”，勾选“下载时保存为
+          EPUB”并提交。之后下载该书时，系统会按当前下载语言设置生成 EPUB。
+        </div>
+      </n-popover>
+      <button
+        v-else
+        type="button"
+        class="txt-to-epub-help__trigger"
+        aria-label="TXT 转 EPUB 说明"
+        @click="showTxtToEpubHelp = true"
+      >
+        <n-icon :component="InfoOutlined" size="18" />
+      </button>
+    </n-flex>
+    <c-modal v-model:show="showTxtToEpubHelp" title="TXT 转 EPUB">
+      如需将 TXT 保存为 EPUB，请先在首页上传 TXT
+      并确认目录，再进入该书的“编辑展示信息”，勾选“下载时保存为
+      EPUB”并提交。之后下载该书时，系统会按当前下载语言设置生成 EPUB。
+    </c-modal>
 
     <n-flex align="center">
       <n-checkbox v-model:checked="includeChapterTitles">章节标题</n-checkbox>
@@ -164,6 +209,23 @@ const generateResults = () => {
 <style scoped>
 .conversion-preview {
   max-height: min(58vh, 620px);
+}
+
+.txt-to-epub-help__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--n-text-color-3);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.txt-to-epub-help__content {
+  width: min(356px, calc(100vw - 48px));
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .conversion-preview__file {
