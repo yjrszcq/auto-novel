@@ -2306,6 +2306,18 @@ test('automatically translates a reader window without persisting a partial chap
     await expect(automaticTranslationButton).toBeHidden();
 
     await page.getByRole('button', { name: '工具', exact: true }).click();
+    for (const label of [
+      '翻译器选择',
+      '术语表',
+      '清除翻译缓存',
+      '重翻当前章',
+    ]) {
+      await expect(
+        page
+          .getByRole('dialog', { name: '阅读工具' })
+          .getByRole('button', { name: label, exact: true }),
+      ).toBeVisible();
+    }
     await page
       .getByRole('dialog', { name: '阅读工具' })
       .getByRole('button', { name: '重翻当前章', exact: true })

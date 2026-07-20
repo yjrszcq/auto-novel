@@ -300,14 +300,6 @@ const hasIncompleteChapter = computed(
     currentChapterSummary.value !== undefined &&
     currentChapterSummary.value.translationStatus !== 'complete',
 );
-const hasIncompleteBookTranslation = computed(
-  () =>
-    requiresWholeChapterTranslation.value &&
-    result.value?.kind === 'ready' &&
-    result.value.chapters.some(
-      ({ translationStatus }) => translationStatus !== 'complete',
-    ),
-);
 const showsAutomaticTranslationControls = computed(
   () =>
     hasIncompleteChapter.value ||
@@ -3806,13 +3798,13 @@ onBeforeUnmount(() => {
           朗读当前段
         </n-button>
         <n-button
-          v-if="hasIncompleteBookTranslation"
+          v-if="requiresWholeChapterTranslation"
           @click="openAutomaticTranslatorSelection"
         >
           翻译器选择
         </n-button>
         <n-button
-          v-if="hasIncompleteBookTranslation"
+          v-if="requiresWholeChapterTranslation"
           @click="openReaderGlossary"
         >
           术语表
