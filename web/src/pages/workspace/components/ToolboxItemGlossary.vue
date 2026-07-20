@@ -148,8 +148,12 @@ watch(
     deletedWords.value = new Set();
     deletionHistory.value = [];
     selectedWords.value = [];
-    translations.value = { ...(props.initialGlossary ?? {}) };
-    manuallyEdited.value = new Set(Object.keys(props.initialGlossary ?? {}));
+    translations.value = Object.fromEntries(
+      Object.entries(props.initialGlossary ?? {}).filter(
+        ([, value]) => value.trim().length > 0,
+      ),
+    );
+    manuallyEdited.value = new Set();
     translationFailures.value = new Map();
     extractionLoading.value = true;
     extractionError.value = '';
@@ -205,8 +209,17 @@ const undoDelete = () => {
 };
 
 const updateTranslation = (word: string, value: string) => {
-  translations.value = { ...translations.value, [word]: value };
-  manuallyEdited.value = new Set([...manuallyEdited.value, word]);
+  const nextTranslations = { ...translations.value };
+  const nextManuallyEdited = new Set(manuallyEdited.value);
+  if (value.trim().length === 0) {
+    delete nextTranslations[word];
+    nextManuallyEdited.delete(word);
+  } else {
+    nextTranslations[word] = value;
+    nextManuallyEdited.add(word);
+  }
+  translations.value = nextTranslations;
+  manuallyEdited.value = nextManuallyEdited;
   const failures = new Map(translationFailures.value);
   failures.delete(word);
   translationFailures.value = failures;
@@ -214,10 +227,10 @@ const updateTranslation = (word: string, value: string) => {
 
 const glossaryValue = (): Glossary =>
   Object.fromEntries(
-    activeCandidates.value.map(({ word }) => [
-      word,
-      translations.value[word] ?? '',
-    ]),
+    activeCandidates.value.flatMap(({ word }) => {
+      const translation = translations.value[word]?.trim();
+      return translation ? [[word, translation]] : [];
+    }),
   );
 
 const glossaryText = () => Glossary.toText(glossaryValue());

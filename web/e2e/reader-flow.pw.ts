@@ -2165,7 +2165,7 @@ test('automatically translates a reader window without persisting a partial chap
       });
       transaction.objectStore('file').put({
         id: bookId,
-        file: new File(['テスト\n'.repeat(12)], bookId, {
+        file: new File(['テスト\n'.repeat(12), 'サンプル\n'], bookId, {
           type: 'text/plain',
         }),
       });
@@ -2285,7 +2285,22 @@ test('automatically translates a reader window without persisting a partial chap
     await expect(
       glossaryDialog.locator('tbody tr').filter({ hasText: 'ダミー' }),
     ).toHaveCount(0);
+    const untranslatedGlossaryRow = glossaryDialog.locator('tbody tr').filter({
+      hasText: 'サンプル',
+    });
+    await expect(untranslatedGlossaryRow).toBeVisible();
+    await expect(
+      untranslatedGlossaryRow.getByText('未翻译', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      glossaryRow.getByText('已翻译', { exact: true }),
+    ).toBeVisible();
+    await glossaryRow.locator('input').fill('');
+    await expect(
+      glossaryRow.getByText('未翻译', { exact: true }),
+    ).toBeVisible();
     await glossaryRow.locator('input').fill('测试词');
+    await expect(glossaryRow.getByText('手工', { exact: true })).toBeVisible();
     await glossaryDialog
       .getByRole('button', { name: '应用到本书', exact: true })
       .click();
