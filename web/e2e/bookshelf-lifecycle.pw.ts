@@ -77,6 +77,19 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
   expect(bounds!.y).toBeCloseTo(0, 0);
   expect(bounds!.width).toBeCloseTo(390, 0);
   expect(bounds!.height).toBeCloseTo(844, 0);
+  const mobilePreviewAction = preview.getByRole('button', {
+    name: '确认目录并导入',
+    exact: true,
+  });
+  await expect(mobilePreviewAction).toBeVisible();
+  const mobilePreviewActionBounds = await mobilePreviewAction.boundingBox();
+  expect(mobilePreviewActionBounds).not.toBeNull();
+  expect(
+    mobilePreviewActionBounds!.x + mobilePreviewActionBounds!.width,
+  ).toBeLessThanOrEqual(390);
+  expect(
+    mobilePreviewActionBounds!.y + mobilePreviewActionBounds!.height,
+  ).toBeLessThanOrEqual(844);
   expect(await preview.locator('.txt-source-line').count()).toBeLessThanOrEqual(
     120,
   );

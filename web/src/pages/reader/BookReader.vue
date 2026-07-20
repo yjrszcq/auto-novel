@@ -4006,12 +4006,12 @@ onBeforeUnmount(() => {
 
     <ReaderBottomSheet v-model:show="showSettings" title="阅读设置" wide>
       <n-form label-placement="top" class="book-reader__settings-grid">
-        <div>
+        <div class="book-reader__settings-half">
           <n-form-item label="字体大小">
             <n-slider v-model:value="settings.fontSize" :max="32" :min="12" />
           </n-form-item>
         </div>
-        <div>
+        <div class="book-reader__settings-half">
           <n-form-item label="行高">
             <n-slider
               v-model:value="settings.lineHeight"
@@ -4021,7 +4021,7 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div>
+        <div class="book-reader__settings-half">
           <n-form-item label="正文宽度">
             <n-slider
               v-model:value="settings.contentWidth"
@@ -4031,7 +4031,7 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div>
+        <div class="book-reader__settings-half">
           <n-form-item label="页面边距">
             <n-slider
               v-model:value="settings.horizontalPadding"
@@ -4041,7 +4041,7 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div>
+        <div class="book-reader__settings-half">
           <n-form-item label="主题">
             <n-select
               v-model:value="settings.theme"
@@ -4055,7 +4055,7 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div>
+        <div class="book-reader__settings-half">
           <n-form-item label="阅读流">
             <n-select
               v-model:value="settings.flow"
@@ -4067,12 +4067,42 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div v-if="requiresWholeChapterTranslation">
+        <div
+          v-if="requiresWholeChapterTranslation"
+          class="book-reader__settings-reading-language"
+        >
+          <n-form-item>
+            <template #label>
+              <span class="book-reader__settings-reading-label">
+                <span>阅读语言</span>
+                <n-text v-if="currentChapterAwaitsTranslation" type="warning">
+                  翻译后生效
+                </n-text>
+              </span>
+            </template>
+            <n-select
+              :value="readingMode"
+              :options="readerModeOptions"
+              @update:value="chooseSettingsMode"
+            />
+          </n-form-item>
+        </div>
+        <div
+          v-if="requiresWholeChapterTranslation"
+          class="book-reader__settings-quarter"
+        >
           <n-form-item>
             <template #label>
               <span class="book-reader__settings-label">
                 自动翻译预翻译页数
-                <n-popover trigger="click" placement="top">
+                <n-popover
+                  trigger="click"
+                  placement="bottom-start"
+                  :style="{
+                    maxWidth: 'min(320px, calc(100vw - 32px))',
+                    whiteSpace: 'normal',
+                  }"
+                >
                   <template #trigger>
                     <button
                       class="book-reader__settings-info"
@@ -4098,7 +4128,10 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div v-if="requiresWholeChapterTranslation">
+        <div
+          v-if="requiresWholeChapterTranslation"
+          class="book-reader__settings-quarter"
+        >
           <n-form-item label="重翻完成后">
             <n-select
               v-model:value="settings.retranslationPolicy"
@@ -4112,25 +4145,8 @@ onBeforeUnmount(() => {
         </div>
         <div
           v-if="requiresWholeChapterTranslation"
-          class="book-reader__settings-wide"
+          class="book-reader__settings-translator"
         >
-          <n-form-item>
-            <template #label>
-              <span class="book-reader__settings-reading-label">
-                <span>阅读语言</span>
-                <n-text v-if="currentChapterAwaitsTranslation" type="warning">
-                  翻译后生效
-                </n-text>
-              </span>
-            </template>
-            <n-select
-              :value="readingMode"
-              :options="readerModeOptions"
-              @update:value="chooseSettingsMode"
-            />
-          </n-form-item>
-        </div>
-        <div v-if="requiresWholeChapterTranslation">
           <n-form-item label="GPT 翻译器">
             <n-select
               v-model:value="automaticGptWorkerValue"
@@ -4140,7 +4156,10 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div v-if="requiresWholeChapterTranslation">
+        <div
+          v-if="requiresWholeChapterTranslation"
+          class="book-reader__settings-translator"
+        >
           <n-form-item label="Sakura 翻译器">
             <n-select
               v-model:value="automaticSakuraWorkerValue"
@@ -4525,12 +4544,18 @@ onBeforeUnmount(() => {
 
 .book-reader__settings-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0 32px;
 }
 
-.book-reader__settings-wide {
-  grid-column: 1 / -1;
+.book-reader__settings-half,
+.book-reader__settings-reading-language,
+.book-reader__settings-translator {
+  grid-column: span 2;
+}
+
+.book-reader__settings-quarter {
+  grid-column: span 1;
 }
 
 .book-reader__settings-label,
@@ -4545,6 +4570,16 @@ onBeforeUnmount(() => {
   width: 100%;
   justify-content: space-between;
   gap: 16px;
+}
+
+.book-reader__settings-reading-language :deep(.n-form-item-label) {
+  align-self: stretch;
+  width: 100%;
+}
+
+.book-reader__settings-reading-language :deep(.n-form-item-label__text) {
+  display: block;
+  width: 100%;
 }
 
 .book-reader__settings-info {
@@ -4604,7 +4639,7 @@ onBeforeUnmount(() => {
   --reader-page-padding: max(
     28px,
     var(--reader-padding),
-    calc((100vw - 860px) / 2)
+    calc((100vw - var(--reader-content-width)) / 2)
   );
   width: 100%;
   height: calc(100dvh - 32px);
@@ -4652,7 +4687,7 @@ onBeforeUnmount(() => {
   --reader-page-padding: max(
     28px,
     var(--reader-padding),
-    calc((50vw - 860px) / 2)
+    calc((50vw - var(--reader-content-width)) / 2)
   );
 }
 
@@ -4807,7 +4842,12 @@ onBeforeUnmount(() => {
   }
 
   .book-reader__content--paginated {
-    --reader-page-padding: max(22px, env(safe-area-inset-left));
+    --reader-page-padding: max(
+      22px,
+      var(--reader-padding),
+      env(safe-area-inset-left),
+      env(safe-area-inset-right)
+    );
     height: calc(100dvh - 34px);
     padding: 0;
   }
@@ -4851,7 +4891,13 @@ onBeforeUnmount(() => {
     gap: 8px;
   }
 
-  .book-reader__settings-wide {
+  .book-reader__settings-half,
+  .book-reader__settings-quarter {
+    grid-column: span 1;
+  }
+
+  .book-reader__settings-reading-language,
+  .book-reader__settings-translator {
     grid-column: 1 / -1;
   }
 }

@@ -920,6 +920,22 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(
     mobileReaderSettings.getByText('GPT 翻译器', { exact: true }),
   ).toBeVisible();
+  await mobileReaderSettings
+    .getByRole('button', { name: '自动翻译预翻译说明' })
+    .click();
+  const preloadExplanation = page
+    .locator('.n-popover')
+    .filter({ hasText: '提前翻译当前页之后的页数' });
+  await expect(preloadExplanation).toBeVisible();
+  const preloadExplanationBounds = await preloadExplanation.boundingBox();
+  expect(preloadExplanationBounds).not.toBeNull();
+  expect(preloadExplanationBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(
+    preloadExplanationBounds!.x + preloadExplanationBounds!.width,
+  ).toBeLessThanOrEqual(390);
+  await mobileReaderSettings
+    .getByRole('button', { name: '自动翻译预翻译说明' })
+    .click();
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '夜晚', exact: true }).click();
   await translationToggle.click();
@@ -1447,7 +1463,7 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
       fontSize: 18,
       lineHeight: 1.9,
       contentWidth: 840,
-      horizontalPadding: 24,
+      horizontalPadding: 64,
       theme: 'light',
       flow: 'paginated',
       updatedAt: 1,
@@ -1491,6 +1507,22 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
   await expect(layout).toHaveClass(
     /reader-segment-layout--original-translated/,
   );
+  await expect(layout).toHaveCSS('padding-left', '64px');
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  const paginationSettings = page.getByRole('dialog', { name: '阅读设置' });
+  const contentWidthSetting = paginationSettings
+    .locator('.n-form-item')
+    .filter({ hasText: '正文宽度' });
+  const contentWidthSlider = contentWidthSetting.getByRole('slider');
+  const contentWidthSliderRail = contentWidthSetting.locator('.n-slider');
+  const contentWidthSliderBounds = await contentWidthSliderRail.boundingBox();
+  expect(contentWidthSliderBounds).not.toBeNull();
+  await contentWidthSliderRail.click({
+    position: { x: 1, y: contentWidthSliderBounds!.height / 2 },
+  });
+  await expect(contentWidthSlider).toHaveAttribute('aria-valuenow', '480');
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await expect(layout).toHaveCSS('padding-left', '80px');
 
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await expect(
@@ -2152,7 +2184,35 @@ test('automatically translates a reader window without persisting a partial chap
       await expect(page.getByText(label, { exact: true }).last()).toBeVisible();
     }
     await page.getByText('日中对照', { exact: true }).last().click();
-    await expect(page.getByText('翻译后生效', { exact: true })).toBeVisible();
+    const readingWarning = page.getByText('翻译后生效', { exact: true });
+    await expect(readingWarning).toBeVisible();
+    const readingLanguageBounds = await readingLanguageSetting.boundingBox();
+    const preloadSettingBounds = await readerSettings
+      .locator('.n-form-item')
+      .filter({ hasText: '自动翻译预翻译页数' })
+      .boundingBox();
+    const retranslationPolicyBounds = await readerSettings
+      .locator('.n-form-item')
+      .filter({ hasText: '重翻完成后' })
+      .boundingBox();
+    const readingSelectBounds = await readingLanguageSetting
+      .locator('.n-base-selection')
+      .boundingBox();
+    const readingWarningBounds = await readingWarning.boundingBox();
+    expect(readingLanguageBounds).not.toBeNull();
+    expect(preloadSettingBounds).not.toBeNull();
+    expect(retranslationPolicyBounds).not.toBeNull();
+    expect(readingSelectBounds).not.toBeNull();
+    expect(readingWarningBounds).not.toBeNull();
+    expect(readingLanguageBounds!.x).toBeLessThan(preloadSettingBounds!.x);
+    expect(preloadSettingBounds!.x).toBeLessThan(retranslationPolicyBounds!.x);
+    expect(
+      Math.abs(
+        readingWarningBounds!.x +
+          readingWarningBounds!.width -
+          (readingSelectBounds!.x + readingSelectBounds!.width),
+      ),
+    ).toBeLessThanOrEqual(2);
     await expect(
       readerSettings.getByText('自动翻译预翻译页数', { exact: true }),
     ).toBeVisible();

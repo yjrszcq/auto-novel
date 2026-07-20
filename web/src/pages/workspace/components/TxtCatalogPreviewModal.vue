@@ -417,16 +417,23 @@ onBeforeUnmount(disposeSession);
       </n-button-group>
     </div>
 
-    <n-progress
+    <div
       v-if="loading || building"
-      type="line"
-      :percentage="progress"
-      :indicator-placement="'inside'"
-      processing
-    />
-    <n-alert v-if="loading" type="info" :show-icon="false">
-      {{ progressMessage }}
-    </n-alert>
+      class="txt-catalog-progress"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="txt-catalog-progress__label">
+        <span>{{ building ? '正在生成目录计划' : progressMessage }}</span>
+        <span>{{ progress }}%</span>
+      </div>
+      <n-progress
+        type="line"
+        :percentage="progress"
+        :show-indicator="false"
+        processing
+      />
+    </div>
     <n-alert v-else-if="error" type="error">{{ error }}</n-alert>
 
     <template v-if="snapshot">
@@ -708,6 +715,20 @@ onBeforeUnmount(disposeSession);
   white-space: nowrap;
 }
 
+.txt-catalog-progress {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.txt-catalog-progress__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
 .txt-catalog-search {
   margin: 12px 0;
 }
@@ -924,16 +945,28 @@ onBeforeUnmount(disposeSession);
 
 <style>
 .n-modal.txt-catalog-modal {
+  display: flex;
+  flex-direction: column;
   width: min(1280px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
+  overflow: hidden;
 }
 
-.txt-catalog-modal > .n-card__content {
+.txt-catalog-modal > .n-card-content {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+}
+
+.txt-catalog-modal > .n-card-header,
+.txt-catalog-modal > .n-card__action {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 767px) {
   .n-modal.txt-catalog-modal {
+    position: fixed;
+    inset: 0;
     width: 100vw;
     max-width: none;
     height: 100dvh;
@@ -942,10 +975,11 @@ onBeforeUnmount(disposeSession);
     border-radius: 0;
   }
 
-  .txt-catalog-modal > .n-card__content {
+  .txt-catalog-modal > .n-card-content {
     min-height: 0;
     padding-right: 12px;
     padding-left: 12px;
+    overscroll-behavior: contain;
   }
 
   .txt-catalog-modal > .n-card__action {
