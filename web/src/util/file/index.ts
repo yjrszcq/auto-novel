@@ -18,12 +18,22 @@ export {
   stripTxtHeadingDecoration,
 } from './TxtHeadingRules';
 export type { TxtHeadingKind, TxtHeadingRuleMatch } from './TxtHeadingRules';
+export {
+  createTxtImportPlan,
+  parseTxtCatalog,
+  reconstructTxtImportPlan,
+} from './TxtCatalogParser';
+export type { ParseTxtCatalogOptions } from './TxtCatalogParser';
 export type {
+  TxtCatalogNode,
   TxtDecodedDocument,
   TxtDecodeCandidate,
   TxtEncoding,
   TxtHeadingDraft,
+  TxtImportPlan,
   TxtParseMode,
+  TxtParseSummary,
+  TxtPlannedChapter,
   TxtSourceLine,
 } from '../../model/TxtCatalog';
 export type ParsedFile = Epub | Srt | Txt;

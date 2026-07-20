@@ -38,3 +38,45 @@ export interface TxtDecodedDocument {
   lines: TxtSourceLine[];
   candidates: TxtDecodeCandidate[];
 }
+
+export interface TxtPlannedChapter {
+  /** Deterministic plan-local identifier; persisted IDs are generated later. */
+  planId: string;
+  title: string;
+  level: number;
+  parentChapterIndex?: number;
+  headingLineIndex?: number;
+  sourceStartLine: number;
+  sourceEndLine: number;
+  content: string;
+  isPreamble?: boolean;
+  isFallback?: boolean;
+}
+
+export interface TxtCatalogNode {
+  chapterIndex: number;
+  title: string;
+  level: number;
+  children: TxtCatalogNode[];
+}
+
+export interface TxtParseSummary {
+  encoding: TxtEncoding;
+  mode: TxtParseMode;
+  lineCount: number;
+  candidateCount: number;
+  headingCount: number;
+  rejectedCount: number;
+  learnedFormatCount: number;
+  usedFallback: boolean;
+  averageConfidence: number;
+}
+
+export interface TxtImportPlan {
+  encoding: TxtEncoding;
+  mode: TxtParseMode;
+  chapters: TxtPlannedChapter[];
+  navigation: TxtCatalogNode[];
+  headings: TxtHeadingDraft[];
+  summary: TxtParseSummary;
+}
