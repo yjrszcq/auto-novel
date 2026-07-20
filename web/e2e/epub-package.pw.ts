@@ -376,7 +376,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   const chooseFlow = async (label: string) => {
     await page.getByRole('button', { name: '设置', exact: true }).click();
     const flowSetting = page
-      .locator('.book-reader__settings-theme')
+      .locator('.book-reader__settings-grid .n-form-item')
       .filter({ hasText: '阅读流' });
     await flowSetting.locator('.n-base-selection').click();
     await page

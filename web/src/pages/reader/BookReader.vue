@@ -8,6 +8,7 @@ import {
   ChevronLeftOutlined,
   ChevronRightOutlined,
   DarkModeOutlined,
+  InfoOutlined,
   MenuBookOutlined,
   SettingsOutlined,
   WarningAmberOutlined,
@@ -40,7 +41,6 @@ import { parseFile, type ParsedFile } from '@/util/file';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
 import ReaderEpubLayout from './components/ReaderEpubLayout.vue';
-import ReaderModeDialog from './components/ReaderModeDialog.vue';
 import ReaderSegmentLayout from './components/ReaderSegmentLayout.vue';
 import { createLocalVolumeReaderAdapter } from './adapters/LocalVolumeReaderAdapter';
 import {
@@ -73,6 +73,7 @@ import {
 } from './core/ReaderBookmarks';
 import {
   getAvailableReaderModes,
+  getReaderModeLabel,
   getReaderModeShortcut,
   readerModes,
   resolveReaderMode,
@@ -119,7 +120,6 @@ const loading = ref(false);
 const result = shallowRef<ReaderPageLoadResult>();
 const initialSegmentId = ref<string>();
 const showSettings = ref(false);
-const showModePrompt = ref(false);
 const showCatalog = ref(false);
 const collapsedCatalogEntryIds = ref(new Set<string>());
 const showTools = ref(false);
@@ -127,7 +127,6 @@ const showBookInfo = ref(false);
 const showBookmarks = ref(false);
 const showSearch = ref(false);
 const showInteractiveTranslation = ref(false);
-const showAutomaticTranslatorSelection = ref(false);
 const showRetranslationSelection = ref(false);
 const showRetranslationDecision = ref(false);
 const showReaderGlossary = ref(false);
@@ -160,10 +159,8 @@ const bookmarks = ref<ReaderBookmark[]>([]);
 const viewportChapterId = ref<string>();
 const viewportSegmentId = ref<string>();
 let pendingBookmark: ReaderBookmark | undefined;
-const rememberModeChoice = ref(false);
 const readingMode = ref<ReaderMode>('original');
 const availableModes = ref<ReaderMode[]>(['original']);
-const visiblePageModes = ref<ReaderMode[]>(['original']);
 let readingStartedAt: number | undefined;
 let readingBookId: string | undefined;
 let readingStatsWrite = Promise.resolve();
@@ -326,6 +323,12 @@ const automaticSakuraWorkerOptions = computed(() =>
     value: worker.id,
   })),
 );
+const readerModeOptions = computed(() =>
+  readerModes.map((mode) => ({
+    label: getReaderModeLabel(mode, result.value?.book.sourceLanguage),
+    value: mode,
+  })),
+);
 const currentTranslationStatusLabel = computed(() =>
   currentChapterSummary.value === undefined
     ? ''
@@ -374,11 +377,9 @@ const hasOpenReaderPanel = () =>
   showBookmarks.value ||
   showSearch.value ||
   showInteractiveTranslation.value ||
-  showAutomaticTranslatorSelection.value ||
   showRetranslationSelection.value ||
   showRetranslationDecision.value ||
   showReaderGlossary.value ||
-  showModePrompt.value ||
   showMobileTranslationNotice.value;
 
 const closeReaderPanels = () => {
@@ -392,13 +393,11 @@ const closeReaderPanels = () => {
   showBookmarks.value = false;
   showSearch.value = false;
   showInteractiveTranslation.value = false;
-  showAutomaticTranslatorSelection.value = false;
   showRetranslationSelection.value = false;
   if (pendingRetranslation.value === undefined) {
     showRetranslationDecision.value = false;
   }
   showReaderGlossary.value = false;
-  showModePrompt.value = false;
   showMobileTranslationNotice.value = false;
 };
 
@@ -423,11 +422,6 @@ const openTools = () => {
   const shouldOpen = !showTools.value;
   closeReaderPanels();
   showTools.value = shouldOpen;
-};
-
-const openAutomaticTranslatorSelection = () => {
-  showTools.value = false;
-  showAutomaticTranslatorSelection.value = true;
 };
 
 const openReaderGlossary = async () => {
@@ -1144,7 +1138,6 @@ const resolveMode = async (
     availableModes.value = ['original'];
     readingMode.value = 'original';
     bookStyle.value = preference?.style;
-    showModePrompt.value = false;
     return;
   }
   availableModes.value = getAvailableReaderModes();
@@ -1155,29 +1148,29 @@ const resolveMode = async (
     capabilities,
   });
   bookStyle.value = preference?.style;
-  showModePrompt.value = false;
 };
 
 const chooseMode = async (mode: ReaderMode) => {
   const anchor = captureReaderPosition();
   temporaryMode = mode;
   readingMode.value = mode;
-  showModePrompt.value = false;
   await nextTick();
   await nextTick();
   restoreReaderPosition(anchor);
   updateViewportMetrics();
   await saveProgress();
-  if (rememberModeChoice.value) {
-    const repository = await repositoryPromise;
-    const preference = await repository.getReaderBookPreference(bookId.value);
-    await repository.putReaderBookPreference({
-      ...preference,
-      bookId: bookId.value,
-      preferredMode: mode,
-      updatedAt: Date.now(),
-    });
-  }
+};
+
+const chooseSettingsMode = async (mode: ReaderMode) => {
+  await chooseMode(mode);
+  const repository = await repositoryPromise;
+  const preference = await repository.getReaderBookPreference(bookId.value);
+  await repository.putReaderBookPreference({
+    ...preference,
+    bookId: bookId.value,
+    preferredMode: mode,
+    updatedAt: Date.now(),
+  });
 };
 
 const getSegmentElements = (root: ParentNode = document) => {
@@ -1760,14 +1753,6 @@ const getVisibleReaderSegments = (): VisibleReaderSegment[] => {
     seen.add(key);
     return [{ chapterId, segmentId, original: segment.original }];
   });
-};
-
-const openVisiblePageModePrompt = () => {
-  const ready = result.value;
-  if (ready?.kind !== 'ready') return;
-  showTools.value = false;
-  visiblePageModes.value = [...readerModes];
-  showModePrompt.value = true;
 };
 
 const createVisibleTranslationConfig = (
@@ -3799,12 +3784,6 @@ onBeforeUnmount(() => {
         </n-button>
         <n-button
           v-if="requiresWholeChapterTranslation"
-          @click="openAutomaticTranslatorSelection"
-        >
-          翻译器选择
-        </n-button>
-        <n-button
-          v-if="requiresWholeChapterTranslation"
           @click="openReaderGlossary"
         >
           术语表
@@ -3824,12 +3803,6 @@ onBeforeUnmount(() => {
           @click="toggleCurrentChapterRetranslation"
         >
           重翻当前章
-        </n-button>
-        <n-button
-          v-if="requiresWholeChapterTranslation"
-          @click="openVisiblePageModePrompt"
-        >
-          阅读语言
         </n-button>
         <n-button
           v-if="requiresWholeChapterTranslation"
@@ -3882,30 +3855,6 @@ onBeforeUnmount(() => {
           替换译文
         </n-button>
       </div>
-    </ReaderBottomSheet>
-
-    <ReaderBottomSheet
-      v-model:show="showAutomaticTranslatorSelection"
-      title="翻译器选择"
-    >
-      <n-form label-placement="top" class="book-reader__translator-selection">
-        <n-form-item label="GPT 翻译器">
-          <n-select
-            v-model:value="automaticGptWorkerValue"
-            :options="automaticGptWorkerOptions"
-            :disabled="automaticGptWorkerOptions.length === 0"
-            placeholder="尚未配置 GPT 翻译器"
-          />
-        </n-form-item>
-        <n-form-item label="Sakura 翻译器">
-          <n-select
-            v-model:value="automaticSakuraWorkerValue"
-            :options="automaticSakuraWorkerOptions"
-            :disabled="automaticSakuraWorkerOptions.length === 0"
-            placeholder="尚未配置 Sakura 翻译器"
-          />
-        </n-form-item>
-      </n-form>
     </ReaderBottomSheet>
 
     <ReaderBottomSheet
@@ -4055,18 +4004,6 @@ onBeforeUnmount(() => {
       </n-list>
     </ReaderBottomSheet>
 
-    <ReaderModeDialog
-      v-model:show="showModePrompt"
-      v-model:remember="rememberModeChoice"
-      :modes="visiblePageModes"
-      :selected="readingMode"
-      :translation-pending="currentChapterAwaitsTranslation"
-      :source-language="
-        result?.kind === 'ready' ? result.book.sourceLanguage : undefined
-      "
-      @select="chooseMode"
-    />
-
     <ReaderBottomSheet v-model:show="showSettings" title="阅读设置" wide>
       <n-form label-placement="top" class="book-reader__settings-grid">
         <div>
@@ -4104,7 +4041,7 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div class="book-reader__settings-theme">
+        <div>
           <n-form-item label="主题">
             <n-select
               v-model:value="settings.theme"
@@ -4118,7 +4055,7 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div class="book-reader__settings-theme">
+        <div>
           <n-form-item label="阅读流">
             <n-select
               v-model:value="settings.flow"
@@ -4130,8 +4067,25 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
-        <div class="book-reader__settings-theme">
-          <n-form-item label="自动翻译预翻译页数">
+        <div v-if="requiresWholeChapterTranslation">
+          <n-form-item>
+            <template #label>
+              <span class="book-reader__settings-label">
+                自动翻译预翻译页数
+                <n-popover trigger="click" placement="top">
+                  <template #trigger>
+                    <button
+                      class="book-reader__settings-info"
+                      type="button"
+                      aria-label="自动翻译预翻译说明"
+                    >
+                      <n-icon :component="InfoOutlined" />
+                    </button>
+                  </template>
+                  提前翻译当前页之后的页数；0 表示只处理当前可见页。
+                </n-popover>
+              </span>
+            </template>
             <n-input-number
               :value="settings.autoTranslationPreloadPages"
               :min="0"
@@ -4143,11 +4097,8 @@ onBeforeUnmount(() => {
               @update:value="updateAutoTranslationPreloadPages"
             />
           </n-form-item>
-          <n-text depth="3">
-            提前翻译当前页之后的页数；0 表示只处理当前可见页。
-          </n-text>
         </div>
-        <div class="book-reader__settings-theme">
+        <div v-if="requiresWholeChapterTranslation">
           <n-form-item label="重翻完成后">
             <n-select
               v-model:value="settings.retranslationPolicy"
@@ -4156,6 +4107,46 @@ onBeforeUnmount(() => {
                 { label: '替换', value: 'replace' },
                 { label: '不替换', value: 'keep' },
               ]"
+            />
+          </n-form-item>
+        </div>
+        <div
+          v-if="requiresWholeChapterTranslation"
+          class="book-reader__settings-wide"
+        >
+          <n-form-item>
+            <template #label>
+              <span class="book-reader__settings-reading-label">
+                <span>阅读语言</span>
+                <n-text v-if="currentChapterAwaitsTranslation" type="warning">
+                  翻译后生效
+                </n-text>
+              </span>
+            </template>
+            <n-select
+              :value="readingMode"
+              :options="readerModeOptions"
+              @update:value="chooseSettingsMode"
+            />
+          </n-form-item>
+        </div>
+        <div v-if="requiresWholeChapterTranslation">
+          <n-form-item label="GPT 翻译器">
+            <n-select
+              v-model:value="automaticGptWorkerValue"
+              :options="automaticGptWorkerOptions"
+              :disabled="automaticGptWorkerOptions.length === 0"
+              placeholder="尚未配置 GPT 翻译器"
+            />
+          </n-form-item>
+        </div>
+        <div v-if="requiresWholeChapterTranslation">
+          <n-form-item label="Sakura 翻译器">
+            <n-select
+              v-model:value="automaticSakuraWorkerValue"
+              :options="automaticSakuraWorkerOptions"
+              :disabled="automaticSakuraWorkerOptions.length === 0"
+              placeholder="尚未配置 Sakura 翻译器"
             />
           </n-form-item>
         </div>
@@ -4489,11 +4480,6 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.book-reader__translator-selection {
-  display: grid;
-  gap: 2px;
-}
-
 .book-reader__retranslation-description {
   margin: 0 0 16px;
   color: var(--reader-muted-color);
@@ -4543,8 +4529,39 @@ onBeforeUnmount(() => {
   gap: 0 32px;
 }
 
-.book-reader__settings-theme {
+.book-reader__settings-wide {
   grid-column: 1 / -1;
+}
+
+.book-reader__settings-label,
+.book-reader__settings-reading-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.book-reader__settings-reading-label {
+  width: 100%;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.book-reader__settings-info {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+}
+
+.book-reader__settings-info :deep(.n-icon) {
+  font-size: 18px;
 }
 
 .book-reader__loading {
@@ -4834,7 +4851,7 @@ onBeforeUnmount(() => {
     gap: 8px;
   }
 
-  .book-reader__settings-theme {
+  .book-reader__settings-wide {
     grid-column: 1 / -1;
   }
 }
