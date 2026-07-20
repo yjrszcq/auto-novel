@@ -1,3 +1,4 @@
+import type { LocalDownloadMode } from '@/model/LocalVolume';
 import type { TranslatorId } from '@/model/Translator';
 import { useLocalStorage } from '@/util';
 import { LSKey } from './key';
@@ -7,7 +8,7 @@ export interface Setting {
   autoTopJobWhenAddTask: boolean;
   menuCollapsed: boolean;
   downloadFormat: {
-    mode: 'zh' | 'zh-jp' | 'jp-zh';
+    mode: LocalDownloadMode;
     translationsMode: 'parallel' | 'priority';
     translations: TranslatorId[];
   };
@@ -16,7 +17,7 @@ export interface Setting {
     value: 'byCreateAt' | 'byId';
     desc: boolean;
   };
-  homeDownloadMode: 'zh' | 'zh-jp' | 'jp-zh';
+  homeDownloadMode: LocalDownloadMode;
   homeDownloadPriority: 'gpt' | 'sakura';
   embedMetadataInOriginalDownload: boolean;
   embedMetadataInTranslatedDownload: boolean;
@@ -47,6 +48,7 @@ export namespace Setting {
     { label: '中文', value: 'zh' },
     { label: '中日', value: 'zh-jp' },
     { label: '日中', value: 'jp-zh' },
+    { label: '日文', value: 'jp' },
   ];
   export const themeOptions = [
     { label: '亮色主题', value: 'light' },

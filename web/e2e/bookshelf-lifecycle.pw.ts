@@ -1618,6 +1618,155 @@ test('keeps EPUB presentation edits, downloads, and source data independent', as
     .toBe('embedded');
 });
 
+test('converts configured TXT downloads to EPUB', async ({ page }) => {
+  const filename = 'TXT Export EPUB.txt';
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'auto-novel:settings',
+      JSON.stringify({
+        theme: 'system',
+        autoTopJobWhenAddTask: false,
+        menuCollapsed: false,
+        downloadFormat: {
+          mode: 'zh-jp',
+          translationsMode: 'priority',
+          translations: ['gpt'],
+        },
+        workspaceSound: false,
+        localVolumeOrder: { value: 'byCreateAt', desc: true },
+        homeDownloadMode: 'zh-jp',
+        homeDownloadPriority: 'gpt',
+        embedMetadataInOriginalDownload: false,
+        embedMetadataInTranslatedDownload: false,
+      }),
+    );
+  });
+  await page.goto('/setting');
+  await expect(
+    page
+      .locator('.n-list-item')
+      .filter({ hasText: '首页' })
+      .getByText('日文', { exact: true }),
+  ).toBeVisible();
+  await page.goto('/');
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: filename,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('第一章\n章节原文'),
+    });
+  await confirmTxtPreview(page, filename);
+  await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'chapter'],
+      'readwrite',
+    );
+    const metadataStore = transaction.objectStore('metadata');
+    const chapterStore = transaction.objectStore('chapter');
+    const metadataRequest = metadataStore.get(bookId);
+    metadataRequest.onsuccess = () => {
+      const metadata = metadataRequest.result as {
+        glossaryId: string;
+        toc: Array<{ chapterId: string; gpt?: string }>;
+      };
+      const chapterId = metadata.toc[0]!.chapterId;
+      const chapterRequest = chapterStore.get(`${bookId}/${chapterId}`);
+      chapterRequest.onsuccess = () => {
+        const chapter = chapterRequest.result as {
+          paragraphs: string[];
+          gpt?: {
+            glossaryId: string;
+            glossary: Record<string, string>;
+            paragraphs: string[];
+          };
+        };
+        chapter.gpt = {
+          glossaryId: metadata.glossaryId,
+          glossary: {},
+          paragraphs: chapter.paragraphs.map(
+            (_paragraph, index) => `章节译文 ${index + 1}`,
+          ),
+        };
+        metadata.toc[0]!.gpt = metadata.glossaryId;
+        chapterStore.put(chapter);
+        metadataStore.put(metadata);
+      };
+    };
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, filename);
+
+  await page.goto(`/books/${encodeURIComponent(filename)}/edit`);
+  const convertCheckbox = page.getByRole('checkbox', {
+    name: '下载时转换为 EPUB',
+  });
+  await expect(convertCheckbox).not.toBeChecked();
+  await convertCheckbox.check();
+  await page.locator('.metadata-edit__form input').first().fill('导出展示书名');
+  await page.getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page).toHaveURL(/\/details$/);
+
+  const [translatedDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载译文', exact: true }).click(),
+  ]);
+  expect(translatedDownload.suggestedFilename()).toBe(
+    'zh-jp.Yg.TXT Export EPUB.epub',
+  );
+  const translatedReader = new ZipReader(
+    new BlobReader(
+      new Blob([Uint8Array.from(await readDownload(translatedDownload))]),
+    ),
+  );
+  const translatedEntries = new Map(
+    (await translatedReader.getEntries()).map((entry) => [
+      entry.filename,
+      entry,
+    ]),
+  );
+  expect(
+    await translatedEntries.get('OEBPS/content.opf')!.getData!(
+      new TextWriter(),
+    ),
+  ).toContain('导出展示书名');
+  const translatedChapter = await translatedEntries.get(
+    'OEBPS/text/chapter-1.xhtml',
+  )!.getData!(new TextWriter());
+  expect(translatedChapter).toContain('章节译文');
+  expect(translatedChapter).toContain('章节原文');
+  await translatedReader.close();
+
+  const [originalDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载原文', exact: true }).click(),
+  ]);
+  expect(originalDownload.suggestedFilename()).toBe('TXT Export EPUB.epub');
+  const originalReader = new ZipReader(
+    new BlobReader(
+      new Blob([Uint8Array.from(await readDownload(originalDownload))]),
+    ),
+  );
+  const originalEntries = new Map(
+    (await originalReader.getEntries()).map((entry) => [entry.filename, entry]),
+  );
+  const originalChapter = await originalEntries.get(
+    'OEBPS/text/chapter-1.xhtml',
+  )!.getData!(new TextWriter());
+  expect(originalChapter).toContain('章节原文');
+  expect(originalChapter).not.toContain('章节译文');
+  await originalReader.close();
+});
+
 test('permanent deletion removes exactly one complete book graph', async ({
   page,
 }) => {

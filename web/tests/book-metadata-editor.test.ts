@@ -36,6 +36,7 @@ describe('book metadata editor', () => {
       authors: [],
       description: '原始简介',
       languages: [],
+      downloadAsEpub: false,
       originalDownload: 'embed',
       translatedDownload: 'source',
     });
@@ -52,9 +53,23 @@ describe('book metadata editor', () => {
       description: '原始简介',
       coverUrl: '',
       languages: ['ja'],
+      downloadAsEpub: false,
       originalDownload: 'embed',
       translatedDownload: 'source',
     });
+  });
+
+  it('prefills and preserves the TXT EPUB download preference', () => {
+    const txtVolume: LocalVolumeMetadata = {
+      ...volume,
+      id: 'book.txt',
+      sourceFormat: 'txt',
+      txtDownloadAsEpub: true,
+    };
+    const form = createBookMetadataForm(txtVolume);
+
+    expect(form.downloadAsEpub).toBe(true);
+    expect(restoreSourceMetadata(form, txtVolume).downloadAsEpub).toBe(true);
   });
 
   it('persists explicit empty values and validates BCP 47 tags', () => {

@@ -400,7 +400,7 @@ const downloadTranslated = async () => {
     (translator): translator is LocalTranslator =>
       translator === 'gpt' || translator === 'sakura',
   );
-  if (translations.length === 0) {
+  if (setting.value.homeDownloadMode !== 'jp' && translations.length === 0) {
     message.warning('请先在设置中启用 GPT 或 Sakura');
     return;
   }

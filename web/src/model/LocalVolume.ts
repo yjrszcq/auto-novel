@@ -51,6 +51,7 @@ export interface LocalVolumeImportDiagnostic {
 }
 
 export type DownloadMetadataPolicy = 'global' | 'embed' | 'source';
+export type LocalDownloadMode = 'zh' | 'zh-jp' | 'jp-zh' | 'jp';
 
 interface LocalDownloadMetadataPreference {
   original: DownloadMetadataPolicy;
@@ -73,6 +74,7 @@ export interface LocalVolumeMetadata {
   importDiagnostics?: LocalVolumeImportDiagnostic[];
   bookMetadata?: LocalBookMetadata;
   downloadMetadataPreference?: LocalDownloadMetadataPreference;
+  txtDownloadAsEpub?: boolean;
 }
 
 const hasOwn = <Key extends keyof LocalBookMetadata>(

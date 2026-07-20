@@ -151,10 +151,11 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     id,
     bookMetadata,
     downloadMetadataPreference,
+    txtDownloadAsEpub,
     cover,
   }: Pick<
     LocalVolumeMetadata,
-    'id' | 'bookMetadata' | 'downloadMetadataPreference'
+    'id' | 'bookMetadata' | 'downloadMetadataPreference' | 'txtDownloadAsEpub'
   > & {
     cover?: ReaderCover | null;
   }) => {
@@ -167,6 +168,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       ...value,
       bookMetadata,
       downloadMetadataPreference,
+      txtDownloadAsEpub,
     });
     if (cover === null) await coverStore.delete(id);
     else if (cover !== undefined) await coverStore.put(cover);

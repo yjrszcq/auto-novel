@@ -73,10 +73,11 @@ export const createLocalVolumeStore = async () => {
     {
       bookMetadata,
       downloadMetadataPreference,
+      txtDownloadAsEpub,
       cover,
     }: Pick<
       LocalVolumeMetadata,
-      'bookMetadata' | 'downloadMetadataPreference'
+      'bookMetadata' | 'downloadMetadataPreference' | 'txtDownloadAsEpub'
     > & {
       cover?: Awaited<ReturnType<typeof dao.getReaderCover>> | null;
     },
@@ -85,6 +86,7 @@ export const createLocalVolumeStore = async () => {
       id,
       bookMetadata,
       downloadMetadataPreference,
+      txtDownloadAsEpub,
       cover,
     });
 
@@ -95,12 +97,25 @@ export const createLocalVolumeStore = async () => {
     id: string;
     embedMetadata?: boolean;
   }) => {
-    const stored = await dao.getFile(id);
+    const [stored, volume] = await Promise.all([
+      dao.getFile(id),
+      getVolume(id),
+    ]);
     if (stored === undefined) throw new Error('原始文件不存在');
-    if (!embedMetadata) return { filename: id, blob: stored.file };
-
-    const volume = await getVolume(id);
     if (volume === undefined) throw new Error('小说不存在');
+    if (volume.sourceFormat === 'txt' && volume.txtDownloadAsEpub) {
+      const result = await getTranslationFile(dao, {
+        id,
+        mode: 'jp',
+        translationsMode: 'priority',
+        translations: [],
+      });
+      return {
+        filename: id.replace(/\.txt$/i, '') + '.epub',
+        blob: result.blob,
+      };
+    }
+    if (!embedMetadata) return { filename: id, blob: stored.file };
     const parsed = await parseFile(stored.file);
     if (parsed.type !== 'epub') return { filename: id, blob: stored.file };
     await embedEpubDownloadMetadata(dao, parsed, volume);

@@ -1,9 +1,17 @@
 import { parseFile } from '@/util/file';
+import {
+  getLocalBookMetadata,
+  type LocalDownloadMode,
+} from '@/model/LocalVolume';
 
 import { injectEpubParagraphTranslations } from './EpubParser';
 import { collectEpubSourceTranslations } from './EpubTranslationExport';
-import { embedEpubDownloadMetadata } from './EpubDownloadMetadata';
+import {
+  embedEpubDownloadMetadata,
+  getEpubDownloadCover,
+} from './EpubDownloadMetadata';
 import type { LocalVolumeDao } from './LocalVolumeDao';
+import { createTxtEpub } from './TxtEpubExport';
 
 export const getTranslationFile = async (
   dao: LocalVolumeDao,
@@ -15,18 +23,21 @@ export const getTranslationFile = async (
     embedMetadata = false,
   }: {
     id: string;
-    mode: 'zh' | 'zh-jp' | 'jp-zh';
+    mode: LocalDownloadMode;
     translationsMode: 'parallel' | 'priority';
     translations: ('sakura' | 'baidu' | 'youdao' | 'gpt')[];
     embedMetadata?: boolean;
   },
 ) => {
-  const filename = [
-    mode,
-    (translationsMode === 'parallel' ? 'B' : 'Y') +
-      translations.map((it) => it[0]).join(''),
-    id,
-  ].join('.');
+  const filename =
+    mode === 'jp'
+      ? `jp.${id}`
+      : [
+          mode,
+          (translationsMode === 'parallel' ? 'B' : 'Y') +
+            translations.map((it) => it[0]).join(''),
+          id,
+        ].join('.');
 
   const metadata = await dao.getMetadata(id);
   if (metadata === undefined) throw Error('小说不存在');
@@ -50,32 +61,64 @@ export const getTranslationFile = async (
     return { jpLines, zhLinesList };
   };
 
+  const getDownloadLines = async (chapterId: string, chapterTitle?: string) => {
+    const { jpLines, zhLinesList } = await getZhLinesList(chapterId);
+    const omitHeading =
+      chapterTitle !== undefined && jpLines[0]?.trim() === chapterTitle.trim();
+    const originalLines = omitHeading ? jpLines.slice(1) : [...jpLines];
+    const translatedLinesList = zhLinesList.map((lines) =>
+      omitHeading ? lines.slice(1) : lines,
+    );
+    if (mode === 'jp') return originalLines;
+    if (translatedLinesList.length === 0) return ['// 该分段翻译缺失。'];
+    const combinedLinesList = [...translatedLinesList];
+    if (mode === 'jp-zh') combinedLinesList.unshift(originalLines);
+    else if (mode === 'zh-jp') combinedLinesList.push(originalLines);
+    const lines: string[] = [];
+    for (let index = 0; index < combinedLinesList[0]!.length; index += 1) {
+      combinedLinesList.forEach((values) => lines.push(values[index] ?? ''));
+    }
+    return lines;
+  };
+
   const file = await dao.getFile(id);
   if (file === undefined) throw Error('原始文件不存在');
 
   const myFile = await parseFile(file.file);
 
   if (myFile.type === 'txt') {
-    const buffer = [];
-    for (const { chapterId } of metadata.toc) {
-      const { jpLines, zhLinesList } = await getZhLinesList(chapterId);
-
-      if (zhLinesList.length === 0) {
-        buffer.push('// 该分段翻译缺失。');
-      } else {
-        const combinedLinesList = zhLinesList;
-        if (mode === 'jp-zh') {
-          combinedLinesList.unshift(jpLines);
-        } else if (mode === 'zh-jp') {
-          combinedLinesList.push(jpLines);
-        }
-        for (let i = 0; i < combinedLinesList[0].length; i++) {
-          combinedLinesList.forEach((lines) => buffer.push(lines[i]));
-        }
-      }
+    const chapters = [];
+    for (const tocItem of metadata.toc) {
+      chapters.push({
+        id: tocItem.chapterId,
+        title: tocItem.title?.trim() || '未命名章节',
+        parentChapterId: tocItem.parentChapterId,
+        paragraphs: await getDownloadLines(
+          tocItem.chapterId,
+          metadata.txtDownloadAsEpub ? tocItem.title : undefined,
+        ),
+      });
     }
-    myFile.text = buffer.join('\n');
+    if (metadata.txtDownloadAsEpub) {
+      const epubFilename = filename.replace(/\.txt$/i, '') + '.epub';
+      return {
+        filename: epubFilename,
+        blob: await createTxtEpub({
+          filename: epubFilename,
+          metadata: getLocalBookMetadata(metadata),
+          chapters,
+          cover: await getEpubDownloadCover(dao, metadata),
+        }),
+      };
+    }
+    myFile.text = chapters.flatMap(({ paragraphs }) => paragraphs).join('\n');
   } else if (myFile.type === 'epub') {
+    if (mode === 'jp') {
+      if (embedMetadata) {
+        await embedEpubDownloadMetadata(dao, myFile, metadata);
+      }
+      return { filename, blob: await myFile.toBlob() };
+    }
     const nativeChapters = [];
     for (const tocItem of metadata.toc) {
       const chapter = await dao.getChapter(id, tocItem.chapterId);
@@ -103,6 +146,7 @@ export const getTranslationFile = async (
       await embedEpubDownloadMetadata(dao, myFile, metadata);
     }
   } else if (myFile.type === 'srt') {
+    if (mode === 'jp') return { filename, blob: await myFile.toBlob() };
     const { zhLinesList } = await getZhLinesList('0');
     const newSubtitles: typeof myFile.subtitles = [];
     for (const s of myFile.subtitles) {

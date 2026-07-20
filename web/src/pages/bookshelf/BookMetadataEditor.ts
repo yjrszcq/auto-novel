@@ -11,6 +11,7 @@ export interface BookMetadataFormValue {
   description: string;
   coverUrl: string;
   languages: string[];
+  downloadAsEpub: boolean;
   originalDownload: DownloadMetadataPolicy;
   translatedDownload: DownloadMetadataPolicy;
 }
@@ -21,6 +22,7 @@ const formMetadata = (metadata: LocalBookMetadata): BookMetadataFormValue => ({
   description: metadata.description ?? '',
   coverUrl: metadata.coverUrl ?? '',
   languages: [...(metadata.languages ?? [])],
+  downloadAsEpub: false,
   originalDownload: 'global',
   translatedDownload: 'global',
 });
@@ -29,6 +31,7 @@ export const createBookMetadataForm = (
   volume: LocalVolumeMetadata,
 ): BookMetadataFormValue => ({
   ...formMetadata(getLocalBookMetadata(volume)),
+  downloadAsEpub: volume.txtDownloadAsEpub ?? false,
   originalDownload: volume.downloadMetadataPreference?.original ?? 'global',
   translatedDownload: volume.downloadMetadataPreference?.translated ?? 'global',
 });
@@ -38,6 +41,7 @@ export const restoreSourceMetadata = (
   volume: LocalVolumeMetadata,
 ): BookMetadataFormValue => ({
   ...formMetadata(volume.sourceBookMetadata),
+  downloadAsEpub: form.downloadAsEpub,
   originalDownload: form.originalDownload,
   translatedDownload: form.translatedDownload,
 });

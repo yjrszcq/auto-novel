@@ -27,11 +27,16 @@ export const embedEpubDownloadMetadata = async (
     languages: metadata.languages ?? [],
   });
 
-  const coverUrl = metadata.coverUrl?.trim();
-  if (coverUrl) {
-    epub.setCover(await fetchCover(coverUrl));
-    return;
-  }
+  const cover = await getEpubDownloadCover(dao, volume);
+  if (cover !== undefined) epub.setCover(cover);
+};
+
+export const getEpubDownloadCover = async (
+  dao: DownloadMetadataDao,
+  volume: LocalVolumeMetadata,
+) => {
+  const coverUrl = getLocalBookMetadata(volume).coverUrl?.trim();
+  if (coverUrl) return fetchCover(coverUrl);
   const cover = await dao.getReaderCover(volume.id);
-  if (cover?.source === 'custom') epub.setCover(cover.blob);
+  return cover?.source === 'custom' ? cover.blob : undefined;
 };

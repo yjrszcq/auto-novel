@@ -42,12 +42,14 @@ const form = reactive<BookMetadataFormValue>({
   description: '',
   coverUrl: '',
   languages: [],
+  downloadAsEpub: false,
   originalDownload: 'global',
   translatedDownload: 'global',
 });
 const repositoryPromise = useLocalVolumeStore();
 const bookId = computed(() => String(route.params.bookId));
 const isEpub = computed(() => volume.value?.sourceFormat === 'epub');
+const isTxt = computed(() => volume.value?.sourceFormat === 'txt');
 
 const languageOptions: SelectOption[] = [
   { label: '中文（简体）', value: 'zh-CN' },
@@ -235,6 +237,7 @@ const submit = async () => {
             translated: form.translatedDownload,
           }
         : undefined,
+      txtDownloadAsEpub: isTxt.value ? form.downloadAsEpub : undefined,
       cover: coverMutation.value,
     });
     message.success('书籍信息已保存');
@@ -359,6 +362,12 @@ onBeforeUnmount(clearCoverObjectUrl);
                 :on-create="createLanguage"
                 placeholder="原文件未提供语言"
               />
+            </n-form-item>
+
+            <n-form-item v-if="isTxt" label="下载格式">
+              <n-checkbox v-model:checked="form.downloadAsEpub">
+                下载时转换为 EPUB
+              </n-checkbox>
             </n-form-item>
 
             <template v-if="isEpub">
