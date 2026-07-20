@@ -5,6 +5,7 @@ export const getChapterTranslationParams = (
   chapter: ReaderChapterSummary,
 ): TranslateTaskParams => ({
   level: 'normal',
+  translateMetadata: false,
   forceMetadata: false,
   startIndex: chapter.index,
   endIndex: chapter.index + 1,

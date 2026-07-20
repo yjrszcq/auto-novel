@@ -157,6 +157,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
           if (end > start) {
             const task = TranslateTaskDescriptor.local(id, {
               level,
+              translateMetadata: tasks.length === 0,
               forceMetadata,
               startIndex: start,
               endIndex: end,
@@ -168,6 +169,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       } else {
         const task = TranslateTaskDescriptor.local(id, {
           level,
+          translateMetadata: true,
           forceMetadata,
           startIndex,
           endIndex,
@@ -208,6 +210,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       ids.forEach((id) => {
         const task = TranslateTaskDescriptor.local(id, {
           level,
+          translateMetadata: true,
           forceMetadata: false,
           startIndex: 0,
           endIndex: 65535,

@@ -1,8 +1,9 @@
 import type {
   CatalogTitleTranslation,
   CatalogTitleTranslations,
+  LocalVolumeMetadata,
 } from '@/model/LocalVolume';
-import type { TranslatorId } from '@/model/Translator';
+import type { TranslateTaskParams, TranslatorId } from '@/model/Translator';
 
 export interface CatalogTitleEntry {
   title?: string;
@@ -41,4 +42,51 @@ export const selectCatalogTitleTranslation = (
     if (translation !== undefined) return translation.text.trim();
   }
   return undefined;
+};
+
+export interface CatalogTitleTranslationPlanTarget {
+  id: string;
+  sourceTitle: string;
+}
+
+export interface CatalogTitleTranslationPlan {
+  sourceTitles: string[];
+  toc: CatalogTitleTranslationPlanTarget[];
+  navigation: CatalogTitleTranslationPlanTarget[];
+}
+
+export const createCatalogTitleTranslationPlan = (
+  metadata: LocalVolumeMetadata,
+  translatorId: TranslatorId,
+  level: TranslateTaskParams['level'],
+  forceMetadata: boolean,
+): CatalogTitleTranslationPlan => {
+  const sourceTitles = new Set<string>();
+  const shouldTranslate = (entry: CatalogTitleEntry) => {
+    const sourceTitle = normalizeTitle(entry.title);
+    if (sourceTitle.length === 0) return false;
+    if (forceMetadata || level === 'all') return true;
+    if (level === 'normal') {
+      return getCatalogTitleTranslation(entry, translatorId) === undefined;
+    }
+    return !isCatalogTitleTranslationCurrent(
+      entry,
+      translatorId,
+      metadata.glossaryId,
+    );
+  };
+  const collect = <Entry extends CatalogTitleEntry>(
+    entries: readonly Entry[],
+    getId: (entry: Entry) => string,
+  ) =>
+    entries.flatMap((entry) => {
+      if (!shouldTranslate(entry)) return [];
+      const sourceTitle = normalizeTitle(entry.title);
+      sourceTitles.add(sourceTitle);
+      return [{ id: getId(entry), sourceTitle }];
+    });
+
+  const toc = collect(metadata.toc, (entry) => entry.chapterId);
+  const navigation = collect(metadata.navigation ?? [], (entry) => entry.id);
+  return { sourceTitles: [...sourceTitles], toc, navigation };
 };

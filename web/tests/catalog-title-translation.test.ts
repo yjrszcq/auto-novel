@@ -4,6 +4,7 @@ import { deleteDB } from 'idb';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  createCatalogTitleTranslationPlan,
   getCatalogTitleTranslation,
   isCatalogTitleTranslationCurrent,
   selectCatalogTitleTranslation,
@@ -17,6 +18,63 @@ afterEach(async () => {
 });
 
 describe('catalog title translations', () => {
+  it('plans missing, expired, and forced titles without duplicate requests', () => {
+    const metadata = {
+      id: 'book',
+      createAt: 1,
+      toc: [
+        { chapterId: 'missing', title: '共同标题' },
+        {
+          chapterId: 'current',
+          title: '当前标题',
+          titleTranslations: {
+            gpt: {
+              text: '当前译文',
+              glossaryId: 'current-glossary',
+              sourceTitle: '当前标题',
+            },
+          },
+        },
+        {
+          chapterId: 'expired',
+          title: '过期标题',
+          titleTranslations: {
+            gpt: {
+              text: '过期译文',
+              glossaryId: 'old-glossary',
+              sourceTitle: '过期标题',
+            },
+          },
+        },
+      ],
+      navigation: [
+        { id: 'volume', title: '共同标题', level: 0 },
+        { id: 'empty', title: '   ', level: 0 },
+      ],
+      glossaryId: 'current-glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceFormat: 'epub' as const,
+      sourceBookMetadata: {},
+    };
+
+    expect(
+      createCatalogTitleTranslationPlan(metadata, 'gpt', 'normal', false),
+    ).toMatchObject({
+      sourceTitles: ['共同标题'],
+      toc: [{ id: 'missing' }],
+      navigation: [{ id: 'volume' }],
+    });
+    expect(
+      createCatalogTitleTranslationPlan(metadata, 'gpt', 'expire', false)
+        .sourceTitles,
+    ).toEqual(['共同标题', '过期标题']);
+    expect(
+      createCatalogTitleTranslationPlan(metadata, 'gpt', 'normal', true)
+        .sourceTitles,
+    ).toEqual(['共同标题', '当前标题', '过期标题']);
+  });
+
   it('selects a source-matched translation by priority and detects expiry', () => {
     const entry = {
       title: ' 第一章 ',

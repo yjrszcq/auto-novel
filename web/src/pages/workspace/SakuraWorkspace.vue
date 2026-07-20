@@ -158,6 +158,7 @@ const runQueuedJobs = async () => {
                 ? undefined
                 : TranslateTaskDescriptor.local(desc.volumeId, {
                     ...params,
+                    translateMetadata: false,
                     chapterIds: progress.remainingChapterIds,
                   });
             job.progress = {

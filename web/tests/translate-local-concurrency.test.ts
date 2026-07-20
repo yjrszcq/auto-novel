@@ -94,6 +94,7 @@ const translateVolume = (
     { type: 'local', volumeId },
     {
       level,
+      translateMetadata: false,
       forceMetadata: false,
       startIndex: 0,
       endIndex: 65535,
@@ -105,6 +106,137 @@ const translateVolume = (
   );
 
 describe('local volume concurrent translation', () => {
+  it('translates and persists the whole catalog before chapter work', async () => {
+    const volumeId = 'catalog-volume.epub';
+    await seedVolume(volumeId, [
+      { id: 'chapter-a', paragraphs: ['正文甲'] },
+      { id: 'chapter-b', paragraphs: ['正文乙'] },
+    ]);
+    const seededDao = await createLocalVolumeDao();
+    await seededDao.updateMetadata(volumeId, (metadata) => ({
+      ...metadata,
+      toc: metadata.toc.map((entry, index) => ({
+        ...entry,
+        title: index === 0 ? '正文甲' : '章题2',
+      })),
+      navigation: [
+        { id: 'volume', title: '第一卷', level: 0 },
+        {
+          id: 'chapter-a-nav',
+          title: '正文甲',
+          level: 1,
+          chapterId: 'chapter-a',
+          parentId: 'volume',
+        },
+      ],
+    }));
+    await seededDao.updateChapter(volumeId, 'chapter-a', (chapter) => ({
+      ...chapter,
+      gpt: {
+        glossaryId: 'glossary',
+        glossary: {},
+        paragraphs: ['正文甲译文'],
+      },
+    }));
+    seededDao.close();
+    const server = await startOpenAiTestServer();
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'catalog-key',
+      model: 'catalog-model',
+    });
+    const { callback, state } = createCallback();
+
+    await translateLocal(
+      { type: 'local', volumeId },
+      {
+        level: 'normal',
+        translateMetadata: true,
+        forceMetadata: false,
+        startIndex: 0,
+        endIndex: 65535,
+        formatRetryCount: 3,
+      },
+      callback,
+      translator,
+      undefined,
+      { concurrency: 1 },
+    );
+
+    expect(state).toMatchObject({ total: 2, successes: 2, failures: 0 });
+    expect(server.requests[0]?.body.messages.at(-1)?.content).toEqual(
+      expect.stringContaining('第一卷'),
+    );
+    const storedDao = await createLocalVolumeDao();
+    const metadata = await storedDao.getMetadata(volumeId);
+    storedDao.close();
+    expect(metadata?.toc[0]?.titleTranslations?.gpt).toMatchObject({
+      text: '正文甲译文',
+      glossaryId: 'glossary',
+      sourceTitle: '正文甲',
+    });
+    expect(metadata?.navigation?.[0]?.titleTranslations?.gpt).toMatchObject({
+      glossaryId: 'glossary',
+      sourceTitle: '第一卷',
+    });
+    expect(metadata?.navigation?.[1]?.titleTranslations?.gpt?.text).toBe(
+      metadata?.toc[0]?.titleTranslations?.gpt?.text,
+    );
+  });
+
+  it('continues chapter translation when catalog translation fails', async () => {
+    const volumeId = 'catalog-failure-volume.epub';
+    await seedVolume(volumeId, [
+      { id: 'chapter-a', paragraphs: ['正文甲'] },
+      { id: 'chapter-b', paragraphs: ['正文乙'] },
+    ]);
+    const server = await startOpenAiTestServer({
+      onChat: (request) => {
+        const prompt = request.body.messages.at(-1)?.content ?? '';
+        return prompt.includes('chapter-a')
+          ? {
+              content: '目录失败',
+              errorCode: 'invalid_request',
+              status: 400,
+            }
+          : { content: '#1:正文译文' };
+      },
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'catalog-failure-key',
+      model: 'catalog-failure-model',
+    });
+    const { callback, state } = createCallback();
+
+    await translateLocal(
+      { type: 'local', volumeId },
+      {
+        level: 'all',
+        translateMetadata: true,
+        forceMetadata: false,
+        startIndex: 0,
+        endIndex: 65535,
+        formatRetryCount: 0,
+      },
+      callback,
+      translator,
+      undefined,
+      { concurrency: 1 },
+    );
+
+    expect(state).toMatchObject({ total: 2, successes: 2, failures: 0 });
+    expect(state.logs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('目录翻译失败，继续翻译正文'),
+      ]),
+    );
+  });
+
   it('preserves TOC order, exact scope, and one chapter read per task', async () => {
     const volumeId = 'ordered-volume.epub';
     await seedVolume(volumeId, [
@@ -130,6 +262,7 @@ describe('local volume concurrent translation', () => {
       { type: 'local', volumeId },
       {
         level: 'all',
+        translateMetadata: false,
         forceMetadata: false,
         startIndex: 0,
         endIndex: 3,

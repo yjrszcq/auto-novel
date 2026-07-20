@@ -20,11 +20,14 @@ import type {
   SegmentProgressInfo,
   Translator,
 } from './Translator';
+import { createCatalogTitleTranslationPlan } from './CatalogTitleTranslation';
 
 export const translateLocal = async (
   { volumeId }: LocalTranslateTaskDesc,
   {
     level,
+    translateMetadata,
+    forceMetadata,
     startIndex,
     endIndex,
     chapterIds,
@@ -45,6 +48,7 @@ export const translateLocal = async (
 
   const getChapter = (chapterId: string) =>
     localVolumeRepository.getChapter(volumeId, chapterId);
+  const listChapters = () => localVolumeRepository.listChapter(volumeId);
 
   const updateTranslation = (chapterId: string, json: ChapterTranslation) =>
     localVolumeRepository.updateTranslation(
@@ -53,6 +57,11 @@ export const translateLocal = async (
       translator.id,
       json,
     );
+  const updateCatalogTitleTranslations = (
+    input: Parameters<
+      typeof localVolumeRepository.updateCatalogTitleTranslations
+    >[0],
+  ) => localVolumeRepository.updateCatalogTitleTranslations(input);
 
   // Task
   let metadata: LocalVolumeMetadata;
@@ -102,6 +111,93 @@ export const translateLocal = async (
     ? normalizeConcurrencyLimit(options.concurrency)
     : normalizeTranslationConcurrency(options?.concurrency);
   const requestLimiter = createConcurrencyLimiter(concurrency);
+
+  if (translateMetadata) {
+    try {
+      const plan = createCatalogTitleTranslationPlan(
+        metadata,
+        translator.id,
+        level,
+        forceMetadata,
+      );
+      if (plan.sourceTitles.length === 0) {
+        callback.log('目录无需更新');
+      } else {
+        callback.log(`翻译目录（${plan.sourceTitles.length} 个标题）`);
+        const translatedBySource = new Map<string, string>();
+        if (!forceMetadata && level !== 'all') {
+          const chapterById = new Map(
+            (await listChapters()).map((chapter) => [chapter.id, chapter]),
+          );
+          plan.toc.forEach(({ id, sourceTitle }) => {
+            const chapter = chapterById.get(`${volumeId}/${id}`);
+            const translation = chapter?.[translator.id];
+            const translatedTitle = translation?.paragraphs[0]?.trim();
+            if (
+              chapter?.paragraphs[0]?.trim() === sourceTitle &&
+              translation?.glossaryId === metadata.glossaryId &&
+              translatedTitle
+            ) {
+              translatedBySource.set(sourceTitle, translatedTitle);
+            }
+          });
+        }
+        const unresolvedTitles = plan.sourceTitles.filter(
+          (sourceTitle) => !translatedBySource.has(sourceTitle),
+        );
+        if (unresolvedTitles.length > 0) {
+          const translatedTitles = await translator.translate(
+            unresolvedTitles,
+            {
+              glossary: metadata.glossary,
+              force: forceMetadata || level === 'all',
+              signal,
+              formatRetryCount,
+            },
+            {
+              concurrency,
+              requestLimiter:
+                options?.segmentDispatcher === undefined
+                  ? requestLimiter
+                  : undefined,
+              segmentDispatcher: options?.segmentDispatcher,
+            },
+          );
+          unresolvedTitles.forEach((sourceTitle, index) => {
+            translatedBySource.set(
+              sourceTitle,
+              translatedTitles[index]?.trim() ?? '',
+            );
+          });
+        }
+        const toUpdates = (
+          targets: typeof plan.toc,
+        ): Array<{
+          id: string;
+          sourceTitle: string;
+          translatedTitle: string;
+        }> =>
+          targets.map((target) => ({
+            ...target,
+            translatedTitle: translatedBySource.get(target.sourceTitle) ?? '',
+          }));
+        const result = await updateCatalogTitleTranslations({
+          bookId: volumeId,
+          translatorId: translator.id,
+          glossaryId: metadata.glossaryId,
+          toc: toUpdates(plan.toc),
+          navigation: toUpdates(plan.navigation),
+        });
+        callback.log(
+          `目录翻译完成：更新 ${result.updated} 项` +
+            (result.skipped > 0 ? `，跳过 ${result.skipped} 项` : ''),
+        );
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return 'abort';
+      callback.log(`目录翻译失败，继续翻译正文：${await formatError(e)}`);
+    }
+  }
 
   const translateChapter = async (
     { chapterId, tocIndex }: (typeof chapters)[number],

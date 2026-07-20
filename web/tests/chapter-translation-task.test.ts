@@ -64,6 +64,7 @@ describe('current chapter translation task', () => {
     ).toMatchObject({
       desc: { type: 'local', volumeId: 'book' },
       params: {
+        translateMetadata: true,
         forceMetadata: true,
         startIndex: 3,
         endIndex: 4,
@@ -78,12 +79,14 @@ describe('current chapter translation task', () => {
     workspace.ref.value.jobRecords = [];
     const originalTask = TranslateTaskDescriptor.local('book', {
       level: 'all',
+      translateMetadata: true,
       forceMetadata: false,
       startIndex: 0,
       endIndex: 10,
     });
     const resumeTask = TranslateTaskDescriptor.local('book', {
       level: 'all',
+      translateMetadata: false,
       forceMetadata: false,
       startIndex: 0,
       endIndex: 10,
@@ -101,5 +104,29 @@ describe('current chapter translation task', () => {
     expect(workspace.retryJobRecord(record)).toBe(true);
     expect(workspace.ref.value.jobs[0].task).toBe(resumeTask);
     expect(workspace.ref.value.jobRecords).toHaveLength(0);
+  });
+
+  it('assigns whole-book catalog translation to only one split task', () => {
+    const workspace = useGptWorkspaceStore();
+    workspace.ref.value.jobs = [];
+
+    const result = useLocalVolumeManager().queueJobToWorkspace('split-book', {
+      level: 'expire',
+      type: 'gpt',
+      shouldTop: false,
+      forceMetadata: false,
+      startIndex: 0,
+      endIndex: 9,
+      taskNumber: 3,
+      total: 9,
+    });
+
+    expect(result).toEqual([true, true, true]);
+    expect(
+      workspace.ref.value.jobs.map(
+        (job) =>
+          TranslateTaskDescriptor.parse(job.task).params.translateMetadata,
+      ),
+    ).toEqual([true, false, false]);
   });
 });

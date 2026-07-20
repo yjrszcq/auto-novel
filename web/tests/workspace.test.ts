@@ -38,6 +38,7 @@ describe('workspace task descriptors', () => {
   it('round-trips the current local task format', () => {
     const task = TranslateTaskDescriptor.local('book/a', {
       level: 'all',
+      translateMetadata: true,
       forceMetadata: true,
       startIndex: 2,
       endIndex: 8,
@@ -48,6 +49,7 @@ describe('workspace task descriptors', () => {
       desc: { type: 'local', volumeId: 'book/a' },
       params: {
         level: 'all',
+        translateMetadata: true,
         forceMetadata: true,
         startIndex: 2,
         endIndex: 8,
@@ -59,6 +61,7 @@ describe('workspace task descriptors', () => {
   it('round-trips an exact remaining chapter scope', () => {
     const task = TranslateTaskDescriptor.local('book/a', {
       level: 'all',
+      translateMetadata: false,
       forceMetadata: false,
       startIndex: 0,
       endIndex: 100,

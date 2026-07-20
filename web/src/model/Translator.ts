@@ -74,6 +74,7 @@ export type TranslateTaskDesc = LocalTranslateTaskDesc;
 
 export type TranslateTaskParams = {
   level: 'normal' | 'expire' | 'all' | 'sync'; // 翻译等级
+  translateMetadata: boolean; // 是否翻译书籍目录等元数据
   forceMetadata: boolean; // 强制重翻元数据
   startIndex: number;
   endIndex: number;
@@ -97,6 +98,7 @@ type TranslateTaskDescriptor = string;
 export namespace TranslateTaskDescriptor {
   const buildTaskQueryString = ({
     level,
+    translateMetadata,
     forceMetadata,
     startIndex,
     endIndex,
@@ -105,6 +107,7 @@ export namespace TranslateTaskDescriptor {
   }: TranslateTaskParams) => {
     const searchParamsInit: { [key: string]: string } = {
       level,
+      translateMetadata: translateMetadata.toString(),
       forceMetadata: forceMetadata.toString(),
       startIndex: startIndex.toString(),
       endIndex: endIndex.toString(),
@@ -148,6 +151,7 @@ export namespace TranslateTaskDescriptor {
 
     const params: TranslateTaskParams = {
       level: query.get('level') as 'normal' | 'expire' | 'all' | 'sync',
+      translateMetadata: queryBoolean('translateMetadata'),
       forceMetadata: queryBoolean('forceMetadata'),
       startIndex: queryInt('startIndex', 0),
       endIndex: queryInt('endIndex', 65535),

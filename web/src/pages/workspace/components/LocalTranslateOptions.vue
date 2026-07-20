@@ -6,6 +6,7 @@ import {
 } from '@/model/Translator';
 
 const translateLevel = ref<'normal' | 'expire' | 'all'>('expire');
+const forceMetadata = ref(false);
 const showRetranslateWarning = computed(() => translateLevel.value === 'all');
 const startIndex = ref<number | null>(0);
 const endIndex = ref<number | null>(65536);
@@ -15,7 +16,8 @@ const formatRetryCount = ref<number | null>(3);
 defineExpose({
   getTranslateTaskParams: () => ({
     level: translateLevel.value,
-    forceMetadata: false,
+    translateMetadata: true,
+    forceMetadata: forceMetadata.value,
     startIndex: startIndex.value ?? 0,
     endIndex: endIndex.value ?? 65536,
     formatRetryCount: normalizeFormatRetryCount(
@@ -47,6 +49,9 @@ defineExpose({
           <div>重翻：重翻全部章节</div>
         </div>
       </n-tooltip>
+    </c-action-wrapper>
+    <c-action-wrapper title="目录">
+      <n-checkbox v-model:checked="forceMetadata">重翻目录</n-checkbox>
     </c-action-wrapper>
     <n-text
       v-if="showRetranslateWarning"

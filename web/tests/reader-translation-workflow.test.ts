@@ -21,6 +21,7 @@ describe('reader translation workflow', () => {
   it('targets only the current chapter in a local translation task', () => {
     expect(getChapterTranslationParams(chapter)).toEqual({
       level: 'normal',
+      translateMetadata: false,
       forceMetadata: false,
       startIndex: 3,
       endIndex: 4,
