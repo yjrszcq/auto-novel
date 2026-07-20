@@ -74,6 +74,13 @@ import {
 } from './core/ReaderMode';
 import { getTranslationStatusLabel } from './core/ReaderTranslationWorkflow';
 import {
+  planReaderAutomaticTranslationWindow,
+  ReaderAutomaticTranslationSession,
+  type ReaderAutomaticTranslationSelection,
+  type ReaderAutomaticTranslationSource,
+} from './core/ReaderAutoTranslation';
+import { ReaderAutomaticTranslationCoordinator } from './core/ReaderAutomaticTranslationCoordinator';
+import {
   applyReaderStyleOverride,
   defaultReaderSettings,
   normalizeReaderSettings,
@@ -149,8 +156,12 @@ let continuousLoadGeneration = 0;
 let routeSyncedFromScroll: string | undefined;
 let adjustingContinuousChapters = false;
 const isSpeaking = ref(false);
-const translatingPage = ref<'gpt' | 'sakura'>();
-let pageTranslationController: AbortController | undefined;
+const automaticTranslationSource = ref<ReaderAutomaticTranslationSource>();
+const automaticTranslationSession = new ReaderAutomaticTranslationSession();
+let automaticTranslationController: AbortController | undefined;
+let automaticTranslationTimer: number | undefined;
+let automaticTranslationRunning = false;
+let automaticTranslationQueued = false;
 const temporaryTranslations = new Map<string, string>();
 
 const repositoryPromise = useLocalVolumeStore();
@@ -250,6 +261,11 @@ const hasIncompleteChapter = computed(
     requiresWholeChapterTranslation.value &&
     currentChapterSummary.value !== undefined &&
     currentChapterSummary.value.translationStatus !== 'complete',
+);
+const showsAutomaticTranslationControls = computed(
+  () =>
+    hasIncompleteChapter.value ||
+    automaticTranslationSource.value !== undefined,
 );
 const currentTranslationStatusLabel = computed(() =>
   currentChapterSummary.value === undefined
@@ -1608,96 +1624,318 @@ const createVisibleTranslationConfig = (
         prevSegLength: (worker as SakuraWorker).prevSegLength,
       };
 
-const translateVisiblePage = async (type: 'gpt' | 'sakura') => {
-  if (translatingPage.value !== undefined) return;
+type ActiveAutomaticTranslationRuntime = {
+  selection: ReaderAutomaticTranslationSelection;
+  config: TranslatorConfig;
+  concurrency: number;
+  glossary: Record<string, string>;
+};
+
+let activeAutomaticTranslationRuntime:
+  ActiveAutomaticTranslationRuntime | undefined;
+
+const loadedReaderChapters = () => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return [];
+  return [
+    ...new Map(
+      [ready.chapter, ...continuousChapters.value].map((chapter) => [
+        chapter.chapterId,
+        chapter,
+      ]),
+    ).values(),
+  ].sort((left, right) => left.chapterIndex - right.chapterIndex);
+};
+
+const renderTemporaryTranslations = async (changedChapterIds: Set<string>) => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return;
+  const loadedIds = new Set(
+    loadedReaderChapters().map(({ chapterId }) => chapterId),
+  );
+  if (![...changedChapterIds].some((chapterId) => loadedIds.has(chapterId))) {
+    return;
+  }
+  const anchor = captureReaderPosition();
+  continuousChapters.value = continuousChapters.value.map(
+    withTemporaryTranslations,
+  );
+  const chapter =
+    continuousChapters.value.find(
+      ({ chapterId }) => chapterId === ready.chapter.chapterId,
+    ) ?? withTemporaryTranslations(ready.chapter);
+  result.value = { ...ready, chapter };
+  temporaryMode = settings.value.defaultMode;
+  enableTemporaryReadingModes(chapter);
+  await nextTick();
+  await nextTick();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  restoreReaderPosition(anchor);
+  updateViewportMetrics();
+};
+
+const showAutomaticTranslationDraft = (
+  selection: ReaderAutomaticTranslationSelection,
+  values: Array<{ chapterId: string; segmentId: string; translated: string }>,
+) => {
+  if (!automaticTranslationSession.isActive(selection)) return;
+  const changedChapterIds = new Set<string>();
+  values.forEach(({ chapterId, segmentId, translated }) => {
+    temporaryTranslations.set(
+      temporaryTranslationKey(chapterId, segmentId),
+      translated,
+    );
+    changedChapterIds.add(chapterId);
+  });
+  void renderTemporaryTranslations(changedChapterIds);
+};
+
+const markAutomaticTranslationCommitted = async (
+  selection: ReaderAutomaticTranslationSelection,
+  chapterId: string,
+) => {
+  if (!automaticTranslationSession.isActive(selection)) return;
+  const adapter = await cachedAdapterPromise;
+  adapter.invalidateChapter({ bookId: bookId.value, chapterId });
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return;
+  result.value = {
+    ...ready,
+    chapters: ready.chapters.map((chapter) =>
+      chapter.id === chapterId
+        ? {
+            ...chapter,
+            translationStatus: 'complete',
+            translatedSegmentCount: chapter.totalSegmentCount,
+            translationSources: [
+              ...new Set([...chapter.translationSources, selection.source]),
+            ],
+          }
+        : chapter,
+    ),
+  };
+};
+
+const collectAutomaticTranslationChapters = async (
+  visible: VisibleReaderSegment[],
+) => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return [];
+  const chapters = new Map(
+    loadedReaderChapters().map((chapter) => [chapter.chapterId, chapter]),
+  );
+  const visibleIndexes = visible.flatMap(({ chapterId }) => {
+    const index = chapters.get(chapterId)?.chapterIndex;
+    return index === undefined ? [] : [index];
+  });
+  if (visibleIndexes.length === 0) return [...chapters.values()];
+  let nextIndex = Math.max(...visibleIndexes) + 1;
+  const adapter = await cachedAdapterPromise;
+  while (true) {
+    const planned = planReaderAutomaticTranslationWindow({
+      chapters: [...chapters.values()],
+      visible,
+      preloadPages: settings.value.autoTranslationPreloadPages,
+    });
+    const prefetchedCharacters = planned.prefetch.reduce(
+      (total, target) => total + target.original.trim().length,
+      0,
+    );
+    if (
+      prefetchedCharacters >= planned.prefetchCharacterBudget ||
+      nextIndex >= ready.chapters.length
+    ) {
+      break;
+    }
+    const summary = ready.chapters[nextIndex];
+    nextIndex += 1;
+    if (summary === undefined || chapters.has(summary.id)) continue;
+    const chapter = await adapter.getChapter({
+      bookId: bookId.value,
+      chapterId: summary.id,
+    });
+    chapters.set(chapter.chapterId, chapter);
+  }
+  return [...chapters.values()].sort(
+    (left, right) => left.chapterIndex - right.chapterIndex,
+  );
+};
+
+const runAutomaticTranslationOnce = async () => {
+  const runtime = activeAutomaticTranslationRuntime;
+  const controller = automaticTranslationController;
+  if (
+    runtime === undefined ||
+    controller === undefined ||
+    controller.signal.aborted ||
+    !automaticTranslationSession.isActive(runtime.selection)
+  ) {
+    return;
+  }
+  const visible = getVisibleReaderSegments();
+  if (visible.length === 0) return;
+  const chapters = await collectAutomaticTranslationChapters(visible);
+  if (controller.signal.aborted) return;
+  const planned = planReaderAutomaticTranslationWindow({
+    chapters,
+    visible,
+    preloadPages: settings.value.autoTranslationPreloadPages,
+  });
+  if (planned.all.length === 0) return;
+  const repository = await repositoryPromise;
+  const coordinator = new ReaderAutomaticTranslationCoordinator(
+    automaticTranslationSession,
+    {
+      loadChapter: (chapterId) =>
+        repository.getChapter(bookId.value, chapterId),
+      translate: async (selection, originals, glossary, signal) => {
+        if (!automaticTranslationSession.isActive(selection)) return [];
+        const translator = await Translator.create(runtime.config, false);
+        return translator.translate(
+          originals,
+          { force: true, glossary, signal },
+          {
+            concurrency: selection.source === 'gpt' ? runtime.concurrency : 1,
+          },
+        );
+      },
+      commit: async (selection, chapterId, translation) => {
+        await repository.updateTranslation(
+          bookId.value,
+          chapterId,
+          selection.source,
+          translation,
+        );
+      },
+      onDraft: showAutomaticTranslationDraft,
+      onCommitted: (selection, chapterId) => {
+        void markAutomaticTranslationCommitted(selection, chapterId);
+      },
+    },
+  );
+  await coordinator.translateTargets({
+    generation: automaticTranslationSession.currentGeneration(),
+    selection: runtime.selection,
+    targets: planned.all,
+    glossary: runtime.glossary,
+    concurrency:
+      runtime.selection.source === 'sakura' ? runtime.concurrency : 1,
+    signal: controller.signal,
+  });
+};
+
+const runAutomaticTranslation = async () => {
+  if (automaticTranslationRunning) {
+    automaticTranslationQueued = true;
+    return;
+  }
+  automaticTranslationRunning = true;
+  try {
+    do {
+      automaticTranslationQueued = false;
+      await runAutomaticTranslationOnce();
+    } while (
+      automaticTranslationQueued &&
+      automaticTranslationController?.signal.aborted === false
+    );
+  } catch (reason) {
+    if (automaticTranslationController?.signal.aborted === false) {
+      message.error(`自动翻译失败：${String(reason)}`);
+    }
+  } finally {
+    automaticTranslationRunning = false;
+  }
+};
+
+const scheduleAutomaticTranslation = () => {
+  if (activeAutomaticTranslationRuntime === undefined) return;
+  if (automaticTranslationTimer !== undefined) {
+    window.clearTimeout(automaticTranslationTimer);
+  }
+  automaticTranslationTimer = window.setTimeout(() => {
+    automaticTranslationTimer = undefined;
+    void runAutomaticTranslation();
+  }, 140);
+};
+
+const stopAutomaticTranslation = (notify = true) => {
+  if (automaticTranslationTimer !== undefined) {
+    window.clearTimeout(automaticTranslationTimer);
+    automaticTranslationTimer = undefined;
+  }
+  automaticTranslationController?.abort();
+  automaticTranslationController = undefined;
+  automaticTranslationSession.stop();
+  activeAutomaticTranslationRuntime = undefined;
+  automaticTranslationSource.value = undefined;
+  automaticTranslationQueued = false;
+  if (notify) message.info('已停止自动翻译');
+};
+
+const restoreAutomaticTranslationDraft = (
+  selection: ReaderAutomaticTranslationSelection,
+) => {
+  temporaryTranslations.clear();
+  const changedChapterIds = new Set<string>();
+  loadedReaderChapters().forEach(({ chapterId }) => {
+    automaticTranslationSession
+      .entries(selection, chapterId)
+      .forEach(({ segmentId, translated }) => {
+        temporaryTranslations.set(
+          temporaryTranslationKey(chapterId, segmentId),
+          translated,
+        );
+        changedChapterIds.add(chapterId);
+      });
+  });
+  void renderTemporaryTranslations(changedChapterIds);
+};
+
+const toggleAutomaticTranslation = async (
+  source: ReaderAutomaticTranslationSource,
+) => {
+  if (automaticTranslationSource.value === source) {
+    stopAutomaticTranslation();
+    return;
+  }
   const worker =
-    type === 'gpt'
+    source === 'gpt'
       ? gptWorkspace.ref.value.workers[0]
       : sakuraWorkspace.ref.value.workers[0];
   if (worker === undefined) {
     message.warning(
-      `请先在${type === 'gpt' ? 'GPT' : 'Sakura'}工作区配置翻译器`,
+      `请先在${source === 'gpt' ? 'GPT' : 'Sakura'}工作区配置翻译器`,
     );
     return;
   }
-  const targets = getVisibleReaderSegments();
-  if (targets.length === 0) {
-    message.warning('当前页面没有可翻译的文字');
+  const volume = await (await repositoryPromise).getVolume(bookId.value);
+  if (volume === undefined) {
+    message.error('书籍不存在');
     return;
   }
-  const anchor = captureReaderPosition();
-  const controller = new AbortController();
-  pageTranslationController = controller;
-  translatingPage.value = type;
-  try {
-    const batchCount = Math.min(
-      normalizeTranslationConcurrency(worker.concurrency),
-      targets.length,
-    );
-    const batches = Array.from({ length: batchCount }, (_, index) =>
-      targets.slice(
-        Math.floor((index * targets.length) / batchCount),
-        Math.floor(((index + 1) * targets.length) / batchCount),
-      ),
-    );
-    const config = createVisibleTranslationConfig(type, worker);
-    const translatedBatches = await Promise.all(
-      batches.map(async (batch) => {
-        const translator = await Translator.create(config, false);
-        const output = await translator.translate(
-          batch.map(({ original }) => original),
-          { force: true, signal: controller.signal },
-          { concurrency: 1 },
-        );
-        return batch.map((target, index) => ({
-          ...target,
-          translated: output[index] ?? '',
-        }));
-      }),
-    );
-    if (controller.signal.aborted) return;
-    translatedBatches
-      .flat()
-      .forEach((target) =>
-        temporaryTranslations.set(
-          temporaryTranslationKey(target.chapterId, target.segmentId),
-          target.translated,
-        ),
-      );
-    continuousChapters.value = continuousChapters.value.map(
-      withTemporaryTranslations,
-    );
-    const ready = result.value;
-    if (ready?.kind === 'ready') {
-      const chapter =
-        continuousChapters.value.find(
-          ({ chapterId }) => chapterId === ready.chapter.chapterId,
-        ) ?? withTemporaryTranslations(ready.chapter);
-      result.value = { ...ready, chapter };
-      temporaryMode = settings.value.defaultMode;
-      enableTemporaryReadingModes(chapter);
-    }
-    await nextTick();
-    await nextTick();
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => resolve()),
-    );
-    restoreReaderPosition(anchor);
-    updateViewportMetrics();
-    showTools.value = false;
-    showMobileTranslationNotice.value = false;
-    (document.activeElement as HTMLElement | null)?.blur();
-    message.success('当前页面已临时翻译');
-  } catch (reason) {
-    if (!controller.signal.aborted) {
-      message.error(`翻译失败：${String(reason)}`);
-    }
-  } finally {
-    if (pageTranslationController === controller) {
-      pageTranslationController = undefined;
-      translatingPage.value = undefined;
-    }
-  }
+  automaticTranslationController?.abort();
+  const config = createVisibleTranslationConfig(source, worker);
+  const selection: ReaderAutomaticTranslationSelection = {
+    source,
+    workerId: worker.id,
+    workerFingerprint: JSON.stringify(config),
+    glossaryId: volume.glossaryId,
+  };
+  automaticTranslationSession.start(selection);
+  automaticTranslationController = new AbortController();
+  activeAutomaticTranslationRuntime = {
+    selection,
+    config,
+    concurrency: normalizeTranslationConcurrency(worker.concurrency),
+    glossary: { ...volume.glossary },
+  };
+  automaticTranslationSource.value = source;
+  restoreAutomaticTranslationDraft(selection);
+  showMobileTranslationNotice.value = false;
+  (document.activeElement as HTMLElement | null)?.blur();
+  message.success(`已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`);
+  await nextTick();
+  scheduleAutomaticTranslation();
 };
 
 const loadBookmarks = async (targetBookId = bookId.value) => {
@@ -2229,6 +2467,9 @@ watch(
   () => [bookId.value, requestedChapterId.value],
   ([nextBookId, nextChapterId], previous) => {
     if (previous !== undefined && nextBookId !== previous[0]) {
+      stopAutomaticTranslation(false);
+      automaticTranslationSession.clearDrafts();
+      temporaryTranslations.clear();
       searchUiRequestId += 1;
       void searchControllerPromise.then((controller) => controller.cancel());
       searchQuery.value = '';
@@ -2339,6 +2580,16 @@ watch(usesDoublePageSpread, async () => {
 
 watch(
   () => [
+    viewportChapterId.value,
+    viewportSegmentId.value,
+    readerPageIndex.value,
+    settings.value.autoTranslationPreloadPages,
+  ],
+  () => scheduleAutomaticTranslation(),
+);
+
+watch(
+  () => [
     activeSettings.value.fontSize,
     activeSettings.value.lineHeight,
     activeSettings.value.contentWidth,
@@ -2364,7 +2615,8 @@ onBeforeUnmount(() => {
   searchUiRequestId += 1;
   void controllerPromise.then((controller) => controller.cancel());
   void searchControllerPromise.then((controller) => controller.cancel());
-  pageTranslationController?.abort();
+  stopAutomaticTranslation(false);
+  automaticTranslationSession.clearDrafts();
   window.removeEventListener('scroll', handleViewportScroll);
   window.removeEventListener('resize', handleViewportResize);
   if (viewportResizeFrame !== undefined) {
@@ -2394,7 +2646,8 @@ onBeforeUnmount(() => {
       v-if="controlsVisible"
       class="book-reader__app-bar"
       :class="{
-        'book-reader__app-bar--with-translation': hasIncompleteChapter,
+        'book-reader__app-bar--with-translation':
+          showsAutomaticTranslationControls,
       }"
     >
       <button
@@ -2409,37 +2662,50 @@ onBeforeUnmount(() => {
         <span :title="result.book.title">{{ result.book.title }}</span>
       </div>
       <div v-else class="book-reader__app-bar-title">本地阅读器</div>
-      <div v-if="hasIncompleteChapter" class="book-reader__app-bar-translation">
+      <div
+        v-if="showsAutomaticTranslationControls"
+        class="book-reader__app-bar-translation"
+      >
         <span>{{ currentTranslationStatusLabel }}</span>
         <n-button
           size="tiny"
-          secondary
-          :loading="translatingPage === 'gpt'"
-          :disabled="translatingPage !== undefined && translatingPage !== 'gpt'"
-          @click="translateVisiblePage('gpt')"
+          :type="automaticTranslationSource === 'gpt' ? 'primary' : 'default'"
+          :secondary="automaticTranslationSource !== 'gpt'"
+          :aria-pressed="automaticTranslationSource === 'gpt'"
+          @click="toggleAutomaticTranslation('gpt')"
         >
-          GPT 翻译本页
+          GPT 自动翻译
         </n-button>
         <n-button
           size="tiny"
-          secondary
-          :loading="translatingPage === 'sakura'"
-          :disabled="
-            translatingPage !== undefined && translatingPage !== 'sakura'
+          :type="
+            automaticTranslationSource === 'sakura' ? 'primary' : 'default'
           "
-          @click="translateVisiblePage('sakura')"
+          :secondary="automaticTranslationSource !== 'sakura'"
+          :aria-pressed="automaticTranslationSource === 'sakura'"
+          @click="toggleAutomaticTranslation('sakura')"
         >
-          Sakura 翻译本页
+          Sakura 自动翻译
         </n-button>
-        <n-button size="tiny" secondary @click="openVisiblePageModePrompt">
+        <n-button
+          v-if="hasIncompleteChapter"
+          size="tiny"
+          secondary
+          @click="openVisiblePageModePrompt"
+        >
           阅读版本
         </n-button>
-        <n-button size="tiny" secondary @click="refreshCurrentChapter">
+        <n-button
+          v-if="hasIncompleteChapter"
+          size="tiny"
+          secondary
+          @click="refreshCurrentChapter"
+        >
           刷新本页
         </n-button>
       </div>
       <button
-        v-if="hasIncompleteChapter"
+        v-if="showsAutomaticTranslationControls"
         class="book-reader__app-bar-action book-reader__translation-toggle"
         type="button"
         :aria-label="
@@ -2473,7 +2739,9 @@ onBeforeUnmount(() => {
 
     <div
       v-if="
-        controlsVisible && hasIncompleteChapter && showMobileTranslationNotice
+        controlsVisible &&
+        showsAutomaticTranslationControls &&
+        showMobileTranslationNotice
       "
       class="book-reader__translation-popover-layer"
       @click.self="showMobileTranslationNotice = false"
@@ -2488,28 +2756,36 @@ onBeforeUnmount(() => {
           <div class="book-reader__translation-panel-actions">
             <n-button
               size="small"
-              :loading="translatingPage === 'gpt'"
-              :disabled="
-                translatingPage !== undefined && translatingPage !== 'gpt'
+              :type="
+                automaticTranslationSource === 'gpt' ? 'primary' : 'default'
               "
-              @click="translateVisiblePage('gpt')"
+              :aria-pressed="automaticTranslationSource === 'gpt'"
+              @click="toggleAutomaticTranslation('gpt')"
             >
-              GPT 翻译本页
+              GPT 自动翻译
             </n-button>
             <n-button
               size="small"
-              :loading="translatingPage === 'sakura'"
-              :disabled="
-                translatingPage !== undefined && translatingPage !== 'sakura'
+              :type="
+                automaticTranslationSource === 'sakura' ? 'primary' : 'default'
               "
-              @click="translateVisiblePage('sakura')"
+              :aria-pressed="automaticTranslationSource === 'sakura'"
+              @click="toggleAutomaticTranslation('sakura')"
             >
-              Sakura 翻译本页
+              Sakura 自动翻译
             </n-button>
-            <n-button size="small" @click="openVisiblePageModePrompt">
+            <n-button
+              v-if="hasIncompleteChapter"
+              size="small"
+              @click="openVisiblePageModePrompt"
+            >
               阅读版本
             </n-button>
-            <n-button size="small" @click="refreshCurrentChapter">
+            <n-button
+              v-if="hasIncompleteChapter"
+              size="small"
+              @click="refreshCurrentChapter"
+            >
               刷新本页
             </n-button>
           </div>

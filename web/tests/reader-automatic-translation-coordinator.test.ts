@@ -100,6 +100,7 @@ describe('reader automatic translation coordinator', () => {
     expect(translate).toHaveBeenCalledWith(
       selection,
       ['原文二'],
+      {},
       expect.any(AbortSignal),
     );
     expect(commits.mock.calls[0]?.[2].paragraphs).toEqual([

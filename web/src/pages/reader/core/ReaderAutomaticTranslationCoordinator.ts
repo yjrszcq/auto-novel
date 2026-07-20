@@ -16,6 +16,7 @@ export interface ReaderAutomaticTranslationCoordinatorDependencies {
   translate: (
     selection: ReaderAutomaticTranslationSelection,
     originals: string[],
+    glossary: ChapterTranslation['glossary'],
     signal: AbortSignal,
   ) => Promise<string[]>;
   commit: (
@@ -146,6 +147,7 @@ export class ReaderAutomaticTranslationCoordinator {
           const translated = await this.dependencies.translate(
             selection,
             claimed.map(({ original }) => original),
+            glossary,
             workerSignal,
           );
           if (translated.length !== claimed.length) {
