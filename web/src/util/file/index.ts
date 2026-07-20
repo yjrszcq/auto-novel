@@ -19,12 +19,34 @@ export {
 } from './TxtHeadingRules';
 export type { TxtHeadingKind, TxtHeadingRuleMatch } from './TxtHeadingRules';
 export {
+  analyzeTxtCatalog,
   createTxtImportPlan,
   parseTxtCatalog,
   reconstructTxtImportPlan,
 } from './TxtCatalogParser';
 export type { ParseTxtCatalogOptions } from './TxtCatalogParser';
+export { TxtCatalogDraftEditor } from './TxtCatalogDraftEditor';
+export type { TxtCatalogDraftValidation } from './TxtCatalogDraftEditor';
 export type {
+  TxtCatalogLineWindow,
+  TxtCatalogPreviewSnapshot,
+  TxtCatalogSearchResult,
+  TxtCatalogWorkerRequest,
+  TxtCatalogWorkerResponse,
+  TxtCatalogWorkerResult,
+} from './TxtCatalogWorkerProtocol';
+export {
+  createTxtCatalogSession,
+  getStoredTxtParseMode,
+  setStoredTxtParseMode,
+  TXT_PARSE_MODE_STORAGE_KEY,
+} from './TxtCatalogWorkerSession';
+export type {
+  TxtCatalogProgress,
+  TxtCatalogSession,
+} from './TxtCatalogWorkerSession';
+export type {
+  TxtCatalogAnalysis,
   TxtCatalogNode,
   TxtDecodedDocument,
   TxtDecodeCandidate,

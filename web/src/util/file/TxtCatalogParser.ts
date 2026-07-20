@@ -1,4 +1,5 @@
 import type {
+  TxtCatalogAnalysis,
   TxtCatalogNode,
   TxtDecodedDocument,
   TxtHeadingDraft,
@@ -539,14 +540,42 @@ export const parseTxtCatalog = (
   document: TxtDecodedDocument,
   options: ParseTxtCatalogOptions = {},
 ) => {
+  const analysis = analyzeTxtCatalog(document, options);
+  return createTxtImportPlan(document, analysis.headings, {
+    mode: analysis.summary.mode,
+    candidateCount: analysis.summary.candidateCount,
+    rejectedCount: analysis.summary.rejectedCount,
+    learnedFormatCount: analysis.summary.learnedFormatCount,
+  });
+};
+
+export const analyzeTxtCatalog = (
+  document: TxtDecodedDocument,
+  options: ParseTxtCatalogOptions = {},
+): TxtCatalogAnalysis => {
   const mode = options.mode ?? 'balanced';
   const selection = selectHeadings(document, mode);
-  return createTxtImportPlan(document, selection.headings, {
-    mode,
-    candidateCount: selection.candidateCount,
-    rejectedCount: selection.rejectedCount,
-    learnedFormatCount: selection.learnedFormatCount,
-  });
+  const averageConfidence =
+    selection.headings.length === 0
+      ? 0
+      : selection.headings.reduce(
+          (total, heading) => total + heading.confidence,
+          0,
+        ) / selection.headings.length;
+  return {
+    headings: selection.headings,
+    summary: {
+      encoding: document.encoding,
+      mode,
+      lineCount: document.lines.length,
+      candidateCount: selection.candidateCount,
+      headingCount: selection.headings.length,
+      rejectedCount: selection.rejectedCount,
+      learnedFormatCount: selection.learnedFormatCount,
+      usedFallback: selection.headings.length === 0,
+      averageConfidence: clampConfidence(averageConfidence),
+    },
+  };
 };
 
 export const reconstructTxtImportPlan = (plan: TxtImportPlan) =>

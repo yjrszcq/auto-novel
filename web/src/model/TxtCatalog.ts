@@ -80,3 +80,8 @@ export interface TxtImportPlan {
   headings: TxtHeadingDraft[];
   summary: TxtParseSummary;
 }
+
+export interface TxtCatalogAnalysis {
+  headings: TxtHeadingDraft[];
+  summary: TxtParseSummary;
+}
