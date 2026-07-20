@@ -4747,3 +4747,137 @@ test('loads only the current GPT workspace schema', async ({ page }) => {
     page.locator('.n-list-item').filter({ hasText: 'legacy-worker' }),
   ).toHaveCount(0);
 });
+
+test('keeps continuous scrolling stable while adjacent chapters are loaded and trimmed', async ({
+  page,
+}) => {
+  const continuousBookId = 'continuous-scroll-window.txt';
+  const chapterIds = Array.from({ length: 9 }, (_, index) => String(index));
+  const paragraphs = (chapterIndex: number) =>
+    Array.from(
+      { length: 8 },
+      (_, paragraphIndex) =>
+        `第 ${chapterIndex + 1} 章第 ${paragraphIndex + 1} 段连续滚动正文`,
+    );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await expect(page.locator('.n-skeleton')).toHaveCount(0);
+  await page.evaluate(
+    async ({ bookId, ids, chapterParagraphs }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter', 'reader-settings'],
+        'readwrite',
+      );
+      transaction.objectStore('metadata').put({
+        id: bookId,
+        createAt: 1,
+        toc: ids.map((chapterId, index) => ({
+          chapterId,
+          title: `第 ${index + 1} 章`,
+        })),
+        sourceFormat: 'txt',
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+        sourceBookMetadata: {
+          title: '连续滚动测试',
+          authors: [],
+          languages: ['zh'],
+        },
+      });
+      for (const [index, chapterId] of ids.entries()) {
+        transaction.objectStore('chapter').put({
+          id: `${bookId}/${chapterId}`,
+          volumeId: bookId,
+          paragraphs: chapterParagraphs[index],
+          segmentIds: chapterParagraphs[index].map(
+            (_, paragraphIndex) => `continuous-${chapterId}-${paragraphIndex}`,
+          ),
+        });
+      }
+      transaction.objectStore('reader-settings').put({
+        id: 'default',
+        defaultMode: 'original',
+        translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+        fontSize: 18,
+        lineHeight: 1.9,
+        contentWidth: 840,
+        horizontalPadding: 24,
+        theme: 'light',
+        flow: 'scrolled',
+        updatedAt: 1,
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    {
+      bookId: continuousBookId,
+      ids: chapterIds,
+      chapterParagraphs: chapterIds.map((_, index) => paragraphs(index)),
+    },
+  );
+
+  const chapter = (chapterId: string) =>
+    page.locator(`[data-reader-chapter-id="${chapterId}"]`);
+  const loadedChapterIds = () =>
+    page
+      .locator('[data-reader-chapter-id]')
+      .evaluateAll((elements) =>
+        elements.map(
+          (element) => (element as HTMLElement).dataset.readerChapterId,
+        ),
+      );
+
+  await page.goto(`/books/${continuousBookId}/read/4`);
+  await expect(chapter('4')).toBeVisible();
+  await expect.poll(loadedChapterIds).toEqual(['3', '4', '5']);
+  const chapterFourTopBeforeBack = await chapter('4').evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  await page.mouse.wheel(0, -250);
+  await page.waitForTimeout(400);
+  const chapterFourTopAfterBack = await chapter('4').evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  expect(chapterFourTopAfterBack - chapterFourTopBeforeBack).toBeGreaterThan(
+    100,
+  );
+  expect(chapterFourTopAfterBack - chapterFourTopBeforeBack).toBeLessThan(600);
+
+  await page.goto(`/books/${continuousBookId}/read/4`);
+  await expect(chapter('4')).toBeVisible();
+  await expect.poll(loadedChapterIds).toEqual(['3', '4', '5']);
+  for (let index = 0; index < 8; index += 1) {
+    await page.mouse.wheel(0, 150);
+    await page.waitForTimeout(150);
+  }
+  await expect
+    .poll(loadedChapterIds, { timeout: 10_000 })
+    .toEqual(['3', '4', '5', '6', '7']);
+  const chapterFourTopBeforeForward = await chapter('4').evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  for (let index = 0; index < 4; index += 1) {
+    await page.mouse.wheel(0, 250);
+  }
+  await expect.poll(loadedChapterIds, { timeout: 10_000 }).not.toContain('3');
+  await page.waitForTimeout(500);
+  const chapterFourTopAfterForward = await chapter('4').evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  expect(
+    chapterFourTopBeforeForward - chapterFourTopAfterForward,
+  ).toBeGreaterThan(600);
+});
