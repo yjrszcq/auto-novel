@@ -1873,6 +1873,7 @@ const discardAutomaticTranslationChapterDraft = async (
   selection: ReaderAutomaticTranslationSelection,
   chapterId: string,
 ) => {
+  const targetBookId = bookId.value;
   automaticTranslationSession.clearChapter(selection, chapterId);
   const prefix = `${chapterId}\u0000`;
   [...temporaryTranslations.keys()]
@@ -1880,12 +1881,13 @@ const discardAutomaticTranslationChapterDraft = async (
     .forEach((key) => temporaryTranslations.delete(key));
   const repository = await repositoryPromise;
   await repository.deleteReaderAutomaticTranslationCaches({
-    bookId: bookId.value,
+    bookId: targetBookId,
     chapterId,
   });
   const ready = result.value;
   if (
     ready?.kind !== 'ready' ||
+    ready.book.id !== targetBookId ||
     !loadedReaderChapters().some((chapter) => chapter.chapterId === chapterId)
   ) {
     return;
@@ -1893,18 +1895,22 @@ const discardAutomaticTranslationChapterDraft = async (
   const anchoredChapterId = ready.chapter.chapterId;
   const anchor = captureReaderPosition();
   const adapter = await cachedAdapterPromise;
-  adapter.invalidateChapter({ bookId: bookId.value, chapterId });
+  adapter.invalidateChapter({ bookId: targetBookId, chapterId });
   const [chapter, chapters] = await Promise.all([
-    adapter.getChapter({ bookId: bookId.value, chapterId }),
-    adapter.getChapters(bookId.value),
+    adapter.getChapter({ bookId: targetBookId, chapterId }),
+    adapter.getChapters(targetBookId),
   ]);
+  if (result.value?.kind !== 'ready' || result.value.book.id !== targetBookId) {
+    return;
+  }
+  const latest = result.value;
   continuousChapters.value = continuousChapters.value.map((loaded) =>
     loaded.chapterId === chapterId ? chapter : loaded,
   );
   result.value = {
-    ...ready,
+    ...latest,
     chapters,
-    chapter: ready.chapter.chapterId === chapterId ? chapter : ready.chapter,
+    chapter: latest.chapter.chapterId === chapterId ? chapter : latest.chapter,
   };
   await nextTick();
   await nextTick();
@@ -2405,13 +2411,14 @@ const resolveConfiguredAutomaticTranslationWorker = (
 
 const hydrateAutomaticTranslationDrafts = async (
   selection: ReaderAutomaticTranslationSelection,
+  request: number,
+  targetBookId: string,
 ) => {
   const repository = await repositoryPromise;
   const expectedSelectionKey =
     getReaderAutomaticTranslationSelectionCacheKey(selection);
-  const allCaches = await repository.listReaderAutomaticTranslationCaches(
-    bookId.value,
-  );
+  const allCaches =
+    await repository.listReaderAutomaticTranslationCaches(targetBookId);
   const chapterRequests = new Map<
     string,
     ReturnType<typeof repository.getChapter>
@@ -2425,7 +2432,7 @@ const hydrateAutomaticTranslationDrafts = async (
     allCaches.map(async (cache) => {
       let chapterRequest = chapterRequests.get(cache.chapterId);
       if (chapterRequest === undefined) {
-        chapterRequest = repository.getChapter(bookId.value, cache.chapterId);
+        chapterRequest = repository.getChapter(targetBookId, cache.chapterId);
         chapterRequests.set(cache.chapterId, chapterRequest);
       }
       const chapter = await chapterRequest;
@@ -2461,6 +2468,9 @@ const hydrateAutomaticTranslationDrafts = async (
     caches.map(async (cache) => {
       const chapter = chapters.get(cache.chapterId);
       if (
+        request !== automaticTranslationStartRequest ||
+        bookId.value !== targetBookId ||
+        !automaticTranslationSession.isActive(selection) ||
         chapter === undefined ||
         getReaderAutomaticTranslationContentRevision({
           segmentIds: chapter.segmentIds,
@@ -2499,6 +2509,7 @@ const startAutomaticTranslation = async (
     return false;
   }
   try {
+    const targetBookId = bookId.value;
     const previousRetranslationChapterId = retranslationChapterId.value;
     automaticTranslationController?.abort();
     automaticTranslationSession.stop();
@@ -2506,8 +2517,13 @@ const startAutomaticTranslation = async (
       await restoreRetranslationChapterDisplay(previousRetranslationChapterId);
     }
     if (request !== automaticTranslationStartRequest) return false;
-    const volume = await (await repositoryPromise).getVolume(bookId.value);
-    if (request !== automaticTranslationStartRequest) return false;
+    const volume = await (await repositoryPromise).getVolume(targetBookId);
+    if (
+      request !== automaticTranslationStartRequest ||
+      bookId.value !== targetBookId
+    ) {
+      return false;
+    }
     if (volume === undefined) throw new Error('书籍不存在');
     const config = createVisibleTranslationConfig(source, worker);
     const selection: ReaderAutomaticTranslationSelection = {
@@ -2542,7 +2558,7 @@ const startAutomaticTranslation = async (
     retranslationChapterId.value =
       purpose === 'retranslate' ? targetChapterId : undefined;
     temporaryMode = settings.value.defaultMode;
-    await hydrateAutomaticTranslationDrafts(selection);
+    await hydrateAutomaticTranslationDrafts(selection, request, targetBookId);
     if (
       request !== automaticTranslationStartRequest ||
       !automaticTranslationSession.isActive(selection)
