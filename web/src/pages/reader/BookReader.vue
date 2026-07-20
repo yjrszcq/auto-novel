@@ -193,6 +193,7 @@ let automaticTranslationRunning = false;
 let automaticTranslationQueued = false;
 const temporaryTranslations = new Map<string, string>();
 const pendingRetranslation = shallowRef<{
+  bookId: string;
   selection: ReaderAutomaticTranslationSelection;
   chapterId: string;
   translation: ChapterTranslation;
@@ -1889,6 +1890,7 @@ const discardAutomaticTranslationChapterDraft = async (
   ) {
     return;
   }
+  const anchoredChapterId = ready.chapter.chapterId;
   const anchor = captureReaderPosition();
   const adapter = await cachedAdapterPromise;
   adapter.invalidateChapter({ bookId: bookId.value, chapterId });
@@ -1906,7 +1908,9 @@ const discardAutomaticTranslationChapterDraft = async (
   };
   await nextTick();
   await nextTick();
-  restoreReaderPosition(anchor);
+  if (result.value?.chapter.chapterId === anchoredChapterId) {
+    restoreReaderPosition(anchor);
+  }
   updateViewportMetrics();
 };
 
@@ -2161,7 +2165,10 @@ const haltAutomaticTranslationRuntime = () => {
   automaticTranslationQueued = false;
 };
 
-const restoreRetranslationChapterDisplay = async (chapterId: string) => {
+const restoreRetranslationChapterDisplay = async (
+  chapterId: string,
+  targetBookId = bookId.value,
+) => {
   const prefix = `${chapterId}\u0000`;
   [...temporaryTranslations.keys()]
     .filter((key) => key.startsWith(prefix))
@@ -2169,6 +2176,7 @@ const restoreRetranslationChapterDisplay = async (chapterId: string) => {
   if (retranslationChapterId.value === chapterId) {
     retranslationChapterId.value = undefined;
   }
+  if (targetBookId !== bookId.value) return;
   const ready = result.value;
   if (
     ready?.kind !== 'ready' ||
@@ -2176,24 +2184,29 @@ const restoreRetranslationChapterDisplay = async (chapterId: string) => {
   ) {
     return;
   }
+  const anchoredChapterId = ready.chapter.chapterId;
   const anchor = captureReaderPosition();
   const adapter = await cachedAdapterPromise;
-  adapter.invalidateChapter({ bookId: bookId.value, chapterId });
+  adapter.invalidateChapter({ bookId: targetBookId, chapterId });
   const [chapter, chapters] = await Promise.all([
-    adapter.getChapter({ bookId: bookId.value, chapterId }),
-    adapter.getChapters(bookId.value),
+    adapter.getChapter({ bookId: targetBookId, chapterId }),
+    adapter.getChapters(targetBookId),
   ]);
+  if (targetBookId !== bookId.value || result.value?.kind !== 'ready') return;
+  const latest = result.value;
   continuousChapters.value = continuousChapters.value.map((loaded) =>
     loaded.chapterId === chapterId ? chapter : loaded,
   );
   result.value = {
-    ...ready,
+    ...latest,
     chapters,
-    chapter: ready.chapter.chapterId === chapterId ? chapter : ready.chapter,
+    chapter: latest.chapter.chapterId === chapterId ? chapter : latest.chapter,
   };
   await nextTick();
   await nextTick();
-  restoreReaderPosition(anchor);
+  if (result.value?.chapter.chapterId === anchoredChapterId) {
+    restoreReaderPosition(anchor);
+  }
   updateViewportMetrics();
 };
 
@@ -2217,7 +2230,7 @@ const applyRetranslationDecision = async (replace: boolean) => {
     if (replace) {
       const repository = await repositoryPromise;
       await repository.updateTranslation(
-        bookId.value,
+        pending.bookId,
         pending.chapterId,
         pending.selection.source,
         pending.translation,
@@ -2227,13 +2240,13 @@ const applyRetranslationDecision = async (replace: boolean) => {
         pending.chapterId,
       );
     }
-    await restoreRetranslationChapterDisplay(pending.chapterId);
+    await restoreRetranslationChapterDisplay(pending.chapterId, pending.bookId);
     message.success(
       replace ? '当前章译文已替换' : '已保留原译文，重翻结果仍在缓存中',
     );
   } catch (reason) {
     message.error(`无法处理重翻结果：${String(reason)}`);
-    await restoreRetranslationChapterDisplay(pending.chapterId);
+    await restoreRetranslationChapterDisplay(pending.chapterId, pending.bookId);
   }
 };
 
@@ -2249,7 +2262,12 @@ const handleRetranslationComplete = async (
     return;
   }
   haltAutomaticTranslationRuntime();
-  pendingRetranslation.value = { selection, chapterId, translation };
+  pendingRetranslation.value = {
+    bookId: bookId.value,
+    selection,
+    chapterId,
+    translation,
+  };
   if (settings.value.retranslationPolicy === 'replace') {
     await applyRetranslationDecision(true);
     return;
