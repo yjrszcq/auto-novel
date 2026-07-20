@@ -123,11 +123,28 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
   await seedBook(page);
   await page.goto(`/books/${encodeURIComponent(bookId)}/details`);
 
-  await page.getByRole('button', { name: '编辑目录', exact: true }).click();
+  await page.getByRole('button', { name: '打开目录', exact: true }).click();
+  const detailsCatalog = page.locator('.book-details-catalog-drawer');
+  await detailsCatalog
+    .getByRole('button', { name: '编辑目录', exact: true })
+    .click();
   const titleEditor = page.getByRole('dialog', {
     name: '编辑目录显示文本',
   });
   await expect(titleEditor).toBeVisible();
+  await expect(detailsCatalog).toBeHidden();
+  const editExplanation = page.getByText(
+    '此处只修改目录显示文本，不改变正文、章节边界、层级、译文或阅读位置。',
+    { exact: true },
+  );
+  await expect(editExplanation).toHaveCount(0);
+  await titleEditor
+    .getByRole('button', { name: '目录标题编辑说明', exact: true })
+    .click();
+  await expect(editExplanation).toBeVisible();
+  await titleEditor
+    .getByRole('button', { name: '目录标题编辑说明', exact: true })
+    .click();
   const titleInputs = titleEditor.locator('input');
   await expect(titleInputs).toHaveCount(3);
   await titleInputs.first().fill('自定义卷名');
@@ -139,7 +156,6 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
   ).toBeVisible();
 
   await page.getByRole('button', { name: '打开目录', exact: true }).click();
-  const detailsCatalog = page.locator('.book-details-catalog-drawer');
   await expect(
     detailsCatalog.getByText('自定义卷名', { exact: true }),
   ).toBeVisible();
@@ -178,13 +194,26 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
   expect(afterTitleEdit).toHaveLength(3);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '重新解析目录', exact: true }).click();
+  await page.getByRole('button', { name: '打开目录', exact: true }).click();
+  await detailsCatalog
+    .getByRole('button', { name: '编辑目录', exact: true })
+    .click();
+  await expect(titleEditor).toBeVisible();
+  const editorBounds = await titleEditor.boundingBox();
+  expect(editorBounds).not.toBeNull();
+  expect(editorBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(editorBounds!.x + editorBounds!.width).toBeLessThanOrEqual(390);
+  expect(editorBounds!.y + editorBounds!.height).toBeLessThanOrEqual(844);
+  await titleEditor
+    .getByRole('button', { name: '重新解析目录', exact: true })
+    .click();
   const confirmation = page.locator('.n-popconfirm');
   await confirmation
     .getByRole('button', { name: '进入预览', exact: true })
     .click();
   const preview = page.getByRole('dialog', { name: '重新解析 TXT 目录' });
   await expect(preview).toBeVisible();
+  await expect(titleEditor).toBeHidden();
   const previewBounds = await preview.boundingBox();
   expect(previewBounds).not.toBeNull();
   expect(previewBounds!.x).toBeGreaterThanOrEqual(0);

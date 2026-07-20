@@ -281,6 +281,18 @@ const openChapter = (chapterId: string) => {
   );
 };
 
+const openCatalog = () => {
+  showCatalogTitleEditor.value = false;
+  showCatalogRebuild.value = false;
+  showCatalog.value = true;
+};
+
+const openCatalogTitleEditor = () => {
+  showCatalog.value = false;
+  showCatalogRebuild.value = false;
+  showCatalogTitleEditor.value = true;
+};
+
 const openCatalogEntry = (catalogEntry: ReaderNavigationEntry) => {
   if (catalogParentIds.value.has(catalogEntry.id)) {
     const collapsed = new Set(collapsedCatalogEntryIds.value);
@@ -318,6 +330,8 @@ const saveCatalogTitles = async (
 const prepareCatalogRebuild = async () => {
   const volume = entry.value?.volume;
   if (volume === undefined || preparingCatalogRebuild.value) return;
+  showCatalog.value = false;
+  showCatalogTitleEditor.value = false;
   preparingCatalogRebuild.value = true;
   try {
     const repository = await repositoryPromise;
@@ -572,24 +586,7 @@ onMounted(() => void load());
             <n-button type="primary" @click="startReading">
               {{ progress === undefined ? '开始阅读' : '继续阅读' }}
             </n-button>
-            <n-button @click="showCatalog = true">打开目录</n-button>
-            <n-button v-if="isTxt" @click="showCatalogTitleEditor = true">
-              编辑目录
-            </n-button>
-            <n-popconfirm
-              v-if="isTxt"
-              style="max-width: min(340px, calc(100vw - 16px))"
-              positive-text="进入预览"
-              negative-text="取消"
-              @positive-click="prepareCatalogRebuild"
-            >
-              <template #trigger>
-                <n-button :loading="preparingCatalogRebuild">
-                  重新解析目录
-                </n-button>
-              </template>
-              完整重建允许修改目录位置和层级；不完整的译文来源会整套清除，确认预览前不会写入数据。
-            </n-popconfirm>
+            <n-button @click="openCatalog">打开目录</n-button>
           </n-flex>
           <n-button class="book-details__return-to-shelf" @click="returnHome">
             返回首页
@@ -677,13 +674,31 @@ onMounted(() => void load());
         <n-drawer-content :closable="false">
           <template #header>
             <div class="book-details__catalog-header">
-              <button
-                class="book-details__catalog-close"
-                type="button"
-                @click="showCatalog = false"
-              >
-                目录
-              </button>
+              <div class="book-details__catalog-title-actions">
+                <button
+                  class="book-details__catalog-close"
+                  type="button"
+                  @click="showCatalog = false"
+                >
+                  目录
+                </button>
+                <button
+                  v-if="isTxt && catalogTitleEntries.length > 0"
+                  aria-label="编辑目录"
+                  class="book-details__edit-button"
+                  type="button"
+                  @click="openCatalogTitleEditor"
+                >
+                  <n-icon>
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path
+                        d="M3 21q-.825 0-1.412-.587T1 19V5q0-.825.588-1.412T3 3h8v2H3v14h14v-8h2v8q0 .825-.587 1.413T17 21H3Zm4-4v-4.25l9.175-9.175q.3-.3.675-.45t.75-.15q.4 0 .775.15t.675.45l1.375 1.4q.3.3.438.675T21 6.4q0 .375-.137.738t-.438.662L11.25 17H7Zm2-2h1.4l5.8-5.8-1.4-1.4L9 13.6V15Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </n-icon>
+                </button>
+              </div>
               <n-text depth="3">共 {{ chapters.length }} 章</n-text>
             </div>
           </template>
@@ -812,7 +827,9 @@ onMounted(() => void load());
         v-model:show="showCatalogTitleEditor"
         :entries="catalogTitleEntries"
         :saving="savingCatalogTitles"
+        :preparing-rebuild="preparingCatalogRebuild"
         @confirm="saveCatalogTitles"
+        @rebuild="prepareCatalogRebuild"
       />
       <TxtCatalogPreviewModal
         v-if="isTxt"
@@ -1116,6 +1133,12 @@ onMounted(() => void load());
   width: calc(100% + 8px);
   gap: 12px;
   margin: 0 -4px;
+}
+
+.book-details__catalog-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .book-details__catalog-close {

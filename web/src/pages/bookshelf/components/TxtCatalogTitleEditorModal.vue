@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { LocalVolumeTocEntry } from '@/model/LocalVolume';
+import { InfoOutlined } from '@vicons/material';
 
 interface CatalogTitleDraft {
   chapterId: string;
@@ -11,11 +12,13 @@ const props = withDefaults(
   defineProps<{
     entries: readonly LocalVolumeTocEntry[];
     saving?: boolean;
+    preparingRebuild?: boolean;
   }>(),
-  { saving: false },
+  { saving: false, preparingRebuild: false },
 );
 const emit = defineEmits<{
   confirm: [titles: { chapterId: string; title: string }[]];
+  rebuild: [];
 }>();
 const show = defineModel<boolean>('show', { default: false });
 const message = useMessage();
@@ -64,16 +67,31 @@ watch(
   <n-modal
     v-model:show="show"
     preset="card"
-    title="编辑目录显示文本"
     aria-label="编辑目录显示文本"
     :bordered="false"
     :mask-closable="!props.saving"
     :closable="!props.saving"
     class="txt-catalog-title-modal"
   >
-    <n-alert type="info" :show-icon="false">
-      此处只修改目录显示文本，不改变正文、章节边界、层级、译文或阅读位置。
-    </n-alert>
+    <template #header>
+      <div class="txt-catalog-title-header">
+        <span>编辑目录显示文本</span>
+        <n-popover trigger="click" placement="bottom-start">
+          <template #trigger>
+            <button
+              type="button"
+              class="txt-catalog-title-info"
+              aria-label="目录标题编辑说明"
+            >
+              <n-icon :component="InfoOutlined" size="18" />
+            </button>
+          </template>
+          <span>
+            此处只修改目录显示文本，不改变正文、章节边界、层级、译文或阅读位置。
+          </span>
+        </n-popover>
+      </div>
+    </template>
     <n-virtual-list
       class="txt-catalog-title-list"
       :items="drafts"
@@ -95,12 +113,32 @@ watch(
       </template>
     </n-virtual-list>
     <template #action>
-      <n-flex justify="end" :wrap="false">
-        <n-button :disabled="props.saving" @click="show = false">取消</n-button>
-        <n-button type="primary" :loading="props.saving" @click="confirm">
-          保存标题
-        </n-button>
-      </n-flex>
+      <div class="txt-catalog-title-actions">
+        <n-popconfirm
+          style="max-width: min(340px, calc(100vw - 16px))"
+          positive-text="进入预览"
+          negative-text="取消"
+          @positive-click="emit('rebuild')"
+        >
+          <template #trigger>
+            <n-button
+              :disabled="props.saving"
+              :loading="props.preparingRebuild"
+            >
+              重新解析目录
+            </n-button>
+          </template>
+          完整重建允许修改目录位置和层级；不完整的译文来源会整套清除，确认预览前不会写入数据。
+        </n-popconfirm>
+        <n-flex justify="end" :wrap="false">
+          <n-button :disabled="props.saving" @click="show = false">
+            取消
+          </n-button>
+          <n-button type="primary" :loading="props.saving" @click="confirm">
+            保存标题
+          </n-button>
+        </n-flex>
+      </div>
     </template>
   </n-modal>
 </template>
@@ -108,9 +146,39 @@ watch(
 <style scoped>
 .txt-catalog-title-list {
   height: min(62vh, 620px);
-  margin-top: 12px;
   border: 1px solid var(--n-border-color);
   border-radius: 4px;
+}
+
+.txt-catalog-title-header,
+.txt-catalog-title-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.txt-catalog-title-header {
+  justify-content: flex-start;
+}
+
+.txt-catalog-title-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.txt-catalog-title-info:focus-visible {
+  border-radius: 50%;
+  outline: 2px solid var(--n-color-target);
+  outline-offset: 2px;
 }
 
 .txt-catalog-title-row {
