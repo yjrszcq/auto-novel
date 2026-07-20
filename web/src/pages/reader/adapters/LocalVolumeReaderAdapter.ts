@@ -3,6 +3,7 @@ import type {
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import {
+  chapterTranslationSources,
   getLocalBookMetadata,
   getLocalVolumeTitle,
   requiresWholeChapterTranslation,
@@ -39,7 +40,7 @@ const getChapterTitle = (
 ) => title?.trim() || `${formatTitle(bookId)} - ${chapterId}`;
 
 const getChapterSources = (chapter: LocalVolumeChapter) =>
-  (['sakura', 'gpt', 'youdao', 'baidu'] as const).filter((translatorId) =>
+  chapterTranslationSources.filter((translatorId) =>
     chapter[translatorId]?.paragraphs.some(Boolean),
   );
 

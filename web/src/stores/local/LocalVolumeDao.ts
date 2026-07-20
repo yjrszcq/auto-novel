@@ -7,6 +7,7 @@ import type {
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import type { TranslatorId } from '@/model/Translator';
+import { hasCompleteChapterTranslation } from '@/domain/translate/ChapterTranslationCompletion';
 import type {
   ReaderBookPreference,
   ReaderBookshelfState,
@@ -232,7 +233,10 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     translatorId: TranslatorId;
     translation: ChapterTranslation;
   }) => {
-    const tx = db.transaction(['chapter', 'metadata'], 'readwrite');
+    const tx = db.transaction(
+      ['chapter', 'metadata', 'reader-chapter-cache'],
+      'readwrite',
+    );
     try {
       const chapterStore = tx.objectStore('chapter');
       const metadataStore = tx.objectStore('metadata');
@@ -252,9 +256,24 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       metadata.toc
         .filter((entry) => entry.chapterId === chapterId)
         .forEach((entry) => (entry[translatorId] = translation.glossaryId));
+      const cacheStore = tx.objectStore('reader-chapter-cache');
+      const cacheDeletes: Promise<unknown>[] = [];
+      if (hasCompleteChapterTranslation(chapter)) {
+        for await (const cursor of cacheStore
+          .index('byBookId')
+          .iterate(bookId)) {
+          if (
+            cursor.value.kind === 'automatic-translation' &&
+            cursor.value.chapterId === chapterId
+          ) {
+            cacheDeletes.push(cursor.delete());
+          }
+        }
+      }
       await Promise.all([
         chapterStore.put(chapter),
         metadataStore.put(metadata),
+        ...cacheDeletes,
       ]);
       await tx.done;
       return metadata;
@@ -485,8 +504,26 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   const upsertReaderAutomaticTranslationCache = async (
     value: ReaderAutomaticTranslationCache,
   ) => {
-    const tx = db.transaction('reader-chapter-cache', 'readwrite');
-    const existing = await tx.store.get(value.key);
+    const tx = db.transaction(['chapter', 'reader-chapter-cache'], 'readwrite');
+    const cacheStore = tx.objectStore('reader-chapter-cache');
+    const chapter = await tx
+      .objectStore('chapter')
+      .get(`${value.bookId}/${value.chapterId}`);
+    if (chapter !== undefined && hasCompleteChapterTranslation(chapter)) {
+      for await (const cursor of cacheStore
+        .index('byBookId')
+        .iterate(value.bookId)) {
+        if (
+          cursor.value.kind === 'automatic-translation' &&
+          cursor.value.chapterId === value.chapterId
+        ) {
+          await cursor.delete();
+        }
+      }
+      await tx.done;
+      return undefined;
+    }
+    const existing = await cacheStore.get(value.key);
     const canMerge =
       isReaderAutomaticTranslationCache(existing) &&
       existing.bookId === value.bookId &&
@@ -507,7 +544,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       ...value,
       entries: [...entries.values()],
     };
-    await tx.store.put(stored);
+    await cacheStore.put(stored);
     await tx.done;
     return stored;
   };

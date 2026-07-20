@@ -34,6 +34,21 @@ describe('reader capabilities', () => {
     expect(selected?.paragraphs).toEqual(['G1', 'G2']);
   });
 
+  it('prefers a complete lower-priority translation over a partial higher-priority one', () => {
+    const selected = selectTranslation(
+      chapter({
+        gpt: { glossaryId: 'gpt', glossary: {}, paragraphs: ['G1', ''] },
+        sakura: {
+          glossaryId: 'sakura',
+          glossary: {},
+          paragraphs: ['S1', 'S2'],
+        },
+      }),
+    );
+
+    expect(selected?.translatorId).toBe('sakura');
+  });
+
   it('reports missing, partial, and complete translation status', () => {
     expect(getTranslationStatus(['one', 'two'], undefined)).toEqual({
       status: 'none',
@@ -44,6 +59,10 @@ describe('reader capabilities', () => {
       translatedSegmentCount: 1,
     });
     expect(getTranslationStatus(['one', 'two'], ['一', '二'])).toEqual({
+      status: 'complete',
+      translatedSegmentCount: 2,
+    });
+    expect(getTranslationStatus(['one', '', 'two'], ['一', '', '二'])).toEqual({
       status: 'complete',
       translatedSegmentCount: 2,
     });

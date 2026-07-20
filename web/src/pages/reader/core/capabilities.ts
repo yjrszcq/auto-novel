@@ -5,6 +5,10 @@ import type {
   ReaderChapterSummary,
   ReaderTranslationStatus,
 } from '@/model/Reader';
+import {
+  chapterTranslationSources,
+  isChapterTranslationComplete,
+} from '@/domain/translate/ChapterTranslationCompletion';
 
 export const defaultTranslationPriority: TranslatorId[] = [
   'gpt',
@@ -19,6 +23,12 @@ export const selectTranslation = (
   chapter: LocalVolumeChapter,
   priority: TranslatorId[] = defaultTranslationPriority,
 ) => {
+  for (const translatorId of priority) {
+    const paragraphs = chapter[translatorId]?.paragraphs;
+    if (isChapterTranslationComplete(chapter.paragraphs, paragraphs)) {
+      return { translatorId, paragraphs };
+    }
+  }
   for (const translatorId of priority) {
     const paragraphs = chapter[translatorId]?.paragraphs;
     if (paragraphs?.some(hasText)) {
@@ -36,16 +46,21 @@ export const getTranslationStatus = (
   translatedSegmentCount: number;
 } => {
   const translatedSegmentCount =
-    translatedParagraphs?.filter((paragraph) => hasText(paragraph)).length ?? 0;
+    translatedParagraphs?.filter(
+      (paragraph, index) =>
+        hasText(originalParagraphs[index]) && hasText(paragraph),
+    ).length ?? 0;
 
   if (translatedSegmentCount === 0) {
     return { status: 'none', translatedSegmentCount };
   }
-  if (translatedSegmentCount >= originalParagraphs.length) {
+  if (isChapterTranslationComplete(originalParagraphs, translatedParagraphs)) {
     return { status: 'complete', translatedSegmentCount };
   }
   return { status: 'partial', translatedSegmentCount };
 };
+
+export { chapterTranslationSources };
 
 export const getReadingCapabilities = (
   chapters: ReaderChapterSummary[],

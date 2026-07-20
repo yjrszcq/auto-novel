@@ -3,6 +3,7 @@ import type {
   LocalVolumeChapter,
 } from '@/model/LocalVolume';
 import { runWithConcurrency } from '@/domain/translate/Concurrency';
+import { hasCompleteChapterTranslation } from '@/domain/translate/ChapterTranslationCompletion';
 
 import type {
   ReaderAutomaticTranslationResult,
@@ -28,7 +29,11 @@ export interface ReaderAutomaticTranslationCoordinatorDependencies {
     selection: ReaderAutomaticTranslationSelection,
     chapter: LocalVolumeChapter,
     values: ReaderAutomaticTranslationResult[],
-  ) => Promise<void>;
+  ) => Promise<boolean | void>;
+  onChapterAlreadyComplete?: (
+    selection: ReaderAutomaticTranslationSelection,
+    chapterId: string,
+  ) => Promise<void> | void;
   onDraft?: (
     selection: ReaderAutomaticTranslationSelection,
     values: ReaderAutomaticTranslationResult[],
@@ -134,6 +139,17 @@ export class ReaderAutomaticTranslationCoordinator {
         const chapter = await this.dependencies.loadChapter(chapterId);
         if (chapter === undefined) throw new Error('章节不存在');
         if (
+          (selection.purpose ?? 'automatic') === 'automatic' &&
+          hasCompleteChapterTranslation(chapter)
+        ) {
+          this.session.clearChapter(selection, chapterId);
+          await this.dependencies.onChapterAlreadyComplete?.(
+            selection,
+            chapterId,
+          );
+          return;
+        }
+        if (
           chapterTargets.some(
             ({ segmentId, segmentIndex, original }) =>
               chapter.segmentIds[segmentIndex] !== segmentId ||
@@ -166,7 +182,19 @@ export class ReaderAutomaticTranslationCoordinator {
             segmentId: target.segmentId,
             translated: translated[index] ?? '',
           }));
-          await this.dependencies.persistDraft?.(selection, chapter, values);
+          const persisted = await this.dependencies.persistDraft?.(
+            selection,
+            chapter,
+            values,
+          );
+          if (persisted === false) {
+            this.session.release(generation, claimed);
+            await this.dependencies.onChapterAlreadyComplete?.(
+              selection,
+              chapterId,
+            );
+            return;
+          }
           if (!this.session.store(generation, values) || workerSignal.aborted)
             return;
           this.dependencies.onDraft?.(selection, values);

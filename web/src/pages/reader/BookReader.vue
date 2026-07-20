@@ -125,6 +125,7 @@ const showAutomaticTranslatorSelection = ref(false);
 const showReaderGlossary = ref(false);
 const readerGlossaryLoading = ref(false);
 const readerGlossaryApplying = ref(false);
+const clearingAutomaticTranslationCache = ref(false);
 const readerGlossaryError = ref('');
 const readerGlossaryFiles = shallowRef<ParsedFile[]>([]);
 const readerGlossaryInitial = shallowRef<Glossary>({});
@@ -438,6 +439,9 @@ const applyReaderGlossary = async (glossary: Glossary) => {
     temporaryTranslations.clear();
     const repository = await repositoryPromise;
     await repository.updateGlossary(bookId.value, glossary);
+    await repository.deleteReaderAutomaticTranslationCaches({
+      bookId: bookId.value,
+    });
     const adapter = await cachedAdapterPromise;
     adapter.invalidateChapter({ bookId: bookId.value });
     showReaderGlossary.value = false;
@@ -449,6 +453,34 @@ const applyReaderGlossary = async (glossary: Glossary) => {
     message.error(`无法应用术语表：${String(reason)}`);
   } finally {
     readerGlossaryApplying.value = false;
+  }
+};
+
+const clearReaderAutomaticTranslationCache = async () => {
+  if (clearingAutomaticTranslationCache.value) return;
+  clearingAutomaticTranslationCache.value = true;
+  try {
+    const anchor = captureReaderPosition();
+    await saveProgress();
+    stopAutomaticTranslation(false);
+    automaticTranslationSession.clearDrafts();
+    temporaryTranslations.clear();
+    const repository = await repositoryPromise;
+    const deleted = await repository.deleteReaderAutomaticTranslationCaches({
+      bookId: bookId.value,
+    });
+    const adapter = await cachedAdapterPromise;
+    adapter.invalidateBook?.(bookId.value);
+    await load();
+    await nextTick();
+    restoreReaderPosition(anchor);
+    message.success(
+      deleted > 0 ? `已清除 ${deleted} 条翻译缓存` : '没有可清除的翻译缓存',
+    );
+  } catch (reason) {
+    message.error(`清除翻译缓存失败：${String(reason)}`);
+  } finally {
+    clearingAutomaticTranslationCache.value = false;
   }
 };
 
@@ -1805,32 +1837,57 @@ const showAutomaticTranslationDraft = (
   void renderTemporaryTranslations(changedChapterIds);
 };
 
+const discardAutomaticTranslationChapterDraft = async (
+  selection: ReaderAutomaticTranslationSelection,
+  chapterId: string,
+) => {
+  automaticTranslationSession.clearChapter(selection, chapterId);
+  const prefix = `${chapterId}\u0000`;
+  [...temporaryTranslations.keys()]
+    .filter((key) => key.startsWith(prefix))
+    .forEach((key) => temporaryTranslations.delete(key));
+  const repository = await repositoryPromise;
+  await repository.deleteReaderAutomaticTranslationCaches({
+    bookId: bookId.value,
+    chapterId,
+  });
+  const ready = result.value;
+  if (
+    ready?.kind !== 'ready' ||
+    !loadedReaderChapters().some((chapter) => chapter.chapterId === chapterId)
+  ) {
+    return;
+  }
+  const anchor = captureReaderPosition();
+  const adapter = await cachedAdapterPromise;
+  adapter.invalidateChapter({ bookId: bookId.value, chapterId });
+  const [chapter, chapters] = await Promise.all([
+    adapter.getChapter({ bookId: bookId.value, chapterId }),
+    adapter.getChapters(bookId.value),
+  ]);
+  continuousChapters.value = continuousChapters.value.map((loaded) =>
+    loaded.chapterId === chapterId ? chapter : loaded,
+  );
+  result.value = {
+    ...ready,
+    chapters,
+    chapter: ready.chapter.chapterId === chapterId ? chapter : ready.chapter,
+  };
+  await nextTick();
+  await nextTick();
+  restoreReaderPosition(anchor);
+  updateViewportMetrics();
+};
+
 const markAutomaticTranslationCommitted = async (
   selection: ReaderAutomaticTranslationSelection,
   chapterId: string,
 ) => {
   if (!automaticTranslationSession.isActive(selection)) return;
-  const adapter = await cachedAdapterPromise;
-  adapter.invalidateChapter({ bookId: bookId.value, chapterId });
-  const ready = result.value;
-  if (ready?.kind !== 'ready') return;
-  const chapters = ready.chapters.map((chapter) =>
-    chapter.id === chapterId
-      ? {
-          ...chapter,
-          translationStatus: 'complete' as const,
-          translatedSegmentCount: chapter.totalSegmentCount,
-          translationSources: [
-            ...new Set([...chapter.translationSources, selection.source]),
-          ],
-        }
-      : chapter,
-  );
-  result.value = {
-    ...ready,
-    chapters,
-  };
+  await discardAutomaticTranslationChapterDraft(selection, chapterId);
+  const chapters = result.value?.kind === 'ready' ? result.value.chapters : [];
   if (
+    chapters.length > 0 &&
     chapters.every(({ translationStatus }) => translationStatus === 'complete')
   ) {
     stopAutomaticTranslation(false);
@@ -1843,8 +1900,15 @@ const collectAutomaticTranslationChapters = async (
 ) => {
   const ready = result.value;
   if (ready?.kind !== 'ready') return [];
+  const completedChapterIds = new Set(
+    ready.chapters
+      .filter(({ translationStatus }) => translationStatus === 'complete')
+      .map(({ id }) => id),
+  );
   const chapters = new Map(
-    loadedReaderChapters().map((chapter) => [chapter.chapterId, chapter]),
+    loadedReaderChapters()
+      .filter((chapter) => !completedChapterIds.has(chapter.chapterId))
+      .map((chapter) => [chapter.chapterId, chapter]),
   );
   const visibleIndexes = visible.flatMap(({ chapterId }) => {
     const index = chapters.get(chapterId)?.chapterIndex;
@@ -1871,7 +1935,12 @@ const collectAutomaticTranslationChapters = async (
     }
     const summary = ready.chapters[nextIndex];
     nextIndex += 1;
-    if (summary === undefined || chapters.has(summary.id)) continue;
+    if (
+      summary === undefined ||
+      completedChapterIds.has(summary.id) ||
+      chapters.has(summary.id)
+    )
+      continue;
     const chapter = await adapter.getChapter({
       bookId: bookId.value,
       chapterId: summary.id,
@@ -1930,7 +1999,7 @@ const runAutomaticTranslationOnce = async () => {
         );
       },
       persistDraft: async (selection, chapter, values) => {
-        await repository.upsertReaderAutomaticTranslationCache(
+        const stored = await repository.upsertReaderAutomaticTranslationCache(
           createReaderAutomaticTranslationCache({
             bookId: bookId.value,
             chapterId: values[0]!.chapterId,
@@ -1942,7 +2011,9 @@ const runAutomaticTranslationOnce = async () => {
             values,
           }),
         );
+        return stored !== undefined;
       },
+      onChapterAlreadyComplete: discardAutomaticTranslationChapterDraft,
       onDraft: showAutomaticTranslationDraft,
       onCommitted: (selection, chapterId) => {
         void markAutomaticTranslationCommitted(selection, chapterId);
@@ -3383,6 +3454,13 @@ onBeforeUnmount(() => {
           @click="openReaderGlossary"
         >
           术语表
+        </n-button>
+        <n-button
+          v-if="requiresWholeChapterTranslation"
+          :loading="clearingAutomaticTranslationCache"
+          @click="clearReaderAutomaticTranslationCache"
+        >
+          清除翻译缓存
         </n-button>
         <n-button
           @click="

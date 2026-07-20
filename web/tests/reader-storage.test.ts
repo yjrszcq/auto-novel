@@ -215,6 +215,19 @@ describe('reader storage', () => {
       contentRevision: 'current',
       cachedAt: 1,
     });
+    await reopened.upsertReaderAutomaticTranslationCache({
+      kind: 'automatic-translation',
+      key: 'book/0/automatic',
+      bookId: 'book',
+      chapterId: '0',
+      source: 'gpt',
+      purpose: 'automatic',
+      selectionKey: 'selection',
+      glossaryId: 'glossary',
+      contentRevision: 'current',
+      entries: [{ segmentId: initialSegmentIds[0]!, translated: '草稿' }],
+      cachedAt: 1,
+    });
     await reopened.putReaderChapterCache({
       key: 'other-book/0/current',
       bookId: 'other-book',
@@ -246,6 +259,7 @@ describe('reader storage', () => {
     expect(await reopened.getReaderReadingStats('book')).toBeUndefined();
     expect(await reopened.listReaderBookmarks('book')).toEqual([]);
     expect(await reopened.getReaderCover('book')).toBeUndefined();
+    expect(await reopened.listReaderChapterCaches('book')).toEqual([]);
     expect(await reopened.listReaderBookmarks('other-book')).toHaveLength(1);
     expect(await reopened.listReaderChapterCaches('other-book')).toHaveLength(
       1,
@@ -277,6 +291,19 @@ describe('reader storage', () => {
       paragraphs: ['原文'],
       segmentIds: ['segment'],
     });
+    await dao.upsertReaderAutomaticTranslationCache({
+      kind: 'automatic-translation',
+      key: 'draft-before-formal-translation',
+      bookId: 'book',
+      chapterId: '0',
+      source: 'sakura',
+      purpose: 'automatic',
+      selectionKey: 'selection',
+      glossaryId: 'glossary',
+      contentRevision: 'revision',
+      entries: [{ segmentId: 'segment', translated: '草稿' }],
+      cachedAt: 1,
+    });
 
     await dao.putChapterTranslation({
       bookId: 'book',
@@ -292,6 +319,23 @@ describe('reader storage', () => {
       '译文',
     ]);
     expect((await dao.getMetadata('book'))?.toc[0]?.gpt).toBe('translated');
+    expect(await dao.listReaderAutomaticTranslationCaches('book')).toEqual([]);
+    expect(
+      await dao.upsertReaderAutomaticTranslationCache({
+        kind: 'automatic-translation',
+        key: 'late-draft',
+        bookId: 'book',
+        chapterId: '0',
+        source: 'sakura',
+        purpose: 'automatic',
+        selectionKey: 'selection',
+        glossaryId: 'glossary',
+        contentRevision: 'revision',
+        entries: [{ segmentId: 'segment', translated: '迟到草稿' }],
+        cachedAt: 2,
+      }),
+    ).toBeUndefined();
+    expect(await dao.listReaderAutomaticTranslationCaches('book')).toEqual([]);
 
     await expect(
       dao.putChapterTranslation({

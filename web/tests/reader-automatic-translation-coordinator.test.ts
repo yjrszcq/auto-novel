@@ -135,6 +135,41 @@ describe('reader automatic translation coordinator', () => {
     ]);
   });
 
+  it('skips a chapter completed by any formal translation source', async () => {
+    const session = new ReaderAutomaticTranslationSession();
+    const generation = session.start(selection);
+    const chapter = createChapter();
+    chapter.sakura = {
+      glossaryId: 'another-glossary',
+      glossary: {},
+      paragraphs: ['正式译文一', '正式译文二'],
+    };
+    session.hydrate(selection, [
+      { chapterId: 'chapter', segmentId: 'segment-0', translated: '旧草稿' },
+    ]);
+    const translate = vi.fn();
+    const completed = vi.fn();
+    const coordinator = new ReaderAutomaticTranslationCoordinator(session, {
+      loadChapter: async () => chapter,
+      translate,
+      commit: vi.fn(),
+      onChapterAlreadyComplete: completed,
+    });
+
+    await coordinator.translateTargets({
+      generation,
+      selection,
+      targets: [target(0), target(1)],
+      glossary: {},
+      concurrency: 1,
+      signal: new AbortController().signal,
+    });
+
+    expect(translate).not.toHaveBeenCalled();
+    expect(completed).toHaveBeenCalledWith(selection, 'chapter');
+    expect(session.entries(selection, 'chapter')).toEqual([]);
+  });
+
   it('releases failed targets for retry and rejects results after stop', async () => {
     const session = new ReaderAutomaticTranslationSession();
     const generation = session.start(selection);
