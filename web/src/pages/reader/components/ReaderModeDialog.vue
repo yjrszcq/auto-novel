@@ -23,12 +23,12 @@ const emit = defineEmits<{
     :mask-closable="true"
     @update:show="emit('update:show', $event)"
   >
-    <n-card title="选择阅读方式" style="width: min(92vw, 420px)">
+    <n-card title="选择阅读语言" style="width: min(92vw, 420px)">
       <template #header-extra>
         <n-button
           quaternary
           circle
-          aria-label="关闭阅读版本"
+          aria-label="关闭阅读语言"
           @click="emit('update:show', false)"
         >
           <template #icon>

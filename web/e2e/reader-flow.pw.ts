@@ -171,7 +171,20 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
   );
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '目录' })).toHaveCount(0);
-  await expect(page.getByRole('dialog', { name: '阅读工具' })).toBeVisible();
+  const chineseReaderTools = page.getByRole('dialog', { name: '阅读工具' });
+  await expect(chineseReaderTools).toBeVisible();
+  await expect(
+    chineseReaderTools.getByRole('button', {
+      name: '阅读语言',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    chineseReaderTools.getByRole('button', {
+      name: '刷新本页',
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '阅读工具' })).toHaveCount(0);
 });
@@ -363,6 +376,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   ).toContainText('reader-flow.txt');
   await bookInfoDialog.locator('.n-base-close').click();
   await expect(bookInfoDialog).toHaveCount(0);
+  await expect(page.getByText('阅读语言', { exact: true })).toBeVisible();
   await expect(page.getByText('翻译进度', { exact: true })).toHaveCount(0);
   await expect(page.getByText('语言', { exact: true })).toHaveCount(0);
   await expect(page.getByText('目录', { exact: true })).toHaveCount(0);
@@ -822,18 +836,18 @@ test('opens a local bookshelf book safely through the current reader route', asy
     '.book-reader__translation-popover-layer',
   );
   const translationPopover = page.locator('.book-reader__translation-popover');
-  await translationPopover
-    .getByRole('button', { name: '阅读版本', exact: true })
-    .click();
-  const modeDialog = page.getByText('选择阅读方式', { exact: true });
-  await expect(modeDialog).toBeVisible();
-  await page.getByRole('button', { name: '关闭阅读版本' }).click();
-  await expect(modeDialog).toBeHidden();
-  await translationPopover
-    .getByRole('button', { name: '阅读版本', exact: true })
-    .click();
-  await page.locator('.n-modal-mask').click({ position: { x: 4, y: 4 } });
-  await expect(modeDialog).toBeHidden();
+  await expect(
+    translationPopover.getByRole('button', {
+      name: '阅读语言',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    translationPopover.getByRole('button', {
+      name: '刷新本页',
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await expect(translationLayer).toHaveCSS('position', 'fixed');
   await expect(translationPopover).toHaveCSS(
     'background-color',
@@ -875,6 +889,21 @@ test('opens a local bookshelf book safely through the current reader route', asy
     position: { x: 4, y: translationLayerBounds.height - 4 },
   });
   await expect(page.getByRole('button', { name: 'GPT 自动翻译' })).toBeHidden();
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  const mobileReaderTools = page.getByRole('dialog', { name: '阅读工具' });
+  await mobileReaderTools
+    .getByRole('button', { name: '阅读语言', exact: true })
+    .click();
+  const modeDialog = page.getByText('选择阅读语言', { exact: true });
+  await expect(modeDialog).toBeVisible();
+  await page.getByRole('button', { name: '关闭阅读语言' }).click();
+  await expect(modeDialog).toBeHidden();
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await mobileReaderTools
+    .getByRole('button', { name: '阅读语言', exact: true })
+    .click();
+  await page.locator('.n-modal-mask').click({ position: { x: 4, y: 4 } });
+  await expect(modeDialog).toBeHidden();
   await page.getByRole('button', { name: '夜晚', exact: true }).click();
   await translationToggle.click();
   await expect(translationPopover).toHaveCSS(
@@ -1450,8 +1479,13 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
   await expect(
     page
       .getByRole('dialog', { name: '阅读工具' })
-      .getByRole('button', { name: '阅读版本', exact: true }),
-  ).toHaveCount(0);
+      .getByRole('button', { name: '阅读语言', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '刷新本页', exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: '关闭阅读工具' }).click();
 
   const chooseMode = async (shortcut: string, expectedClass: RegExp) => {
@@ -2067,8 +2101,11 @@ test('automatically translates a reader window without persisting a partial chap
       }),
     ).toHaveCount(0);
     await expect(
-      toolsDialog.getByRole('button', { name: '阅读版本', exact: true }),
-    ).toHaveCount(0);
+      toolsDialog.getByRole('button', { name: '阅读语言', exact: true }),
+    ).toBeVisible();
+    await expect(
+      toolsDialog.getByRole('button', { name: '刷新本页', exact: true }),
+    ).toBeVisible();
     await expect(
       toolsDialog.getByRole('button', { name: '重翻当前章', exact: true }),
     ).toBeDisabled();
@@ -2113,14 +2150,15 @@ test('automatically translates a reader window without persisting a partial chap
       'true',
     );
     await expect(source).toContainText('译文第1行');
+    await page.getByRole('button', { name: '工具', exact: true }).click();
     await page
-      .locator('.book-reader__app-bar-translation')
-      .getByRole('button', { name: '阅读版本', exact: true })
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '阅读语言', exact: true })
       .click();
     await expect(
       page.getByRole('button', { name: '中文', exact: true }),
     ).toBeVisible();
-    await page.getByRole('button', { name: '关闭阅读版本' }).click();
+    await page.getByRole('button', { name: '关闭阅读语言' }).click();
     await page.keyboard.press('4');
     await expect(source).toContainText('临时原文第 1 段');
     await page.keyboard.press('1');

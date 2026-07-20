@@ -1762,6 +1762,7 @@ const getVisibleReaderSegments = (): VisibleReaderSegment[] => {
 const openVisiblePageModePrompt = () => {
   const ready = result.value;
   if (ready?.kind !== 'ready') return;
+  showTools.value = false;
   const chapters = new Map(
     [ready.chapter, ...continuousChapters.value].map((chapter) => [
       chapter.chapterId,
@@ -3170,6 +3171,7 @@ const completedTranslationTasks = computed(() =>
 
 const refreshCurrentChapter = async () => {
   if (result.value?.kind !== 'ready') return;
+  showTools.value = false;
   const chapterId = result.value.chapter.chapterId;
   await saveProgress();
   const adapter = await cachedAdapterPromise;
@@ -3459,22 +3461,6 @@ onBeforeUnmount(() => {
         >
           Sakura 自动翻译
         </n-button>
-        <n-button
-          v-if="hasIncompleteChapter"
-          size="tiny"
-          secondary
-          @click="openVisiblePageModePrompt"
-        >
-          阅读版本
-        </n-button>
-        <n-button
-          v-if="hasIncompleteChapter"
-          size="tiny"
-          secondary
-          @click="refreshCurrentChapter"
-        >
-          刷新本页
-        </n-button>
       </div>
       <button
         v-if="showsAutomaticTranslationControls"
@@ -3549,20 +3535,6 @@ onBeforeUnmount(() => {
               @click="toggleAutomaticTranslation('sakura')"
             >
               Sakura 自动翻译
-            </n-button>
-            <n-button
-              v-if="hasIncompleteChapter"
-              size="small"
-              @click="openVisiblePageModePrompt"
-            >
-              阅读版本
-            </n-button>
-            <n-button
-              v-if="hasIncompleteChapter"
-              size="small"
-              @click="refreshCurrentChapter"
-            >
-              刷新本页
             </n-button>
           </div>
         </div>
@@ -3874,6 +3846,18 @@ onBeforeUnmount(() => {
           @click="toggleCurrentChapterRetranslation"
         >
           重翻当前章
+        </n-button>
+        <n-button
+          v-if="requiresWholeChapterTranslation"
+          @click="openVisiblePageModePrompt"
+        >
+          阅读语言
+        </n-button>
+        <n-button
+          v-if="requiresWholeChapterTranslation"
+          @click="refreshCurrentChapter"
+        >
+          刷新本页
         </n-button>
       </div>
     </ReaderBottomSheet>

@@ -612,7 +612,7 @@ onMounted(() => void load());
         />
         <n-flex class="book-details__settings" vertical>
           <div class="book-details__setting-row">
-            <n-text depth="3">打开方式</n-text>
+            <n-text depth="3">阅读语言</n-text>
             <n-select
               :options="readingModeOptions"
               :value="preferredMode"
