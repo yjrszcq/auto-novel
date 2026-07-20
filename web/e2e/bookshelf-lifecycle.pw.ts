@@ -123,6 +123,21 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
   await minimumConfidence.press('Tab');
   await expect(preview).toContainText('500 / 501 项');
   await expect(preview).toContainText('已过滤 1 项');
+  const sourceSearch = preview.getByRole('textbox', {
+    name: '搜索正文并跳转',
+  });
+  await sourceSearch.fill('Epilogue');
+  await sourceSearch.press('Enter');
+  const filteredSourceLine = preview
+    .locator('.txt-source-line')
+    .filter({ hasText: 'Epilogue' });
+  await expect(filteredSourceLine).toBeVisible();
+  await filteredSourceLine.locator('button').click();
+  await expect(preview).toContainText('501 / 501 项');
+  await expect(preview).toContainText('已过滤 0 项');
+  await preview.getByRole('button', { name: '撤回', exact: true }).click();
+  await expect(preview).toContainText('500 / 501 项');
+  await expect(preview).toContainText('已过滤 1 项');
   await preview
     .getByRole('button', { name: '确认目录并导入', exact: true })
     .click();
