@@ -3798,6 +3798,14 @@ onBeforeUnmount(() => {
           朗读当前段
         </n-button>
         <n-button
+          @click="
+            showTools = false;
+            showBookInfo = true;
+          "
+        >
+          书籍信息
+        </n-button>
+        <n-button
           v-if="requiresWholeChapterTranslation"
           @click="openAutomaticTranslatorSelection"
         >
@@ -3827,14 +3835,6 @@ onBeforeUnmount(() => {
           @click="openRetranslationSelection"
         >
           重翻当前章
-        </n-button>
-        <n-button
-          @click="
-            showTools = false;
-            showBookInfo = true;
-          "
-        >
-          书籍信息
         </n-button>
         <n-button
           :disabled="previousChapterId === undefined"
