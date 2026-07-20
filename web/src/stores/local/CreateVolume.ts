@@ -20,6 +20,7 @@ type ImportedChapter = {
   level?: number;
   parentChapterId?: string;
   paragraphs: string[];
+  sourceLines?: number[];
   sourceStartLine?: number;
   sourceEndLine?: number;
   sourceRanges?: LocalVolumeChapterSourceRange[];
@@ -54,6 +55,7 @@ const persistVolume = async (
       chapterId,
       paragraphs,
       sourceRanges,
+      sourceLines,
       sourceStartLine,
       sourceEndLine,
     }) => ({
@@ -61,6 +63,7 @@ const persistVolume = async (
       volumeId: id,
       paragraphs,
       segmentIds: paragraphs.map(() => createUuid()),
+      sourceLines,
       sourceRanges,
       sourceStartLine,
       sourceEndLine,
@@ -102,10 +105,10 @@ const persistVolume = async (
   return { diagnostics: importDiagnostics ?? [] };
 };
 
-const validateReviewedTxtPlan = (plan: TxtImportPlan) => {
+export const validateReviewedTxtPlan = (plan: TxtImportPlan) => {
   if (plan.chapters.length === 0) throw new Error('TXT 导入计划没有章节');
   let expectedStartLine = 0;
-  for (const chapter of plan.chapters) {
+  plan.chapters.forEach((chapter, chapterIndex) => {
     if (chapter.sourceStartLine !== expectedStartLine)
       throw new Error('TXT 导入计划的原文行范围不连续');
     if (chapter.sourceEndLine < chapter.sourceStartLine)
@@ -123,8 +126,15 @@ const validateReviewedTxtPlan = (plan: TxtImportPlan) => {
       chapter.level > 6
     )
       throw new Error('TXT 导入计划包含无效目录层级');
+    if (
+      chapter.parentChapterIndex !== undefined &&
+      (!Number.isInteger(chapter.parentChapterIndex) ||
+        chapter.parentChapterIndex < 0 ||
+        chapter.parentChapterIndex >= chapterIndex)
+    )
+      throw new Error('TXT 导入计划包含无效目录父级');
     expectedStartLine = chapter.sourceEndLine + 1;
-  }
+  });
   if (expectedStartLine !== plan.summary.lineCount)
     throw new Error('TXT 导入计划没有覆盖完整正文');
 };
@@ -149,6 +159,10 @@ export const createReviewedTxtVolume = async (
         ? undefined
         : chapterIds[chapter.parentChapterIndex],
     paragraphs: chapter.content.split('\n'),
+    sourceLines: Array.from(
+      { length: chapter.sourceEndLine - chapter.sourceStartLine + 1 },
+      (_, offset) => chapter.sourceStartLine + offset,
+    ),
     sourceStartLine: chapter.sourceStartLine,
     sourceEndLine: chapter.sourceEndLine,
   }));

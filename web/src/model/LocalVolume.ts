@@ -146,6 +146,7 @@ export interface LocalVolumeChapter {
   volumeId: string;
   paragraphs: string[];
   segmentIds: string[];
+  sourceLines?: number[];
   sourceStartLine?: number;
   sourceEndLine?: number;
   sourceRanges?: LocalVolumeChapterSourceRange[];

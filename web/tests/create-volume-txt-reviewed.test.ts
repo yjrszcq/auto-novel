@@ -72,6 +72,14 @@ describe('reviewed TXT volume creation', () => {
         const chapter = storedChapters.get(`book.txt/${entry.chapterId}`)!;
         expect(chapter.sourceStartLine).toBe(entry.sourceStartLine);
         expect(chapter.sourceEndLine).toBe(entry.sourceEndLine);
+        expect(chapter.sourceLines).toEqual(
+          Array.from(
+            {
+              length: entry.sourceEndLine! - entry.sourceStartLine! + 1,
+            },
+            (_, offset) => entry.sourceStartLine! + offset,
+          ),
+        );
         expect(chapter.segmentIds).toHaveLength(chapter.paragraphs.length);
         expect(new Set(chapter.segmentIds).size).toBe(
           chapter.segmentIds.length,
@@ -98,6 +106,15 @@ describe('reviewed TXT volume creation', () => {
         parentId: `txt:${metadata?.toc[0]?.chapterId}`,
       },
     ]);
+    const firstChapterId = metadata!.toc[0]!.chapterId;
+    expect(
+      (
+        await adapter.getChapter({
+          bookId: 'book.txt',
+          chapterId: firstChapterId,
+        })
+      ).segments[0],
+    ).toMatchObject({ sourceLine: 0 });
     dao.close();
   });
 

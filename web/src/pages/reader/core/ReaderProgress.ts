@@ -14,16 +14,19 @@ export const createReaderProgress = ({
   bookId,
   chapterId,
   segmentId,
+  sourceLine,
   scrollRatio,
 }: {
   bookId: string;
   chapterId: string;
   segmentId?: string;
+  sourceLine?: number;
   scrollRatio: number;
 }): ReaderProgress => ({
   bookId,
   chapterId,
   segmentId,
+  sourceLine,
   segmentOffset: 0,
   scrollRatio: Math.max(0, Math.min(scrollRatio, 1)),
   mode: 'original',

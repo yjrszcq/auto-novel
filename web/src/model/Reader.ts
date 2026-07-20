@@ -42,6 +42,7 @@ export interface ReaderProgress {
   bookId: string;
   chapterId: string;
   segmentId?: string;
+  sourceLine?: number;
   segmentOffset?: number;
   scrollRatio?: number;
   mode?: ReaderMode;
@@ -59,6 +60,7 @@ export interface ReaderBookmark {
   bookId: string;
   chapterId: string;
   segmentId?: string;
+  sourceLine?: number;
   languageSide?: 'original' | 'translated';
   offsetRatio?: number;
   viewportTopOffset?: number;
@@ -125,6 +127,7 @@ export interface ReaderSegment {
   id: string;
   index: number;
   original: string;
+  sourceLine?: number;
   translated?: string;
 }
 

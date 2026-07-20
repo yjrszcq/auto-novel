@@ -5,6 +5,7 @@ export interface CreateReaderBookmarkInput {
   bookId: string;
   chapterId: string;
   segmentId?: string;
+  sourceLine?: number;
   languageSide?: ReaderBookmark['languageSide'];
   offsetRatio?: number;
   viewportTopOffset?: number;
@@ -17,6 +18,7 @@ export const createReaderBookmark = ({
   bookId,
   chapterId,
   segmentId,
+  sourceLine,
   languageSide,
   offsetRatio,
   viewportTopOffset,
@@ -28,6 +30,7 @@ export const createReaderBookmark = ({
   bookId,
   chapterId,
   segmentId,
+  sourceLine,
   languageSide,
   offsetRatio,
   viewportTopOffset,
@@ -51,6 +54,7 @@ export const findBookmarkAtSegment = (
 export const getBookmarkTarget = (bookmark: ReaderBookmark) => ({
   chapterId: bookmark.chapterId,
   segmentId: bookmark.segmentId,
+  sourceLine: bookmark.sourceLine,
   languageSide: bookmark.languageSide,
   offsetRatio: bookmark.offsetRatio,
   viewportTopOffset: bookmark.viewportTopOffset,

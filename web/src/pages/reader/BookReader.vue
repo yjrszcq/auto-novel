@@ -1008,6 +1008,7 @@ const getSegmentElements = (root: ParentNode = document) => {
 type ReaderPositionAnchor = {
   chapterId: string;
   segmentId: string;
+  sourceLine?: number;
   languageSide?: 'original' | 'translated';
   offsetRatio: number;
   viewportTopOffset: number;
@@ -1060,6 +1061,16 @@ const getSegmentLanguageElements = (segment: HTMLElement) => [
   ...(segment.matches('[data-reader-language-side]') ? [segment] : []),
   ...segment.querySelectorAll<HTMLElement>('[data-reader-language-side]'),
 ];
+
+const getSegmentSourceLine = (chapterId: string, segmentId: string) => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return undefined;
+  const chapter = [ready.chapter, ...continuousChapters.value].find(
+    (item) => item.chapterId === chapterId,
+  );
+  return chapter?.segments.find((segment) => segment.id === segmentId)
+    ?.sourceLine;
+};
 
 const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
   const viewport = readerViewport.value;
@@ -1125,6 +1136,7 @@ const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
   return {
     chapterId,
     segmentId,
+    sourceLine: getSegmentSourceLine(chapterId, segmentId),
     languageSide:
       languageSide === 'original' || languageSide === 'translated'
         ? languageSide
@@ -1733,6 +1745,7 @@ const toggleBookmark = async () => {
         bookId: result.value.book.id,
         chapterId: anchor.chapterId,
         segmentId: anchor.segmentId,
+        sourceLine: anchor.sourceLine,
         languageSide: anchor.languageSide,
         offsetRatio: anchor.offsetRatio,
         viewportTopOffset: anchor.viewportTopOffset,
@@ -1862,11 +1875,16 @@ const saveProgress = async () => {
             return scrollable <= 0 ? 0 : window.scrollY / scrollable;
           })();
   const repository = await repositoryPromise;
+  const sourceLine =
+    segmentId === undefined
+      ? undefined
+      : getSegmentSourceLine(activeChapterId, segmentId);
   await repository.putReaderProgress(
     createReaderProgress({
       bookId: result.value.book.id,
       chapterId: activeChapterId,
       segmentId,
+      sourceLine,
       scrollRatio,
     }),
   );

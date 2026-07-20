@@ -14,6 +14,7 @@ import { embedEpubDownloadMetadata } from './EpubDownloadMetadata';
 import { getTranslationFile } from './GetTranslationFile';
 import type { LocalVolumeDao } from './LocalVolumeDao';
 import { createLocalVolumeDao } from './LocalVolumeDao';
+import { rebuildTxtVolume } from './RebuildTxtVolume';
 
 export const createLocalVolumeStore = async () => {
   const dao = await createLocalVolumeDao();
@@ -139,6 +140,7 @@ export const createLocalVolumeStore = async () => {
     getOriginalDownloadFile,
     createVolume: bind(createVolume),
     createReviewedTxtVolume: bind(createReviewedTxtVolume),
+    rebuildTxtVolume: bind(rebuildTxtVolume),
     deleteVolume,
     updateGlossary,
     updateReadAt,

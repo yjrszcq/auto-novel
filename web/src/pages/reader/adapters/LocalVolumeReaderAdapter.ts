@@ -246,6 +246,7 @@ export const createLocalVolumeReaderAdapter = (
           id: chapter.segmentIds[index],
           index,
           original,
+          sourceLine: chapter.sourceLines?.[index],
           translated: translation?.paragraphs[index],
         })),
         ...(richChapter === undefined ? {} : { epub: richChapter }),

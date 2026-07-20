@@ -18,6 +18,15 @@ import type {
 
 type Mutator<T> = (value: T) => T;
 
+export interface ReplaceTxtCatalogInput {
+  bookId: string;
+  expectedChapterIds: string[];
+  metadata: LocalVolumeMetadata;
+  chapters: LocalVolumeChapter[];
+  progress?: ReaderProgress;
+  bookmarks: ReaderBookmark[];
+}
+
 interface VolumesDBSchema extends DBSchema {
   metadata: {
     key: string;
@@ -205,6 +214,102 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
   const listChapterByVolumeId = (id: string) =>
     db.getAllFromIndex('chapter', 'byVolumeId', id);
 
+  const replaceTxtCatalog = async ({
+    bookId,
+    expectedChapterIds,
+    metadata,
+    chapters,
+    progress,
+    bookmarks,
+  }: ReplaceTxtCatalogInput) => {
+    const tx = db.transaction(
+      [
+        'metadata',
+        'chapter',
+        'reader-progress',
+        'reader-bookmark',
+        'reader-chapter-cache',
+      ],
+      'readwrite',
+    );
+    try {
+      const metadataStore = tx.objectStore('metadata');
+      const chapterStore = tx.objectStore('chapter');
+      const bookmarkStore = tx.objectStore('reader-bookmark');
+      const cacheStore = tx.objectStore('reader-chapter-cache');
+      const [current, oldChapterKeys, oldBookmarkKeys, cacheKeys] =
+        await Promise.all([
+          metadataStore.get(bookId),
+          chapterStore.index('byVolumeId').getAllKeys(bookId),
+          bookmarkStore.index('byBookId').getAllKeys(bookId),
+          cacheStore.index('byBookId').getAllKeys(bookId),
+        ]);
+      if (current === undefined) throw new Error('小说不存在');
+      if (current.sourceFormat !== 'txt')
+        throw new Error('只有 TXT 书籍可以重建目录');
+      if (
+        current.toc.length !== expectedChapterIds.length ||
+        current.toc.some(
+          (entry, index) => entry.chapterId !== expectedChapterIds[index],
+        )
+      )
+        throw new Error('目录已在其他位置更新，请重新打开预览');
+      if (metadata.id !== bookId) throw new Error('重建目录的书籍标识不一致');
+      if (
+        (progress !== undefined && progress.bookId !== bookId) ||
+        chapters.some(
+          (chapter) =>
+            chapter.volumeId !== bookId || !chapter.id.startsWith(`${bookId}/`),
+        ) ||
+        bookmarks.some((bookmark) => bookmark.bookId !== bookId)
+      )
+        throw new Error('重建目录包含其他书籍的数据');
+
+      const replacementBookmarkIds = new Set(
+        bookmarks.map((bookmark) => bookmark.id),
+      );
+      const writes: Promise<unknown>[] = [];
+      const queueWrite = (write: () => Promise<unknown>) => {
+        const pending = write();
+        void pending.catch(() => undefined);
+        writes.push(pending);
+      };
+      queueWrite(() => metadataStore.put(metadata));
+      oldChapterKeys.forEach((key) =>
+        queueWrite(() => chapterStore.delete(key)),
+      );
+      chapters.forEach((chapter) =>
+        queueWrite(() => chapterStore.put(chapter)),
+      );
+      queueWrite(() =>
+        progress === undefined
+          ? tx.objectStore('reader-progress').delete(bookId)
+          : tx.objectStore('reader-progress').put(progress),
+      );
+      oldBookmarkKeys
+        .filter((key) => !replacementBookmarkIds.has(String(key)))
+        .forEach((key) => queueWrite(() => bookmarkStore.delete(key)));
+      bookmarks.forEach((bookmark) =>
+        queueWrite(() => bookmarkStore.put(bookmark)),
+      );
+      cacheKeys.forEach((key) => queueWrite(() => cacheStore.delete(key)));
+      await Promise.all(writes);
+      await tx.done;
+    } catch (cause) {
+      try {
+        tx.abort();
+      } catch {
+        // The transaction may already have aborted because a request failed.
+      }
+      try {
+        await tx.done;
+      } catch {
+        // Preserve the original error below.
+      }
+      throw cause;
+    }
+  };
+
   // Reader
   const getReaderSettings = () => db.get('reader-settings', 'default');
   const putReaderSettings = (value: ReaderSettingsRecord) =>
@@ -309,6 +414,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     createChapter,
     updateChapter,
     listChapterByVolumeId,
+    replaceTxtCatalog,
     //
     getReaderSettings,
     putReaderSettings,
