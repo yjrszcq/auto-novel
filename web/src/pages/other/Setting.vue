@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { ReaderMode, ReaderSettingsRecord } from '@/model/Reader';
+import type {
+  ReaderMode,
+  ReaderRetranslationPolicy,
+  ReaderSettingsRecord,
+} from '@/model/Reader';
 import { readerModeLabels } from '../reader/core/ReaderMode';
 import {
   defaultReaderSettings,
@@ -24,6 +28,14 @@ const readerModeOptions: { label: string; value: ReaderMode }[] = [
   { label: '中日', value: 'translated-original' },
   { label: '日中', value: 'original-translated' },
   { label: '原文', value: 'original' },
+];
+const readerRetranslationPolicyOptions: {
+  label: string;
+  value: ReaderRetranslationPolicy;
+}[] = [
+  { label: '询问', value: 'ask' },
+  { label: '替换', value: 'replace' },
+  { label: '不替换', value: 'keep' },
 ];
 const playSound = (source: string) => {
   return new Audio(source).play();
@@ -78,6 +90,14 @@ const updateAutoTranslationPreloadPages = (value: number | null) => {
     ...current,
     autoTranslationPreloadPages:
       normalizeReaderAutoTranslationPreloadPages(value),
+  }));
+};
+
+const updateRetranslationPolicy = (value: string | number) => {
+  if (value !== 'ask' && value !== 'replace' && value !== 'keep') return;
+  void persistReaderSettings((current) => ({
+    ...current,
+    retranslationPolicy: value,
   }));
 };
 
@@ -208,6 +228,17 @@ onMounted(() => {
                 提前翻译当前页之后的页数；0 表示只处理当前可见页。
               </n-text>
             </n-flex>
+          </c-action-wrapper>
+          <c-action-wrapper title="重翻完成后">
+            <c-radio-group
+              id="reader-retranslation-policy"
+              size="small"
+              :aria-busy="readerSettingsLoading"
+              :value="readerSettings.retranslationPolicy"
+              :options="readerRetranslationPolicyOptions"
+              :disabled="readerSettingsLoading || readerSettingsSaving"
+              @update:value="updateRetranslationPolicy"
+            />
           </c-action-wrapper>
         </n-flex>
       </n-list-item>

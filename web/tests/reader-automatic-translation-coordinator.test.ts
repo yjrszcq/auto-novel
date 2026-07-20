@@ -170,6 +170,54 @@ describe('reader automatic translation coordinator', () => {
     expect(session.entries(selection, 'chapter')).toEqual([]);
   });
 
+  it('retranslates from original text and exposes a candidate without committing', async () => {
+    const retranslation = {
+      ...selection,
+      purpose: 'retranslate' as const,
+    };
+    const session = new ReaderAutomaticTranslationSession();
+    const generation = session.start(retranslation);
+    const chapter = createChapter();
+    chapter.gpt = {
+      glossaryId: 'current-glossary',
+      glossary: {},
+      paragraphs: ['旧译文一', '旧译文二'],
+    };
+    const translate = vi.fn(async (_selection, originals: string[]) =>
+      originals.map((original) => `重翻-${original}`),
+    );
+    const commit = vi.fn();
+    const candidate = vi.fn();
+    const coordinator = new ReaderAutomaticTranslationCoordinator(session, {
+      loadChapter: async () => chapter,
+      translate,
+      commit,
+      onRetranslationComplete: candidate,
+    });
+
+    await coordinator.translateTargets({
+      generation,
+      selection: retranslation,
+      targets: [target(0), target(1)],
+      glossary: { 人名: '译名' },
+      concurrency: 1,
+      signal: new AbortController().signal,
+    });
+
+    expect(translate).toHaveBeenCalledWith(
+      retranslation,
+      ['原文一', '原文二'],
+      { 人名: '译名' },
+      expect.any(AbortSignal),
+    );
+    expect(commit).not.toHaveBeenCalled();
+    expect(candidate).toHaveBeenCalledWith(retranslation, 'chapter', {
+      glossaryId: 'current-glossary',
+      glossary: { 人名: '译名' },
+      paragraphs: ['重翻-原文一', '重翻-原文二'],
+    });
+  });
+
   it('releases failed targets for retry and rejects results after stop', async () => {
     const session = new ReaderAutomaticTranslationSession();
     const generation = session.start(selection);

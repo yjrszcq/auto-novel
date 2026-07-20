@@ -3,6 +3,8 @@ export type ReaderMode =
 
 export type ReaderFlow = 'auto' | 'paginated' | 'scrolled';
 
+export type ReaderRetranslationPolicy = 'ask' | 'replace' | 'keep';
+
 export interface ReaderBookshelfState {
   bookId: string;
   pinned: boolean;
@@ -15,6 +17,7 @@ export interface ReaderSettingsRecord {
   defaultMode: ReaderMode;
   translationPriority: ('gpt' | 'sakura' | 'youdao' | 'baidu')[];
   autoTranslationPreloadPages: number;
+  retranslationPolicy: ReaderRetranslationPolicy;
   fontSize: number;
   lineHeight: number;
   contentWidth: number;

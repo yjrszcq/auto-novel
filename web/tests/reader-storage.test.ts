@@ -241,6 +241,7 @@ describe('reader storage', () => {
       defaultMode: 'original-translated',
       translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
       autoTranslationPreloadPages: 3,
+      retranslationPolicy: 'ask',
       fontSize: 18,
       lineHeight: 1.8,
       contentWidth: 900,

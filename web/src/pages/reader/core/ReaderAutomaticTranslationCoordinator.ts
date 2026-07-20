@@ -42,6 +42,11 @@ export interface ReaderAutomaticTranslationCoordinatorDependencies {
     selection: ReaderAutomaticTranslationSelection,
     chapterId: string,
   ) => void;
+  onRetranslationComplete?: (
+    selection: ReaderAutomaticTranslationSelection,
+    chapterId: string,
+    translation: ChapterTranslation,
+  ) => Promise<void> | void;
 }
 
 const hasSourceText = (value: string) => value.trim().length > 0;
@@ -67,6 +72,7 @@ const reusableParagraphs = (
   chapter: LocalVolumeChapter,
   selection: ReaderAutomaticTranslationSelection,
 ) => {
+  if ((selection.purpose ?? 'automatic') === 'retranslate') return undefined;
   const persisted = chapter[selection.source];
   return persisted?.glossaryId === selection.glossaryId
     ? persisted.paragraphs
@@ -212,6 +218,14 @@ export class ReaderAutomaticTranslationCoordinator {
             return;
           }
           complete.glossary = { ...glossary };
+          if ((selection.purpose ?? 'automatic') === 'retranslate') {
+            await this.dependencies.onRetranslationComplete?.(
+              selection,
+              chapterId,
+              complete,
+            );
+            return;
+          }
           await this.dependencies.commit(selection, chapterId, complete);
           this.dependencies.onCommitted?.(selection, chapterId);
         } catch (cause) {

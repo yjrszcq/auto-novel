@@ -204,4 +204,19 @@ describe('reader automatic translation session', () => {
     expect(session.get(gpt, '2', '2-1')).toBe('GPT 译文');
     expect(session.get(sakura, '2', '2-1')).toBe('Sakura 译文');
   });
+
+  it('keeps ordinary and retranslation drafts separate', () => {
+    const session = new ReaderAutomaticTranslationSession();
+    const ordinary = selection('gpt');
+    const retranslation = { ...ordinary, purpose: 'retranslate' as const };
+    session.hydrate(ordinary, [
+      { chapterId: '2', segmentId: '2-1', translated: '普通草稿' },
+    ]);
+    session.hydrate(retranslation, [
+      { chapterId: '2', segmentId: '2-1', translated: '重翻草稿' },
+    ]);
+
+    expect(session.get(ordinary, '2', '2-1')).toBe('普通草稿');
+    expect(session.get(retranslation, '2', '2-1')).toBe('重翻草稿');
+  });
 });

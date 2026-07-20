@@ -5,6 +5,7 @@ import {
   applyReaderStyleOverride,
   defaultReaderSettings,
   normalizeReaderAutoTranslationPreloadPages,
+  normalizeReaderRetranslationPolicy,
   normalizeReaderSettings,
   serializeReaderSettings,
 } from '../src/pages/reader/core/ReaderSettings';
@@ -15,6 +16,18 @@ describe('reader settings', () => {
     expect(defaultReaderSettings.defaultMode).toBe('translated');
     expect(defaultReaderSettings.flow).toBe('auto');
     expect(defaultReaderSettings.autoTranslationPreloadPages).toBe(3);
+    expect(defaultReaderSettings.retranslationPolicy).toBe('ask');
+  });
+
+  it('normalizes the retranslation completion policy', () => {
+    expect(normalizeReaderRetranslationPolicy(undefined)).toBe('ask');
+    expect(normalizeReaderRetranslationPolicy('replace')).toBe('replace');
+    expect(normalizeReaderRetranslationPolicy('keep')).toBe('keep');
+    expect(
+      normalizeReaderSettings({
+        retranslationPolicy: 'invalid' as never,
+      }).retranslationPolicy,
+    ).toBe('ask');
   });
 
   it('normalizes automatic translation preloading to whole pages', () => {
@@ -74,6 +87,7 @@ describe('reader settings', () => {
     );
     expect(structuredClone(serialized)).toMatchObject({
       translationPriority: defaultReaderSettings.translationPriority,
+      retranslationPolicy: 'ask',
     });
   });
 

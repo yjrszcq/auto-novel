@@ -1,5 +1,6 @@
 import type {
   ReaderBookStyleOverride,
+  ReaderRetranslationPolicy,
   ReaderSettingsRecord,
 } from '@/model/Reader';
 
@@ -8,6 +9,7 @@ export const defaultReaderSettings: ReaderSettingsRecord = {
   defaultMode: 'translated',
   translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
   autoTranslationPreloadPages: 3,
+  retranslationPolicy: 'ask',
   fontSize: 18,
   lineHeight: 1.9,
   contentWidth: 840,
@@ -30,6 +32,11 @@ export const normalizeReaderAutoTranslationPreloadPages = (
     ),
   );
 
+export const normalizeReaderRetranslationPolicy = (
+  value: ReaderRetranslationPolicy | undefined,
+): ReaderRetranslationPolicy =>
+  value === 'replace' || value === 'keep' ? value : 'ask';
+
 export const normalizeReaderSettings = (
   value: Partial<ReaderSettingsRecord> | undefined,
 ): ReaderSettingsRecord => ({
@@ -39,6 +46,9 @@ export const normalizeReaderSettings = (
   defaultMode: value?.defaultMode ?? defaultReaderSettings.defaultMode,
   autoTranslationPreloadPages: normalizeReaderAutoTranslationPreloadPages(
     value?.autoTranslationPreloadPages,
+  ),
+  retranslationPolicy: normalizeReaderRetranslationPolicy(
+    value?.retranslationPolicy,
   ),
   fontSize: Math.max(12, Math.min(value?.fontSize ?? 18, 32)),
   lineHeight: Math.max(1.2, Math.min(value?.lineHeight ?? 1.9, 2.8)),
