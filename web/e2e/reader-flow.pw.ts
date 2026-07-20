@@ -562,7 +562,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(
     readerTop
-      .getByRole('button', { name: 'GPT 翻译本页' })
+      .getByRole('button', { name: 'GPT 自动翻译' })
       .locator('.n-button__content'),
   ).toHaveCSS('color', 'rgb(51, 54, 57)');
   await expect(readerContent).toHaveClass(/book-reader__content--paginated/);
@@ -789,10 +789,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
     name: '展开未翻译操作',
   });
   await expect(translationToggle).toBeVisible();
-  await expect(page.getByRole('button', { name: 'GPT 翻译本页' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'GPT 自动翻译' })).toBeHidden();
   await translationToggle.click();
   await expect(
-    page.getByRole('button', { name: 'GPT 翻译本页' }),
+    page.getByRole('button', { name: 'GPT 自动翻译' }),
   ).toBeVisible();
   const translationLayer = page.locator(
     '.book-reader__translation-popover-layer',
@@ -826,12 +826,12 @@ test('opens a local bookshelf book safely through the current reader route', asy
   );
   await expect(
     translationPopover
-      .getByRole('button', { name: 'GPT 翻译本页' })
+      .getByRole('button', { name: 'GPT 自动翻译' })
       .locator('.n-button__content'),
   ).toHaveCSS('color', 'rgb(91, 67, 0)');
   await expect(
     translationPopover
-      .getByRole('button', { name: 'GPT 翻译本页' })
+      .getByRole('button', { name: 'GPT 自动翻译' })
       .locator('.n-button__border'),
   ).toHaveCSS('border-color', 'rgb(240, 160, 32)');
   const popoverTop = await translationPopover.evaluate((element) =>
@@ -850,7 +850,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await translationLayer.click({
     position: { x: 4, y: translationLayerBounds.height - 4 },
   });
-  await expect(page.getByRole('button', { name: 'GPT 翻译本页' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'GPT 自动翻译' })).toBeHidden();
   await page.getByRole('button', { name: '夜晚', exact: true }).click();
   await translationToggle.click();
   await expect(translationPopover).toHaveCSS(
@@ -859,7 +859,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   );
   await expect(
     translationPopover
-      .getByRole('button', { name: 'GPT 翻译本页' })
+      .getByRole('button', { name: 'GPT 自动翻译' })
       .locator('.n-button__border'),
   ).toHaveCSS('border-color', 'rgb(139, 120, 100)');
   await page.getByRole('button', { name: '收起未翻译操作' }).click();
@@ -1935,7 +1935,7 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
   ]);
 });
 
-test('temporarily translates only the visible reader page without persisting it', async ({
+test('automatically translates a reader window without persisting a partial chapter', async ({
   page,
 }) => {
   const temporaryBookId = 'reader-temporary-translation.txt';
@@ -2003,6 +2003,7 @@ test('temporarily translates only the visible reader page without persisting it'
         id: 'default',
         defaultMode: 'translated',
         translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+        autoTranslationPreloadPages: 0,
         fontSize: 18,
         lineHeight: 1.9,
         contentWidth: 840,
@@ -2026,22 +2027,29 @@ test('temporarily translates only the visible reader page without persisting it'
     await page.getByRole('button', { name: '工具', exact: true }).click();
     const toolsDialog = page.getByRole('dialog', { name: '阅读工具' });
     await expect(
-      toolsDialog.getByRole('button', { name: 'GPT 翻译本页', exact: true }),
+      toolsDialog.getByRole('button', { name: 'GPT 自动翻译', exact: true }),
     ).toHaveCount(0);
     await expect(
-      toolsDialog.getByRole('button', { name: 'Sakura 翻译本页', exact: true }),
+      toolsDialog.getByRole('button', {
+        name: 'Sakura 自动翻译',
+        exact: true,
+      }),
     ).toHaveCount(0);
     await expect(
       toolsDialog.getByRole('button', { name: '阅读版本', exact: true }),
     ).toHaveCount(0);
     await page.getByRole('button', { name: '关闭阅读工具' }).click();
-    await page
+    const automaticTranslationButton = page
       .locator('.book-reader__app-bar-translation')
-      .getByRole('button', { name: 'GPT 翻译本页', exact: true })
-      .click();
+      .getByRole('button', { name: 'GPT 自动翻译', exact: true });
+    await automaticTranslationButton.click();
     await expect(
-      page.getByText('当前页面已临时翻译', { exact: true }),
+      page.getByText('已开启 GPT 自动翻译', { exact: true }),
     ).toBeVisible();
+    await expect(automaticTranslationButton).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await expect(source).toContainText('译文第1行');
     await page
       .locator('.book-reader__app-bar-translation')
@@ -2055,6 +2063,14 @@ test('temporarily translates only the visible reader page without persisting it'
     await expect(source).toContainText('临时原文第 1 段');
     await page.keyboard.press('1');
     await expect(source).toContainText('译文第1行');
+    await automaticTranslationButton.click();
+    await expect(
+      page.getByText('已停止自动翻译', { exact: true }),
+    ).toBeVisible();
+    await expect(automaticTranslationButton).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
 
     const persistedChapter = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {

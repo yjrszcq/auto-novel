@@ -1696,7 +1696,6 @@ const renderTemporaryTranslations = async (changedChapterIds: Set<string>) => {
       ({ chapterId }) => chapterId === ready.chapter.chapterId,
     ) ?? withTemporaryTranslations(ready.chapter);
   result.value = { ...ready, chapter };
-  temporaryMode = settings.value.defaultMode;
   enableTemporaryReadingModes(chapter);
   await nextTick();
   await nextTick();
@@ -1910,12 +1909,15 @@ const stopAutomaticTranslation = (notify = true) => {
   if (notify) message.info('已停止自动翻译');
 };
 
-const restoreAutomaticTranslationDraft = (
+const restoreAutomaticTranslationDraft = async (
   selection: ReaderAutomaticTranslationSelection,
 ) => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return;
+  const anchor = captureReaderPosition();
+  const chapterIds = loadedReaderChapters().map(({ chapterId }) => chapterId);
   temporaryTranslations.clear();
-  const changedChapterIds = new Set<string>();
-  loadedReaderChapters().forEach(({ chapterId }) => {
+  chapterIds.forEach((chapterId) => {
     automaticTranslationSession
       .entries(selection, chapterId)
       .forEach(({ segmentId, translated }) => {
@@ -1923,10 +1925,36 @@ const restoreAutomaticTranslationDraft = (
           temporaryTranslationKey(chapterId, segmentId),
           translated,
         );
-        changedChapterIds.add(chapterId);
       });
   });
-  void renderTemporaryTranslations(changedChapterIds);
+  const repository = await repositoryPromise;
+  const sourceAdapter = createLocalVolumeReaderAdapter(repository, [
+    selection.source,
+  ]);
+  const refreshedChapters = await Promise.all(
+    chapterIds.map(async (chapterId) =>
+      withTemporaryTranslations(
+        await sourceAdapter.getChapter({
+          bookId: bookId.value,
+          chapterId,
+        }),
+      ),
+    ),
+  );
+  if (!automaticTranslationSession.isActive(selection)) return;
+  const refreshedById = new Map(
+    refreshedChapters.map((chapter) => [chapter.chapterId, chapter]),
+  );
+  continuousChapters.value = continuousChapters.value.map(
+    (chapter) => refreshedById.get(chapter.chapterId) ?? chapter,
+  );
+  const chapter = refreshedById.get(ready.chapter.chapterId) ?? ready.chapter;
+  result.value = { ...ready, chapter };
+  enableTemporaryReadingModes(chapter);
+  await nextTick();
+  await nextTick();
+  restoreReaderPosition(anchor);
+  updateViewportMetrics();
 };
 
 const resolveConfiguredAutomaticTranslationWorker = (
@@ -1976,7 +2004,8 @@ const startAutomaticTranslation = async (
     glossary: { ...volume.glossary },
   };
   automaticTranslationSource.value = source;
-  restoreAutomaticTranslationDraft(selection);
+  temporaryMode = settings.value.defaultMode;
+  await restoreAutomaticTranslationDraft(selection);
   showMobileTranslationNotice.value = false;
   (document.activeElement as HTMLElement | null)?.blur();
   if (notify) {
