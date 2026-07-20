@@ -148,7 +148,7 @@ const startsWithBytes = (bytes: Uint8Array, prefix: readonly number[]) =>
 
 const decode = (bytes: Uint8Array, encoding: TxtEncoding) => {
   try {
-    return new TextDecoder(encoding, { fatal: true }).decode(bytes);
+    return new TextDecoder(encoding).decode(bytes);
   } catch {
     return undefined;
   }

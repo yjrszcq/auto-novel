@@ -163,8 +163,8 @@ Vue TypeScript 检查；lint 覆盖应用源码、单元测试和端到端测试
 `test:gate` 会依次执行严格 lint、全部 Vitest、生产构建/类型检查和完整
 PWA 离线检查、Playwright 核心流程，不需要商业翻译服务凭据。Playwright 默认自行启动 Vite；
 `test:performance` 使用本地临时 HTTP 服务和 fake IndexedDB，验证分段、GPT 与
-Sakura 共享池高水位、多工作者热加入/停止重排、独立服务退避、取消/恢复、缓存身份、千章读取
-和长章节窗口，也不需要真实 API Key。
+Sakura 共享池高水位、多工作者热加入/停止重排、独立服务退避、取消/恢复、缓存身份、千章读取、
+长章节窗口、TXT 目录近线性解析和有界 Worker 窗口，也不需要真实 API Key。
 `test:pwa` 会构建生产包并临时启动 Vite Preview，检查 Web App Manifest、安装
 图标、Service Worker 控制权、手机视口下的离线深路由，以及运行时配置不会被
 错误缓存。它和浏览器测试一样，需要先安装 Playwright Chromium。

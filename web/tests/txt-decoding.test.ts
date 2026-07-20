@@ -77,6 +77,26 @@ describe('TXT decoding', () => {
     expect(decoded.text).toBe('第一章 日本語');
   });
 
+  it('keeps a mostly valid UTF-8 candidate when isolated bytes are damaged', () => {
+    const valid = new TextEncoder().encode(
+      Array.from(
+        { length: 200 },
+        (_, index) => `第${index + 1}章\n这是正文。`,
+      ).join('\n'),
+    );
+    const bytes = new Uint8Array(valid.length + 1);
+    bytes.set(valid);
+    bytes[bytes.length - 1] = 0xff;
+
+    const decoded = decodeTxtBuffer(bytes);
+
+    expect(decoded.encoding).toBe('utf-8');
+    expect(decoded.text.endsWith('\uFFFD')).toBe(true);
+    expect(
+      decoded.candidates.some(({ encoding }) => encoding === 'utf-8'),
+    ).toBe(true);
+  });
+
   it('keeps raw lines and derives normalized detection text and offsets', () => {
     const decoded = decodeTxtText('\uFEFF  ＃＃　第１２章\u3000标题  \r\n本文');
     expect(decoded.text).toBe('  ＃＃　第１２章\u3000标题  \n本文');

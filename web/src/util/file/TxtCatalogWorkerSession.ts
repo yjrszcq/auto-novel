@@ -125,6 +125,9 @@ class WorkerTxtCatalogSession implements TxtCatalogSession {
     const error = new Error(event.message || 'TXT 解析 Worker 异常');
     for (const request of this.pending.values()) request.reject(error);
     this.pending.clear();
+    this.unbindWorker();
+    this.worker.terminate();
+    this.disposed = true;
   };
 
   private request<Request extends Omit<TxtCatalogWorkerRequest, 'requestId'>>(

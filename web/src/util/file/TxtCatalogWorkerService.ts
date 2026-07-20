@@ -114,7 +114,7 @@ export const createTxtCatalogWorkerService = (
         if (query.length === 0) return { lineIndexes: [], wrapped: false };
         const startLine = Math.min(
           Math.max(Math.floor(request.startLine), 0),
-          Math.max(current.lines.length - 1, 0),
+          current.lines.length,
         );
         const limit = Math.min(
           Math.max(Math.floor(request.limit), 1),

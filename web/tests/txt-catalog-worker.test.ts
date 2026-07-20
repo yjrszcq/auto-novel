@@ -38,6 +38,8 @@ describe('TXT catalog Worker service', () => {
   it('returns bounded line windows and supports wrapped search', () => {
     const lines = Array.from({ length: 700 }, (_, index) => `line ${index}`);
     lines[3] = 'needle first';
+    lines[4] = 'boundary first';
+    lines[699] = 'boundary last';
     const service = createTxtCatalogWorkerService();
     service.handle({
       type: 'initialize',
@@ -64,6 +66,18 @@ describe('TXT catalog Worker service', () => {
       limit: 20,
     });
     expect(search).toEqual({ lineIndexes: [3], wrapped: true });
+
+    const searchAfterLastLine = service.handle({
+      type: 'search',
+      requestId: 4,
+      query: 'BOUNDARY',
+      startLine: 700,
+      limit: 1,
+    });
+    expect(searchAfterLastLine).toEqual({
+      lineIndexes: [4],
+      wrapped: true,
+    });
   });
 
   it('reparses modes and builds a plan from reviewed headings', () => {

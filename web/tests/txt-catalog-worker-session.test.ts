@@ -33,6 +33,11 @@ class FakeWorker {
     const event = new MessageEvent('message', { data: response });
     for (const listener of this.listeners.get('message') ?? []) listener(event);
   }
+
+  fail(message: string) {
+    const event = { message } as ErrorEvent;
+    for (const listener of this.listeners.get('error') ?? []) listener(event);
+  }
 }
 
 describe('TXT catalog Worker session', () => {
@@ -89,6 +94,20 @@ describe('TXT catalog Worker session', () => {
 
     await expect(pendingLines).rejects.toMatchObject({ name: 'AbortError' });
     await expect(pendingSearch).rejects.toMatchObject({ name: 'AbortError' });
+    expect(worker.terminated).toBe(true);
+  });
+
+  it('makes a crashed Worker terminal instead of leaving later requests pending', async () => {
+    const worker = new FakeWorker();
+    const session = createTxtCatalogSession(() => worker as unknown as Worker);
+    const pending = session.getLines(0, 20);
+
+    worker.fail('worker crashed');
+
+    await expect(pending).rejects.toThrow('worker crashed');
+    await expect(session.reparse('balanced')).rejects.toMatchObject({
+      name: 'AbortError',
+    });
     expect(worker.terminated).toBe(true);
   });
 
