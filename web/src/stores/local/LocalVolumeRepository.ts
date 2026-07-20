@@ -156,6 +156,8 @@ export const createLocalVolumeStore = async () => {
       dao.listReaderAutomaticTranslationCaches,
     upsertReaderAutomaticTranslationCache:
       dao.upsertReaderAutomaticTranslationCache,
+    deleteReaderAutomaticTranslationCache:
+      dao.deleteReaderAutomaticTranslationCache,
     deleteReaderAutomaticTranslationCaches:
       dao.deleteReaderAutomaticTranslationCaches,
     //

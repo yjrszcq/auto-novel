@@ -567,6 +567,14 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     await tx.done;
     return stored;
   };
+  const deleteReaderAutomaticTranslationCache = async (key: string) => {
+    const tx = db.transaction('reader-chapter-cache', 'readwrite');
+    const value = await tx.store.get(key);
+    if (isReaderAutomaticTranslationCache(value)) {
+      await tx.store.delete(key);
+    }
+    await tx.done;
+  };
   const deleteReaderAutomaticTranslationCaches = async ({
     bookId,
     chapterId,
@@ -693,6 +701,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     getReaderAutomaticTranslationCache,
     listReaderAutomaticTranslationCaches,
     upsertReaderAutomaticTranslationCache,
+    deleteReaderAutomaticTranslationCache,
     deleteReaderAutomaticTranslationCaches,
   };
 };

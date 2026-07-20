@@ -1930,6 +1930,69 @@ const markAutomaticTranslationCommitted = async (
   }
 };
 
+const adoptCompletedChapterTranslation = async (chapterId: string) => {
+  const targetBookId = bookId.value;
+  if (
+    pendingRetranslation.value?.bookId === targetBookId &&
+    pendingRetranslation.value.chapterId === chapterId
+  ) {
+    pendingRetranslation.value = undefined;
+    showRetranslationDecision.value = false;
+  }
+  const selection = activeAutomaticTranslationRuntime?.selection;
+  if (
+    selection !== undefined &&
+    (selection.purpose ?? 'automatic') === 'retranslate' &&
+    retranslationChapterId.value === chapterId
+  ) {
+    haltAutomaticTranslationRuntime();
+  }
+  if (selection !== undefined) {
+    await discardAutomaticTranslationChapterDraft(selection, chapterId);
+    if ((selection.purpose ?? 'automatic') === 'automatic') {
+      scheduleAutomaticTranslation();
+    }
+    return;
+  }
+  const prefix = `${chapterId}\u0000`;
+  [...temporaryTranslations.keys()]
+    .filter((key) => key.startsWith(prefix))
+    .forEach((key) => temporaryTranslations.delete(key));
+  const repository = await repositoryPromise;
+  await repository.deleteReaderAutomaticTranslationCaches({
+    bookId: targetBookId,
+    chapterId,
+  });
+  const ready = result.value;
+  if (ready?.kind !== 'ready' || ready.book.id !== targetBookId) return;
+  const anchoredChapterId = ready.chapter.chapterId;
+  const anchor = captureReaderPosition();
+  const adapter = await cachedAdapterPromise;
+  adapter.invalidateChapter({ bookId: targetBookId, chapterId });
+  const [chapter, chapters] = await Promise.all([
+    adapter.getChapter({ bookId: targetBookId, chapterId }),
+    adapter.getChapters(targetBookId),
+  ]);
+  if (result.value?.kind !== 'ready' || result.value.book.id !== targetBookId) {
+    return;
+  }
+  const latest = result.value;
+  continuousChapters.value = continuousChapters.value.map((loaded) =>
+    loaded.chapterId === chapterId ? chapter : loaded,
+  );
+  result.value = {
+    ...latest,
+    chapters,
+    chapter: latest.chapter.chapterId === chapterId ? chapter : latest.chapter,
+  };
+  await nextTick();
+  await nextTick();
+  if (result.value?.chapter.chapterId === anchoredChapterId) {
+    restoreReaderPosition(anchor);
+  }
+  updateViewportMetrics();
+};
+
 const collectAutomaticTranslationChapters = async (
   visible: VisibleReaderSegment[],
 ) => {
@@ -2346,10 +2409,49 @@ const hydrateAutomaticTranslationDrafts = async (
   const repository = await repositoryPromise;
   const expectedSelectionKey =
     getReaderAutomaticTranslationSelectionCacheKey(selection);
-  const caches = (
-    await repository.listReaderAutomaticTranslationCaches(bookId.value)
-  ).filter(
+  const allCaches = await repository.listReaderAutomaticTranslationCaches(
+    bookId.value,
+  );
+  const chapterRequests = new Map<
+    string,
+    ReturnType<typeof repository.getChapter>
+  >();
+  const chapters = new Map<
+    string,
+    Awaited<ReturnType<typeof repository.getChapter>>
+  >();
+  const staleCacheKeys = new Set<string>();
+  await Promise.all(
+    allCaches.map(async (cache) => {
+      let chapterRequest = chapterRequests.get(cache.chapterId);
+      if (chapterRequest === undefined) {
+        chapterRequest = repository.getChapter(bookId.value, cache.chapterId);
+        chapterRequests.set(cache.chapterId, chapterRequest);
+      }
+      const chapter = await chapterRequest;
+      chapters.set(cache.chapterId, chapter);
+      const stale =
+        chapter === undefined ||
+        getReaderAutomaticTranslationContentRevision({
+          segmentIds: chapter.segmentIds,
+          paragraphs: chapter.paragraphs,
+        }) !== cache.contentRevision ||
+        (cache.purpose === 'retranslate' &&
+          cache.formalTranslationRevision !==
+            getChapterFormalTranslationRevision(chapter));
+      if (stale) {
+        staleCacheKeys.add(cache.key);
+      }
+    }),
+  );
+  await Promise.all(
+    [...staleCacheKeys].map((key) =>
+      repository.deleteReaderAutomaticTranslationCache(key),
+    ),
+  );
+  const caches = allCaches.filter(
     (cache) =>
+      !staleCacheKeys.has(cache.key) &&
       cache.purpose === (selection.purpose ?? 'automatic') &&
       cache.source === selection.source &&
       cache.selectionKey === expectedSelectionKey &&
@@ -2357,10 +2459,7 @@ const hydrateAutomaticTranslationDrafts = async (
   );
   await Promise.all(
     caches.map(async (cache) => {
-      const chapter = await repository.getChapter(
-        bookId.value,
-        cache.chapterId,
-      );
+      const chapter = chapters.get(cache.chapterId);
       if (
         chapter === undefined ||
         getReaderAutomaticTranslationContentRevision({
@@ -3142,14 +3241,12 @@ watch(showReaderGlossary, (show) => {
   readerGlossaryError.value = '';
 });
 watch(completedTranslationTasks, (tasks, previousTasks) => {
-  if (
-    tasks.some(
-      (task) =>
-        !previousTasks.includes(task) && taskTargetsCurrentChapter(task),
-    )
-  ) {
-    void refreshCurrentChapter();
-  }
+  const completedCurrentTask = tasks.find(
+    (task) => !previousTasks.includes(task) && taskTargetsCurrentChapter(task),
+  );
+  if (completedCurrentTask === undefined) return;
+  const chapterId = currentChapterSummary.value?.id;
+  if (chapterId !== undefined) void adoptCompletedChapterTranslation(chapterId);
 });
 
 watch(

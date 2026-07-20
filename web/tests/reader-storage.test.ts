@@ -535,6 +535,13 @@ describe('reader storage', () => {
     expect(await dao.listReaderAutomaticTranslationCaches('book')).toHaveLength(
       2,
     );
+    await dao.deleteReaderAutomaticTranslationCache('retranslate-one');
+    await dao.deleteReaderAutomaticTranslationCache('legacy');
+    expect(
+      (await dao.listReaderAutomaticTranslationCaches('book')).map(
+        ({ key }) => key,
+      ),
+    ).toEqual(['automatic-two']);
     expect(await dao.listReaderChapterCaches('book')).toContainEqual({
       key: 'legacy',
       bookId: 'book',
