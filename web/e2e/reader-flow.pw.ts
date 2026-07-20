@@ -1892,6 +1892,16 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
     .locator('[data-reader-segment-id="tools-segment-0"] p')
     .first();
   await expect(firstParagraph).toContainText('选择词语');
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  const flowSetting = page
+    .locator('.book-reader__settings-grid .n-form-item')
+    .filter({ hasText: '阅读流' });
+  await flowSetting.locator('.n-base-selection').click();
+  await expect(
+    page.getByText('自动（电脑分页，手机滚动）', { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '阅读设置' })).toBeHidden();
   const selectQuery = async () => {
     await firstParagraph.evaluate((paragraph) => {
       const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
@@ -1963,6 +1973,31 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
   ).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
+  const chapterStatus = page.locator('.book-reader__chapter-status');
+  const bookStatus = page.locator('.book-reader__book-status');
+  const progressStatus = page.locator('.book-reader__reading-progress-status');
+  const timeStatus = page.locator('.book-reader__time-status');
+  await expect(bookStatus).toHaveText('阅读工具测试');
+  await expect(bookStatus).toHaveCSS('text-overflow', 'ellipsis');
+  await expect(progressStatus).toContainText(/^\d{1,3}%/);
+  await expect(timeStatus).toHaveText(/^\d{2}:\d{2}$/);
+  await expect(bookStatus).toHaveCSS(
+    'font-size',
+    await chapterStatus.evaluate(
+      (element) => getComputedStyle(element).fontSize,
+    ),
+  );
+  await expect(progressStatus).toHaveCSS(
+    'color',
+    await chapterStatus.evaluate((element) => getComputedStyle(element).color),
+  );
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await flowSetting.locator('.n-base-selection').click();
+  await page.getByText('自动', { exact: true }).click();
+  await expect(flowSetting.locator('.n-base-selection-label')).toHaveText(
+    '自动',
+  );
+  await page.getByRole('button', { name: '关闭阅读设置' }).click();
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await page.getByRole('button', { name: '书签 (1)', exact: true }).click();
   const bookmarksDialog = page.getByRole('dialog', { name: '书签' });
@@ -1971,6 +2006,23 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
   await expect(firstParagraph).toBeVisible();
 
   await selectQuery();
+  await expect(page.locator('.book-reader__app-bar')).toBeVisible();
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await page.locator('.book-reader__content').evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: Math.max(rect.top, 0) + 200,
+      }),
+    );
+  });
+  await expect(page.locator('.book-reader__app-bar')).toHaveCount(0);
+  await selectQuery();
+  await expect(
+    page.getByRole('button', { name: 'AI', exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'AI', exact: true }).click();
   await expect(page).toHaveURL(/\/books\/reader-tools\.txt\/read\/0$/);
   const interactiveDialog = page.getByRole('dialog', { name: 'AI 查词' });

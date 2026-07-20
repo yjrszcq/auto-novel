@@ -146,6 +146,9 @@ let searchUiRequestId = 0;
 const showMobileTranslationNotice = ref(false);
 const showMobilePreloadHelp = ref(false);
 const controlsVisible = ref(true);
+const selectedReaderText = ref('');
+const currentTime = ref('');
+let pendingInteractiveSelection = '';
 const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
@@ -248,6 +251,15 @@ const requestedSegmentId = computed(() =>
 const requestedEpubHref = computed(() =>
   typeof route.query.epub === 'string' ? route.query.epub : undefined,
 );
+
+const readerFlowOptions = computed(() => [
+  {
+    label: isDesktopReader.value ? '自动（电脑分页，手机滚动）' : '自动',
+    value: 'auto',
+  },
+  { label: '分页', value: 'paginated' },
+  { label: '滚动', value: 'scrolled' },
+]);
 
 const catalogParentIds = computed(() => {
   if (result.value?.kind !== 'ready') return new Set<string>();
@@ -759,6 +771,31 @@ const toggleControlsFromContent = (event: MouseEvent) => {
   ) {
     controlsVisible.value = !controlsVisible.value;
   }
+};
+
+const updateReaderSelection = () => {
+  const selection = window.getSelection();
+  const text = selection?.toString().trim() ?? '';
+  if (selection === null || selection.isCollapsed || text.length === 0) {
+    selectedReaderText.value = '';
+    return;
+  }
+  const anchor = selection.anchorNode;
+  const root = anchor?.getRootNode();
+  const selectionHost =
+    root instanceof ShadowRoot ? root.host : anchor?.parentElement;
+  if (
+    selectionHost instanceof Element &&
+    selectionHost.closest('.book-reader__content') !== null
+  ) {
+    selectedReaderText.value = text;
+    controlsVisible.value = true;
+  }
+};
+
+const captureInteractiveSelection = () => {
+  pendingInteractiveSelection =
+    window.getSelection()?.toString().trim() || selectedReaderText.value;
 };
 
 const handleReaderKeydown = (event: KeyboardEvent) => {
@@ -1690,7 +1727,12 @@ const stopSpeaking = () => {
 
 const openInteractiveTranslation = () => {
   const shouldOpen = !showInteractiveTranslation.value;
-  const text = window.getSelection()?.toString().trim() ?? '';
+  const text =
+    window.getSelection()?.toString().trim() ||
+    pendingInteractiveSelection ||
+    selectedReaderText.value;
+  pendingInteractiveSelection = '';
+  selectedReaderText.value = '';
   closeReaderPanels();
   if (!shouldOpen) return;
   interactiveInitialText.value = text || undefined;
@@ -3137,6 +3179,16 @@ const chapterProgressPercent = computed(() => {
   );
 });
 
+const updateCurrentTime = () => {
+  currentTime.value = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date());
+};
+
+let currentTimeTimer: number | undefined;
+
 const completedTranslationTasks = computed(() =>
   [
     ...gptWorkspace.ref.value.jobRecords,
@@ -3352,9 +3404,12 @@ watch(
 
 onMounted(() => {
   void loadSettings();
+  updateCurrentTime();
+  currentTimeTimer = window.setInterval(updateCurrentTime, 30_000);
   window.addEventListener('scroll', handleViewportScroll, { passive: true });
   window.addEventListener('resize', handleViewportResize, { passive: true });
   window.addEventListener('keydown', handleReaderKeydown);
+  document.addEventListener('selectionchange', updateReaderSelection);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 });
 onBeforeUnmount(() => {
@@ -3370,7 +3425,9 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(viewportResizeFrame);
   }
   window.removeEventListener('keydown', handleReaderKeydown);
+  document.removeEventListener('selectionchange', updateReaderSelection);
   document.removeEventListener('visibilitychange', handleVisibilityChange);
+  if (currentTimeTimer !== undefined) window.clearInterval(currentTimeTimer);
   void saveProgress();
   void recordReadingTime();
   stopSpeaking();
@@ -3509,10 +3566,32 @@ onBeforeUnmount(() => {
 
     <div
       v-if="result?.kind === 'ready' && !showMobileTranslationNotice"
-      class="book-reader__chapter-status"
+      class="book-reader__corner-status book-reader__chapter-status"
       :title="result.chapter.title"
     >
       {{ result.chapter.title }}
+    </div>
+
+    <div
+      v-if="result?.kind === 'ready' && !showMobileTranslationNotice"
+      class="book-reader__corner-status book-reader__time-status"
+    >
+      {{ currentTime }}
+    </div>
+
+    <div
+      v-if="result?.kind === 'ready'"
+      class="book-reader__corner-status book-reader__book-status"
+      :title="result.book.title"
+    >
+      {{ result.book.title }}
+    </div>
+
+    <div
+      v-if="result?.kind === 'ready'"
+      class="book-reader__corner-status book-reader__reading-progress-status"
+    >
+      {{ Math.round(chapterProgressPercent) }}%
     </div>
 
     <div
@@ -3654,7 +3733,11 @@ onBeforeUnmount(() => {
           <n-icon :component="BuildOutlined" />
           <span>工具</span>
         </button>
-        <button type="button" @click="openInteractiveTranslation">
+        <button
+          type="button"
+          @pointerdown="captureInteractiveSelection"
+          @click="openInteractiveTranslation"
+        >
           <n-icon :component="AutoAwesomeOutlined" />
           <span>AI</span>
         </button>
@@ -4054,11 +4137,7 @@ onBeforeUnmount(() => {
           <n-form-item label="阅读流">
             <n-select
               v-model:value="settings.flow"
-              :options="[
-                { label: '自动（电脑分页，手机滚动）', value: 'auto' },
-                { label: '分页', value: 'paginated' },
-                { label: '滚动', value: 'scrolled' },
-              ]"
+              :options="readerFlowOptions"
             />
           </n-form-item>
         </div>
@@ -4352,12 +4431,9 @@ onBeforeUnmount(() => {
   color: var(--reader-warning-text);
 }
 
-.book-reader__chapter-status {
+.book-reader__corner-status {
   position: fixed;
-  top: 3px;
-  left: 8px;
   z-index: 20;
-  max-width: calc(100vw - 24px);
   overflow: hidden;
   color: var(--reader-muted-color);
   font-size: 12px;
@@ -4365,6 +4441,28 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.book-reader__chapter-status {
+  top: 3px;
+  left: 8px;
+  max-width: calc(100vw - 96px);
+}
+
+.book-reader__time-status {
+  top: 3px;
+  right: 8px;
+}
+
+.book-reader__book-status {
+  bottom: 6px;
+  left: 8px;
+  max-width: calc(50vw - 16px);
+}
+
+.book-reader__reading-progress-status {
+  right: 8px;
+  bottom: 6px;
 }
 
 .book-reader__translation-panel {
@@ -4826,8 +4924,24 @@ onBeforeUnmount(() => {
   .book-reader__chapter-status {
     top: 6px;
     left: 14px;
-    max-width: calc(100vw - 28px);
+    max-width: calc(100vw - 104px);
     font-size: 12px;
+  }
+
+  .book-reader__time-status {
+    top: 6px;
+    right: 14px;
+  }
+
+  .book-reader__book-status {
+    bottom: 6px;
+    left: 14px;
+    max-width: calc(65vw - 20px);
+  }
+
+  .book-reader__reading-progress-status {
+    right: 14px;
+    bottom: 6px;
   }
 
   .book-reader__content {

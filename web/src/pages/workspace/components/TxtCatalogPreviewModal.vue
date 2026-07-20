@@ -1011,6 +1011,11 @@ onBeforeUnmount(disposeSession);
     overscroll-behavior: contain;
   }
 
+  .txt-catalog-modal > .n-card-header {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
   .txt-catalog-modal > .n-card__action {
     padding-right: 12px;
     padding-bottom: max(12px, env(safe-area-inset-bottom));

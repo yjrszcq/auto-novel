@@ -240,6 +240,15 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
   expect(previewBounds!.y).toBeCloseTo(0, 0);
   expect(previewBounds!.width).toBeCloseTo(390, 0);
   expect(previewBounds!.height).toBeCloseTo(844, 0);
+  const previewLeftEdges = await preview.evaluate((dialog) => ({
+    title: dialog
+      .querySelector<HTMLElement>('.n-card-header__main')!
+      .getBoundingClientRect().left,
+    content: dialog
+      .querySelector<HTMLElement>('.txt-catalog-toolbar')!
+      .getBoundingClientRect().left,
+  }));
+  expect(previewLeftEdges.title).toBeCloseTo(previewLeftEdges.content, 0);
   for (const selector of ['.txt-line-viewport', '.txt-heading-list']) {
     await expect
       .poll(() =>
