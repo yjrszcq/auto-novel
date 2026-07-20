@@ -76,6 +76,7 @@ import { getTranslationStatusLabel } from './core/ReaderTranslationWorkflow';
 import {
   planReaderAutomaticTranslationWindow,
   ReaderAutomaticTranslationSession,
+  resolveReaderAutomaticTranslationWorker,
   type ReaderAutomaticTranslationSelection,
   type ReaderAutomaticTranslationSource,
 } from './core/ReaderAutoTranslation';
@@ -111,6 +112,7 @@ const showBookInfo = ref(false);
 const showBookmarks = ref(false);
 const showSearch = ref(false);
 const showInteractiveTranslation = ref(false);
+const showAutomaticTranslatorSelection = ref(false);
 const interactiveInitialText = ref<string>();
 const searchQuery = ref('');
 const searchResults = shallowRef<ReaderSearchResult[]>([]);
@@ -157,6 +159,8 @@ let routeSyncedFromScroll: string | undefined;
 let adjustingContinuousChapters = false;
 const isSpeaking = ref(false);
 const automaticTranslationSource = ref<ReaderAutomaticTranslationSource>();
+const selectedAutomaticGptWorkerId = ref<string>();
+const selectedAutomaticSakuraWorkerId = ref<string>();
 const automaticTranslationSession = new ReaderAutomaticTranslationSession();
 let automaticTranslationController: AbortController | undefined;
 let automaticTranslationTimer: number | undefined;
@@ -262,10 +266,30 @@ const hasIncompleteChapter = computed(
     currentChapterSummary.value !== undefined &&
     currentChapterSummary.value.translationStatus !== 'complete',
 );
+const hasIncompleteBookTranslation = computed(
+  () =>
+    requiresWholeChapterTranslation.value &&
+    result.value?.kind === 'ready' &&
+    result.value.chapters.some(
+      ({ translationStatus }) => translationStatus !== 'complete',
+    ),
+);
 const showsAutomaticTranslationControls = computed(
   () =>
     hasIncompleteChapter.value ||
     automaticTranslationSource.value !== undefined,
+);
+const automaticGptWorkerOptions = computed(() =>
+  gptWorkspace.ref.value.workers.map((worker) => ({
+    label: `${worker.model} · ${worker.endpoint}`,
+    value: worker.id,
+  })),
+);
+const automaticSakuraWorkerOptions = computed(() =>
+  sakuraWorkspace.ref.value.workers.map((worker) => ({
+    label: `Sakura · ${worker.endpoint}`,
+    value: worker.id,
+  })),
 );
 const currentTranslationStatusLabel = computed(() =>
   currentChapterSummary.value === undefined
@@ -309,6 +333,7 @@ const hasOpenReaderPanel = () =>
   showBookmarks.value ||
   showSearch.value ||
   showInteractiveTranslation.value ||
+  showAutomaticTranslatorSelection.value ||
   showModePrompt.value ||
   showMobileTranslationNotice.value;
 
@@ -320,6 +345,7 @@ const closeReaderPanels = () => {
   showBookmarks.value = false;
   showSearch.value = false;
   showInteractiveTranslation.value = false;
+  showAutomaticTranslatorSelection.value = false;
   showModePrompt.value = false;
   showMobileTranslationNotice.value = false;
 };
@@ -345,6 +371,11 @@ const openTools = () => {
   const shouldOpen = !showTools.value;
   closeReaderPanels();
   showTools.value = shouldOpen;
+};
+
+const openAutomaticTranslatorSelection = () => {
+  showTools.value = false;
+  showAutomaticTranslatorSelection.value = true;
 };
 
 const openSearch = () => {
@@ -1699,21 +1730,28 @@ const markAutomaticTranslationCommitted = async (
   adapter.invalidateChapter({ bookId: bookId.value, chapterId });
   const ready = result.value;
   if (ready?.kind !== 'ready') return;
+  const chapters = ready.chapters.map((chapter) =>
+    chapter.id === chapterId
+      ? {
+          ...chapter,
+          translationStatus: 'complete' as const,
+          translatedSegmentCount: chapter.totalSegmentCount,
+          translationSources: [
+            ...new Set([...chapter.translationSources, selection.source]),
+          ],
+        }
+      : chapter,
+  );
   result.value = {
     ...ready,
-    chapters: ready.chapters.map((chapter) =>
-      chapter.id === chapterId
-        ? {
-            ...chapter,
-            translationStatus: 'complete',
-            translatedSegmentCount: chapter.totalSegmentCount,
-            translationSources: [
-              ...new Set([...chapter.translationSources, selection.source]),
-            ],
-          }
-        : chapter,
-    ),
+    chapters,
   };
+  if (
+    chapters.every(({ translationStatus }) => translationStatus === 'complete')
+  ) {
+    stopAutomaticTranslation(false);
+    message.success('全书翻译已完成');
+  }
 };
 
 const collectAutomaticTranslationChapters = async (
@@ -1891,27 +1929,35 @@ const restoreAutomaticTranslationDraft = (
   void renderTemporaryTranslations(changedChapterIds);
 };
 
-const toggleAutomaticTranslation = async (
+const resolveConfiguredAutomaticTranslationWorker = (
   source: ReaderAutomaticTranslationSource,
+) =>
+  source === 'gpt'
+    ? resolveReaderAutomaticTranslationWorker(
+        gptWorkspace.ref.value.workers,
+        selectedAutomaticGptWorkerId.value,
+      )
+    : resolveReaderAutomaticTranslationWorker(
+        sakuraWorkspace.ref.value.workers,
+        selectedAutomaticSakuraWorkerId.value,
+      );
+
+const startAutomaticTranslation = async (
+  source: ReaderAutomaticTranslationSource,
+  notify = true,
 ) => {
-  if (automaticTranslationSource.value === source) {
-    stopAutomaticTranslation();
-    return;
-  }
-  const worker =
-    source === 'gpt'
-      ? gptWorkspace.ref.value.workers[0]
-      : sakuraWorkspace.ref.value.workers[0];
+  const worker = resolveConfiguredAutomaticTranslationWorker(source);
   if (worker === undefined) {
+    stopAutomaticTranslation(false);
     message.warning(
       `请先在${source === 'gpt' ? 'GPT' : 'Sakura'}工作区配置翻译器`,
     );
-    return;
+    return false;
   }
   const volume = await (await repositoryPromise).getVolume(bookId.value);
   if (volume === undefined) {
     message.error('书籍不存在');
-    return;
+    return false;
   }
   automaticTranslationController?.abort();
   const config = createVisibleTranslationConfig(source, worker);
@@ -1933,10 +1979,52 @@ const toggleAutomaticTranslation = async (
   restoreAutomaticTranslationDraft(selection);
   showMobileTranslationNotice.value = false;
   (document.activeElement as HTMLElement | null)?.blur();
-  message.success(`已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`);
+  if (notify) {
+    message.success(`已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`);
+  }
   await nextTick();
   scheduleAutomaticTranslation();
+  return true;
 };
+
+const toggleAutomaticTranslation = async (
+  source: ReaderAutomaticTranslationSource,
+) => {
+  if (automaticTranslationSource.value === source) {
+    stopAutomaticTranslation();
+    return;
+  }
+  await startAutomaticTranslation(source);
+};
+
+const selectAutomaticTranslationWorker = async (
+  source: ReaderAutomaticTranslationSource,
+  workerId: string,
+) => {
+  if (source === 'gpt') selectedAutomaticGptWorkerId.value = workerId;
+  else selectedAutomaticSakuraWorkerId.value = workerId;
+  if (automaticTranslationSource.value !== source) return;
+  if (await startAutomaticTranslation(source, false)) {
+    message.success(`已切换 ${source === 'gpt' ? 'GPT' : 'Sakura'} 翻译器`);
+  }
+};
+
+const automaticGptWorkerValue = computed<string | null>({
+  get: () => resolveConfiguredAutomaticTranslationWorker('gpt')?.id ?? null,
+  set: (workerId) => {
+    if (workerId !== null)
+      void selectAutomaticTranslationWorker('gpt', workerId);
+  },
+});
+
+const automaticSakuraWorkerValue = computed<string | null>({
+  get: () => resolveConfiguredAutomaticTranslationWorker('sakura')?.id ?? null,
+  set: (workerId) => {
+    if (workerId !== null) {
+      void selectAutomaticTranslationWorker('sakura', workerId);
+    }
+  },
+});
 
 const loadBookmarks = async (targetBookId = bookId.value) => {
   const repository = await repositoryPromise;
@@ -2590,6 +2678,30 @@ watch(
 
 watch(
   () => [
+    JSON.stringify(gptWorkspace.ref.value.workers),
+    JSON.stringify(sakuraWorkspace.ref.value.workers),
+  ],
+  () => {
+    const source = automaticTranslationSource.value;
+    if (source === undefined) return;
+    const worker = resolveConfiguredAutomaticTranslationWorker(source);
+    const fingerprint =
+      worker === undefined
+        ? undefined
+        : JSON.stringify(createVisibleTranslationConfig(source, worker));
+    if (
+      worker === undefined ||
+      activeAutomaticTranslationRuntime?.selection.workerId !== worker.id ||
+      activeAutomaticTranslationRuntime.selection.workerFingerprint !==
+        fingerprint
+    ) {
+      void startAutomaticTranslation(source, false);
+    }
+  },
+);
+
+watch(
+  () => [
     activeSettings.value.fontSize,
     activeSettings.value.lineHeight,
     activeSettings.value.contentWidth,
@@ -3044,6 +3156,12 @@ onBeforeUnmount(() => {
           朗读当前段
         </n-button>
         <n-button
+          v-if="hasIncompleteBookTranslation"
+          @click="openAutomaticTranslatorSelection"
+        >
+          翻译器选择
+        </n-button>
+        <n-button
           @click="
             showTools = false;
             showBookInfo = true;
@@ -3064,6 +3182,30 @@ onBeforeUnmount(() => {
           下一章
         </n-button>
       </div>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet
+      v-model:show="showAutomaticTranslatorSelection"
+      title="翻译器选择"
+    >
+      <n-form label-placement="top" class="book-reader__translator-selection">
+        <n-form-item label="GPT 翻译器">
+          <n-select
+            v-model:value="automaticGptWorkerValue"
+            :options="automaticGptWorkerOptions"
+            :disabled="automaticGptWorkerOptions.length === 0"
+            placeholder="尚未配置 GPT 翻译器"
+          />
+        </n-form-item>
+        <n-form-item label="Sakura 翻译器">
+          <n-select
+            v-model:value="automaticSakuraWorkerValue"
+            :options="automaticSakuraWorkerOptions"
+            :disabled="automaticSakuraWorkerOptions.length === 0"
+            placeholder="尚未配置 Sakura 翻译器"
+          />
+        </n-form-item>
+      </n-form>
     </ReaderBottomSheet>
 
     <ReaderBottomSheet v-model:show="showBookInfo" title="书籍信息">
@@ -3603,6 +3745,11 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.book-reader__translator-selection {
+  display: grid;
+  gap: 2px;
 }
 
 .book-reader__book-info {

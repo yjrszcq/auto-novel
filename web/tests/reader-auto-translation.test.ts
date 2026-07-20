@@ -4,6 +4,7 @@ import type { ReaderChapterContent } from '@/model/Reader';
 import {
   planReaderAutomaticTranslationWindow,
   ReaderAutomaticTranslationSession,
+  resolveReaderAutomaticTranslationWorker,
   type ReaderAutomaticTranslationSelection,
 } from '@/pages/reader/core/ReaderAutoTranslation';
 
@@ -29,6 +30,22 @@ const selection = (
   workerId,
   workerFingerprint: `${workerId}-profile`,
   glossaryId: 'glossary',
+});
+
+describe('reader automatic translator selection', () => {
+  it('uses an explicit worker and safely falls back to the first configured worker', () => {
+    const workers = [{ id: 'first' }, { id: 'second' }];
+
+    expect(resolveReaderAutomaticTranslationWorker(workers, 'second')?.id).toBe(
+      'second',
+    );
+    expect(
+      resolveReaderAutomaticTranslationWorker(workers, 'removed')?.id,
+    ).toBe('first');
+    expect(
+      resolveReaderAutomaticTranslationWorker([], 'removed'),
+    ).toBeUndefined();
+  });
 });
 
 describe('reader automatic translation window', () => {

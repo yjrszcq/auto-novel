@@ -23,6 +23,13 @@ export interface ReaderAutomaticTranslationWindow {
   prefetchCharacterBudget: number;
 }
 
+export const resolveReaderAutomaticTranslationWorker = <
+  Worker extends { id: string },
+>(
+  workers: Worker[],
+  preferredWorkerId?: string,
+) => workers.find(({ id }) => id === preferredWorkerId) ?? workers[0];
+
 const targetKey = ({
   chapterId,
   segmentId,
