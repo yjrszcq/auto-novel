@@ -24,6 +24,7 @@ export type ChatResponse = {
 
 type OpenAiTestServerOptions = {
   model?: string;
+  responseDelayMs?: number;
   onChat?: (
     request: RecordedChatRequest,
   ) => ChatResponse | Promise<ChatResponse>;
@@ -117,6 +118,11 @@ export const startOpenAiTestServer = async (
     maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
 
     try {
+      if ((options.responseDelayMs ?? 0) > 0) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, options.responseDelayMs),
+        );
+      }
       const result = options.onChat
         ? await options.onChat(recordedRequest)
         : { content: defaultTranslation(recordedRequest) };

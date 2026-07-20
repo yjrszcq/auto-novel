@@ -1962,8 +1962,9 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
 test('automatically translates a reader window without persisting a partial chapter', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const temporaryBookId = 'reader-temporary-translation.txt';
-  const server = await startOpenAiTestServer();
+  const server = await startOpenAiTestServer({ responseDelayMs: 1_000 });
   try {
     await page.addInitScript((endpoint) => {
       localStorage.setItem(
@@ -2068,6 +2069,9 @@ test('automatically translates a reader window without persisting a partial chap
     await expect(
       toolsDialog.getByRole('button', { name: '阅读版本', exact: true }),
     ).toHaveCount(0);
+    await expect(
+      toolsDialog.getByRole('button', { name: '重翻当前章', exact: true }),
+    ).toBeDisabled();
     await toolsDialog
       .getByRole('button', { name: '翻译器选择', exact: true })
       .click();
@@ -2342,19 +2346,41 @@ test('automatically translates a reader window without persisting a partial chap
           .getByRole('button', { name: label, exact: true }),
       ).toBeVisible();
     }
-    await page
+    const retranslateButton = page
       .getByRole('dialog', { name: '阅读工具' })
-      .getByRole('button', { name: '重翻当前章', exact: true })
-      .click();
+      .getByRole('button', { name: '重翻当前章', exact: true });
+    await expect(retranslateButton).toBeEnabled();
+    await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
+    await retranslateButton.click();
     const retranslationSourceDialog = page.getByRole('dialog', {
       name: '重翻当前章',
     });
+    await page.getByRole('button', { name: '关闭重翻当前章' }).click();
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
+    await retranslateButton.click();
     await retranslationSourceDialog
       .getByRole('button', { name: 'GPT 自动翻译', exact: true })
       .click();
     await expect(
       page.getByText('已开始使用 GPT 重翻当前章', { exact: true }),
     ).toBeVisible();
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await expect(retranslateButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(retranslateButton).toHaveClass(/n-button--primary-type/);
+    await retranslateButton.click();
+    await expect(page.getByRole('dialog', { name: '重翻当前章' })).toHaveCount(
+      0,
+    );
+    await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(retranslateButton).not.toHaveClass(/n-button--primary-type/);
+    await expect(
+      page.getByText('已停止自动翻译', { exact: true }),
+    ).toBeVisible();
+    await retranslateButton.click();
+    await retranslationSourceDialog
+      .getByRole('button', { name: 'GPT 自动翻译', exact: true })
+      .click();
     const retranslationDecision = page.getByRole('dialog', {
       name: '重翻已完成',
     });

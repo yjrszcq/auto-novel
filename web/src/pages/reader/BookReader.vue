@@ -328,6 +328,12 @@ const currentTranslationStatusLabel = computed(() =>
     ? ''
     : getTranslationStatusLabel(currentChapterSummary.value.translationStatus),
 );
+const canRetranslateCurrentChapter = computed(
+  () =>
+    requiresWholeChapterTranslation.value &&
+    currentChapterSummary.value !== undefined &&
+    currentChapterSummary.value.translationStatus !== 'none',
+);
 
 const taskTargetsCurrentChapter = (task: string) => {
   try {
@@ -2585,8 +2591,20 @@ const startAutomaticTranslation = async (
   }
 };
 
-const openRetranslationSelection = () => {
+const isCurrentChapterRetranslating = computed(
+  () =>
+    retranslationChapterId.value !== undefined &&
+    retranslationChapterId.value === currentChapterSummary.value?.id &&
+    activeAutomaticTranslationRuntime?.selection.purpose === 'retranslate',
+);
+
+const toggleCurrentChapterRetranslation = () => {
+  if (isCurrentChapterRetranslating.value) {
+    stopAutomaticTranslation();
+    return;
+  }
   if (result.value?.kind !== 'ready') return;
+  if (!canRetranslateCurrentChapter.value) return;
   showTools.value = false;
   showRetranslationSelection.value = true;
 };
@@ -2594,7 +2612,10 @@ const openRetranslationSelection = () => {
 const startCurrentChapterRetranslation = async (
   source: ReaderAutomaticTranslationSource,
 ) => {
-  if (result.value?.kind !== 'ready') return;
+  if (result.value?.kind !== 'ready' || !canRetranslateCurrentChapter.value) {
+    showRetranslationSelection.value = false;
+    return;
+  }
   const chapterId = result.value.chapter.chapterId;
   showRetranslationSelection.value = false;
   await startAutomaticTranslation(source, true, 'retranslate', chapterId);
@@ -3847,13 +3868,10 @@ onBeforeUnmount(() => {
         </n-button>
         <n-button
           v-if="requiresWholeChapterTranslation"
-          :type="
-            activeAutomaticTranslationRuntime?.selection.purpose ===
-            'retranslate'
-              ? 'primary'
-              : 'default'
-          "
-          @click="openRetranslationSelection"
+          :type="isCurrentChapterRetranslating ? 'primary' : 'default'"
+          :disabled="!canRetranslateCurrentChapter"
+          :aria-pressed="isCurrentChapterRetranslating"
+          @click="toggleCurrentChapterRetranslation"
         >
           重翻当前章
         </n-button>
