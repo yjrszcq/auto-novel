@@ -8,7 +8,10 @@ import type {
   ReaderReadingStats,
 } from '@/model/Reader';
 import type { TxtImportPlan } from '@/model/TxtCatalog';
-import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
+import {
+  isChineseLanguageTag,
+  shouldEmbedDownloadMetadata,
+} from '@/model/LocalVolume';
 import { ChevronRightOutlined } from '@vicons/material';
 import { useKeyModifier } from '@vueuse/core';
 import { useRouter } from 'vue-router';
@@ -101,6 +104,9 @@ const formattedLanguages = computed(() =>
     ? book.value.languages.map(formatLanguage).join('\n')
     : '—',
 );
+const isChineseBook = computed(
+  () => book.value?.languages?.some(isChineseLanguageTag) ?? false,
+);
 const translatorCompleted = (type: LocalTranslator) =>
   entry.value?.volume.toc.filter(
     (chapter) => chapter[type] === entry.value?.volume.glossaryId,
@@ -132,6 +138,8 @@ const visibleCatalogEntries = computed(() => {
 const chapterSummaryById = computed(
   () => new Map(chapters.value.map((chapter) => [chapter.id, chapter])),
 );
+const getChapterTranslationStatus = (chapterId: string) =>
+  chapterSummaryById.value.get(chapterId)?.translationStatus ?? 'none';
 const catalogTitleEntries = computed(() => {
   const navigationTitleByChapterId = new Map(
     navigation.value.flatMap((item) =>
@@ -743,30 +751,22 @@ onMounted(() => void load());
                     :component="ChevronRightOutlined"
                   />
                 </span>
-                <span
-                  v-if="catalogEntry.chapterId !== undefined"
-                  class="book-details__catalog-index"
-                >
-                  第
-                  {{
-                    (chapterSummaryById.get(catalogEntry.chapterId)?.index ??
-                      0) + 1
-                  }}
-                  章
-                </span>
-                <span v-else class="book-details__catalog-index">—</span>
                 <span class="book-details__catalog-title">
                   {{ catalogEntry.title }}
                 </span>
                 <n-tag
-                  v-if="catalogEntry.chapterId !== undefined"
+                  v-if="
+                    catalogEntry.chapterId !== undefined &&
+                    (!isChineseBook ||
+                      getChapterTranslationStatus(catalogEntry.chapterId) !==
+                        'none')
+                  "
                   :bordered="false"
                   size="small"
                 >
                   {{
                     translationStatusLabels[
-                      chapterSummaryById.get(catalogEntry.chapterId)
-                        ?.translationStatus ?? 'none'
+                      getChapterTranslationStatus(catalogEntry.chapterId)
                     ]
                   }}
                 </n-tag>
@@ -1159,15 +1159,10 @@ onMounted(() => void load());
 
 .book-details__catalog-button :deep(.n-button__content) {
   display: grid;
-  grid-template-columns: 20px auto minmax(0, 1fr) auto;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   width: 100%;
   padding-left: var(--book-details-catalog-indent, 0);
   gap: 10px;
-}
-
-.book-details__catalog-index {
-  color: var(--n-text-color-2);
-  white-space: nowrap;
 }
 
 .book-details__catalog-indicator {

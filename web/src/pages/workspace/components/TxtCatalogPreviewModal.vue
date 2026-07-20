@@ -386,6 +386,7 @@ onBeforeUnmount(disposeSession);
     :block-scroll="true"
     :mask-closable="false"
     :closable="!props.submitting"
+    transform-origin="center"
     class="txt-catalog-modal"
     @update:show="handleShowUpdate"
   >
@@ -933,17 +934,23 @@ onBeforeUnmount(disposeSession);
 
 @media (max-width: 767px) {
   .n-modal.txt-catalog-modal {
-    width: calc(100vw - 12px);
-    max-height: calc(100dvh - 12px);
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
   }
 
   .txt-catalog-modal > .n-card__content {
+    min-height: 0;
     padding-right: 12px;
     padding-left: 12px;
   }
 
   .txt-catalog-modal > .n-card__action {
     padding-right: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
     padding-left: 12px;
   }
 }

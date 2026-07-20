@@ -71,6 +71,7 @@ watch(
     :bordered="false"
     :mask-closable="!props.saving"
     :closable="!props.saving"
+    transform-origin="center"
     class="txt-catalog-title-modal"
   >
     <template #header>
@@ -160,6 +161,7 @@ watch(
 
 .txt-catalog-title-header {
   justify-content: flex-start;
+  gap: 4px;
 }
 
 .txt-catalog-title-info {

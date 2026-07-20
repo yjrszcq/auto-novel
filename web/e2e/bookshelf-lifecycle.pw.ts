@@ -70,12 +70,13 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
 
   const preview = page.getByRole('dialog', { name: 'TXT 目录预览' });
   await expect(preview).toContainText('Review One.txt');
+  await expect(preview).toHaveCSS('transform', 'none');
   const bounds = await preview.boundingBox();
   expect(bounds).not.toBeNull();
-  expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.y).toBeGreaterThanOrEqual(0);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+  expect(bounds!.x).toBeCloseTo(0, 0);
+  expect(bounds!.y).toBeCloseTo(0, 0);
+  expect(bounds!.width).toBeCloseTo(390, 0);
+  expect(bounds!.height).toBeCloseTo(844, 0);
   expect(await preview.locator('.txt-source-line').count()).toBeLessThanOrEqual(
     120,
   );

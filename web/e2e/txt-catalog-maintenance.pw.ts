@@ -160,6 +160,12 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
     detailsCatalog.getByText('自定义卷名', { exact: true }),
   ).toBeVisible();
   await expect(
+    detailsCatalog.locator('.book-details__catalog-index'),
+  ).toHaveCount(0);
+  await expect(detailsCatalog.getByText('未翻译', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
     detailsCatalog.getByText('第一章 出发', { exact: true }),
   ).toHaveCount(0);
   await detailsCatalog
@@ -214,11 +220,13 @@ test('edits TXT catalog titles and rebuilds hierarchy on desktop and mobile', as
   const preview = page.getByRole('dialog', { name: '重新解析 TXT 目录' });
   await expect(preview).toBeVisible();
   await expect(titleEditor).toBeHidden();
+  await expect(preview).toHaveCSS('transform', 'none');
   const previewBounds = await preview.boundingBox();
   expect(previewBounds).not.toBeNull();
-  expect(previewBounds!.x).toBeGreaterThanOrEqual(0);
-  expect(previewBounds!.x + previewBounds!.width).toBeLessThanOrEqual(390);
-  expect(previewBounds!.y + previewBounds!.height).toBeLessThanOrEqual(844);
+  expect(previewBounds!.x).toBeCloseTo(0, 0);
+  expect(previewBounds!.y).toBeCloseTo(0, 0);
+  expect(previewBounds!.width).toBeCloseTo(390, 0);
+  expect(previewBounds!.height).toBeCloseTo(844, 0);
   await preview
     .getByRole('button', { name: '确认并完整重建', exact: true })
     .click();
