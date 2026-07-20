@@ -448,7 +448,7 @@ onBeforeUnmount(disposeSession);
 
     <template v-if="snapshot">
       <div class="txt-catalog-review-controls">
-        <n-flex align="center" :wrap="true" :size="[8, 8]">
+        <div class="txt-catalog-confidence">
           <span>最低置信度</span>
           <n-input-number
             class="txt-confidence-input"
@@ -464,12 +464,14 @@ onBeforeUnmount(disposeSession);
           >
             <template #suffix>%</template>
           </n-input-number>
+        </div>
+        <div class="txt-catalog-confidence-hint">
           <n-text depth="3">
             自动目录 ≥ {{ minimumConfidencePercent }}%；人工调整始终保留
           </n-text>
           <n-text depth="3">已过滤 {{ filteredHeadingCount }} 项</n-text>
-        </n-flex>
-        <n-button-group>
+        </div>
+        <n-button-group class="txt-catalog-review-actions">
           <n-button :disabled="!canUndo || loading || busy" @click="undoDraft">
             <template #icon><n-icon :component="UndoOutlined" /></template>
             撤回
@@ -714,10 +716,33 @@ onBeforeUnmount(disposeSession);
 }
 
 .txt-catalog-review-controls {
-  justify-content: space-between;
+  display: grid;
+  grid-template-areas: 'confidence hint actions';
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-height: 46px;
   padding: 8px 0;
   border-bottom: 1px solid var(--n-border-color);
+}
+
+.txt-catalog-confidence,
+.txt-catalog-confidence-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.txt-catalog-confidence {
+  grid-area: confidence;
+  white-space: nowrap;
+}
+
+.txt-catalog-confidence-hint {
+  grid-area: hint;
+  flex-wrap: wrap;
+}
+
+.txt-catalog-review-actions {
+  grid-area: actions;
 }
 
 .txt-confidence-input {
@@ -938,12 +963,19 @@ onBeforeUnmount(disposeSession);
   }
 
   .txt-catalog-review-controls {
-    align-items: stretch;
-    flex-direction: column;
+    grid-template-areas:
+      'confidence actions'
+      'hint hint';
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
   }
 
-  .txt-catalog-review-controls > :deep(.n-button-group) {
-    align-self: flex-end;
+  .txt-confidence-input {
+    width: 64px;
+  }
+
+  .txt-catalog-confidence-hint {
+    align-items: flex-start;
   }
 
   .txt-catalog-file-name {

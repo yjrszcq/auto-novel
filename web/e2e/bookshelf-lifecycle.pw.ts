@@ -131,6 +131,29 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
   const minimumConfidence = preview.getByRole('textbox', {
     name: '最低置信度',
   });
+  const confidenceControl = preview.locator('.txt-catalog-confidence');
+  const reviewActions = preview.locator('.txt-catalog-review-actions');
+  const confidenceHint = preview.locator('.txt-catalog-confidence-hint');
+  const [confidenceBounds, reviewActionBounds, confidenceHintBounds] =
+    await Promise.all([
+      confidenceControl.boundingBox(),
+      reviewActions.boundingBox(),
+      confidenceHint.boundingBox(),
+    ]);
+  expect(confidenceBounds).not.toBeNull();
+  expect(reviewActionBounds).not.toBeNull();
+  expect(confidenceHintBounds).not.toBeNull();
+  expect(confidenceBounds!.y).toBeCloseTo(reviewActionBounds!.y, 0);
+  expect(confidenceHintBounds!.y).toBeGreaterThanOrEqual(
+    Math.max(
+      confidenceBounds!.y + confidenceBounds!.height,
+      reviewActionBounds!.y + reviewActionBounds!.height,
+    ),
+  );
+  await expect(preview.locator('.txt-confidence-input')).toHaveCSS(
+    'width',
+    '64px',
+  );
   await minimumConfidence.click();
   await minimumConfidence.press('Control+A');
   await minimumConfidence.pressSequentially('96');
