@@ -41,6 +41,20 @@ export interface UpdateTxtCatalogTitlesInput {
   titles: { chapterId: string; title: string }[];
 }
 
+export interface CatalogTitleTranslationTarget {
+  id: string;
+  sourceTitle: string;
+  translatedTitle: string;
+}
+
+export interface PutCatalogTitleTranslationsInput {
+  bookId: string;
+  translatorId: TranslatorId;
+  glossaryId: string;
+  toc: CatalogTitleTranslationTarget[];
+  navigation: CatalogTitleTranslationTarget[];
+}
+
 interface VolumesDBSchema extends DBSchema {
   metadata: {
     key: string;
@@ -296,6 +310,68 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       throw cause;
     }
   };
+  const putCatalogTitleTranslations = async ({
+    bookId,
+    translatorId,
+    glossaryId,
+    toc,
+    navigation,
+  }: PutCatalogTitleTranslationsInput) => {
+    const tx = db.transaction('metadata', 'readwrite');
+    const metadata = await tx.store.get(bookId);
+    if (metadata === undefined) throw new Error('小说不存在');
+
+    let updated = 0;
+    let skipped = 0;
+    const apply = <
+      Entry extends { title?: string; titleTranslations?: object },
+    >(
+      entries: Entry[],
+      targets: CatalogTitleTranslationTarget[],
+      getId: (entry: Entry) => string,
+    ) => {
+      const targetById = new Map(targets.map((target) => [target.id, target]));
+      return entries.map((entry) => {
+        const target = targetById.get(getId(entry));
+        if (target === undefined) return entry;
+        const sourceTitle = target.sourceTitle.trim();
+        const translatedTitle = target.translatedTitle.trim();
+        if (
+          entry.title?.trim() !== sourceTitle ||
+          translatedTitle.length === 0
+        ) {
+          skipped += 1;
+          return entry;
+        }
+        updated += 1;
+        return {
+          ...entry,
+          titleTranslations: {
+            ...entry.titleTranslations,
+            [translatorId]: {
+              text: translatedTitle,
+              glossaryId,
+              sourceTitle,
+            },
+          },
+        };
+      });
+    };
+
+    metadata.toc = apply(metadata.toc, toc, (entry) => entry.chapterId);
+    if (metadata.navigation !== undefined) {
+      metadata.navigation = apply(
+        metadata.navigation,
+        navigation,
+        (entry) => entry.id,
+      );
+    } else {
+      skipped += navigation.length;
+    }
+    await tx.store.put(metadata);
+    await tx.done;
+    return { metadata, updated, skipped };
+  };
   const listChapterByVolumeId = (id: string) =>
     db.getAllFromIndex('chapter', 'byVolumeId', id);
 
@@ -332,6 +408,10 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
         toc: current.toc.map((entry) => ({
           ...entry,
           title: titleByChapterId.get(entry.chapterId)!,
+          titleTranslations:
+            entry.title?.trim() === titleByChapterId.get(entry.chapterId)
+              ? entry.titleTranslations
+              : undefined,
         })),
         navigation: current.navigation?.map((entry) => ({
           ...entry,
@@ -339,6 +419,11 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
             entry.chapterId === undefined
               ? entry.title
               : (titleByChapterId.get(entry.chapterId) ?? entry.title),
+          titleTranslations:
+            entry.chapterId === undefined ||
+            entry.title.trim() === titleByChapterId.get(entry.chapterId)
+              ? entry.titleTranslations
+              : undefined,
         })),
       };
       await tx.store.put(metadata);
@@ -675,6 +760,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     createChapter,
     updateChapter,
     putChapterTranslation,
+    putCatalogTitleTranslations,
     listChapterByVolumeId,
     updateTxtCatalogTitles,
     replaceTxtCatalog,

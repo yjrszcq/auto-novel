@@ -1,4 +1,15 @@
 import type { Glossary } from './Glossary';
+import type { TranslatorId } from './Translator';
+
+export interface CatalogTitleTranslation {
+  text: string;
+  glossaryId: string;
+  sourceTitle: string;
+}
+
+export type CatalogTitleTranslations = Partial<
+  Record<TranslatorId, CatalogTitleTranslation>
+>;
 
 export interface ChapterTranslation {
   glossaryId: string;
@@ -17,6 +28,7 @@ export interface LocalVolumeChapterSourceRange {
 export interface LocalVolumeTocEntry {
   chapterId: string;
   title?: string;
+  titleTranslations?: CatalogTitleTranslations;
   level?: number;
   parentChapterId?: string;
   sourceStartLine?: number;
@@ -30,6 +42,7 @@ export interface LocalVolumeTocEntry {
 export interface LocalVolumeNavigationEntry {
   id: string;
   title: string;
+  titleTranslations?: CatalogTitleTranslations;
   level: number;
   href?: string;
   chapterId?: string;
