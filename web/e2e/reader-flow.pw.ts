@@ -2125,6 +2125,34 @@ test('automatically translates a reader window without persisting a partial chap
     }, temporaryBookId);
     expect(persistedChapter).not.toHaveProperty('gpt');
     expect(server.requests.length).toBeGreaterThan(0);
+    await expect
+      .poll(() =>
+        page.evaluate(async (bookId) => {
+          const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('volumes');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          const request = database
+            .transaction('reader-chapter-cache', 'readonly')
+            .objectStore('reader-chapter-cache')
+            .index('byBookId')
+            .getAll(bookId);
+          const values = await new Promise<
+            Array<{ kind?: string; purpose?: string }>
+          >((resolve, reject) => {
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          database.close();
+          return values.filter(
+            (value) =>
+              value.kind === 'automatic-translation' &&
+              value.purpose === 'automatic',
+          ).length;
+        }, temporaryBookId),
+      )
+      .toBeGreaterThan(0);
 
     const persistedGlossary = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -2246,9 +2274,36 @@ test('automatically translates a reader window without persisting a partial chap
         paragraphCount: 24,
         usesCurrentGlossary: true,
       });
+    await expect
+      .poll(() =>
+        page.evaluate(async (bookId) => {
+          const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('volumes');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          const request = database
+            .transaction('reader-chapter-cache', 'readonly')
+            .objectStore('reader-chapter-cache')
+            .index('byBookId')
+            .getAll(bookId);
+          const values = await new Promise<Array<{ kind?: string }>>(
+            (resolve, reject) => {
+              request.onerror = () => reject(request.error);
+              request.onsuccess = () => resolve(request.result);
+            },
+          );
+          database.close();
+          return values.filter(
+            (value) => value.kind === 'automatic-translation',
+          ).length;
+        }, temporaryBookId),
+      )
+      .toBe(0);
 
     await page.reload();
     await expect(source).toContainText('译文第1行');
+    await expect(automaticTranslationButton).toBeHidden();
 
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await page
@@ -2305,6 +2360,40 @@ test('automatically translates a reader window without persisting a partial chap
         }, temporaryBookId),
       )
       .toBe(1);
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '清除翻译缓存', exact: true })
+      .click();
+    await expect(
+      page.getByText('已清除 1 条翻译缓存', { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(async (bookId) => {
+          const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('volumes');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          const request = database
+            .transaction('reader-chapter-cache', 'readonly')
+            .objectStore('reader-chapter-cache')
+            .index('byBookId')
+            .getAll(bookId);
+          const values = await new Promise<Array<{ kind?: string }>>(
+            (resolve, reject) => {
+              request.onerror = () => reject(request.error);
+              request.onsuccess = () => resolve(request.result);
+            },
+          );
+          database.close();
+          return values.filter(
+            (value) => value.kind === 'automatic-translation',
+          ).length;
+        }, temporaryBookId),
+      )
+      .toBe(0);
   } finally {
     await server.close();
   }
