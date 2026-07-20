@@ -227,6 +227,7 @@ describe('reader storage', () => {
       id: 'default',
       defaultMode: 'original-translated',
       translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      autoTranslationPreloadPages: 3,
       fontSize: 18,
       lineHeight: 1.8,
       contentWidth: 900,
@@ -256,5 +257,61 @@ describe('reader storage', () => {
       defaultMode: 'original-translated',
     });
     settingsReloaded.close();
+  });
+
+  it('updates a chapter translation and its TOC version in one transaction', async () => {
+    const dao = await createLocalVolumeDao(databaseName);
+    await dao.createMetadata({
+      id: 'book',
+      createAt: 1,
+      toc: [{ chapterId: '0' }],
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceFormat: 'txt',
+      sourceBookMetadata: {},
+    });
+    await dao.createChapter({
+      id: 'book/0',
+      volumeId: 'book',
+      paragraphs: ['原文'],
+      segmentIds: ['segment'],
+    });
+
+    await dao.putChapterTranslation({
+      bookId: 'book',
+      chapterId: '0',
+      translatorId: 'gpt',
+      translation: {
+        glossaryId: 'translated',
+        glossary: {},
+        paragraphs: ['译文'],
+      },
+    });
+    expect((await dao.getChapter('book', '0'))?.gpt?.paragraphs).toEqual([
+      '译文',
+    ]);
+    expect((await dao.getMetadata('book'))?.toc[0]?.gpt).toBe('translated');
+
+    await dao.createChapter({
+      id: 'orphan/0',
+      volumeId: 'orphan',
+      paragraphs: ['不能提交'],
+      segmentIds: ['orphan-segment'],
+    });
+    await expect(
+      dao.putChapterTranslation({
+        bookId: 'orphan',
+        chapterId: '0',
+        translatorId: 'gpt',
+        translation: {
+          glossaryId: 'should-not-write',
+          glossary: {},
+          paragraphs: ['错误译文'],
+        },
+      }),
+    ).rejects.toThrow('小说不存在');
+    expect((await dao.getChapter('orphan', '0'))?.gpt).toBeUndefined();
+    dao.close();
   });
 });

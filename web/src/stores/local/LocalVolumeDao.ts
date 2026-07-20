@@ -2,9 +2,11 @@ import type { DBSchema } from 'idb';
 import { openDB } from 'idb';
 
 import type {
+  ChapterTranslation,
   LocalVolumeChapter,
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
+import type { TranslatorId } from '@/model/Translator';
 import type {
   ReaderBookPreference,
   ReaderBookshelfState,
@@ -216,6 +218,54 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     }
     await tx.done;
     return value;
+  };
+  const putChapterTranslation = async ({
+    bookId,
+    chapterId,
+    translatorId,
+    translation,
+  }: {
+    bookId: string;
+    chapterId: string;
+    translatorId: TranslatorId;
+    translation: ChapterTranslation;
+  }) => {
+    const tx = db.transaction(['chapter', 'metadata'], 'readwrite');
+    try {
+      const chapterStore = tx.objectStore('chapter');
+      const metadataStore = tx.objectStore('metadata');
+      const [chapter, metadata] = await Promise.all([
+        chapterStore.get(`${bookId}/${chapterId}`),
+        metadataStore.get(bookId),
+      ]);
+      if (chapter === undefined) throw new Error('章节不存在');
+      if (metadata === undefined) throw new Error('小说不存在');
+      if (!metadata.toc.some((entry) => entry.chapterId === chapterId)) {
+        throw new Error('章节不在目录中');
+      }
+      chapter[translatorId] = translation;
+      metadata.toc
+        .filter((entry) => entry.chapterId === chapterId)
+        .forEach((entry) => (entry[translatorId] = translation.glossaryId));
+      await Promise.all([
+        chapterStore.put(chapter),
+        metadataStore.put(metadata),
+      ]);
+      await tx.done;
+      return metadata;
+    } catch (cause) {
+      try {
+        tx.abort();
+      } catch {
+        // A failed request may already have aborted the transaction.
+      }
+      try {
+        await tx.done;
+      } catch {
+        // Preserve the original error below.
+      }
+      throw cause;
+    }
   };
   const listChapterByVolumeId = (id: string) =>
     db.getAllFromIndex('chapter', 'byVolumeId', id);
@@ -479,6 +529,7 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     getChapter,
     createChapter,
     updateChapter,
+    putChapterTranslation,
     listChapterByVolumeId,
     updateTxtCatalogTitles,
     replaceTxtCatalog,

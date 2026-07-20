@@ -4,7 +4,6 @@ import { createUuid } from '@/util/uuid';
 import type { Glossary } from '@/model/Glossary';
 import type {
   ChapterTranslation,
-  LocalVolumeChapter,
   LocalVolumeMetadata,
 } from '@/model/LocalVolume';
 import type { TranslatorId } from '@/model/Translator';
@@ -96,29 +95,12 @@ export const createLocalVolumeStore = async () => {
     translatorId: TranslatorId,
     translation: ChapterTranslation,
   ) => {
-    const chapter = await dao.updateChapter(
-      id,
+    const metadata = await dao.putChapterTranslation({
+      bookId: id,
       chapterId,
-      (value: LocalVolumeChapter) => {
-        value[translatorId] = translation;
-        return value;
-      },
-    );
-    if (chapter === undefined) {
-      throw '章节不存在';
-    }
-    const metadata = await dao.updateMetadata(
-      id,
-      (value: LocalVolumeMetadata) => {
-        value.toc
-          .filter((it) => it.chapterId === chapterId)
-          .forEach((it) => (it[translatorId] = translation.glossaryId));
-        return value;
-      },
-    );
-    if (metadata === undefined) {
-      throw '小说不存在';
-    }
+      translatorId,
+      translation,
+    });
     return metadata.toc.filter((it) => it[translatorId] !== undefined).length;
   };
 
