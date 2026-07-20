@@ -1970,7 +1970,7 @@ test('automatically translates a reader window without persisting a partial chap
         request.onsuccess = () => resolve(request.result);
       });
       const transaction = database.transaction(
-        ['metadata', 'chapter', 'reader-settings'],
+        ['metadata', 'file', 'chapter', 'reader-settings'],
         'readwrite',
       );
       transaction.objectStore('metadata').put({
@@ -1979,7 +1979,7 @@ test('automatically translates a reader window without persisting a partial chap
         toc: [{ chapterId: '0', title: '临时翻译章节' }],
         sourceFormat: 'txt',
         glossaryId: 'glossary',
-        glossary: {},
+        glossary: { テスト: '测试' },
         favoredId: 'default',
         sourceBookMetadata: {
           title: '临时翻译测试',
@@ -1998,6 +1998,12 @@ test('automatically translates a reader window without persisting a partial chap
           { length: 24 },
           (_, index) => `temporary-segment-${index}`,
         ),
+      });
+      transaction.objectStore('file').put({
+        id: bookId,
+        file: new File(['テスト\n'.repeat(12)], bookId, {
+          type: 'text/plain',
+        }),
       });
       transaction.objectStore('reader-settings').put({
         id: 'default',
@@ -2038,7 +2044,35 @@ test('automatically translates a reader window without persisting a partial chap
     await expect(
       toolsDialog.getByRole('button', { name: '阅读版本', exact: true }),
     ).toHaveCount(0);
-    await page.getByRole('button', { name: '关闭阅读工具' }).click();
+    await toolsDialog
+      .getByRole('button', { name: '翻译器选择', exact: true })
+      .click();
+    const translatorDialog = page.getByRole('dialog', {
+      name: '翻译器选择',
+    });
+    await expect(translatorDialog).toBeVisible();
+    await expect(translatorDialog.getByText(/reader-test-model/)).toBeVisible();
+    await page.getByRole('button', { name: '关闭翻译器选择' }).click();
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '术语表', exact: true })
+      .click();
+    const glossaryDialog = page.getByRole('dialog', { name: '术语表处理' });
+    const glossaryRow = glossaryDialog.locator('tbody tr').filter({
+      hasText: 'テスト',
+    });
+    await expect(glossaryRow).toBeVisible();
+    await glossaryRow.locator('input').fill('测试词');
+    await glossaryDialog
+      .getByRole('button', { name: '应用到本书', exact: true })
+      .click();
+    await expect(
+      page.getByText('术语表已应用，未完成的自动翻译缓存已清除', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(glossaryDialog).toBeHidden();
     const automaticTranslationButton = page
       .locator('.book-reader__app-bar-translation')
       .getByRole('button', { name: 'GPT 自动翻译', exact: true });
@@ -2091,6 +2125,25 @@ test('automatically translates a reader window without persisting a partial chap
     }, temporaryBookId);
     expect(persistedChapter).not.toHaveProperty('gpt');
     expect(server.requests.length).toBeGreaterThan(0);
+
+    const persistedGlossary = await page.evaluate(async (bookId) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const metadata = await new Promise<{ glossary: Record<string, string> }>(
+        (resolve, reject) => {
+          const transaction = database.transaction('metadata', 'readonly');
+          const request = transaction.objectStore('metadata').get(bookId);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        },
+      );
+      database.close();
+      return metadata.glossary;
+    }, temporaryBookId);
+    expect(persistedGlossary).toEqual({ テスト: '测试词' });
 
     await page.reload();
     await expect(source).toContainText('临时原文第 1 段');

@@ -20,6 +20,12 @@ import {
 
 const props = defineProps<{
   files: ParsedFile[];
+  initialGlossary?: Glossary;
+  initialMinimumCount?: number;
+  applyLabel?: string;
+}>();
+const emit = defineEmits<{
+  apply: [glossary: Glossary];
 }>();
 
 const message = useMessage();
@@ -43,7 +49,7 @@ const showTranslatorConfigModal = ref(false);
 const sourceCounts = shallowRef(new Map<string, number>());
 const extractionLoading = ref(false);
 const extractionError = ref('');
-const minimumCount = ref(10);
+const minimumCount = ref(props.initialMinimumCount ?? 10);
 const query = ref('');
 const sort = ref<GlossarySort>('count-desc');
 const sortOptions = [
@@ -141,8 +147,8 @@ watch(
     deletedWords.value = new Set();
     deletionHistory.value = [];
     selectedWords.value = [];
-    translations.value = {};
-    manuallyEdited.value = new Set();
+    translations.value = { ...(props.initialGlossary ?? {}) };
+    manuallyEdited.value = new Set(Object.keys(props.initialGlossary ?? {}));
     translationFailures.value = new Map();
     extractionLoading.value = true;
     extractionError.value = '';
@@ -155,7 +161,11 @@ watch(
         }),
       );
       if (request !== extractionRequest) return;
-      sourceCounts.value = mergeGlossaryCounts(counts);
+      const merged = mergeGlossaryCounts(counts);
+      Object.keys(props.initialGlossary ?? {}).forEach((word) => {
+        if (!merged.has(word)) merged.set(word, 1);
+      });
+      sourceCounts.value = merged;
     } catch (error) {
       if (request === extractionRequest) extractionError.value = String(error);
     } finally {
@@ -205,15 +215,15 @@ const updateTranslation = (word: string, value: string) => {
   translationFailures.value = failures;
 };
 
-const glossaryText = () =>
-  Glossary.toText(
-    Object.fromEntries(
-      activeCandidates.value.map(({ word }) => [
-        word,
-        translations.value[word] ?? '',
-      ]),
-    ),
+const glossaryValue = (): Glossary =>
+  Object.fromEntries(
+    activeCandidates.value.map(({ word }) => [
+      word,
+      translations.value[word] ?? '',
+    ]),
   );
+
+const glossaryText = () => Glossary.toText(glossaryValue());
 
 const copyGlossary = async () => {
   try {
@@ -387,6 +397,15 @@ onBeforeUnmount(() => {
     </div>
 
     <n-flex align="center">
+      <c-button
+        v-if="applyLabel"
+        :label="applyLabel"
+        :disabled="extractionLoading || translating"
+        type="primary"
+        size="small"
+        :round="false"
+        @action="emit('apply', glossaryValue())"
+      />
       <c-button
         :label="allVisibleSelected ? '取消全选' : '全选当前'"
         :disabled="visibleCandidates.length === 0"

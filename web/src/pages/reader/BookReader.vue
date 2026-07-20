@@ -20,6 +20,7 @@ import type {
   ReaderMode,
   ReaderSettingsRecord,
 } from '@/model/Reader';
+import type { Glossary } from '@/model/Glossary';
 import {
   normalizeTranslationConcurrency,
   TranslateJob,
@@ -32,6 +33,7 @@ import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { darkTheme, lightTheme } from 'naive-ui';
 import type { GlobalThemeOverrides } from 'naive-ui';
 import { useRouter } from 'vue-router';
+import { parseFile, type ParsedFile } from '@/util/file';
 
 import ReaderBottomSheet from './components/ReaderBottomSheet.vue';
 import ReaderEpubLayout from './components/ReaderEpubLayout.vue';
@@ -97,6 +99,9 @@ import {
 const InteractiveTranslation = defineAsyncComponent(
   () => import('../workspace/Interactive.vue'),
 );
+const ToolboxItemGlossary = defineAsyncComponent(
+  () => import('../workspace/components/ToolboxItemGlossary.vue'),
+);
 
 const route = useRoute();
 const router = useRouter();
@@ -113,6 +118,12 @@ const showBookmarks = ref(false);
 const showSearch = ref(false);
 const showInteractiveTranslation = ref(false);
 const showAutomaticTranslatorSelection = ref(false);
+const showReaderGlossary = ref(false);
+const readerGlossaryLoading = ref(false);
+const readerGlossaryError = ref('');
+const readerGlossaryFiles = shallowRef<ParsedFile[]>([]);
+const readerGlossaryInitial = shallowRef<Glossary>({});
+let readerGlossaryRequest = 0;
 const interactiveInitialText = ref<string>();
 const searchQuery = ref('');
 const searchResults = shallowRef<ReaderSearchResult[]>([]);
@@ -334,6 +345,7 @@ const hasOpenReaderPanel = () =>
   showSearch.value ||
   showInteractiveTranslation.value ||
   showAutomaticTranslatorSelection.value ||
+  showReaderGlossary.value ||
   showModePrompt.value ||
   showMobileTranslationNotice.value;
 
@@ -346,6 +358,7 @@ const closeReaderPanels = () => {
   showSearch.value = false;
   showInteractiveTranslation.value = false;
   showAutomaticTranslatorSelection.value = false;
+  showReaderGlossary.value = false;
   showModePrompt.value = false;
   showMobileTranslationNotice.value = false;
 };
@@ -376,6 +389,54 @@ const openTools = () => {
 const openAutomaticTranslatorSelection = () => {
   showTools.value = false;
   showAutomaticTranslatorSelection.value = true;
+};
+
+const openReaderGlossary = async () => {
+  const request = ++readerGlossaryRequest;
+  showTools.value = false;
+  showReaderGlossary.value = true;
+  readerGlossaryLoading.value = true;
+  readerGlossaryError.value = '';
+  readerGlossaryFiles.value = [];
+  try {
+    const repository = await repositoryPromise;
+    const [stored, volume] = await Promise.all([
+      repository.getFile(bookId.value),
+      repository.getVolume(bookId.value),
+    ]);
+    if (stored === undefined || volume === undefined) {
+      throw new Error('原始书籍文件不存在');
+    }
+    const parsed = await parseFile(stored.file);
+    if (request !== readerGlossaryRequest || !showReaderGlossary.value) return;
+    readerGlossaryInitial.value = { ...volume.glossary };
+    readerGlossaryFiles.value = [parsed];
+  } catch (reason) {
+    if (request === readerGlossaryRequest && showReaderGlossary.value) {
+      readerGlossaryError.value = String(reason);
+    }
+  } finally {
+    if (request === readerGlossaryRequest) {
+      readerGlossaryLoading.value = false;
+    }
+  }
+};
+
+const applyReaderGlossary = async (glossary: Glossary) => {
+  const anchor = captureReaderPosition();
+  await saveProgress();
+  stopAutomaticTranslation(false);
+  automaticTranslationSession.clearDrafts();
+  temporaryTranslations.clear();
+  const repository = await repositoryPromise;
+  await repository.updateGlossary(bookId.value, glossary);
+  const adapter = await cachedAdapterPromise;
+  adapter.invalidateChapter({ bookId: bookId.value });
+  showReaderGlossary.value = false;
+  await load();
+  await nextTick();
+  restoreReaderPosition(anchor);
+  message.success('术语表已应用，未完成的自动翻译缓存已清除');
 };
 
 const openSearch = () => {
@@ -2651,6 +2712,12 @@ watch(searchQuery, () => {
     void searchControllerPromise.then((controller) => controller.cancel());
   }
 });
+watch(showReaderGlossary, (show) => {
+  if (show) return;
+  readerGlossaryRequest += 1;
+  readerGlossaryFiles.value = [];
+  readerGlossaryError.value = '';
+});
 watch(completedTranslationTasks, (tasks, previousTasks) => {
   if (
     tasks.some(
@@ -3191,6 +3258,12 @@ onBeforeUnmount(() => {
           翻译器选择
         </n-button>
         <n-button
+          v-if="hasIncompleteBookTranslation"
+          @click="openReaderGlossary"
+        >
+          术语表
+        </n-button>
+        <n-button
           @click="
             showTools = false;
             showBookInfo = true;
@@ -3235,6 +3308,35 @@ onBeforeUnmount(() => {
           />
         </n-form-item>
       </n-form>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet
+      v-model:show="showReaderGlossary"
+      title="术语表处理"
+      wide
+    >
+      <div v-if="readerGlossaryLoading" class="book-reader__embedded-loading">
+        <n-spin size="medium" />
+        <span>正在读取原始书籍…</span>
+      </div>
+      <n-alert v-else-if="readerGlossaryError" type="error">
+        加载失败：{{ readerGlossaryError }}
+      </n-alert>
+      <Suspense v-else-if="readerGlossaryFiles.length > 0">
+        <ToolboxItemGlossary
+          :files="readerGlossaryFiles"
+          :initial-glossary="readerGlossaryInitial"
+          :initial-minimum-count="1"
+          apply-label="应用到本书"
+          @apply="applyReaderGlossary"
+        />
+        <template #fallback>
+          <div class="book-reader__embedded-loading">
+            <n-spin size="medium" />
+            <span>正在加载术语表工具…</span>
+          </div>
+        </template>
+      </Suspense>
     </ReaderBottomSheet>
 
     <ReaderBottomSheet v-model:show="showBookInfo" title="书籍信息">
