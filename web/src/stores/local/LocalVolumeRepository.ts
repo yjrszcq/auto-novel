@@ -36,6 +36,15 @@ export const createLocalVolumeStore = async () => {
       return value;
     });
 
+  const updateGlossaryCandidates = (
+    id: string,
+    candidateCounts: Record<string, number>,
+  ) =>
+    dao.updateMetadata(id, (value) => {
+      value.glossaryCandidateCounts = candidateCounts;
+      return value;
+    });
+
   const updateReadAt = (id: string) =>
     dao.updateMetadata(id, (value) => {
       value.readAt = Date.now();
@@ -135,6 +144,7 @@ export const createLocalVolumeStore = async () => {
     updateTxtCatalogTitles: dao.updateTxtCatalogTitles,
     deleteVolume,
     updateGlossary,
+    updateGlossaryCandidates,
     updateReadAt,
     updateFavoredId,
     //

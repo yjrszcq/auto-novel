@@ -2278,6 +2278,14 @@ test('automatically translates a reader window without persisting a partial chap
       .getByRole('button', { name: '术语表', exact: true })
       .click();
     const glossaryDialog = page.getByRole('dialog', { name: '术语表处理' });
+    await expect(
+      glossaryDialog.getByText('尚未扫描，点击“扫描”读取源文件', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await glossaryDialog
+      .getByRole('button', { name: '扫描', exact: true })
+      .click();
     const glossaryRow = glossaryDialog.locator('tbody tr').filter({
       hasText: 'テスト',
     });
@@ -2319,6 +2327,9 @@ test('automatically translates a reader window without persisting a partial chap
       .getByRole('button', { name: '术语表', exact: true })
       .click();
     await expect(glossaryDialog).toBeVisible();
+    await expect(
+      glossaryDialog.locator('tbody tr').filter({ hasText: 'テスト' }),
+    ).toBeVisible();
     await expect(
       glossaryDialog.locator('tbody tr').filter({ hasText: 'サンプル' }),
     ).toHaveCount(0);
@@ -2418,6 +2429,7 @@ test('automatically translates a reader window without persisting a partial chap
       });
       const metadata = await new Promise<{
         glossary: Record<string, string>;
+        glossaryCandidateCounts?: Record<string, number>;
         glossaryExcludedWords?: string[];
       }>((resolve, reject) => {
         const transaction = database.transaction('metadata', 'readonly');
@@ -2429,6 +2441,10 @@ test('automatically translates a reader window without persisting a partial chap
       return metadata;
     }, temporaryBookId);
     expect(persistedGlossary.glossary).toEqual({ テスト: '测试词' });
+    expect(persistedGlossary.glossaryCandidateCounts).toEqual({
+      テスト: 12,
+      サンプル: 1,
+    });
     expect(persistedGlossary.glossaryExcludedWords).toEqual(['サンプル']);
 
     await page.reload();

@@ -134,10 +134,14 @@ const readerGlossaryLoading = ref(false);
 const readerGlossaryApplying = ref(false);
 const clearingAutomaticTranslationCache = ref(false);
 const readerGlossaryError = ref('');
-const readerGlossaryFiles = shallowRef<ParsedFile[]>([]);
+const emptyReaderGlossaryFiles: ParsedFile[] = [];
 const readerGlossaryInitial = shallowRef<Glossary>({});
+const readerGlossaryInitialCandidateCounts = shallowRef<
+  Record<string, number> | undefined
+>();
 const readerGlossaryInitialExcludedWords = shallowRef<string[]>([]);
 let readerGlossaryRequest = 0;
+let readerGlossaryCandidateSave = Promise.resolve();
 const interactiveInitialText = ref<string>();
 const searchQuery = ref('');
 const searchResults = shallowRef<ReaderSearchResult[]>([]);
@@ -449,23 +453,19 @@ const openReaderGlossary = async () => {
   showReaderGlossary.value = true;
   readerGlossaryLoading.value = true;
   readerGlossaryError.value = '';
-  readerGlossaryFiles.value = [];
   try {
     const repository = await repositoryPromise;
-    const [stored, volume] = await Promise.all([
-      repository.getFile(bookId.value),
-      repository.getVolume(bookId.value),
-    ]);
-    if (stored === undefined || volume === undefined) {
-      throw new Error('原始书籍文件不存在');
-    }
-    const parsed = await parseFile(stored.file);
+    const volume = await repository.getVolume(bookId.value);
+    if (volume === undefined) throw new Error('小说不存在');
     if (request !== readerGlossaryRequest || !showReaderGlossary.value) return;
     readerGlossaryInitial.value = { ...volume.glossary };
+    readerGlossaryInitialCandidateCounts.value =
+      volume.glossaryCandidateCounts === undefined
+        ? undefined
+        : { ...volume.glossaryCandidateCounts };
     readerGlossaryInitialExcludedWords.value = [
       ...(volume.glossaryExcludedWords ?? []),
     ];
-    readerGlossaryFiles.value = [parsed];
   } catch (reason) {
     if (request === readerGlossaryRequest && showReaderGlossary.value) {
       readerGlossaryError.value = String(reason);
@@ -475,6 +475,28 @@ const openReaderGlossary = async () => {
       readerGlossaryLoading.value = false;
     }
   }
+};
+
+const loadReaderGlossaryFiles = async () => {
+  const repository = await repositoryPromise;
+  const stored = await repository.getFile(bookId.value);
+  if (stored === undefined) throw new Error('原始书籍文件不存在');
+  return [await parseFile(stored.file)];
+};
+
+const saveReaderGlossaryCandidates = (
+  candidateCounts: Record<string, number>,
+) => {
+  readerGlossaryCandidateSave = readerGlossaryCandidateSave.then(async () => {
+    try {
+      const repository = await repositoryPromise;
+      await repository.updateGlossaryCandidates(bookId.value, candidateCounts);
+      readerGlossaryInitialCandidateCounts.value = { ...candidateCounts };
+    } catch (reason) {
+      message.error(`无法保存扫描结果：${String(reason)}`);
+    }
+  });
+  return readerGlossaryCandidateSave;
 };
 
 const applyReaderGlossary = async (
@@ -489,6 +511,7 @@ const applyReaderGlossary = async (
     stopAutomaticTranslation(false, false);
     automaticTranslationSession.clearDrafts();
     temporaryTranslations.clear();
+    await readerGlossaryCandidateSave;
     const repository = await repositoryPromise;
     await repository.updateGlossary(bookId.value, glossary, excludedWords);
     await repository.deleteReaderAutomaticTranslationCaches({
@@ -3305,7 +3328,6 @@ watch(searchQuery, () => {
 watch(showReaderGlossary, (show) => {
   if (show) return;
   readerGlossaryRequest += 1;
-  readerGlossaryFiles.value = [];
   readerGlossaryError.value = '';
 });
 watch(completedTranslationTasks, (tasks, previousTasks) => {
@@ -3951,20 +3973,23 @@ onBeforeUnmount(() => {
     >
       <div v-if="readerGlossaryLoading" class="book-reader__embedded-loading">
         <n-spin size="medium" />
-        <span>正在读取原始书籍…</span>
+        <span>正在读取术语表…</span>
       </div>
       <n-alert v-else-if="readerGlossaryError" type="error">
         加载失败：{{ readerGlossaryError }}
       </n-alert>
-      <Suspense v-else-if="readerGlossaryFiles.length > 0">
+      <Suspense v-else>
         <ToolboxItemGlossary
-          :files="readerGlossaryFiles"
+          :files="emptyReaderGlossaryFiles"
+          :load-files="loadReaderGlossaryFiles"
           :initial-glossary="readerGlossaryInitial"
+          :initial-candidate-counts="readerGlossaryInitialCandidateCounts"
           :initial-excluded-words="readerGlossaryInitialExcludedWords"
           :initial-minimum-count="1"
           :applying="readerGlossaryApplying"
           apply-label="应用到本书"
           @apply="applyReaderGlossary"
+          @scan="saveReaderGlossaryCandidates"
         />
         <template #fallback>
           <div class="book-reader__embedded-loading">

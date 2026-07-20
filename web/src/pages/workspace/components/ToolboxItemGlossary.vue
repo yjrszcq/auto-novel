@@ -20,7 +20,9 @@ import {
 
 const props = defineProps<{
   files: ParsedFile[];
+  loadFiles?: () => Promise<ParsedFile[]>;
   initialGlossary?: Glossary;
+  initialCandidateCounts?: Record<string, number>;
   initialExcludedWords?: string[];
   initialMinimumCount?: number;
   applyLabel?: string;
@@ -28,6 +30,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   apply: [glossary: Glossary, excludedWords: string[]];
+  scan: [candidateCounts: Record<string, number>];
 }>();
 
 const message = useMessage();
@@ -51,6 +54,7 @@ const showTranslatorConfigModal = ref(false);
 const sourceCounts = shallowRef(new Map<string, number>());
 const extractionLoading = ref(false);
 const extractionError = ref('');
+const scanCompleted = ref(false);
 const minimumCount = ref(props.initialMinimumCount ?? 10);
 const query = ref('');
 const sort = ref<GlossarySort>('count-desc');
@@ -140,12 +144,17 @@ watch(
 
 watch(
   () => props.files,
-  async (files) => {
-    const request = ++extractionRequest;
+  () => {
+    extractionRequest += 1;
     translationController?.abort(
       new DOMException('源文件已变化', 'AbortError'),
     );
-    sourceCounts.value = new Map();
+    sourceCounts.value = new Map(
+      Object.entries(props.initialCandidateCounts ?? {}).filter(
+        ([, count]) => Number.isFinite(count) && count > 0,
+      ),
+    );
+    scanCompleted.value = props.initialCandidateCounts !== undefined;
     const initialExcludedWords = [
       ...new Set(
         (props.initialExcludedWords ?? [])
@@ -165,26 +174,36 @@ watch(
     );
     manuallyEdited.value = new Set();
     translationFailures.value = new Map();
-    extractionLoading.value = true;
+    extractionLoading.value = false;
     extractionError.value = '';
-    try {
-      const counts = await Promise.all(
-        files.map(async (file) => {
-          const content =
-            file.type === 'txt' ? file.text : await file.getText();
-          return countKatakanaTerms(content);
-        }),
-      );
-      if (request !== extractionRequest) return;
-      sourceCounts.value = mergeGlossaryCounts(counts);
-    } catch (error) {
-      if (request === extractionRequest) extractionError.value = String(error);
-    } finally {
-      if (request === extractionRequest) extractionLoading.value = false;
-    }
   },
   { immediate: true },
 );
+
+const scanTerms = async () => {
+  if (extractionLoading.value) return;
+  const request = ++extractionRequest;
+  extractionLoading.value = true;
+  extractionError.value = '';
+  try {
+    const files = props.loadFiles ? await props.loadFiles() : props.files;
+    const counts = await Promise.all(
+      files.map(async (file) => {
+        const content = file.type === 'txt' ? file.text : await file.getText();
+        return countKatakanaTerms(content);
+      }),
+    );
+    if (request !== extractionRequest) return;
+    const merged = mergeGlossaryCounts(counts);
+    sourceCounts.value = merged;
+    scanCompleted.value = true;
+    emit('scan', Object.fromEntries(merged));
+  } catch (error) {
+    if (request === extractionRequest) extractionError.value = String(error);
+  } finally {
+    if (request === extractionRequest) extractionLoading.value = false;
+  }
+};
 
 const setSelected = (word: string, selected: boolean) => {
   selectedWords.value = selected
@@ -368,7 +387,9 @@ onBeforeUnmount(() => {
   <n-flex vertical size="large">
     <bulletin>
       <n-p>按片假名出现频次提取候选词，再由用户检查、编辑和导出。</n-p>
-      <n-p>阈值包含等于该次数的词语；自动翻译不会覆盖任何手工编辑。</n-p>
+      <n-p>
+        点击扫描后读取源文件；阈值包含等于该次数的词语，自动翻译不会覆盖任何手工编辑。
+      </n-p>
     </bulletin>
 
     <div class="glossary-toolbar">
@@ -408,6 +429,19 @@ onBeforeUnmount(() => {
           </span>
         </n-text>
         <c-button
+          :label="extractionLoading ? '扫描中' : '扫描'"
+          :disabled="
+            extractionLoading ||
+            translating ||
+            applying ||
+            (files.length === 0 && loadFiles === undefined)
+          "
+          :loading="extractionLoading"
+          size="small"
+          :round="false"
+          @action="scanTerms"
+        />
+        <c-button
           label="翻译器配置"
           :type="showTranslatorConfigModal ? 'primary' : 'default'"
           :aria-expanded="showTranslatorConfigModal"
@@ -423,7 +457,9 @@ onBeforeUnmount(() => {
       <c-button
         v-if="applyLabel"
         :label="applyLabel"
-        :disabled="extractionLoading || translating || applying"
+        :disabled="
+          !scanCompleted || extractionLoading || translating || applying
+        "
         :loading="applying"
         type="primary"
         size="small"
@@ -622,7 +658,11 @@ onBeforeUnmount(() => {
     <n-empty
       v-else-if="!extractionLoading && !extractionError"
       class="glossary-empty-state"
-      description="没有符合当前条件的候选词"
+      :description="
+        scanCompleted
+          ? '没有符合当前条件的候选词'
+          : '尚未扫描，点击“扫描”读取源文件'
+      "
     />
   </n-flex>
 
@@ -766,7 +806,7 @@ onBeforeUnmount(() => {
 
   .glossary-toolbar__row--secondary {
     display: grid;
-    grid-template-columns: 120px minmax(0, 1fr) auto;
+    grid-template-columns: 120px minmax(0, 1fr) auto auto;
   }
 
   .glossary-toolbar__minimum-input {

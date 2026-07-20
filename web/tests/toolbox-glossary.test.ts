@@ -9,6 +9,12 @@ import {
 } from '../src/pages/workspace/components/ToolboxGlossary';
 
 describe('toolbox glossary workflow', () => {
+  it('does not extract terms from purely Chinese content', () => {
+    expect(
+      countKatakanaTerms('这是一本全中文小说，没有任何日文内容。'),
+    ).toEqual(new Map());
+  });
+
   it('normalizes half-width terms and merges duplicate counts', () => {
     const first = countKatakanaTerms('カタカナ ｶﾀｶﾅ テスト');
     const second = countKatakanaTerms('カタカナ テスト テスト');

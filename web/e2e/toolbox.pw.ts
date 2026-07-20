@@ -414,6 +414,9 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       (translatorActionsBounds!.y + translatorActionsBounds!.height),
   ).toBeGreaterThanOrEqual(40);
 
+  const scanButton = page.getByRole('button', { name: '扫描', exact: true });
+  await scanButton.click();
+
   const threshold = page.locator('.n-input-number input');
   await threshold.fill('2');
   await threshold.press('Enter');
@@ -435,11 +438,13 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     exact: true,
   });
   const configButtonBounds = await translatorConfigButton.boundingBox();
+  const scanButtonBounds = await scanButton.boundingBox();
   for (const bounds of [
     minimumBounds,
     searchBounds,
     sortBounds,
     summaryBounds,
+    scanButtonBounds,
     configButtonBounds,
   ]) {
     expect(bounds).not.toBeNull();
@@ -457,6 +462,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   expect(
     Math.abs(centerY(sortBounds!) - centerY(configButtonBounds!)),
   ).toBeLessThanOrEqual(2);
+  expect(scanButtonBounds!.x).toBeLessThan(configButtonBounds!.x);
   expect(
     await page
       .locator('.glossary-toolbar__sort .n-base-selection-label')
