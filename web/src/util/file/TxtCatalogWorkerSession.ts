@@ -53,6 +53,7 @@ export interface TxtCatalogSession {
     query: string,
     startLine: number,
     limit?: number,
+    direction?: 1 | -1,
   ): Promise<TxtCatalogSearchResult>;
   buildPlan(headings: TxtHeadingDraft[]): Promise<TxtImportPlan>;
   cancel(reason?: string): void;
@@ -171,8 +172,8 @@ class WorkerTxtCatalogSession implements TxtCatalogSession {
     return this.request({ type: 'get-lines', startLine, count });
   }
 
-  search(query: string, startLine: number, limit = 20) {
-    return this.request({ type: 'search', query, startLine, limit });
+  search(query: string, startLine: number, limit = 20, direction: 1 | -1 = 1) {
+    return this.request({ type: 'search', query, startLine, limit, direction });
   }
 
   buildPlan(headings: TxtHeadingDraft[]) {
@@ -250,8 +251,8 @@ class DirectTxtCatalogSession implements TxtCatalogSession {
     return this.request({ type: 'get-lines', startLine, count });
   }
 
-  search(query: string, startLine: number, limit = 20) {
-    return this.request({ type: 'search', query, startLine, limit });
+  search(query: string, startLine: number, limit = 20, direction: 1 | -1 = 1) {
+    return this.request({ type: 'search', query, startLine, limit, direction });
   }
 
   buildPlan(headings: TxtHeadingDraft[]) {

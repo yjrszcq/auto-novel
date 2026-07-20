@@ -112,20 +112,26 @@ export const createTxtCatalogWorkerService = (
           request.query,
         ).toLocaleLowerCase();
         if (query.length === 0) return { lineIndexes: [], wrapped: false };
-        const startLine = Math.min(
-          Math.max(Math.floor(request.startLine), 0),
-          current.lines.length,
-        );
+        const forward = request.direction === 1;
+        const startLine = forward
+          ? Math.min(
+              Math.max(Math.floor(request.startLine), 0),
+              current.lines.length,
+            )
+          : Math.min(
+              Math.max(Math.floor(request.startLine), -1),
+              current.lines.length - 1,
+            );
         const limit = Math.min(
           Math.max(Math.floor(request.limit), 1),
           MAX_SEARCH_RESULTS,
         );
         const matches: number[] = [];
-        const scan = (from: number, to: number) => {
+        const scan = (from: number, to: number, step: 1 | -1) => {
           for (
             let index = from;
-            index < to && matches.length < limit;
-            index += 1
+            index !== to && matches.length < limit;
+            index += step
           ) {
             if (
               current.lines[index]?.normalized
@@ -136,11 +142,19 @@ export const createTxtCatalogWorkerService = (
             }
           }
         };
-        scan(startLine, current.lines.length);
+        if (forward) scan(startLine, current.lines.length, 1);
+        else scan(startLine, -1, -1);
         let wrapped = false;
-        if (matches.length === 0 && startLine > 0) {
+        if (matches.length === 0 && forward && startLine > 0) {
           wrapped = true;
-          scan(0, startLine);
+          scan(0, startLine, 1);
+        } else if (
+          matches.length === 0 &&
+          !forward &&
+          startLine < current.lines.length - 1
+        ) {
+          wrapped = true;
+          scan(current.lines.length - 1, startLine, -1);
         }
         return { lineIndexes: matches, wrapped };
       }

@@ -2278,6 +2278,12 @@ test('automatically translates a reader window without persisting a partial chap
       .getByRole('button', { name: '术语表', exact: true })
       .click();
     const glossaryDialog = page.getByRole('dialog', { name: '术语表处理' });
+    const glossaryMinimumInput = glossaryDialog.locator(
+      '.glossary-toolbar__minimum-input input',
+    );
+    await expect(glossaryMinimumInput).toHaveValue('10');
+    await glossaryMinimumInput.fill('1');
+    await glossaryMinimumInput.press('Enter');
     await expect(
       glossaryDialog.getByText('尚未扫描，点击“扫描”读取源文件', {
         exact: true,

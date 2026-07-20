@@ -364,7 +364,7 @@ onBeforeUnmount(clearCoverObjectUrl);
               />
             </n-form-item>
 
-            <n-form-item v-if="isTxt" label="下载格式">
+            <n-form-item v-if="isTxt" label="格式">
               <n-checkbox v-model:checked="form.downloadAsEpub">
                 下载时转换为 EPUB
               </n-checkbox>

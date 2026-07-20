@@ -32,6 +32,7 @@ export type TxtCatalogWorkerRequest =
       query: string;
       startLine: number;
       limit: number;
+      direction: 1 | -1;
     })
   | (TxtCatalogWorkerRequestBase & {
       type: 'build-plan';

@@ -64,6 +64,7 @@ describe('TXT catalog Worker service', () => {
       query: 'NEEDLE',
       startLine: 200,
       limit: 20,
+      direction: 1,
     });
     expect(search).toEqual({ lineIndexes: [3], wrapped: true });
 
@@ -73,9 +74,23 @@ describe('TXT catalog Worker service', () => {
       query: 'BOUNDARY',
       startLine: 700,
       limit: 1,
+      direction: 1,
     });
     expect(searchAfterLastLine).toEqual({
       lineIndexes: [4],
+      wrapped: true,
+    });
+
+    const searchPrevious = service.handle({
+      type: 'search',
+      requestId: 5,
+      query: 'BOUNDARY',
+      startLine: 3,
+      limit: 1,
+      direction: -1,
+    });
+    expect(searchPrevious).toEqual({
+      lineIndexes: [699],
       wrapped: true,
     });
   });

@@ -142,6 +142,13 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
   });
   await sourceSearch.fill('Epilogue');
   await sourceSearch.press('Enter');
+  const searchPrevious = preview.getByRole('button', {
+    name: '查找上一个',
+    exact: true,
+  });
+  await expect(searchPrevious).toBeVisible();
+  await searchPrevious.click();
+  await expect(preview.getByText('已从文件末尾继续')).toBeVisible();
   const filteredSourceLine = preview
     .locator('.txt-source-line')
     .filter({ hasText: 'Epilogue' });
@@ -1710,6 +1717,12 @@ test('converts configured TXT downloads to EPUB', async ({ page }) => {
   const convertCheckbox = page.getByRole('checkbox', {
     name: '下载时转换为 EPUB',
   });
+  await expect(
+    page.locator('.metadata-edit__form').getByText('格式', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator('.metadata-edit__form').getByText('下载格式', { exact: true }),
+  ).toHaveCount(0);
   await expect(convertCheckbox).not.toBeChecked();
   await convertCheckbox.check();
   await page.locator('.metadata-edit__form input').first().fill('导出展示书名');

@@ -70,6 +70,7 @@ const selectedLine = ref(0);
 const contextLines = shallowRef<TxtSourceLine[]>([]);
 const searchQuery = ref('');
 const searchWrapped = ref(false);
+const searchDirection = ref<1 | -1>(1);
 let lineRequestVersion = 0;
 
 const totalTextHeight = computed(
@@ -241,15 +242,16 @@ const setMinimumConfidence = (value: number | null) => {
   if (headingViewport.value !== undefined) headingViewport.value.scrollTop = 0;
 };
 
-const searchNext = async () => {
+const search = async (direction: 1 | -1) => {
   const query = searchQuery.value.trim();
   const currentSession = session.value;
   if (query.length === 0 || currentSession === undefined) return;
   try {
     const result = await currentSession.search(
       query,
-      selectedLine.value + 1,
+      selectedLine.value + direction,
       1,
+      direction,
     );
     const target = result.lineIndexes[0];
     if (target === undefined) {
@@ -257,11 +259,15 @@ const searchNext = async () => {
       return;
     }
     searchWrapped.value = result.wrapped;
+    searchDirection.value = direction;
     await jumpToLine(target);
   } catch (cause) {
     message.error(`搜索失败：${String(cause)}`);
   }
 };
+
+const searchNext = () => search(1);
+const searchPrevious = () => search(-1);
 
 const applyMode = async (nextMode: TxtParseMode) => {
   const currentSession = session.value;
@@ -372,6 +378,10 @@ watch(
   { immediate: true },
 );
 
+watch(searchQuery, () => {
+  searchWrapped.value = false;
+});
+
 onBeforeUnmount(disposeSession);
 </script>
 
@@ -477,12 +487,14 @@ onBeforeUnmount(disposeSession);
       <div class="txt-catalog-search">
         <n-input
           v-model:value="searchQuery"
+          class="txt-catalog-search__input"
           clearable
           placeholder="搜索正文并跳转"
           @keyup.enter="searchNext"
         >
           <template #prefix><n-icon :component="SearchOutlined" /></template>
         </n-input>
+        <n-button @click="searchPrevious">查找上一个</n-button>
         <n-button @click="searchNext">查找下一个</n-button>
         <n-input-number
           :value="selectedLine + 1"
@@ -490,7 +502,13 @@ onBeforeUnmount(disposeSession);
           :max="snapshot.lineCount"
           @update:value="(value) => value !== null && jumpToLine(value - 1)"
         />
-        <n-text v-if="searchWrapped" depth="3">已从文件开头继续</n-text>
+        <n-text
+          v-if="searchWrapped"
+          class="txt-catalog-search__wrap-hint"
+          depth="3"
+        >
+          已从文件{{ searchDirection === 1 ? '开头' : '末尾' }}继续
+        </n-text>
       </div>
 
       <div v-if="contextLines.length" class="txt-catalog-context">
@@ -934,7 +952,12 @@ onBeforeUnmount(disposeSession);
 
   .txt-catalog-search {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .txt-catalog-search__input,
+  .txt-catalog-search__wrap-hint {
+    grid-column: 1 / -1;
   }
 
   .txt-catalog-search :deep(.n-input-number) {
