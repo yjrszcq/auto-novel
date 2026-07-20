@@ -121,6 +121,7 @@ const showInteractiveTranslation = ref(false);
 const showAutomaticTranslatorSelection = ref(false);
 const showReaderGlossary = ref(false);
 const readerGlossaryLoading = ref(false);
+const readerGlossaryApplying = ref(false);
 const readerGlossaryError = ref('');
 const readerGlossaryFiles = shallowRef<ParsedFile[]>([]);
 const readerGlossaryInitial = shallowRef<Glossary>({});
@@ -424,20 +425,28 @@ const openReaderGlossary = async () => {
 };
 
 const applyReaderGlossary = async (glossary: Glossary) => {
-  const anchor = captureReaderPosition();
-  await saveProgress();
-  stopAutomaticTranslation(false);
-  automaticTranslationSession.clearDrafts();
-  temporaryTranslations.clear();
-  const repository = await repositoryPromise;
-  await repository.updateGlossary(bookId.value, glossary);
-  const adapter = await cachedAdapterPromise;
-  adapter.invalidateChapter({ bookId: bookId.value });
-  showReaderGlossary.value = false;
-  await load();
-  await nextTick();
-  restoreReaderPosition(anchor);
-  message.success('术语表已应用，未完成的自动翻译缓存已清除');
+  if (readerGlossaryApplying.value) return;
+  readerGlossaryApplying.value = true;
+  try {
+    const anchor = captureReaderPosition();
+    await saveProgress();
+    stopAutomaticTranslation(false);
+    automaticTranslationSession.clearDrafts();
+    temporaryTranslations.clear();
+    const repository = await repositoryPromise;
+    await repository.updateGlossary(bookId.value, glossary);
+    const adapter = await cachedAdapterPromise;
+    adapter.invalidateChapter({ bookId: bookId.value });
+    showReaderGlossary.value = false;
+    await load();
+    await nextTick();
+    restoreReaderPosition(anchor);
+    message.success('术语表已应用，未完成的自动翻译缓存已清除');
+  } catch (reason) {
+    message.error(`无法应用术语表：${String(reason)}`);
+  } finally {
+    readerGlossaryApplying.value = false;
+  }
 };
 
 const openSearch = () => {
@@ -954,11 +963,16 @@ const readerStyle = computed(() => ({
 }));
 
 const loadSettings = async () => {
-  const repository = await repositoryPromise;
-  settings.value = normalizeReaderSettings(
-    await repository.getReaderSettings(),
-  );
-  settingsLoaded = true;
+  try {
+    const repository = await repositoryPromise;
+    settings.value = normalizeReaderSettings(
+      await repository.getReaderSettings(),
+    );
+  } catch {
+    message.warning('无法读取阅读设置，已使用默认值');
+  } finally {
+    settingsLoaded = true;
+  }
 };
 
 const load = async () => {
@@ -1731,6 +1745,7 @@ type ActiveAutomaticTranslationRuntime = {
 
 let activeAutomaticTranslationRuntime:
   ActiveAutomaticTranslationRuntime | undefined;
+let automaticTranslationStartRequest = 0;
 
 const loadedReaderChapters = () => {
   const ready = result.value;
@@ -1937,15 +1952,21 @@ const runAutomaticTranslation = async () => {
   try {
     do {
       automaticTranslationQueued = false;
-      await runAutomaticTranslationOnce();
+      const controller = automaticTranslationController;
+      try {
+        await runAutomaticTranslationOnce();
+      } catch (reason) {
+        if (
+          controller === automaticTranslationController &&
+          controller?.signal.aborted === false
+        ) {
+          message.error(`自动翻译失败：${String(reason)}`);
+        }
+      }
     } while (
       automaticTranslationQueued &&
       automaticTranslationController?.signal.aborted === false
     );
-  } catch (reason) {
-    if (automaticTranslationController?.signal.aborted === false) {
-      message.error(`自动翻译失败：${String(reason)}`);
-    }
   } finally {
     automaticTranslationRunning = false;
   }
@@ -1963,6 +1984,7 @@ const scheduleAutomaticTranslation = () => {
 };
 
 const stopAutomaticTranslation = (notify = true) => {
+  automaticTranslationStartRequest += 1;
   if (automaticTranslationTimer !== undefined) {
     window.clearTimeout(automaticTranslationTimer);
     automaticTranslationTimer = undefined;
@@ -2041,6 +2063,7 @@ const startAutomaticTranslation = async (
   source: ReaderAutomaticTranslationSource,
   notify = true,
 ) => {
+  const request = ++automaticTranslationStartRequest;
   const worker = resolveConfiguredAutomaticTranslationWorker(source);
   if (worker === undefined) {
     stopAutomaticTranslation(false);
@@ -2049,38 +2072,49 @@ const startAutomaticTranslation = async (
     );
     return false;
   }
-  const volume = await (await repositoryPromise).getVolume(bookId.value);
-  if (volume === undefined) {
-    message.error('书籍不存在');
+  try {
+    const volume = await (await repositoryPromise).getVolume(bookId.value);
+    if (request !== automaticTranslationStartRequest) return false;
+    if (volume === undefined) throw new Error('书籍不存在');
+    automaticTranslationController?.abort();
+    const config = createVisibleTranslationConfig(source, worker);
+    const selection: ReaderAutomaticTranslationSelection = {
+      source,
+      workerId: worker.id,
+      workerFingerprint: JSON.stringify(config),
+      glossaryId: volume.glossaryId,
+    };
+    automaticTranslationSession.start(selection);
+    automaticTranslationController = new AbortController();
+    activeAutomaticTranslationRuntime = {
+      selection,
+      config,
+      concurrency: normalizeTranslationConcurrency(worker.concurrency),
+      glossary: { ...volume.glossary },
+    };
+    automaticTranslationSource.value = source;
+    temporaryMode = settings.value.defaultMode;
+    await restoreAutomaticTranslationDraft(selection);
+    if (
+      request !== automaticTranslationStartRequest ||
+      !automaticTranslationSession.isActive(selection)
+    ) {
+      return false;
+    }
+    showMobileTranslationNotice.value = false;
+    (document.activeElement as HTMLElement | null)?.blur();
+    if (notify) {
+      message.success(`已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`);
+    }
+    await nextTick();
+    scheduleAutomaticTranslation();
+    return true;
+  } catch (reason) {
+    if (request !== automaticTranslationStartRequest) return false;
+    stopAutomaticTranslation(false);
+    message.error(`无法启动自动翻译：${String(reason)}`);
     return false;
   }
-  automaticTranslationController?.abort();
-  const config = createVisibleTranslationConfig(source, worker);
-  const selection: ReaderAutomaticTranslationSelection = {
-    source,
-    workerId: worker.id,
-    workerFingerprint: JSON.stringify(config),
-    glossaryId: volume.glossaryId,
-  };
-  automaticTranslationSession.start(selection);
-  automaticTranslationController = new AbortController();
-  activeAutomaticTranslationRuntime = {
-    selection,
-    config,
-    concurrency: normalizeTranslationConcurrency(worker.concurrency),
-    glossary: { ...volume.glossary },
-  };
-  automaticTranslationSource.value = source;
-  temporaryMode = settings.value.defaultMode;
-  await restoreAutomaticTranslationDraft(selection);
-  showMobileTranslationNotice.value = false;
-  (document.activeElement as HTMLElement | null)?.blur();
-  if (notify) {
-    message.success(`已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`);
-  }
-  await nextTick();
-  scheduleAutomaticTranslation();
-  return true;
 };
 
 const toggleAutomaticTranslation = async (
@@ -2741,10 +2775,14 @@ watch(
     if (!settingsLoaded) {
       return;
     }
-    const repository = await repositoryPromise;
-    await repository.putReaderSettings(
-      serializeReaderSettings({ ...value, updatedAt: Date.now() }),
-    );
+    try {
+      const repository = await repositoryPromise;
+      await repository.putReaderSettings(
+        serializeReaderSettings({ ...value, updatedAt: Date.now() }),
+      );
+    } catch {
+      message.error('无法保存阅读设置');
+    }
   },
   { deep: true },
 );
@@ -3333,6 +3371,7 @@ onBeforeUnmount(() => {
           :files="readerGlossaryFiles"
           :initial-glossary="readerGlossaryInitial"
           :initial-minimum-count="1"
+          :applying="readerGlossaryApplying"
           apply-label="应用到本书"
           @apply="applyReaderGlossary"
         />

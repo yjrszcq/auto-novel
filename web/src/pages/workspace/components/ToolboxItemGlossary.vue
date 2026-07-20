@@ -23,6 +23,7 @@ const props = defineProps<{
   initialGlossary?: Glossary;
   initialMinimumCount?: number;
   applyLabel?: string;
+  applying?: boolean;
 }>();
 const emit = defineEmits<{
   apply: [glossary: Glossary];
@@ -400,7 +401,8 @@ onBeforeUnmount(() => {
       <c-button
         v-if="applyLabel"
         :label="applyLabel"
-        :disabled="extractionLoading || translating"
+        :disabled="extractionLoading || translating || applying"
+        :loading="applying"
         type="primary"
         size="small"
         :round="false"
