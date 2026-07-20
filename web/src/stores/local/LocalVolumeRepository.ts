@@ -151,6 +151,13 @@ export const createLocalVolumeStore = async () => {
     putReaderCover: dao.putReaderCover,
     deleteReaderCover: dao.deleteReaderCover,
     putReaderChapterCache: dao.putReaderChapterCache,
+    getReaderAutomaticTranslationCache: dao.getReaderAutomaticTranslationCache,
+    listReaderAutomaticTranslationCaches:
+      dao.listReaderAutomaticTranslationCaches,
+    upsertReaderAutomaticTranslationCache:
+      dao.upsertReaderAutomaticTranslationCache,
+    deleteReaderAutomaticTranslationCaches:
+      dao.deleteReaderAutomaticTranslationCaches,
     //
     getTranslationFile: bind(getTranslationFile),
   };

@@ -1,12 +1,18 @@
-import type { ReaderChapterContent } from '@/model/Reader';
+import type {
+  ReaderAutomaticTranslationCache,
+  ReaderChapterContent,
+} from '@/model/Reader';
 
 export type ReaderAutomaticTranslationSource = 'gpt' | 'sakura';
+export type ReaderAutomaticTranslationPurpose = 'automatic' | 'retranslate';
 
 export interface ReaderAutomaticTranslationSelection {
   source: ReaderAutomaticTranslationSource;
   workerId: string;
   workerFingerprint: string;
+  cacheFingerprint?: string;
   glossaryId: string;
+  purpose?: ReaderAutomaticTranslationPurpose;
 }
 export interface ReaderAutomaticTranslationTarget {
   chapterId: string;
@@ -41,8 +47,94 @@ const selectionKey = ({
   workerId,
   workerFingerprint,
   glossaryId,
+  purpose = 'automatic',
 }: ReaderAutomaticTranslationSelection) =>
-  [source, workerId, workerFingerprint, glossaryId].join('\u0000');
+  [purpose, source, workerId, workerFingerprint, glossaryId].join('\u0000');
+
+const hashIdentity = (value: string) => {
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return [first, second]
+    .map((part) => (part >>> 0).toString(36).padStart(7, '0'))
+    .join('');
+};
+
+/**
+ * Returns a storage-safe selection identifier. The fingerprint may contain an
+ * API key, so only its one-way digest is allowed to leave the reader session.
+ */
+export const getReaderAutomaticTranslationSelectionCacheKey = (
+  selection: ReaderAutomaticTranslationSelection,
+) =>
+  hashIdentity(
+    selectionKey({
+      ...selection,
+      workerFingerprint: selection.cacheFingerprint ?? selection.workerId,
+    }),
+  );
+
+export const getReaderAutomaticTranslationContentRevision = ({
+  segmentIds,
+  paragraphs,
+}: {
+  segmentIds: string[];
+  paragraphs: string[];
+}) =>
+  hashIdentity(
+    segmentIds
+      .map((segmentId, index) => `${segmentId}\u0001${paragraphs[index] ?? ''}`)
+      .join('\u0002'),
+  );
+
+export const createReaderAutomaticTranslationCache = ({
+  bookId,
+  chapterId,
+  selection,
+  contentRevision,
+  values,
+  cachedAt = Date.now(),
+}: {
+  bookId: string;
+  chapterId: string;
+  selection: ReaderAutomaticTranslationSelection;
+  contentRevision: string;
+  values: ReaderAutomaticTranslationResult[];
+  cachedAt?: number;
+}): ReaderAutomaticTranslationCache => {
+  const selectionCacheKey =
+    getReaderAutomaticTranslationSelectionCacheKey(selection);
+  const purpose = selection.purpose ?? 'automatic';
+  return {
+    kind: 'automatic-translation',
+    key: [
+      'reader-auto',
+      bookId,
+      chapterId,
+      purpose,
+      selection.source,
+      selectionCacheKey,
+      selection.glossaryId,
+      contentRevision,
+    ].join('\u0000'),
+    bookId,
+    chapterId,
+    source: selection.source,
+    purpose,
+    selectionKey: selectionCacheKey,
+    glossaryId: selection.glossaryId,
+    contentRevision,
+    entries: values.map(({ segmentId, translated }) => ({
+      segmentId,
+      translated,
+    })),
+    cachedAt,
+  };
+};
 
 const sameSelection = (
   left: ReaderAutomaticTranslationSelection | undefined,
@@ -204,6 +296,14 @@ export class ReaderAutomaticTranslationSession {
     return true;
   }
 
+  hydrate(
+    selection: ReaderAutomaticTranslationSelection,
+    values: ReaderAutomaticTranslationResult[],
+  ) {
+    const draft = this.draft(selection);
+    values.forEach((value) => draft.set(targetKey(value), value.translated));
+  }
+
   get(
     selection: ReaderAutomaticTranslationSelection,
     chapterId: string,
@@ -222,6 +322,22 @@ export class ReaderAutomaticTranslationSession {
         segmentId: key.slice(prefix.length),
         translated,
       }));
+  }
+
+  clearChapter(
+    selection: ReaderAutomaticTranslationSelection,
+    chapterId: string,
+  ) {
+    const draft = this.drafts.get(selectionKey(selection));
+    if (draft === undefined) return;
+    const prefix = `${chapterId}\u0000`;
+    [...draft.keys()]
+      .filter((key) => key.startsWith(prefix))
+      .forEach((key) => draft.delete(key));
+    [...this.pending]
+      .filter((key) => key.startsWith(prefix))
+      .forEach((key) => this.pending.delete(key));
+    if (draft.size === 0) this.drafts.delete(selectionKey(selection));
   }
 
   clearDrafts() {

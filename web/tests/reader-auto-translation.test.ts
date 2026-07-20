@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { ReaderChapterContent } from '@/model/Reader';
 import {
+  getReaderAutomaticTranslationContentRevision,
+  getReaderAutomaticTranslationSelectionCacheKey,
   planReaderAutomaticTranslationWindow,
   ReaderAutomaticTranslationSession,
   resolveReaderAutomaticTranslationWorker,
@@ -102,6 +104,52 @@ describe('reader automatic translation session', () => {
     );
     expect(session.claim(generation, [target])).toEqual([]);
     expect(session.get(active, '0', '0-0')).toBe('译文');
+  });
+
+  it('hydrates persisted drafts without making them pending', () => {
+    const session = new ReaderAutomaticTranslationSession();
+    const active = selection('gpt', 'gpt-worker');
+    session.hydrate(active, [
+      { chapterId: 'chapter-1', segmentId: 'segment-1', translated: '译文' },
+    ]);
+    const generation = session.start(active);
+
+    expect(session.get(active, 'chapter-1', 'segment-1')).toBe('译文');
+    expect(
+      session.claim(generation, [
+        {
+          chapterId: 'chapter-1',
+          segmentId: 'segment-1',
+          segmentIndex: 0,
+          original: '原文',
+        },
+      ]),
+    ).toEqual([]);
+    session.clearChapter(active, 'chapter-1');
+    expect(session.get(active, 'chapter-1', 'segment-1')).toBeUndefined();
+  });
+
+  it('creates stable storage identities without exposing worker credentials', () => {
+    const first = selection('gpt', 'secret-worker-key');
+    const second = selection('gpt', 'another-secret-key');
+    const firstKey = getReaderAutomaticTranslationSelectionCacheKey(first);
+
+    expect(firstKey).toHaveLength(14);
+    expect(firstKey).not.toContain('secret-worker-key');
+    expect(firstKey).not.toBe(
+      getReaderAutomaticTranslationSelectionCacheKey(second),
+    );
+    expect(
+      getReaderAutomaticTranslationContentRevision({
+        segmentIds: ['segment-1'],
+        paragraphs: ['原文'],
+      }),
+    ).not.toBe(
+      getReaderAutomaticTranslationContentRevision({
+        segmentIds: ['segment-1'],
+        paragraphs: ['修改后的原文'],
+      }),
+    );
   });
 
   it('rejects late results after stop or worker switch and isolates drafts', () => {

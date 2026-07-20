@@ -24,6 +24,11 @@ export interface ReaderAutomaticTranslationCoordinatorDependencies {
     chapterId: string,
     translation: ChapterTranslation,
   ) => Promise<void>;
+  persistDraft?: (
+    selection: ReaderAutomaticTranslationSelection,
+    chapter: LocalVolumeChapter,
+    values: ReaderAutomaticTranslationResult[],
+  ) => Promise<void>;
   onDraft?: (
     selection: ReaderAutomaticTranslationSelection,
     values: ReaderAutomaticTranslationResult[],
@@ -161,7 +166,9 @@ export class ReaderAutomaticTranslationCoordinator {
             segmentId: target.segmentId,
             translated: translated[index] ?? '',
           }));
-          if (!this.session.store(generation, values)) return;
+          await this.dependencies.persistDraft?.(selection, chapter, values);
+          if (!this.session.store(generation, values) || workerSignal.aborted)
+            return;
           this.dependencies.onDraft?.(selection, values);
           const complete = buildCompleteReaderChapterTranslation({
             chapter,

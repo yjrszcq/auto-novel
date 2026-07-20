@@ -76,6 +76,9 @@ import {
 } from './core/ReaderMode';
 import { getTranslationStatusLabel } from './core/ReaderTranslationWorkflow';
 import {
+  createReaderAutomaticTranslationCache,
+  getReaderAutomaticTranslationContentRevision,
+  getReaderAutomaticTranslationSelectionCacheKey,
   planReaderAutomaticTranslationWindow,
   ReaderAutomaticTranslationSession,
   resolveReaderAutomaticTranslationWorker,
@@ -1926,6 +1929,20 @@ const runAutomaticTranslationOnce = async () => {
           translation,
         );
       },
+      persistDraft: async (selection, chapter, values) => {
+        await repository.upsertReaderAutomaticTranslationCache(
+          createReaderAutomaticTranslationCache({
+            bookId: bookId.value,
+            chapterId: values[0]!.chapterId,
+            selection,
+            contentRevision: getReaderAutomaticTranslationContentRevision({
+              segmentIds: chapter.segmentIds,
+              paragraphs: chapter.paragraphs,
+            }),
+            values,
+          }),
+        );
+      },
       onDraft: showAutomaticTranslationDraft,
       onCommitted: (selection, chapterId) => {
         void markAutomaticTranslationCommitted(selection, chapterId);
@@ -2059,6 +2076,47 @@ const resolveConfiguredAutomaticTranslationWorker = (
         selectedAutomaticSakuraWorkerId.value,
       );
 
+const hydrateAutomaticTranslationDrafts = async (
+  selection: ReaderAutomaticTranslationSelection,
+) => {
+  const repository = await repositoryPromise;
+  const expectedSelectionKey =
+    getReaderAutomaticTranslationSelectionCacheKey(selection);
+  const caches = (
+    await repository.listReaderAutomaticTranslationCaches(bookId.value)
+  ).filter(
+    (cache) =>
+      cache.purpose === (selection.purpose ?? 'automatic') &&
+      cache.source === selection.source &&
+      cache.selectionKey === expectedSelectionKey &&
+      cache.glossaryId === selection.glossaryId,
+  );
+  await Promise.all(
+    caches.map(async (cache) => {
+      const chapter = await repository.getChapter(
+        bookId.value,
+        cache.chapterId,
+      );
+      if (
+        chapter === undefined ||
+        getReaderAutomaticTranslationContentRevision({
+          segmentIds: chapter.segmentIds,
+          paragraphs: chapter.paragraphs,
+        }) !== cache.contentRevision
+      ) {
+        return;
+      }
+      automaticTranslationSession.hydrate(
+        selection,
+        cache.entries.map((entry) => ({
+          chapterId: cache.chapterId,
+          ...entry,
+        })),
+      );
+    }),
+  );
+};
+
 const startAutomaticTranslation = async (
   source: ReaderAutomaticTranslationSource,
   notify = true,
@@ -2082,6 +2140,18 @@ const startAutomaticTranslation = async (
       source,
       workerId: worker.id,
       workerFingerprint: JSON.stringify(config),
+      cacheFingerprint: JSON.stringify(
+        source === 'gpt'
+          ? {
+              model: (worker as GptWorker).model,
+              endpoint: worker.endpoint,
+            }
+          : {
+              endpoint: worker.endpoint,
+              segLength: (worker as SakuraWorker).segLength,
+              prevSegLength: (worker as SakuraWorker).prevSegLength,
+            },
+      ),
       glossaryId: volume.glossaryId,
     };
     automaticTranslationSession.start(selection);
@@ -2094,6 +2164,13 @@ const startAutomaticTranslation = async (
     };
     automaticTranslationSource.value = source;
     temporaryMode = settings.value.defaultMode;
+    await hydrateAutomaticTranslationDrafts(selection);
+    if (
+      request !== automaticTranslationStartRequest ||
+      !automaticTranslationSession.isActive(selection)
+    ) {
+      return false;
+    }
     await restoreAutomaticTranslationDraft(selection);
     if (
       request !== automaticTranslationStartRequest ||

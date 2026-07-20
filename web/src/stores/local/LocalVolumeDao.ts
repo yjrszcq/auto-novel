@@ -10,8 +10,10 @@ import type { TranslatorId } from '@/model/Translator';
 import type {
   ReaderBookPreference,
   ReaderBookshelfState,
+  ReaderAutomaticTranslationCache,
   ReaderBookmark,
   ReaderChapterCache,
+  ReaderChapterCacheRecord,
   ReaderCover,
   ReaderProgress,
   ReaderReadingStats,
@@ -83,7 +85,7 @@ interface VolumesDBSchema extends DBSchema {
   };
   'reader-chapter-cache': {
     key: string;
-    value: ReaderChapterCache;
+    value: ReaderChapterCacheRecord;
     indexes: { byBookId: string };
   };
 }
@@ -463,6 +465,80 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     db.put('reader-chapter-cache', value);
   const listReaderChapterCaches = (bookId: string) =>
     db.getAllFromIndex('reader-chapter-cache', 'byBookId', bookId);
+  const isReaderAutomaticTranslationCache = (
+    value: ReaderChapterCacheRecord | undefined,
+  ): value is ReaderAutomaticTranslationCache =>
+    value?.kind === 'automatic-translation';
+  const getReaderAutomaticTranslationCache = async (key: string) => {
+    const value = await db.get('reader-chapter-cache', key);
+    return isReaderAutomaticTranslationCache(value) ? value : undefined;
+  };
+  const listReaderAutomaticTranslationCaches = async (
+    bookId: string,
+    chapterId?: string,
+  ) =>
+    (await db.getAllFromIndex('reader-chapter-cache', 'byBookId', bookId))
+      .filter(isReaderAutomaticTranslationCache)
+      .filter(
+        (value) => chapterId === undefined || value.chapterId === chapterId,
+      );
+  const upsertReaderAutomaticTranslationCache = async (
+    value: ReaderAutomaticTranslationCache,
+  ) => {
+    const tx = db.transaction('reader-chapter-cache', 'readwrite');
+    const existing = await tx.store.get(value.key);
+    const canMerge =
+      isReaderAutomaticTranslationCache(existing) &&
+      existing.bookId === value.bookId &&
+      existing.chapterId === value.chapterId &&
+      existing.source === value.source &&
+      existing.purpose === value.purpose &&
+      existing.selectionKey === value.selectionKey &&
+      existing.glossaryId === value.glossaryId &&
+      existing.contentRevision === value.contentRevision;
+    const entries = new Map(
+      (canMerge ? existing.entries : []).map((entry) => [
+        entry.segmentId,
+        entry,
+      ]),
+    );
+    value.entries.forEach((entry) => entries.set(entry.segmentId, entry));
+    const stored: ReaderAutomaticTranslationCache = {
+      ...value,
+      entries: [...entries.values()],
+    };
+    await tx.store.put(stored);
+    await tx.done;
+    return stored;
+  };
+  const deleteReaderAutomaticTranslationCaches = async ({
+    bookId,
+    chapterId,
+    source,
+    purpose,
+  }: {
+    bookId: string;
+    chapterId?: string;
+    source?: ReaderAutomaticTranslationCache['source'];
+    purpose?: ReaderAutomaticTranslationCache['purpose'];
+  }) => {
+    const tx = db.transaction('reader-chapter-cache', 'readwrite');
+    let deleted = 0;
+    for await (const cursor of tx.store.index('byBookId').iterate(bookId)) {
+      const value = cursor.value;
+      if (
+        isReaderAutomaticTranslationCache(value) &&
+        (chapterId === undefined || value.chapterId === chapterId) &&
+        (source === undefined || value.source === source) &&
+        (purpose === undefined || value.purpose === purpose)
+      ) {
+        await cursor.delete();
+        deleted += 1;
+      }
+    }
+    await tx.done;
+    return deleted;
+  };
   const deleteVolume = async (bookId: string) => {
     const tx = db.transaction(
       [
@@ -558,6 +634,10 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
     deleteReaderCover,
     putReaderChapterCache,
     listReaderChapterCaches,
+    getReaderAutomaticTranslationCache,
+    listReaderAutomaticTranslationCaches,
+    upsertReaderAutomaticTranslationCache,
+    deleteReaderAutomaticTranslationCaches,
   };
 };
 

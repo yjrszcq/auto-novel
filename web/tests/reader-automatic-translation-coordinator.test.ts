@@ -71,6 +71,32 @@ describe('reader automatic translation coordinator', () => {
     });
   });
 
+  it('persists accepted drafts before exposing them to the reader', async () => {
+    const session = new ReaderAutomaticTranslationSession();
+    const generation = session.start(selection);
+    const order: string[] = [];
+    const coordinator = new ReaderAutomaticTranslationCoordinator(session, {
+      loadChapter: async () => createChapter(),
+      translate: async () => ['译文'],
+      commit: vi.fn(),
+      persistDraft: async () => {
+        order.push('persist');
+      },
+      onDraft: () => order.push('render'),
+    });
+
+    await coordinator.translateTargets({
+      generation,
+      selection,
+      targets: [target(0)],
+      glossary: {},
+      concurrency: 1,
+      signal: new AbortController().signal,
+    });
+
+    expect(order).toEqual(['persist', 'render']);
+  });
+
   it('reuses only current-glossary persisted paragraphs', async () => {
     const session = new ReaderAutomaticTranslationSession();
     const generation = session.start(selection);

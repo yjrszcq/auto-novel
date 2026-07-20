@@ -329,4 +329,105 @@ describe('reader storage', () => {
     expect((await dao.getChapter('orphan', '0'))?.gpt).toBeUndefined();
     dao.close();
   });
+
+  it('persists and merges reader automatic translation drafts without changing the schema version', async () => {
+    const dao = await createLocalVolumeDao(databaseName);
+    const base = {
+      kind: 'automatic-translation' as const,
+      key: 'auto:book\u0000chapter\u0000gpt',
+      bookId: 'book',
+      chapterId: 'chapter',
+      source: 'gpt' as const,
+      purpose: 'automatic' as const,
+      selectionKey: 'safe-selection-digest',
+      glossaryId: 'glossary',
+      contentRevision: 'revision',
+    };
+
+    await dao.upsertReaderAutomaticTranslationCache({
+      ...base,
+      entries: [{ segmentId: 'one', translated: '译文一' }],
+      cachedAt: 1,
+    });
+    await dao.upsertReaderAutomaticTranslationCache({
+      ...base,
+      entries: [
+        { segmentId: 'one', translated: '更新译文一' },
+        { segmentId: 'two', translated: '译文二' },
+      ],
+      cachedAt: 2,
+    });
+
+    expect(await dao.getReaderAutomaticTranslationCache(base.key)).toEqual({
+      ...base,
+      entries: [
+        { segmentId: 'one', translated: '更新译文一' },
+        { segmentId: 'two', translated: '译文二' },
+      ],
+      cachedAt: 2,
+    });
+    dao.close();
+
+    const reopened = await createLocalVolumeDao(databaseName);
+    expect(
+      await reopened.listReaderAutomaticTranslationCaches('book', 'chapter'),
+    ).toHaveLength(1);
+    reopened.close();
+    const raw = await openDB(databaseName);
+    expect(raw.version).toBe(LOCAL_VOLUME_DATABASE_VERSION);
+    raw.close();
+  });
+
+  it('keeps legacy chapter caches compatible and selectively clears automatic drafts', async () => {
+    const dao = await createLocalVolumeDao(databaseName);
+    await dao.putReaderChapterCache({
+      key: 'legacy',
+      bookId: 'book',
+      chapterId: 'chapter',
+      contentRevision: 'legacy-revision',
+      cachedAt: 1,
+    });
+    for (const [key, chapterId, purpose] of [
+      ['automatic-one', 'chapter', 'automatic'],
+      ['retranslate-one', 'chapter', 'retranslate'],
+      ['automatic-two', 'other-chapter', 'automatic'],
+    ] as const) {
+      await dao.upsertReaderAutomaticTranslationCache({
+        kind: 'automatic-translation',
+        key,
+        bookId: 'book',
+        chapterId,
+        source: 'gpt',
+        purpose,
+        selectionKey: 'safe-selection-digest',
+        glossaryId: 'glossary',
+        contentRevision: 'revision',
+        entries: [{ segmentId: 'segment', translated: '译文' }],
+        cachedAt: 2,
+      });
+    }
+
+    expect(
+      await dao.getReaderAutomaticTranslationCache('legacy'),
+    ).toBeUndefined();
+    expect(await dao.listReaderChapterCaches('book')).toHaveLength(4);
+    expect(
+      await dao.deleteReaderAutomaticTranslationCaches({
+        bookId: 'book',
+        chapterId: 'chapter',
+        purpose: 'automatic',
+      }),
+    ).toBe(1);
+    expect(await dao.listReaderAutomaticTranslationCaches('book')).toHaveLength(
+      2,
+    );
+    expect(await dao.listReaderChapterCaches('book')).toContainEqual({
+      key: 'legacy',
+      bookId: 'book',
+      chapterId: 'chapter',
+      contentRevision: 'legacy-revision',
+      cachedAt: 1,
+    });
+    dao.close();
+  });
 });

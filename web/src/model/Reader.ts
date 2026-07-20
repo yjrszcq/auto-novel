@@ -84,6 +84,34 @@ export interface ReaderChapterCache {
   cachedAt: number;
 }
 
+export type ReaderAutomaticTranslationPurpose = 'automatic' | 'retranslate';
+
+export interface ReaderAutomaticTranslationCacheEntry {
+  segmentId: string;
+  translated: string;
+}
+
+/**
+ * Persistent reader-only translation drafts. `selectionKey` must be an opaque
+ * digest and must never contain a raw translator configuration or API key.
+ */
+export interface ReaderAutomaticTranslationCache {
+  kind: 'automatic-translation';
+  key: string;
+  bookId: string;
+  chapterId: string;
+  source: 'gpt' | 'sakura';
+  purpose: ReaderAutomaticTranslationPurpose;
+  selectionKey: string;
+  glossaryId: string;
+  contentRevision: string;
+  entries: ReaderAutomaticTranslationCacheEntry[];
+  cachedAt: number;
+}
+
+export type ReaderChapterCacheRecord =
+  ReaderChapterCache | ReaderAutomaticTranslationCache;
+
 export type ReaderTranslationStatus = 'none' | 'partial' | 'complete';
 
 export interface ReaderBook {
