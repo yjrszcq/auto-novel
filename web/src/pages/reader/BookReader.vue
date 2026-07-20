@@ -3651,7 +3651,7 @@ onBeforeUnmount(() => {
         type="button"
         aria-label="上一章"
         :disabled="previousChapterId === undefined"
-        @click="previousChapterId && navigate(previousChapterId, 'end')"
+        @click="previousChapterId && navigate(previousChapterId, 'start')"
       >
         <n-icon :component="ChevronLeftOutlined" />
       </button>

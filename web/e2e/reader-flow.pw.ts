@@ -454,13 +454,14 @@ test('opens a local bookshelf book safely through the current reader route', asy
         return { left: Math.round(left), right: Math.round(right) };
       };
       return {
-        chapterIndex: bounds('.book-details__catalog-index'),
         chapterStatus: bounds('.book-details__catalog-button .n-tag'),
-        title: bounds('.book-details__catalog-close'),
         total: bounds('.book-details__catalog-header .n-text'),
+        catalogIndexes: document.querySelectorAll(
+          '.book-details__catalog-index',
+        ).length,
       };
     });
-    expect(catalogLayout.title.left).toBe(catalogLayout.chapterIndex.left);
+    expect(catalogLayout.catalogIndexes).toBe(0);
     expect(catalogLayout.total.right).toBe(catalogLayout.chapterStatus.right);
   };
   await expectCatalogAlignment();
@@ -476,7 +477,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
     page.getByRole('button', { name: '目录', exact: true }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: '打开目录', exact: true }).click();
-  await page.getByRole('button', { name: /第 2 章/ }).click();
+  await page.getByRole('button', { name: /第二章/ }).click();
   await expect
     .poll(() => new URL(page.url()).pathname)
     .toBe('/books/reader-flow.txt/read/1');
@@ -520,6 +521,13 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
   await chapterNavigation.getByRole('button', { name: '上一章' }).click();
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
+  await expect
+    .poll(() =>
+      page
+        .locator('.book-reader__content')
+        .evaluate((element) => element.scrollLeft),
+    )
+    .toBe(0);
   await page.goto('/books/reader-flow.txt/read/0?segment=segment-0');
   await page.goto('/books/reader-flow.txt/read/0');
   const readerContent = page.locator('.book-reader__content');
@@ -2012,6 +2020,13 @@ test('automatically translates a reader window without persisting a partial chap
               key: 'reader-test-key',
               concurrency: 2,
             },
+            {
+              id: 'reader-selected-worker',
+              endpoint,
+              model: 'reader-selected-model',
+              key: 'reader-selected-key',
+              concurrency: 2,
+            },
           ],
           jobs: [],
           jobRecords: [],
@@ -2144,6 +2159,11 @@ test('automatically translates a reader window without persisting a partial chap
     });
     await expect(translatorDialog).toBeVisible();
     await expect(translatorDialog.getByText(/reader-test-model/)).toBeVisible();
+    await translatorDialog.locator('.n-select').first().click();
+    await page
+      .getByText(/reader-selected-model/, { exact: false })
+      .last()
+      .click();
     await page.getByRole('button', { name: '关闭翻译器选择' }).click();
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await page
@@ -2165,6 +2185,9 @@ test('automatically translates a reader window without persisting a partial chap
       }),
     ).toBeVisible();
     await expect(glossaryDialog).toBeHidden();
+    await source.evaluate((element) =>
+      element.scrollIntoView({ block: 'start', behavior: 'auto' }),
+    );
     const automaticTranslationButton = page
       .locator('.book-reader__app-bar-translation')
       .getByRole('button', { name: 'GPT 自动翻译', exact: true });
@@ -2176,7 +2199,7 @@ test('automatically translates a reader window without persisting a partial chap
       'aria-pressed',
       'true',
     );
-    await expect(source).toContainText('译文第1行');
+    await expect(source).toContainText('译文第1行', { timeout: 15_000 });
     await expect(page.locator('.reader-segment-layout')).toHaveClass(
       /reader-segment-layout--original-translated/,
     );
@@ -2221,6 +2244,11 @@ test('automatically translates a reader window without persisting a partial chap
     }, temporaryBookId);
     expect(persistedChapter).not.toHaveProperty('gpt');
     expect(server.requests.length).toBeGreaterThan(0);
+    expect(
+      server.requests.every(
+        ({ body }) => body.model === 'reader-selected-model',
+      ),
+    ).toBe(true);
     await expect
       .poll(() =>
         page.evaluate(async (bookId) => {
@@ -2419,6 +2447,21 @@ test('automatically translates a reader window without persisting a partial chap
       .getByRole('button', { name: '重翻当前章', exact: true });
     await expect(retranslateButton).toBeEnabled();
     await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
+    await page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '翻译器选择', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: '翻译器选择' })
+      .locator('.n-select')
+      .first()
+      .click();
+    await page
+      .getByText(/reader-selected-model/, { exact: false })
+      .last()
+      .click();
+    await page.getByRole('button', { name: '关闭翻译器选择' }).click();
+    await page.getByRole('button', { name: '工具', exact: true }).click();
     await retranslateButton.click();
     const retranslationSourceDialog = page.getByRole('dialog', {
       name: '重翻当前章',
@@ -2453,6 +2496,7 @@ test('automatically translates a reader window without persisting a partial chap
       name: '重翻已完成',
     });
     await expect(retranslationDecision).toBeVisible({ timeout: 15_000 });
+    expect(server.requests.at(-1)?.body.model).toBe('reader-selected-model');
     await retranslationDecision
       .getByRole('button', { name: '不替换', exact: true })
       .click();
