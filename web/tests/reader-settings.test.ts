@@ -13,6 +13,22 @@ describe('reader settings', () => {
     expect(normalizeReaderSettings(undefined)).toEqual(defaultReaderSettings);
     expect(defaultReaderSettings.defaultMode).toBe('translated');
     expect(defaultReaderSettings.flow).toBe('auto');
+    expect(defaultReaderSettings.autoTranslationPreloadPages).toBe(3);
+  });
+
+  it('normalizes automatic translation preloading to whole pages', () => {
+    expect(
+      normalizeReaderSettings({ autoTranslationPreloadPages: 4.9 })
+        .autoTranslationPreloadPages,
+    ).toBe(4);
+    expect(
+      normalizeReaderSettings({ autoTranslationPreloadPages: -1 })
+        .autoTranslationPreloadPages,
+    ).toBe(0);
+    expect(
+      normalizeReaderSettings({ autoTranslationPreloadPages: 99 })
+        .autoTranslationPreloadPages,
+    ).toBe(20);
   });
 
   it('normalizes partial records and clamps unsafe values', () => {
