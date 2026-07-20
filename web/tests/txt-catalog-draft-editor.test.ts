@@ -73,4 +73,102 @@ describe('TXT catalog draft editor', () => {
       },
     ]);
   });
+
+  it('undoes additions, removals and coalesced field edits', () => {
+    const editor = new TxtCatalogDraftEditor([
+      {
+        lineIndex: 2,
+        title: 'automatic',
+        level: 1,
+        rule: 'english-numbered',
+        confidence: 0.8,
+        isManual: false,
+      },
+    ]);
+
+    editor.update(2, { title: 'a' });
+    editor.update(2, { title: 'ab' });
+    editor.update(2, { title: 'edited' });
+    expect(editor.undo()).toBe(true);
+    expect(editor.snapshot[0]).toMatchObject({
+      title: 'automatic',
+      isManual: false,
+    });
+
+    editor.remove(2);
+    editor.add(8, 'manual', 3);
+    expect(editor.undo()).toBe(true);
+    expect(editor.snapshot).toHaveLength(0);
+    expect(editor.undo()).toBe(true);
+    expect(editor.snapshot[0]).toMatchObject({
+      lineIndex: 2,
+      title: 'automatic',
+    });
+    expect(editor.undo()).toBe(false);
+  });
+
+  it('restores the automatic baseline and allows restoring that change', () => {
+    const automatic = {
+      lineIndex: 2,
+      title: 'automatic',
+      level: 1,
+      rule: 'english-numbered',
+      confidence: 0.8,
+      isManual: false,
+    };
+    const editor = new TxtCatalogDraftEditor([automatic]);
+    editor.update(2, { title: 'reviewed' });
+    editor.add(8, 'manual');
+
+    expect(editor.hasManualChanges).toBe(true);
+    expect(editor.restoreAutomatic()).toBe(true);
+    expect(editor.snapshot).toEqual([{ ...automatic, reasons: undefined }]);
+    expect(editor.hasManualChanges).toBe(false);
+
+    expect(editor.undo()).toBe(true);
+    expect(editor.snapshot).toMatchObject([
+      { lineIndex: 2, title: 'reviewed', isManual: true },
+      { lineIndex: 8, title: 'manual', isManual: true },
+    ]);
+    expect(editor.hasManualChanges).toBe(true);
+  });
+
+  it('filters automatic confidence while preserving reviewed headings', () => {
+    const editor = new TxtCatalogDraftEditor([
+      {
+        lineIndex: 2,
+        title: 'low',
+        level: 1,
+        rule: 'learned',
+        confidence: 0.6,
+        isManual: false,
+      },
+      {
+        lineIndex: 8,
+        title: 'boundary',
+        level: 1,
+        rule: 'numbered',
+        confidence: 0.9,
+        isManual: false,
+      },
+    ]);
+
+    expect(
+      editor
+        .snapshotWithMinimumConfidence(0.9)
+        .map(({ lineIndex }) => lineIndex),
+    ).toEqual([8]);
+    editor.include(2);
+    expect(
+      editor
+        .snapshotWithMinimumConfidence(0.9)
+        .map(({ lineIndex }) => lineIndex),
+    ).toEqual([2, 8]);
+    expect(editor.undo()).toBe(true);
+    expect(
+      editor
+        .snapshotWithMinimumConfidence(0.9)
+        .map(({ lineIndex }) => lineIndex),
+    ).toEqual([8]);
+  });
 });
