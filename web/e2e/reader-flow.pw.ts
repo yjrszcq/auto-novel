@@ -928,17 +928,16 @@ test('opens a local bookshelf book safely through the current reader route', asy
 
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await expect(
-    page
-      .getByRole('button', { name: '添加书签' })
-      .locator('.n-button__content'),
-  ).toHaveCSS('color', 'rgb(51, 54, 57)');
-  await page.getByRole('button', { name: '添加书签' }).click();
-  await expect(page.getByRole('button', { name: '书签 (1)' })).toBeVisible();
+    page.getByRole('dialog', { name: '阅读工具' }).getByRole('button', {
+      name: '添加书签',
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '书籍信息', exact: true }),
+  ).toBeVisible();
 
   await page.keyboard.press('Escape');
-  await expect(
-    page.getByRole('button', { name: '添加书签', exact: true }),
-  ).toBeHidden();
+  await expect(page.getByRole('button', { name: '书籍信息' })).toBeHidden();
   await expect(page.locator('.n-drawer-mask')).toHaveCount(0);
   await readerContent.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -992,6 +991,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await page.locator('.n-base-select-menu').getByText('护眼').click();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '目录', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '目录' })
+    .getByRole('button', { name: '第一部' })
+    .click();
   await expect(
     page
       .getByRole('dialog', { name: '目录' })
@@ -1013,7 +1016,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(
     page
       .getByRole('dialog', { name: '阅读工具' })
-      .getByRole('button', { name: '添加书签' })
+      .getByRole('button', { name: '书籍信息' })
       .locator('.n-button__border'),
   ).toHaveCSS('border-top-color', 'rgb(157, 139, 108)');
   await page.keyboard.press('Escape');
