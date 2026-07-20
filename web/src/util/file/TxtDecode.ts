@@ -64,8 +64,13 @@ export const buildTxtSourceLines = (text: string): TxtSourceLine[] => {
   });
 };
 
-const countMatches = (text: string, pattern: RegExp) =>
-  Array.from(text.matchAll(pattern)).length;
+const countMatches = (text: string, pattern: RegExp) => {
+  pattern.lastIndex = 0;
+  if (!pattern.global) return pattern.test(text) ? 1 : 0;
+  let count = 0;
+  while (pattern.exec(text) !== null) count += 1;
+  return count;
+};
 
 const scoreCommonCharacters = (text: string, encoding: TxtEncoding) => {
   let chinese = 0;
@@ -157,37 +162,29 @@ export const decodeTxtBuffer = (
 ): TxtDecodedDocument => {
   const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
   const bom = detectBom(bytes);
-  const decodedCandidates = ENCODINGS.flatMap<
-    TxtDecodeCandidate & { text: string }
-  >((encoding) => {
+  const candidates: TxtDecodeCandidate[] = [];
+  let best: { encoding: TxtEncoding; score: number; text: string } | undefined;
+  for (const encoding of ENCODINGS) {
+    if (bom !== undefined && encoding !== bom.encoding) continue;
     const text = decode(bytes, encoding);
-    if (text === undefined) return [];
+    if (text === undefined) continue;
     const bomBonus = bom?.encoding === encoding ? 10_000 : 0;
-    const bomPenalty =
-      bom !== undefined && bom.encoding !== encoding ? 10_000 : 0;
-    return [
-      {
-        encoding,
-        score: scoreDecodedText(text, encoding, bytes) + bomBonus - bomPenalty,
-        text,
-      },
-    ];
-  });
-
-  decodedCandidates.sort((left, right) => right.score - left.score);
-  const best = decodedCandidates[0];
+    const score = scoreDecodedText(text, encoding, bytes) + bomBonus;
+    candidates.push({ encoding, score });
+    if (best === undefined || score > best.score) {
+      best = { encoding, score, text };
+    }
+  }
   if (best === undefined) {
     throw new Error('无法识别 TXT 文件编码');
   }
+  candidates.sort((left, right) => right.score - left.score);
   const text = normalizeLineEndings(best.text);
   return {
     encoding: best.encoding,
     text,
     lines: buildTxtSourceLines(text),
-    candidates: decodedCandidates.map(({ encoding, score }) => ({
-      encoding,
-      score,
-    })),
+    candidates,
   };
 };
 

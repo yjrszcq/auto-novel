@@ -53,6 +53,12 @@ describe('scored TXT catalog parsing', () => {
       '故事开始。',
       '我读到第五章了吗？答案当然是否定的。',
       '第一章的内容在这里继续说明。',
+      '',
+      '第一章的内容',
+      '',
+      'Chapter One is a useful label.',
+      '',
+      '第一章では人物を紹介する',
       '她说：“Chapter is just a word.”',
       '故事结束。',
     ]);

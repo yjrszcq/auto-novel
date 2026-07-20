@@ -41,6 +41,9 @@ describe('TXT decoding', () => {
     const decoded = decodeTxtBuffer(utf16Bytes('第1章\n本文', littleEndian));
     expect(decoded.encoding).toBe(encoding);
     expect(decoded.text).toBe('第1章\n本文');
+    expect(decoded.candidates.map((candidate) => candidate.encoding)).toEqual([
+      encoding,
+    ]);
   });
 
   it('detects common GB18030 bytes', () => {

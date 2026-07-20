@@ -21,6 +21,7 @@ interface ScoredCandidate extends TxtHeadingDraft {
   numberValue?: number;
   explicit: boolean;
   learned: boolean;
+  proseLike: boolean;
 }
 
 interface WeakCandidate {
@@ -33,7 +34,6 @@ interface WeakCandidate {
 
 interface FormatEvidence {
   count: number;
-  firstLineIndex: number;
   lastLineIndex: number;
   gapTotal: number;
   gapSquaredTotal: number;
@@ -62,8 +62,11 @@ const hasDialogueShape = (text: string) =>
 const hasProsePunctuation = (text: string) =>
   /[，,；;。！？!?]/.test(text) || /\.{3,}/.test(text);
 
-const hasChineseProseSuffix = (text: string) =>
-  /^(?:第?\s*[〇零一二两兩三四五六七八九十百千万萬0-9]+\s*[章节章回話话幕])(?:的内容|中|里|内|告诉|说道|写道|提到)/.test(
+const hasProseGrammar = (text: string) =>
+  /^(?:第?\s*[〇零一二两兩三四五六七八九十百千万萬0-9]+\s*(?:章|节|節|回|話|话|幕))\s*(?:的内容|中|里|内|では|には|告诉|说道|写道|提到)/.test(
+    text,
+  ) ||
+  /^(?:Chapter|Ch\.?|Section|Episode|Ep\.?)\s+.{1,24}\s+(?:is|was|means|contains|describes)\b/i.test(
     text,
   );
 
@@ -192,7 +195,6 @@ const collectFormatEvidence = (
     if (current === undefined) {
       evidence.set(candidate.signature, {
         count: 1,
-        firstLineIndex: candidate.lineIndex,
         lastLineIndex: candidate.lineIndex,
         gapTotal: 0,
         gapSquaredTotal: 0,
@@ -225,6 +227,7 @@ const scoreExplicitCandidate = (
   const line = lines[candidate.lineIndex];
   const text = line?.normalized ?? candidate.title;
   let confidence = candidate.confidence;
+  const proseLike = hasProseGrammar(text);
   const reasons = [`命中${candidate.rule}`];
   if (isBlank(lines[candidate.lineIndex - 1])) {
     confidence += 0.05;
@@ -249,11 +252,11 @@ const scoreExplicitCandidate = (
     confidence -= 0.18;
     reasons.push('对话形态');
   }
-  if (hasChineseProseSuffix(text)) {
-    confidence -= 0.3;
+  if (proseLike) {
+    confidence -= 0.48;
     reasons.push('正文语法');
   }
-  if (repeated) {
+  if (repeated && !proseLike) {
     confidence += 0.06;
     reasons.push('同格式重复');
   }
@@ -270,6 +273,7 @@ const scoreExplicitCandidate = (
     numberValue: candidate.numberValue,
     explicit: true,
     learned: false,
+    proseLike,
   };
 };
 
@@ -291,19 +295,17 @@ const scoreLearnedCandidate = (
   signature: candidate.signature,
   explicit: false,
   learned: repeated,
+  proseLike: false,
 });
 
 const applyNumberSequenceEvidence = (candidates: ScoredCandidate[]) => {
-  const previousBySignature = new Map<
-    string,
-    { lineIndex: number; numberValue: number }
-  >();
+  const previousBySignature = new Map<string, number>();
   for (const candidate of candidates) {
     const numberValue = candidate.numberValue;
-    if (numberValue === undefined) continue;
+    if (numberValue === undefined || candidate.proseLike) continue;
     const previous = previousBySignature.get(candidate.signature);
     if (previous !== undefined) {
-      const difference = numberValue - previous.numberValue;
+      const difference = numberValue - previous;
       if (difference === 1) {
         candidate.confidence += 0.07;
         candidate.reasons?.push('编号连续');
@@ -315,10 +317,7 @@ const applyNumberSequenceEvidence = (candidates: ScoredCandidate[]) => {
         candidate.reasons?.push('编号倒退或重复');
       }
     }
-    previousBySignature.set(candidate.signature, {
-      lineIndex: candidate.lineIndex,
-      numberValue,
-    });
+    previousBySignature.set(candidate.signature, numberValue);
   }
 };
 
@@ -358,21 +357,30 @@ const selectHeadings = (document: TxtDecodedDocument, mode: TxtParseMode) => {
   const weak = collectWeakCandidates(document.lines, explicitLines);
   const weakEvidence = collectFormatEvidence(weak);
 
-  const scored = explicit.map((candidate) =>
-    scoreExplicitCandidate(
-      candidate,
-      document.lines,
-      isRepeatedFormat(explicitEvidence.get(candidate.signature)),
-    ),
-  );
+  const scoredByLine = new Map<number, ScoredCandidate>();
+  for (const candidate of explicit) {
+    scoredByLine.set(
+      candidate.lineIndex,
+      scoreExplicitCandidate(
+        candidate,
+        document.lines,
+        isRepeatedFormat(explicitEvidence.get(candidate.signature)),
+      ),
+    );
+  }
   if (mode !== 'strict') {
     for (const candidate of weak) {
       const repeated = isRepeatedFormat(weakEvidence.get(candidate.signature));
       if (mode === 'balanced' && !repeated) continue;
-      scored.push(scoreLearnedCandidate(candidate, repeated));
+      scoredByLine.set(
+        candidate.lineIndex,
+        scoreLearnedCandidate(candidate, repeated),
+      );
     }
   }
-  scored.sort((left, right) => left.lineIndex - right.lineIndex);
+  const scored = document.lines.flatMap(
+    ({ lineIndex }) => scoredByLine.get(lineIndex) ?? [],
+  );
   applyNumberSequenceEvidence(scored);
 
   const selected = scored.filter((candidate) => {
