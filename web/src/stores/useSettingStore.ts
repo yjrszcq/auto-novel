@@ -19,11 +19,13 @@ export interface Setting {
   };
   homeDownloadMode: LocalDownloadMode;
   homeDownloadPriority: 'gpt' | 'sakura';
+  languageDetectionConfidencePercent?: number;
   embedMetadataInOriginalDownload: boolean;
   embedMetadataInTranslatedDownload: boolean;
 }
 
 export namespace Setting {
+  export const defaultLanguageDetectionConfidencePercent = 95;
   export const defaultValue: Setting = {
     theme: 'system',
     autoTopJobWhenAddTask: false,
@@ -40,6 +42,8 @@ export namespace Setting {
     },
     homeDownloadMode: 'zh',
     homeDownloadPriority: 'gpt',
+    languageDetectionConfidencePercent:
+      defaultLanguageDetectionConfidencePercent,
     embedMetadataInOriginalDownload: false,
     embedMetadataInTranslatedDownload: false,
   };
@@ -63,6 +67,12 @@ export namespace Setting {
     { label: 'GPT', value: 'gpt' },
     { label: 'Sakura', value: 'sakura' },
   ];
+  export const normalizeLanguageDetectionConfidencePercent = (
+    value: number | null | undefined,
+  ) =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.min(100, Math.max(0, Math.round(value)))
+      : defaultLanguageDetectionConfidencePercent;
 }
 
 export const useSettingStore = defineStore(LSKey.Setting, () => {

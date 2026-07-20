@@ -41,6 +41,9 @@ importers:
       pinia:
         specifier: ^4.0.2
         version: 4.0.2(@vue/devtools-api@8.1.5)(typescript@6.0.3)(vue@3.5.40(typescript@6.0.3))
+      tinyld:
+        specifier: 1.3.4
+        version: 1.3.4
       vue:
         specifier: ^3.5.40
         version: 3.5.40(typescript@6.0.3)
@@ -4472,6 +4475,14 @@ packages:
       }
     engines: { node: '>=12.0.0' }
 
+  tinyld@1.3.4:
+    resolution:
+      {
+        integrity: sha512-u26CNoaInA4XpDU+8s/6Cq8xHc2T5M4fXB3ICfXPokUQoLzmPgSZU02TAkFwFMJCWTjk53gtkS8pETTreZwCqw==,
+      }
+    engines: { node: '>= 12.10.0', npm: '>= 6.12.0', yarn: '>= 1.20.0' }
+    hasBin: true
+
   tinyrainbow@3.1.0:
     resolution:
       {
@@ -7958,6 +7969,8 @@ snapshots:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
+
+  tinyld@1.3.4: {}
 
   tinyrainbow@3.1.0: {}
 

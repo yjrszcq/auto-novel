@@ -1,4 +1,8 @@
 import type { TxtImportPlan } from '@/model/TxtCatalog';
+import {
+  appendMissingDetectedLanguages,
+  detectBookLanguages,
+} from '@/domain/BookLanguageDetection';
 import { parseFile, Srt } from '@/util/file';
 import { createUuid } from '@/util/uuid';
 
@@ -36,6 +40,7 @@ const persistVolume = async (
     navigation,
     sourceFormat,
     sourceBookMetadata,
+    bookMetadata,
     importDiagnostics,
     embeddedCover,
   }: {
@@ -46,6 +51,7 @@ const persistVolume = async (
     navigation?: LocalVolumeNavigationEntry[];
     sourceFormat: LocalVolumeMetadata['sourceFormat'];
     sourceBookMetadata: LocalBookMetadata;
+    bookMetadata?: LocalBookMetadata;
     importDiagnostics?: LocalVolumeMetadata['importDiagnostics'];
     embeddedCover?: Blob;
   },
@@ -86,6 +92,7 @@ const persistVolume = async (
     glossary: {},
     favoredId,
     sourceBookMetadata,
+    ...(bookMetadata === undefined ? {} : { bookMetadata }),
     ...(importDiagnostics?.length ? { importDiagnostics } : {}),
   };
   await dao.createVolume({
@@ -144,6 +151,7 @@ export const createReviewedTxtVolume = async (
   file: File,
   favoredId: string,
   plan: TxtImportPlan,
+  languageDetectionConfidencePercent = 95,
 ) => {
   const id = file.name;
   if ((await dao.getMetadata(id)) !== undefined) throw Error('小说已经存在');
@@ -176,6 +184,10 @@ export const createReviewedTxtVolume = async (
         ? undefined
         : `txt:${chapter.parentChapterId}`,
   }));
+  const detectedLanguages = detectBookLanguages(
+    chapters.map((chapter) => chapter.paragraphs),
+    languageDetectionConfidencePercent,
+  );
 
   return persistVolume(dao, {
     id,
@@ -187,7 +199,7 @@ export const createReviewedTxtVolume = async (
     sourceBookMetadata: {
       title: file.name.replace(/\.[^.]+$/, ''),
       authors: [],
-      languages: ['ja'],
+      languages: detectedLanguages,
     },
   });
 };
@@ -196,6 +208,7 @@ export const createVolume = async (
   dao: LocalVolumeDao,
   file: File,
   favoredId: string,
+  languageDetectionConfidencePercent = 95,
 ) => {
   const id = file.name;
   if ((await dao.getMetadata(id)) !== undefined) throw Error('小说已经存在');
@@ -217,11 +230,22 @@ export const createVolume = async (
           authors: [],
           languages: ['ja'],
         };
+  let bookMetadata: LocalBookMetadata | undefined;
 
   if (parsedFile.type === 'epub') {
     const plan = createEpubImportPlan(parsedFile);
     chapters.push(...plan.chapters);
     navigation = plan.navigation;
+    const detectedLanguages = detectBookLanguages(
+      chapters.map((chapter) => chapter.paragraphs),
+      languageDetectionConfidencePercent,
+    );
+    const sourceLanguages = sourceBookMetadata.languages ?? [];
+    const languages = appendMissingDetectedLanguages(
+      sourceLanguages,
+      detectedLanguages,
+    );
+    if (languages.length > sourceLanguages.length) bookMetadata = { languages };
   } else if (parsedFile.type === 'srt') {
     const lines = parsedFile.subtitles
       .flatMap((subtitle) => subtitle.text)
@@ -243,6 +267,7 @@ export const createVolume = async (
     navigation,
     sourceFormat: parsedFile.type,
     sourceBookMetadata,
+    bookMetadata,
     importDiagnostics,
     embeddedCover,
   });

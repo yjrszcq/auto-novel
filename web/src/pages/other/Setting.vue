@@ -22,6 +22,16 @@ const readerSettings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 const readerSettingsLoading = ref(true);
 const readerSettingsSaving = ref(false);
 const readerRepositoryPromise = useLocalVolumeStore();
+const languageDetectionConfidencePercent = computed<number | null>({
+  get: () =>
+    Setting.normalizeLanguageDetectionConfidencePercent(
+      setting.value.languageDetectionConfidencePercent,
+    ),
+  set: (value) => {
+    setting.value.languageDetectionConfidencePercent =
+      Setting.normalizeLanguageDetectionConfidencePercent(value);
+  },
+});
 
 const readerModeOptions: { label: string; value: ReaderMode }[] = [
   { label: '中文', value: 'translated' },
@@ -182,6 +192,33 @@ onMounted(() => {
       </n-list-item>
 
       <n-list-item>
+        <n-flex vertical :size="8">
+          <b>书籍导入</b>
+          <c-action-wrapper
+            title="语言检测阈值"
+            align="center"
+            class="language-detection-setting"
+          >
+            <div class="language-detection-setting__content">
+              <n-input-number
+                v-model:value="languageDetectionConfidencePercent"
+                class="language-detection-setting__input"
+                :min="0"
+                :max="100"
+                :precision="0"
+                :input-props="{ 'aria-label': '语言检测置信度阈值' }"
+              >
+                <template #suffix>%</template>
+              </n-input-number>
+              <n-text depth="3">
+                上传时自动补充置信度高于该值的正文语言；默认 95%。
+              </n-text>
+            </div>
+          </c-action-wrapper>
+        </n-flex>
+      </n-list-item>
+
+      <n-list-item>
         <n-flex vertical>
           <b>本地 EPUB 下载</b>
           <n-checkbox v-model:checked="setting.embedMetadataInOriginalDownload">
@@ -267,6 +304,25 @@ onMounted(() => {
   gap: 16px;
 }
 
+.language-detection-setting {
+  display: grid !important;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.language-detection-setting__content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.language-detection-setting__input {
+  width: 160px;
+  flex: 0 0 auto;
+}
+
 .reader-preload-setting__content {
   display: grid;
   grid-template-columns: minmax(160px, 240px) minmax(240px, 1fr);
@@ -283,9 +339,20 @@ onMounted(() => {
 }
 
 @media (max-width: 700px) {
+  .language-detection-setting,
   .reader-setting-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
+  }
+
+  .language-detection-setting__content {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .language-detection-setting__input {
+    width: 100%;
   }
 
   .reader-preload-setting__content {

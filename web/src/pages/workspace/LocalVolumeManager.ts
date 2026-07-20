@@ -3,6 +3,7 @@ import { shouldEmbedDownloadMetadata } from '@/model/LocalVolume';
 import type { TxtImportPlan } from '@/model/TxtCatalog';
 import { TranslateTaskDescriptor } from '@/model/Translator';
 import {
+  Setting,
   useLocalVolumeStore,
   useSettingStore,
   useWorkspaceStore,
@@ -25,7 +26,13 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
     },
     async addVolume(file: File, favoredId: string = 'default') {
       const repo = await useLocalVolumeStore();
-      const result = await repo.createVolume(file, favoredId);
+      const result = await repo.createVolume(
+        file,
+        favoredId,
+        Setting.normalizeLanguageDetectionConfidencePercent(
+          useSettingStore().setting.languageDetectionConfidencePercent,
+        ),
+      );
       await this.loadVolumes();
       return result;
     },
@@ -35,7 +42,14 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       favoredId: string = 'default',
     ) {
       const repo = await useLocalVolumeStore();
-      const result = await repo.createReviewedTxtVolume(file, favoredId, plan);
+      const result = await repo.createReviewedTxtVolume(
+        file,
+        favoredId,
+        plan,
+        Setting.normalizeLanguageDetectionConfidencePercent(
+          useSettingStore().setting.languageDetectionConfidencePercent,
+        ),
+      );
       await this.loadVolumes();
       return result;
     },

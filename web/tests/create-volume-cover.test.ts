@@ -30,7 +30,7 @@ describe('local EPUB import cover', () => {
         {
           chapterId: 'chapter.xhtml',
           title: '第一章',
-          paragraphs: ['第一段'],
+          paragraphs: ['这是用于语言检测的中文正文。'.repeat(20)],
           sourceRanges: [{ href: 'chapter.xhtml', start: 0, end: 1 }],
         },
       ],
@@ -47,7 +47,7 @@ describe('local EPUB import cover', () => {
         {
           href: 'chapter.xhtml',
           title: '第一章',
-          paragraphs: ['第一段'],
+          paragraphs: ['这是用于语言检测的中文正文。'.repeat(20)],
         },
       ],
     });
@@ -91,6 +91,7 @@ describe('local EPUB import cover', () => {
           authors: ['测试作者'],
           languages: ['ja'],
         },
+        bookMetadata: { languages: ['ja', 'zh'] },
       }),
     });
   });

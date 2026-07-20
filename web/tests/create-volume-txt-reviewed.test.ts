@@ -38,7 +38,7 @@ describe('reviewed TXT volume creation', () => {
       id: 'book.txt',
       sourceFormat: 'txt',
       favoredId: 'favorite',
-      sourceBookMetadata: { title: 'book', languages: ['ja'] },
+      sourceBookMetadata: { title: 'book', languages: ['zh'] },
     });
     expect(metadata?.toc).toHaveLength(3);
     expect(

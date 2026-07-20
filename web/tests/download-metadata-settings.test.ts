@@ -11,4 +11,13 @@ describe('download metadata settings', () => {
     expect(Setting.defaultValue.embedMetadataInOriginalDownload).toBe(false);
     expect(Setting.defaultValue.embedMetadataInTranslatedDownload).toBe(false);
   });
+
+  it('defaults and normalizes the language detection threshold', () => {
+    expect(Setting.defaultValue.languageDetectionConfidencePercent).toBe(95);
+    expect(Setting.normalizeLanguageDetectionConfidencePercent(undefined)).toBe(
+      95,
+    );
+    expect(Setting.normalizeLanguageDetectionConfidencePercent(95.4)).toBe(95);
+    expect(Setting.normalizeLanguageDetectionConfidencePercent(120)).toBe(100);
+  });
 });

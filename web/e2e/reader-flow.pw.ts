@@ -3378,6 +3378,21 @@ test('persists the global reading version selected in Settings', async ({
   await expect(selector.getByRole('radio', { name: '询问' })).toHaveCount(0);
   const preloadControl = page.locator('.reader-preload-setting__input');
   const preloadHelp = page.locator('.reader-preload-setting__help');
+  const languageDetectionInput = page.getByRole('textbox', {
+    name: '语言检测置信度阈值',
+  });
+  await expect(languageDetectionInput).toHaveValue('95');
+  await languageDetectionInput.fill('97');
+  await languageDetectionInput.press('Tab');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem('auto-novel:settings') ?? '{}')
+            .languageDetectionConfidencePercent,
+      ),
+    )
+    .toBe(97);
   const retranslationSelector = page.locator('#reader-retranslation-policy');
   const desktopControlBounds = await Promise.all(
     [selector, preloadControl, retranslationSelector].map((control) =>
@@ -3446,6 +3461,7 @@ test('persists the global reading version selected in Settings', async ({
   await page.reload();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
   await expect(preloadInput).toHaveValue('7');
+  await expect(languageDetectionInput).toHaveValue('97');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobilePreloadBounds = await preloadControl.boundingBox();
@@ -3453,9 +3469,11 @@ test('persists the global reading version selected in Settings', async ({
   const mobilePreloadRowBounds = await page
     .locator('.reader-preload-setting')
     .boundingBox();
+  const mobileLanguageInputBounds = await languageDetectionInput.boundingBox();
   expect(mobilePreloadBounds).not.toBeNull();
   expect(mobileHelpBounds).not.toBeNull();
   expect(mobilePreloadRowBounds).not.toBeNull();
+  expect(mobileLanguageInputBounds).not.toBeNull();
   expect(mobileHelpBounds!.y).toBeGreaterThanOrEqual(
     mobilePreloadBounds!.y + mobilePreloadBounds!.height,
   );
@@ -3467,6 +3485,10 @@ test('persists the global reading version selected in Settings', async ({
   ).toBeLessThanOrEqual(
     mobilePreloadRowBounds!.x + mobilePreloadRowBounds!.width,
   );
+  expect(mobileLanguageInputBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(
+    mobileLanguageInputBounds!.x + mobileLanguageInputBounds!.width,
+  ).toBeLessThanOrEqual(390);
 });
 
 test('completes, persists, exports, and reads a concurrent GPT job', async ({
