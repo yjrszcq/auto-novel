@@ -21,12 +21,13 @@ import {
 const props = defineProps<{
   files: ParsedFile[];
   initialGlossary?: Glossary;
+  initialExcludedWords?: string[];
   initialMinimumCount?: number;
   applyLabel?: string;
   applying?: boolean;
 }>();
 const emit = defineEmits<{
-  apply: [glossary: Glossary];
+  apply: [glossary: Glossary, excludedWords: string[]];
 }>();
 
 const message = useMessage();
@@ -145,8 +146,17 @@ watch(
       new DOMException('源文件已变化', 'AbortError'),
     );
     sourceCounts.value = new Map();
-    deletedWords.value = new Set();
-    deletionHistory.value = [];
+    const initialExcludedWords = [
+      ...new Set(
+        (props.initialExcludedWords ?? [])
+          .map((word) => word.trim())
+          .filter(Boolean),
+      ),
+    ];
+    deletedWords.value = new Set(initialExcludedWords);
+    deletionHistory.value = initialExcludedWords.length
+      ? [initialExcludedWords]
+      : [];
     selectedWords.value = [];
     translations.value = Object.fromEntries(
       Object.entries(props.initialGlossary ?? {}).filter(
@@ -232,6 +242,9 @@ const glossaryValue = (): Glossary =>
       return translation ? [[word, translation]] : [];
     }),
   );
+
+const applyGlossary = () =>
+  emit('apply', glossaryValue(), [...deletedWords.value].sort());
 
 const glossaryText = () => Glossary.toText(glossaryValue());
 
@@ -415,7 +428,7 @@ onBeforeUnmount(() => {
         type="primary"
         size="small"
         :round="false"
-        @action="emit('apply', glossaryValue())"
+        @action="applyGlossary"
       />
       <c-button
         :label="allVisibleSelected ? '取消全选' : '全选当前'"

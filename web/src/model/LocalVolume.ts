@@ -66,6 +66,7 @@ export interface LocalVolumeMetadata {
   sourceFormat: 'txt' | 'epub' | 'srt';
   glossaryId: string;
   glossary: Glossary;
+  glossaryExcludedWords?: string[];
   favoredId: string;
   sourceBookMetadata: LocalBookMetadata;
   importDiagnostics?: LocalVolumeImportDiagnostic[];

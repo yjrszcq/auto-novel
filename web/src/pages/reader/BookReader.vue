@@ -136,6 +136,7 @@ const clearingAutomaticTranslationCache = ref(false);
 const readerGlossaryError = ref('');
 const readerGlossaryFiles = shallowRef<ParsedFile[]>([]);
 const readerGlossaryInitial = shallowRef<Glossary>({});
+const readerGlossaryInitialExcludedWords = shallowRef<string[]>([]);
 let readerGlossaryRequest = 0;
 const interactiveInitialText = ref<string>();
 const searchQuery = ref('');
@@ -461,6 +462,9 @@ const openReaderGlossary = async () => {
     const parsed = await parseFile(stored.file);
     if (request !== readerGlossaryRequest || !showReaderGlossary.value) return;
     readerGlossaryInitial.value = { ...volume.glossary };
+    readerGlossaryInitialExcludedWords.value = [
+      ...(volume.glossaryExcludedWords ?? []),
+    ];
     readerGlossaryFiles.value = [parsed];
   } catch (reason) {
     if (request === readerGlossaryRequest && showReaderGlossary.value) {
@@ -473,7 +477,10 @@ const openReaderGlossary = async () => {
   }
 };
 
-const applyReaderGlossary = async (glossary: Glossary) => {
+const applyReaderGlossary = async (
+  glossary: Glossary,
+  excludedWords: string[],
+) => {
   if (readerGlossaryApplying.value) return;
   readerGlossaryApplying.value = true;
   try {
@@ -483,7 +490,7 @@ const applyReaderGlossary = async (glossary: Glossary) => {
     automaticTranslationSession.clearDrafts();
     temporaryTranslations.clear();
     const repository = await repositoryPromise;
-    await repository.updateGlossary(bookId.value, glossary);
+    await repository.updateGlossary(bookId.value, glossary, excludedWords);
     await repository.deleteReaderAutomaticTranslationCaches({
       bookId: bookId.value,
     });
@@ -3953,6 +3960,7 @@ onBeforeUnmount(() => {
         <ToolboxItemGlossary
           :files="readerGlossaryFiles"
           :initial-glossary="readerGlossaryInitial"
+          :initial-excluded-words="readerGlossaryInitialExcludedWords"
           :initial-minimum-count="1"
           :applying="readerGlossaryApplying"
           apply-label="应用到本书"

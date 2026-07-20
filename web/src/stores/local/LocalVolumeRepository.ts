@@ -20,10 +20,19 @@ export const createLocalVolumeStore = async () => {
 
   const deleteVolume = dao.deleteVolume;
 
-  const updateGlossary = (id: string, glossary: Glossary) =>
+  const updateGlossary = (
+    id: string,
+    glossary: Glossary,
+    excludedWords?: string[],
+  ) =>
     dao.updateMetadata(id, (value) => {
       value.glossary = glossary;
       value.glossaryId = createUuid();
+      if (excludedWords !== undefined) {
+        value.glossaryExcludedWords = [
+          ...new Set(excludedWords.map((word) => word.trim()).filter(Boolean)),
+        ];
+      }
       return value;
     });
 
