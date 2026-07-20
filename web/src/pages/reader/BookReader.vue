@@ -2977,9 +2977,8 @@ const chapterSummaryById = computed(() => {
 
 const navigateFromCatalog = (entry: ReaderNavigationEntry) => {
   if (catalogParentIds.value.has(entry.id)) {
-    const wasCollapsed = collapsedCatalogEntryIds.value.has(entry.id);
     toggleCatalogEntry(entry.id);
-    if (!wasCollapsed) return;
+    return;
   }
   if (entry.href !== undefined && result.value?.chapter.epub !== undefined) {
     navigateToEpubHref(entry.href, true);

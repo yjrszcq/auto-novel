@@ -340,7 +340,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
         createAt: 1,
         toc: [{ chapterId: '0' }, { chapterId: '1' }],
         navigation: [
-          { id: 'part', title: '第一部', level: 0 },
+          { id: 'part', title: '第一部', level: 0, chapterId: '1' },
           {
             id: 'chapter-0',
             title: '安全开端',
@@ -692,6 +692,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
     .locator('.book-reader__catalog-item')
     .filter({ hasText: '第一部' })
     .click();
+  await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
   await expect(
     page
       .getByRole('dialog', { name: '目录' })
