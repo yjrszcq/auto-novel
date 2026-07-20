@@ -49,9 +49,14 @@ const error = ref<string>();
 const LINE_HEIGHT = 38;
 const LINE_WINDOW_SIZE = 120;
 const LINE_OVERSCAN = 20;
+const HEADING_HEIGHT = 54;
+const HEADING_WINDOW_SIZE = 80;
+const HEADING_OVERSCAN = 12;
 const textViewport = ref<HTMLElement>();
+const headingViewport = ref<HTMLElement>();
 const visibleLines = shallowRef<TxtSourceLine[]>([]);
 const visibleStartLine = ref(0);
+const headingScrollTop = ref(0);
 const selectedLine = ref(0);
 const contextLines = shallowRef<TxtSourceLine[]>([]);
 const searchQuery = ref('');
@@ -62,6 +67,28 @@ const totalTextHeight = computed(
   () => (snapshot.value?.lineCount ?? 0) * LINE_HEIGHT,
 );
 const visibleTextOffset = computed(() => visibleStartLine.value * LINE_HEIGHT);
+const visibleHeadingStart = computed(() => {
+  const requested = Math.max(
+    Math.floor(headingScrollTop.value / HEADING_HEIGHT) - HEADING_OVERSCAN,
+    0,
+  );
+  return Math.min(
+    requested,
+    Math.max(headings.value.length - HEADING_WINDOW_SIZE, 0),
+  );
+});
+const visibleHeadings = computed(() =>
+  headings.value.slice(
+    visibleHeadingStart.value,
+    visibleHeadingStart.value + HEADING_WINDOW_SIZE,
+  ),
+);
+const totalHeadingHeight = computed(
+  () => headings.value.length * HEADING_HEIGHT,
+);
+const visibleHeadingOffset = computed(
+  () => visibleHeadingStart.value * HEADING_HEIGHT,
+);
 const selectedHeadingLines = computed(
   () => new Set(headings.value.map(({ lineIndex }) => lineIndex)),
 );
@@ -127,6 +154,10 @@ const requestVisibleLines = async () => {
 };
 
 const requestVisibleLinesDebounced = useDebounceFn(requestVisibleLines, 24);
+
+const handleHeadingScroll = () => {
+  headingScrollTop.value = headingViewport.value?.scrollTop ?? 0;
+};
 
 const jumpToLine = async (lineIndex: number) => {
   const currentSnapshot = snapshot.value;
@@ -211,6 +242,12 @@ const disposeSession = () => {
   contextLines.value = [];
 };
 
+const releaseSessionDocument = () => {
+  lineRequestVersion += 1;
+  session.value?.dispose();
+  session.value = undefined;
+};
+
 const initialize = async () => {
   const file = props.file;
   if (file === undefined) return;
@@ -254,6 +291,7 @@ const confirmPlan = async () => {
   building.value = true;
   try {
     const plan = await currentSession.buildPlan(editor.snapshot);
+    releaseSessionDocument();
     emit('confirm', plan);
   } catch (cause) {
     if ((cause as DOMException).name !== 'AbortError')
@@ -430,51 +468,66 @@ onBeforeUnmount(disposeSession);
             <strong>目录</strong>
             <n-text depth="3">{{ headings.length }} 项，按原文顺序排列</n-text>
           </header>
-          <div class="txt-heading-list">
+          <div
+            ref="headingViewport"
+            class="txt-heading-list"
+            @scroll="handleHeadingScroll"
+          >
             <div
-              v-for="heading in headings"
-              :key="heading.lineIndex"
-              class="txt-heading-row"
-              @click="jumpToLine(heading.lineIndex)"
+              v-if="headings.length > 0"
+              class="txt-heading-space"
+              :style="{ height: `${totalHeadingHeight}px` }"
             >
-              <span class="heading-line">{{ heading.lineIndex + 1 }}</span>
-              <n-input
-                :value="heading.title"
-                size="small"
-                @click.stop
-                @update:value="
-                  (title) => updateHeading(heading.lineIndex, { title })
-                "
-              />
-              <n-select
-                :value="heading.level"
-                :options="levelOptions"
-                size="small"
-                class="heading-level"
-                @click.stop
-                @update:value="
-                  (level) => updateHeading(heading.lineIndex, { level })
-                "
-              />
-              <span class="heading-confidence">
-                {{ Math.round(heading.confidence * 100) }}%
-              </span>
-              <n-tooltip>
-                <template #trigger>
-                  <n-button
-                    quaternary
-                    circle
-                    type="error"
+              <div
+                class="txt-visible-headings"
+                :style="{ transform: `translateY(${visibleHeadingOffset}px)` }"
+              >
+                <div
+                  v-for="heading in visibleHeadings"
+                  :key="heading.lineIndex"
+                  class="txt-heading-row"
+                  @click="jumpToLine(heading.lineIndex)"
+                >
+                  <span class="heading-line">{{ heading.lineIndex + 1 }}</span>
+                  <n-input
+                    :value="heading.title"
                     size="small"
-                    @click.stop="removeHeading(heading.lineIndex)"
-                  >
-                    <template #icon>
-                      <n-icon :component="DeleteOutlineOutlined" />
+                    @click.stop
+                    @update:value="
+                      (title) => updateHeading(heading.lineIndex, { title })
+                    "
+                  />
+                  <n-select
+                    :value="heading.level"
+                    :options="levelOptions"
+                    size="small"
+                    class="heading-level"
+                    @click.stop
+                    @update:value="
+                      (level) => updateHeading(heading.lineIndex, { level })
+                    "
+                  />
+                  <span class="heading-confidence">
+                    {{ Math.round(heading.confidence * 100) }}%
+                  </span>
+                  <n-tooltip>
+                    <template #trigger>
+                      <n-button
+                        quaternary
+                        circle
+                        type="error"
+                        size="small"
+                        @click.stop="removeHeading(heading.lineIndex)"
+                      >
+                        <template #icon>
+                          <n-icon :component="DeleteOutlineOutlined" />
+                        </template>
+                      </n-button>
                     </template>
-                  </n-button>
-                </template>
-                {{ heading.reasons?.join('；') || heading.rule }}
-              </n-tooltip>
+                    {{ heading.reasons?.join('；') || heading.rule }}
+                  </n-tooltip>
+                </div>
+              </div>
             </div>
             <n-empty
               v-if="headings.length === 0"
@@ -649,11 +702,24 @@ onBeforeUnmount(disposeSession);
 }
 
 .txt-heading-list {
-  padding: 4px 8px;
+  position: relative;
+  padding: 0 8px;
+}
+
+.txt-heading-space {
+  position: relative;
+}
+
+.txt-visible-headings {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
 }
 
 .txt-heading-row {
-  min-height: 54px;
+  box-sizing: border-box;
+  height: 54px;
   padding: 5px 0;
   border-bottom: 1px solid var(--n-border-color);
   cursor: pointer;

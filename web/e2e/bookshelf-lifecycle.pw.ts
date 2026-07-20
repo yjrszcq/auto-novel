@@ -59,7 +59,12 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
       {
         name: 'Review Two.txt',
         mimeType: 'text/plain',
-        buffer: Buffer.from('Chapter 1 Start\nbody'),
+        buffer: Buffer.from(
+          Array.from(
+            { length: 500 },
+            (_, index) => `Chapter ${index + 1} Title\nbody ${index + 1}`,
+          ).join('\n'),
+        ),
       },
     ]);
 
@@ -91,6 +96,10 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
 
   await preview.getByRole('button', { name: '跳过此书', exact: true }).click();
   await expect(preview).toContainText('Review Two.txt');
+  await expect(preview.locator('.txt-heading-row')).not.toHaveCount(0);
+  expect(await preview.locator('.txt-heading-row').count()).toBeLessThanOrEqual(
+    80,
+  );
   await preview.getByRole('button', { name: '取消批次', exact: true }).click();
   await expect(preview).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Review One' })).toHaveCount(
