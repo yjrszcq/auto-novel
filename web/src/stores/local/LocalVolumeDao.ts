@@ -243,6 +243,9 @@ export const createLocalVolumeDao = async (databaseName = 'volumes') => {
       if (!metadata.toc.some((entry) => entry.chapterId === chapterId)) {
         throw new Error('章节不在目录中');
       }
+      if (translation.paragraphs.length !== chapter.paragraphs.length) {
+        throw new Error('翻译段落数量与原文不一致');
+      }
       chapter[translatorId] = translation;
       metadata.toc
         .filter((entry) => entry.chapterId === chapterId)

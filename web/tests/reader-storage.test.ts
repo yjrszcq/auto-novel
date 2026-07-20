@@ -293,6 +293,21 @@ describe('reader storage', () => {
     ]);
     expect((await dao.getMetadata('book'))?.toc[0]?.gpt).toBe('translated');
 
+    await expect(
+      dao.putChapterTranslation({
+        bookId: 'book',
+        chapterId: '0',
+        translatorId: 'sakura',
+        translation: {
+          glossaryId: 'invalid',
+          glossary: {},
+          paragraphs: [],
+        },
+      }),
+    ).rejects.toThrow('翻译段落数量与原文不一致');
+    expect((await dao.getChapter('book', '0'))?.sakura).toBeUndefined();
+    expect((await dao.getMetadata('book'))?.toc[0]?.sakura).toBeUndefined();
+
     await dao.createChapter({
       id: 'orphan/0',
       volumeId: 'orphan',

@@ -127,6 +127,15 @@ export class ReaderAutomaticTranslationCoordinator {
       async ({ chapterId, targets: chapterTargets }, _index, workerSignal) => {
         const chapter = await this.dependencies.loadChapter(chapterId);
         if (chapter === undefined) throw new Error('章节不存在');
+        if (
+          chapterTargets.some(
+            ({ segmentId, segmentIndex, original }) =>
+              chapter.segmentIds[segmentIndex] !== segmentId ||
+              chapter.paragraphs[segmentIndex] !== original,
+          )
+        ) {
+          throw new Error('阅读内容已更新，请重新规划自动翻译');
+        }
         const persisted = reusableParagraphs(chapter, selection);
         const missingTargets = chapterTargets.filter(
           ({ segmentIndex }) => !hasTranslation(persisted?.[segmentIndex]),
@@ -141,6 +150,9 @@ export class ReaderAutomaticTranslationCoordinator {
           );
           if (translated.length !== claimed.length) {
             throw new Error('翻译结果行数不匹配');
+          }
+          if (translated.some((value) => !hasTranslation(value))) {
+            throw new Error('翻译结果包含空白内容');
           }
           const values = claimed.map((target, index) => ({
             chapterId: target.chapterId,
