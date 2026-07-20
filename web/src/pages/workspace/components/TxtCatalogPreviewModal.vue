@@ -2,7 +2,9 @@
 import {
   AddOutlined,
   DeleteOutlineOutlined,
+  RestoreOutlined,
   SearchOutlined,
+  UndoOutlined,
 } from '@vicons/material';
 import { useDebounceFn, useMediaQuery } from '@vueuse/core';
 
@@ -43,6 +45,9 @@ const snapshot = shallowRef<TxtCatalogPreviewSnapshot>();
 const mode = ref<TxtParseMode>(getStoredTxtParseMode());
 const headings = ref<TxtHeadingDraft[]>([]);
 const editor = new TxtCatalogDraftEditor();
+const minimumConfidencePercent = ref(0);
+const canUndo = ref(false);
+const hasManualChanges = ref(false);
 const loading = ref(false);
 const building = ref(false);
 const busy = computed(() => building.value || props.submitting);
@@ -71,6 +76,13 @@ const totalTextHeight = computed(
   () => (snapshot.value?.lineCount ?? 0) * LINE_HEIGHT,
 );
 const visibleTextOffset = computed(() => visibleStartLine.value * LINE_HEIGHT);
+const reviewedHeadings = computed(() =>
+  headings.value.filter(
+    (heading) =>
+      heading.isManual ||
+      heading.confidence * 100 >= minimumConfidencePercent.value,
+  ),
+);
 const visibleHeadingStart = computed(() => {
   const requested = Math.max(
     Math.floor(headingScrollTop.value / HEADING_HEIGHT) - HEADING_OVERSCAN,
@@ -78,28 +90,31 @@ const visibleHeadingStart = computed(() => {
   );
   return Math.min(
     requested,
-    Math.max(headings.value.length - HEADING_WINDOW_SIZE, 0),
+    Math.max(reviewedHeadings.value.length - HEADING_WINDOW_SIZE, 0),
   );
 });
 const visibleHeadings = computed(() =>
-  headings.value.slice(
+  reviewedHeadings.value.slice(
     visibleHeadingStart.value,
     visibleHeadingStart.value + HEADING_WINDOW_SIZE,
   ),
 );
 const totalHeadingHeight = computed(
-  () => headings.value.length * HEADING_HEIGHT,
+  () => reviewedHeadings.value.length * HEADING_HEIGHT,
 );
 const visibleHeadingOffset = computed(
   () => visibleHeadingStart.value * HEADING_HEIGHT,
 );
 const selectedHeadingLines = computed(
-  () => new Set(headings.value.map(({ lineIndex }) => lineIndex)),
+  () => new Set(reviewedHeadings.value.map(({ lineIndex }) => lineIndex)),
+);
+const filteredHeadingCount = computed(
+  () => headings.value.length - reviewedHeadings.value.length,
 );
 const summaryText = computed(() => {
   const current = snapshot.value;
   if (current === undefined) return '';
-  return `${current.encoding} · ${current.lineCount.toLocaleString()} 行 · ${headings.value.length.toLocaleString()} 个目录`;
+  return `${current.encoding} · ${current.lineCount.toLocaleString()} 行 · 将采用 ${reviewedHeadings.value.length.toLocaleString()} 个目录`;
 });
 const modeOptions: { label: string; value: TxtParseMode }[] = [
   { label: '严格', value: 'strict' },
@@ -119,10 +134,14 @@ const confirmText = computed(() =>
 
 const replaceDrafts = (drafts: readonly TxtHeadingDraft[]) => {
   editor.reset(drafts);
+  canUndo.value = editor.canUndo;
+  hasManualChanges.value = editor.hasManualChanges;
   headings.value = editor.snapshot;
 };
 
 const refreshHeadings = () => {
+  canUndo.value = editor.canUndo;
+  hasManualChanges.value = editor.hasManualChanges;
   headings.value = editor.snapshot;
 };
 
@@ -182,8 +201,13 @@ const jumpToLine = async (lineIndex: number) => {
 };
 
 const toggleHeading = (line: TxtSourceLine) => {
-  if (editor.has(line.lineIndex)) editor.remove(line.lineIndex);
-  else editor.add(line.lineIndex, line.raw, 1);
+  if (selectedHeadingLines.value.has(line.lineIndex)) {
+    editor.remove(line.lineIndex);
+  } else if (editor.has(line.lineIndex)) {
+    editor.include(line.lineIndex);
+  } else {
+    editor.add(line.lineIndex, line.raw, 1);
+  }
   refreshHeadings();
   void loadContext(line.lineIndex);
 };
@@ -199,6 +223,22 @@ const updateHeading = (
 const removeHeading = (lineIndex: number) => {
   editor.remove(lineIndex);
   refreshHeadings();
+};
+
+const undoDraft = () => {
+  if (!editor.undo()) return;
+  refreshHeadings();
+};
+
+const restoreAutomatic = () => {
+  if (!editor.restoreAutomatic()) return;
+  refreshHeadings();
+};
+
+const setMinimumConfidence = (value: number | null) => {
+  minimumConfidencePercent.value = Math.min(Math.max(value ?? 0, 0), 100);
+  headingScrollTop.value = 0;
+  if (headingViewport.value !== undefined) headingViewport.value.scrollTop = 0;
 };
 
 const searchNext = async () => {
@@ -266,6 +306,7 @@ const initialize = async () => {
   error.value = undefined;
   progress.value = 0;
   progressMessage.value = '准备解析';
+  minimumConfidencePercent.value = 0;
   const nextSession = createTxtCatalogSession();
   session.value = nextSession;
   nextSession.onProgress((nextProgress) => {
@@ -300,7 +341,11 @@ const confirmPlan = async () => {
   }
   building.value = true;
   try {
-    const plan = await currentSession.buildPlan(editor.snapshot);
+    const plan = await currentSession.buildPlan(
+      editor.snapshotWithMinimumConfidence(
+        minimumConfidencePercent.value / 100,
+      ),
+    );
     releaseSessionDocument();
     emit('confirm', plan);
   } catch (cause) {
@@ -384,6 +429,43 @@ onBeforeUnmount(disposeSession);
     <n-alert v-else-if="error" type="error">{{ error }}</n-alert>
 
     <template v-if="snapshot">
+      <div class="txt-catalog-review-controls">
+        <n-flex align="center" :wrap="true" :size="[8, 8]">
+          <span>最低置信度</span>
+          <n-input-number
+            class="txt-confidence-input"
+            :value="minimumConfidencePercent"
+            :min="0"
+            :max="100"
+            :step="1"
+            :precision="0"
+            :show-button="false"
+            :disabled="loading || busy"
+            :input-props="{ 'aria-label': '最低置信度' }"
+            @update:value="setMinimumConfidence"
+          >
+            <template #suffix>%</template>
+          </n-input-number>
+          <n-text depth="3">
+            自动目录 ≥ {{ minimumConfidencePercent }}%；人工调整始终保留
+          </n-text>
+          <n-text depth="3">已过滤 {{ filteredHeadingCount }} 项</n-text>
+        </n-flex>
+        <n-button-group>
+          <n-button :disabled="!canUndo || loading || busy" @click="undoDraft">
+            <template #icon><n-icon :component="UndoOutlined" /></template>
+            撤回
+          </n-button>
+          <n-button
+            :disabled="!hasManualChanges || loading || busy"
+            @click="restoreAutomatic"
+          >
+            <template #icon><n-icon :component="RestoreOutlined" /></template>
+            还原自动结果
+          </n-button>
+        </n-button-group>
+      </div>
+
       <div class="txt-catalog-search">
         <n-input
           v-model:value="searchQuery"
@@ -450,6 +532,7 @@ onBeforeUnmount(disposeSession);
                   <n-button
                     size="tiny"
                     quaternary
+                    :disabled="loading || busy"
                     :type="
                       selectedHeadingLines.has(line.lineIndex)
                         ? 'error'
@@ -476,7 +559,10 @@ onBeforeUnmount(disposeSession);
         <section class="txt-catalog-panel">
           <header>
             <strong>目录</strong>
-            <n-text depth="3">{{ headings.length }} 项，按原文顺序排列</n-text>
+            <n-text depth="3">
+              {{ reviewedHeadings.length }} /
+              {{ headings.length }} 项，按原文顺序排列
+            </n-text>
           </header>
           <div
             ref="headingViewport"
@@ -484,7 +570,7 @@ onBeforeUnmount(disposeSession);
             @scroll="handleHeadingScroll"
           >
             <div
-              v-if="headings.length > 0"
+              v-if="reviewedHeadings.length > 0"
               class="txt-heading-space"
               :style="{ height: `${totalHeadingHeight}px` }"
             >
@@ -502,6 +588,7 @@ onBeforeUnmount(disposeSession);
                   <n-input
                     :value="heading.title"
                     size="small"
+                    :disabled="loading || busy"
                     @click.stop
                     @update:value="
                       (title) => updateHeading(heading.lineIndex, { title })
@@ -512,6 +599,7 @@ onBeforeUnmount(disposeSession);
                     :options="levelOptions"
                     size="small"
                     class="heading-level"
+                    :disabled="loading || busy"
                     @click.stop
                     @update:value="
                       (level) => updateHeading(heading.lineIndex, { level })
@@ -527,6 +615,7 @@ onBeforeUnmount(disposeSession);
                         circle
                         type="error"
                         size="small"
+                        :disabled="loading || busy"
                         @click.stop="removeHeading(heading.lineIndex)"
                       >
                         <template #icon>
@@ -540,8 +629,12 @@ onBeforeUnmount(disposeSession);
               </div>
             </div>
             <n-empty
-              v-if="headings.length === 0"
-              description="未识别目录，导入时将每 1000 行分段"
+              v-if="reviewedHeadings.length === 0"
+              :description="
+                headings.length === 0
+                  ? '未识别目录，导入时将每 1000 行分段'
+                  : '当前置信度下没有保留的目录，将每 1000 行分段'
+              "
             >
               <template #extra>可在左侧正文中人工添加目录</template>
             </n-empty>
@@ -580,6 +673,7 @@ onBeforeUnmount(disposeSession);
 
 <style scoped>
 .txt-catalog-toolbar,
+.txt-catalog-review-controls,
 .txt-catalog-search,
 .txt-catalog-panel > header,
 .txt-heading-row {
@@ -591,6 +685,17 @@ onBeforeUnmount(disposeSession);
 .txt-catalog-toolbar {
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.txt-catalog-review-controls {
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.txt-confidence-input {
+  width: 104px;
 }
 
 .txt-catalog-file-name {
@@ -761,6 +866,15 @@ onBeforeUnmount(disposeSession);
   .txt-catalog-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .txt-catalog-review-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .txt-catalog-review-controls > :deep(.n-button-group) {
+    align-self: flex-end;
   }
 
   .txt-catalog-file-name {

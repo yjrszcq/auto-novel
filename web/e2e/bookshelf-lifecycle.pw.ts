@@ -60,10 +60,10 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
         name: 'Review Two.txt',
         mimeType: 'text/plain',
         buffer: Buffer.from(
-          Array.from(
+          `${Array.from(
             { length: 500 },
             (_, index) => `Chapter ${index + 1} Title\nbody ${index + 1}`,
-          ).join('\n'),
+          ).join('\n')}\nEpilogue\nclosing body`,
         ),
       },
     ]);
@@ -81,6 +81,20 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
   );
   await preview.locator('.txt-source-line').first().locator('button').click();
   await expect(preview.locator('.txt-heading-row')).toHaveCount(1);
+  await preview.getByRole('button', { name: '撤回', exact: true }).click();
+  await expect(preview.locator('.txt-heading-row')).toHaveCount(0);
+
+  await preview.locator('.txt-source-line').first().locator('button').click();
+  await preview
+    .getByRole('button', { name: '还原自动结果', exact: true })
+    .click();
+  await expect(preview.locator('.txt-heading-row')).toHaveCount(0);
+  await preview.getByRole('button', { name: '撤回', exact: true }).click();
+  await expect(preview.locator('.txt-heading-row')).toHaveCount(1);
+  await preview
+    .getByRole('button', { name: '还原自动结果', exact: true })
+    .click();
+  await expect(preview.locator('.txt-heading-row')).toHaveCount(0);
 
   await preview.getByRole('button', { name: '严格', exact: true }).click();
   await page
@@ -100,14 +114,41 @@ test('reviews queued TXT catalogs without overflowing a mobile viewport', async 
   expect(await preview.locator('.txt-heading-row').count()).toBeLessThanOrEqual(
     80,
   );
-  await preview.getByRole('button', { name: '取消批次', exact: true }).click();
+  const minimumConfidence = preview.getByRole('textbox', {
+    name: '最低置信度',
+  });
+  await minimumConfidence.click();
+  await minimumConfidence.press('Control+A');
+  await minimumConfidence.pressSequentially('96');
+  await minimumConfidence.press('Tab');
+  await expect(preview).toContainText('500 / 501 项');
+  await expect(preview).toContainText('已过滤 1 项');
+  await preview
+    .getByRole('button', { name: '确认目录并导入', exact: true })
+    .click();
   await expect(preview).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Review One' })).toHaveCount(
     0,
   );
-  await expect(page.getByRole('heading', { name: 'Review Two' })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole('heading', { name: 'Review Two' })).toBeVisible();
+  const importedChapterCount = await page.evaluate(async () => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const count = await new Promise<number>((resolve, reject) => {
+      const request = database
+        .transaction('chapter')
+        .objectStore('chapter')
+        .count();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    database.close();
+    return count;
+  });
+  expect(importedChapterCount).toBe(500);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
