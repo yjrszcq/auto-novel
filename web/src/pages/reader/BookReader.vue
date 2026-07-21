@@ -107,6 +107,7 @@ import {
   readerContinuousBufferSegmentBatchSize,
   type ReaderContinuousBufferDirection,
 } from './core/ReaderContinuousBuffer';
+import { planReaderChapterTransition } from './core/ReaderChapterTransition';
 
 import {
   useGptWorkspaceStore,
@@ -3209,6 +3210,27 @@ const nextChapterId = computed(() =>
     : undefined,
 );
 
+const scrolledChapterTransitions = computed(() => {
+  if (result.value?.kind !== 'ready') return {};
+  const input = {
+    chapters: result.value.chapters,
+    navigation: result.value.navigation,
+    currentIndex: currentChapterIndex.value,
+  };
+  return {
+    previous: planReaderChapterTransition({ ...input, direction: 'previous' }),
+    next: planReaderChapterTransition({ ...input, direction: 'next' }),
+  };
+});
+
+const getScrolledChapterTransition = (direction: 'previous' | 'next') =>
+  scrolledChapterTransitions.value[direction];
+
+const isScrolledChapterCheckpoint = (
+  direction: 'previous' | 'next',
+  summaryIndex: number,
+) => getScrolledChapterTransition(direction)?.checkpointIndex === summaryIndex;
+
 function navigateScrolledChapterBoundary(
   direction: 'previous' | 'next',
   requireDocumentBoundary = true,
@@ -3220,8 +3242,11 @@ function navigateScrolledChapterBoundary(
       : window.scrollY + window.innerHeight >=
         document.documentElement.scrollHeight - 2;
   if (requireDocumentBoundary && !atBoundary) return false;
+  const transition = getScrolledChapterTransition(direction);
   const chapterId =
-    direction === 'previous' ? previousChapterId.value : nextChapterId.value;
+    transition === undefined || result.value?.kind !== 'ready'
+      ? undefined
+      : result.value.chapters[transition.targetIndex]?.id;
   if (chapterId === undefined) return false;
   chapterBoundaryNavigationPending = true;
   navigate(chapterId, direction === 'previous' ? 'end' : 'start');
@@ -3417,8 +3442,13 @@ const fillContinuousPreviewDirection = async (
     const adjacentSummaryIndex =
       (activePreview?.summaryIndex ?? currentChapterIndex) +
       (direction === 'previous' ? -1 : 1);
+    const checkpointIndex =
+      getScrolledChapterTransition(direction)?.checkpointIndex;
+    const hasCheckpoint = previews.some(
+      ({ summaryIndex }) => summaryIndex === checkpointIndex,
+    );
     const decision = planReaderContinuousBuffer({
-      renderedHeight: getPreviewBufferHeight(direction),
+      renderedHeight: hasCheckpoint ? getPreviewBufferHeight(direction) : 0,
       targetHeight: getReaderContinuousBufferTarget(
         getReaderVisibleBottom() - getReaderVisibleTop(),
         direction,
@@ -4046,13 +4076,15 @@ onBeforeUnmount(() => {
       >
         <template v-if="resolvedFlow === 'scrolled'">
           <section
-            v-for="(preview, index) in previousChapterPreviews"
+            v-for="preview in previousChapterPreviews"
             :key="`previous:${preview.chapter.chapterId}`"
             class="book-reader__continuous-chapter book-reader__chapter-preview"
             data-reader-chapter-preview="previous"
             :data-reader-preview-chapter-id="preview.chapter.chapterId"
             :data-reader-adjacent-preview="
-              index === previousChapterPreviews.length - 1 ? 'true' : undefined
+              isScrolledChapterCheckpoint('previous', preview.summaryIndex)
+                ? 'true'
+                : undefined
             "
           >
             <ReaderEpubLayout
@@ -4103,12 +4135,16 @@ onBeforeUnmount(() => {
             />
           </section>
           <section
-            v-for="(preview, index) in nextChapterPreviews"
+            v-for="preview in nextChapterPreviews"
             :key="`next:${preview.chapter.chapterId}`"
             class="book-reader__continuous-chapter book-reader__chapter-preview"
             data-reader-chapter-preview="next"
             :data-reader-preview-chapter-id="preview.chapter.chapterId"
-            :data-reader-adjacent-preview="index === 0 ? 'true' : undefined"
+            :data-reader-adjacent-preview="
+              isScrolledChapterCheckpoint('next', preview.summaryIndex)
+                ? 'true'
+                : undefined
+            "
           >
             <ReaderEpubLayout
               v-if="preview.chapter.epub !== undefined"

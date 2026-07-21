@@ -4994,6 +4994,147 @@ test('previews adjacent chapter edges before committing a chapter transition', a
   await expect.poll(currentStartOffset).toBeLessThanOrEqual(1);
 });
 
+test('crosses consecutive parent titles at their highest checkpoint', async ({
+  page,
+}) => {
+  const bookId = 'hierarchical-scroll-checkpoint.txt';
+  const chapterIds = ['before', 'volume', 'part', 'chapter', 'after'];
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await expect(page.locator('.n-skeleton')).toHaveCount(0);
+  await page.evaluate(
+    async ({ id, chapters }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter', 'reader-settings'],
+        'readwrite',
+      );
+      transaction.objectStore('metadata').put({
+        id,
+        createAt: 1,
+        toc: chapters.map((chapterId) => ({ chapterId, title: chapterId })),
+        navigation: [
+          { id: 'before-nav', title: 'Before', level: 0, chapterId: 'before' },
+          { id: 'volume-nav', title: 'Volume', level: 0, chapterId: 'volume' },
+          {
+            id: 'part-nav',
+            title: 'Part',
+            level: 1,
+            chapterId: 'part',
+            parentId: 'volume-nav',
+          },
+          {
+            id: 'chapter-nav',
+            title: 'Chapter',
+            level: 2,
+            chapterId: 'chapter',
+            parentId: 'part-nav',
+          },
+          { id: 'after-nav', title: 'After', level: 0, chapterId: 'after' },
+        ],
+        sourceFormat: 'txt',
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+        sourceBookMetadata: { title: id, languages: ['zh'] },
+      });
+      chapters.forEach((chapterId, chapterIndex) => {
+        const paragraphs =
+          chapterId === 'before' || chapterId === 'chapter'
+            ? Array.from(
+                { length: 40 },
+                (_, index) => `${chapterId} content ${index}`,
+              )
+            : [`${chapterId} title`];
+        transaction.objectStore('chapter').put({
+          id: `${id}/${chapterId}`,
+          volumeId: id,
+          paragraphs,
+          segmentIds: paragraphs.map(
+            (_, index) => `hierarchy-${chapterIndex}-${index}`,
+          ),
+        });
+      });
+      transaction.objectStore('reader-settings').put({
+        id: 'default',
+        defaultMode: 'original',
+        translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+        fontSize: 18,
+        lineHeight: 1.9,
+        contentWidth: 840,
+        horizontalPadding: 24,
+        theme: 'light',
+        flow: 'scrolled',
+        updatedAt: 1,
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    { id: bookId, chapters: chapterIds },
+  );
+
+  const crossCheckpoint = async (direction: 'previous' | 'next') => {
+    const checkpoint = page.locator(
+      `[data-reader-chapter-preview="${direction}"][data-reader-adjacent-preview="true"]`,
+    );
+    await expect(checkpoint).toBeVisible();
+    await page.waitForTimeout(100);
+    await page.evaluate((targetDirection) => {
+      const preview = document.querySelector<HTMLElement>(
+        `[data-reader-chapter-preview="${targetDirection}"][data-reader-adjacent-preview="true"]`,
+      );
+      const rect = preview!.getBoundingClientRect();
+      const edge =
+        targetDirection === 'next'
+          ? (document
+              .querySelector<HTMLElement>('.book-reader__app-bar')
+              ?.getBoundingClientRect().bottom ?? 0)
+          : (document
+              .querySelector<HTMLElement>('.book-reader__bottom-navigation')
+              ?.getBoundingClientRect().top ?? window.innerHeight);
+      window.scrollBy(
+        0,
+        targetDirection === 'next'
+          ? rect.top - edge - 4
+          : rect.bottom - edge + 4,
+      );
+    }, direction);
+    await page.mouse.move(195, 400);
+    await page.mouse.wheel(0, direction === 'next' ? 50 : -50);
+  };
+
+  await page.goto(`/books/${bookId}/read/before`);
+  const nextCheckpoint = page.locator(
+    '[data-reader-chapter-preview="next"][data-reader-adjacent-preview="true"]',
+  );
+  await expect(nextCheckpoint).toHaveAttribute(
+    'data-reader-preview-chapter-id',
+    'volume',
+  );
+  await crossCheckpoint('next');
+  await expect(page).toHaveURL(/\/read\/chapter$/);
+
+  const previousCheckpoint = page.locator(
+    '[data-reader-chapter-preview="previous"][data-reader-adjacent-preview="true"]',
+  );
+  await expect(previousCheckpoint).toHaveAttribute(
+    'data-reader-preview-chapter-id',
+    'volume',
+  );
+  await crossCheckpoint('previous');
+  await expect(page).toHaveURL(/\/read\/before$/);
+});
+
 test('fills a large continuous viewport across consecutive short chapters and book edges', async ({
   page,
 }) => {
