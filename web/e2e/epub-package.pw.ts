@@ -377,7 +377,9 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
     },
     {
       chapterId: chapter!.id,
-      translations: chapter!.paragraphs.map((text) => `译文 ${text}`),
+      translations: chapter!.paragraphs.map((text, index) =>
+        index === 1 ? '译文 头发发展在里面' : `译文 ${text}`,
+      ),
     },
   );
 
@@ -400,6 +402,30 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       .locator('.book-reader__settings-grid .n-form-item')
       .filter({ hasText: '阅读流' });
     await flowSetting.locator('.n-base-selection').click();
+    await page
+      .locator('.n-base-select-menu')
+      .getByText(label, { exact: true })
+      .click();
+    await page.keyboard.press('Escape');
+  };
+  const chooseScript = async (label: string) => {
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    const scriptSetting = page
+      .locator('.book-reader__settings-grid .n-form-item')
+      .filter({ hasText: '中文字体' });
+    await scriptSetting.locator('.n-base-selection').click();
+    await page
+      .locator('.n-base-select-menu')
+      .getByText(label, { exact: true })
+      .click();
+    await page.keyboard.press('Escape');
+  };
+  const chooseReadingLanguage = async (label: string) => {
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    const languageSetting = page
+      .locator('.book-reader__settings-grid .n-form-item')
+      .filter({ hasText: '阅读语言' });
+    await languageSetting.locator('.n-base-selection').click();
     await page
       .locator('.n-base-select-menu')
       .getByText(label, { exact: true })
@@ -497,6 +523,32 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   expect(remotePublicationRequests).toEqual([]);
   expect(await page.evaluate(() => 'epubScriptExecuted' in window)).toBe(false);
   const firstSegmentId = chapter!.segmentIds[0];
+  const chineseSegmentId = chapter!.segmentIds[1]!;
+
+  const getRichStructure = () =>
+    richHost.evaluate((host, segmentId) => {
+      const shadow = host.shadowRoot!;
+      const original = shadow.querySelector<HTMLElement>(
+        `[data-reader-segment-id="${segmentId}"][data-reader-language-side="original"]`,
+      )!;
+      const internal = shadow.querySelector<HTMLAnchorElement>(
+        '[data-epub-href="notes.xhtml#note-1"]',
+      );
+      const external = shadow.querySelector<HTMLAnchorElement>(
+        'a[href="https://example.org/author"]',
+      );
+      return {
+        originalText: original.textContent?.trim(),
+        originalId: original.id,
+        originalClass: original.className,
+        internalHref: internal?.getAttribute('href'),
+        internalTarget: internal?.getAttribute('data-epub-href'),
+        externalHref: external?.getAttribute('href'),
+        externalRel: external?.getAttribute('rel'),
+        imageSrc: shadow.querySelector('img')?.getAttribute('src'),
+      };
+    }, firstSegmentId);
+  const structureBeforeScript = await getRichStructure();
 
   const getLanguageOrder = () =>
     richHost.evaluate(
@@ -513,27 +565,67 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
           })),
       firstSegmentId,
     );
-  await page.keyboard.press('1');
+  await chooseReadingLanguage('中文');
   await expect
     .poll(getLanguageOrder)
     .toEqual([
       expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
     ]);
-  await page.keyboard.press('2');
+  await page.setViewportSize({ width: 800, height: 900 });
+  const narrowSegment = page.locator(
+    `[data-reader-segment-id="${firstSegmentId}"][data-reader-language-side="translated"]`,
+  );
+  await chooseScript('繁体字形');
+  await expect
+    .poll(getLanguageOrder)
+    .toEqual([
+      expect.objectContaining({ language: 'translated', text: '譯文 第一章' }),
+    ]);
+  await expect(narrowSegment).toBeAttached();
+  await expect
+    .poll(() =>
+      richHost.evaluate((host, segmentId) => {
+        const elements = host.shadowRoot?.querySelectorAll<HTMLElement>(
+          `[data-reader-segment-id="${segmentId}"]`,
+        );
+        return {
+          original: Array.from(elements ?? []).find(
+            (element) => element.dataset.readerLanguageSide === 'original',
+          )?.textContent,
+          translated: Array.from(elements ?? []).find(
+            (element) => element.dataset.readerLanguageSide === 'translated',
+          )?.textContent,
+        };
+      }, chineseSegmentId),
+    )
+    .toEqual({
+      original: expect.stringContaining('第一段 参见附录 外部网站'),
+      translated: expect.stringContaining('頭髮發展在裏面'),
+    });
+  expect(await getRichStructure()).toEqual(structureBeforeScript);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await chooseScript('简体字形');
+  await expect
+    .poll(getLanguageOrder)
+    .toEqual([
+      expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
+    ]);
+  expect(await getRichStructure()).toEqual(structureBeforeScript);
+  await chooseReadingLanguage('中日对照');
   await expect
     .poll(getLanguageOrder)
     .toEqual([
       expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
       expect.objectContaining({ language: 'original', text: '第一章' }),
     ]);
-  await page.keyboard.press('3');
+  await chooseReadingLanguage('日中对照');
   await expect
     .poll(getLanguageOrder)
     .toEqual([
       expect.objectContaining({ language: 'original', text: '第一章' }),
       expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
     ]);
-  await page.keyboard.press('4');
+  await chooseReadingLanguage('原文（日文）');
   await expect
     .poll(getLanguageOrder)
     .toEqual([
