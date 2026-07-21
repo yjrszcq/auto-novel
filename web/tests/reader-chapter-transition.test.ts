@@ -110,4 +110,23 @@ describe('reader hierarchical chapter transitions', () => {
       }),
     ).toEqual({ checkpointIndex: 1, targetIndex: 1 });
   });
+
+  it('stops at the real book boundaries', () => {
+    expect(
+      planReaderChapterTransition({
+        chapters,
+        navigation,
+        currentIndex: 0,
+        direction: 'previous',
+      }),
+    ).toBeUndefined();
+    expect(
+      planReaderChapterTransition({
+        chapters,
+        navigation,
+        currentIndex: chapters.length - 1,
+        direction: 'next',
+      }),
+    ).toBeUndefined();
+  });
 });
