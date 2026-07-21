@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { InfoOutlined } from '@vicons/material';
+import { useMediaQuery } from '@vueuse/core';
 
 import type {
   ReaderChineseScript,
@@ -21,6 +22,9 @@ import { Setting, useLocalVolumeStore, useSettingStore } from '@/stores';
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
 const message = useMessage();
+const isMobile = useMediaQuery('(max-width: 639px)');
+const showLanguageDetectionHelp = ref(false);
+const showReaderPreloadHelp = ref(false);
 const readerSettings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 const readerSettingsLoading = ref(true);
 const readerSettingsSaving = ref(false);
@@ -232,6 +236,7 @@ onMounted(() => {
                 <template #suffix>%</template>
               </n-input-number>
               <n-popover
+                v-if="!isMobile"
                 trigger="click"
                 placement="bottom-start"
                 :style="{
@@ -254,6 +259,19 @@ onMounted(() => {
                 </template>
                 仅采用高于阈值的正文检测结果；检测语言与文件元数据没有重合时以检测结果为准，否则补充缺失语言。
               </n-popover>
+              <n-button
+                v-else
+                class="setting-info-button"
+                quaternary
+                circle
+                size="small"
+                aria-label="语言检测阈值说明"
+                @click="showLanguageDetectionHelp = true"
+              >
+                <template #icon>
+                  <n-icon :component="InfoOutlined" />
+                </template>
+              </n-button>
             </div>
           </c-action-wrapper>
         </n-flex>
@@ -373,6 +391,7 @@ onMounted(() => {
                 @update:value="updateAutoTranslationPreloadPages"
               />
               <n-popover
+                v-if="!isMobile"
                 trigger="click"
                 placement="bottom-start"
                 :style="{
@@ -395,6 +414,19 @@ onMounted(() => {
                 </template>
                 提前翻译当前页之后的页数；0 表示只处理当前可见页。
               </n-popover>
+              <n-button
+                v-else
+                class="setting-info-button"
+                quaternary
+                circle
+                size="small"
+                aria-label="自动翻译预翻译说明"
+                @click="showReaderPreloadHelp = true"
+              >
+                <template #icon>
+                  <n-icon :component="InfoOutlined" />
+                </template>
+              </n-button>
             </div>
           </c-action-wrapper>
           <c-action-wrapper
@@ -415,6 +447,21 @@ onMounted(() => {
         </n-flex>
       </n-list-item>
     </n-list>
+
+    <c-modal
+      v-model:show="showLanguageDetectionHelp"
+      title="语言检测阈值"
+      aria-label="语言检测阈值"
+    >
+      仅采用高于阈值的正文检测结果；检测语言与文件元数据没有重合时以检测结果为准，否则补充缺失语言。
+    </c-modal>
+    <c-modal
+      v-model:show="showReaderPreloadHelp"
+      title="自动翻译预翻译"
+      aria-label="自动翻译预翻译"
+    >
+      提前翻译当前页之后的页数；0 表示只处理当前可见页。
+    </c-modal>
   </div>
 </template>
 

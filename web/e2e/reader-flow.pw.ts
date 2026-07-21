@@ -3734,20 +3734,31 @@ test('persists the global reading version selected in Settings', async ({
   expect(
     mobileLanguageInputBounds!.x + mobileLanguageInputBounds!.width,
   ).toBeLessThanOrEqual(390);
-  for (const helpButton of [languageHelpButton, preloadHelpButton]) {
+  for (const { helpButton, title, text } of [
+    {
+      helpButton: languageHelpButton,
+      title: '语言检测阈值',
+      text: '仅采用高于阈值的正文检测结果',
+    },
+    {
+      helpButton: preloadHelpButton,
+      title: '自动翻译预翻译',
+      text: '提前翻译当前页之后的页数',
+    },
+  ]) {
     await helpButton.click();
-    const popover = page.locator('.n-popover').filter({
-      hasText:
-        helpButton === languageHelpButton
-          ? '仅采用高于阈值的正文检测结果'
-          : '提前翻译当前页之后的页数',
-    });
-    await expect(popover).toBeVisible();
-    const bounds = await popover.boundingBox();
+    const dialog = page.getByRole('dialog', { name: title });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(text);
+    const bounds = await dialog.boundingBox();
     expect(bounds).not.toBeNull();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
-    await helpButton.click();
+    await dialog.getByRole('button', { name: 'close' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(
+      page.locator('.n-popover').filter({ hasText: text }),
+    ).toHaveCount(0);
   }
 });
 
