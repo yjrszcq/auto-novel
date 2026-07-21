@@ -119,6 +119,20 @@ describe('reader Chinese script conversion', () => {
     });
   });
 
+  it('keeps the original segment array when conversion is disabled', async () => {
+    const segments = [{ id: 'segment', index: 0, original: '头发发展在里面' }];
+
+    await expect(
+      convertReaderSegments({
+        bookId: 'book-disabled',
+        script: 'none',
+        segments,
+        original: true,
+        translated: false,
+      }),
+    ).resolves.toBe(segments);
+  });
+
   it('preserves phrase context split across EPUB text nodes', async () => {
     await expect(
       convertReaderTextParts({

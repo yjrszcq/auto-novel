@@ -58,6 +58,7 @@ const refreshDisplayedSegments = async () => {
       translated: props.convertTranslated,
     });
     if (generation !== conversionGeneration) return;
+    if (converted === source) return;
     displayedSegments.value = converted;
     await nextTick();
     emit('content-change');

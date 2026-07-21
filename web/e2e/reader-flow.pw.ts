@@ -2336,7 +2336,8 @@ test('keeps the reading anchor and speech text when Chinese script changes', asy
   await scriptSetting.locator('.n-base-selection').click();
   await page.getByText('繁体字形', { exact: true }).click();
   await expect(anchor).toContainText('頭髮發展在裏面');
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '关闭阅读设置', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '阅读设置' })).toBeHidden();
   const offsetAfter = await anchor.evaluate(
     (element) => element.getBoundingClientRect().top,
   );
@@ -2649,13 +2650,6 @@ test('automatically translates a reader window without persisting a partial chap
       'true',
     );
     await expect(source).toContainText('译文第1行', { timeout: 15_000 });
-    await expect(
-      page.locator('.reader-segment-layout').filter({ has: source }),
-    ).toHaveClass(/reader-segment-layout--original-translated/);
-    await page.keyboard.press('4');
-    await expect(source).toContainText('临时原文第 1 段');
-    await page.keyboard.press('1');
-    await expect(source).toContainText('译文第1行');
     await automaticTranslationButton.click();
     await expect(
       page.getByText('已停止自动翻译', { exact: true }),
@@ -2664,6 +2658,27 @@ test('automatically translates a reader window without persisting a partial chap
       'aria-pressed',
       'false',
     );
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    const temporaryScriptSetting = page
+      .getByRole('dialog', { name: '阅读设置' })
+      .locator('.n-form-item')
+      .filter({ hasText: '中文字体' });
+    await temporaryScriptSetting.locator('.n-base-selection').click();
+    await page.getByText('繁体字形', { exact: true }).last().click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await expect(source).toContainText('譯文第1行');
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await temporaryScriptSetting.locator('.n-base-selection').click();
+    await page.getByText('不转换', { exact: true }).last().click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await expect(source).toContainText('译文第1行');
+    await expect(
+      page.locator('.reader-segment-layout').filter({ has: source }),
+    ).toHaveClass(/reader-segment-layout--original-translated/);
+    await page.keyboard.press('4');
+    await expect(source).toContainText('临时原文第 1 段');
+    await page.keyboard.press('1');
+    await expect(source).toContainText('译文第1行');
 
     const persistedChapter = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {

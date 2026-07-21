@@ -97,8 +97,9 @@ export const convertReaderSegments = async ({
   segments: ReaderSegment[];
   original: boolean;
   translated: boolean;
-}) =>
-  Promise.all(
+}) => {
+  if (script === 'none' || (!original && !translated)) return segments;
+  return Promise.all(
     segments.map(async (segment) => ({
       ...segment,
       original: original
@@ -118,6 +119,7 @@ export const convertReaderSegments = async ({
           : segment.translated,
     })),
   );
+};
 
 export const convertReaderTextParts = async ({
   bookId,

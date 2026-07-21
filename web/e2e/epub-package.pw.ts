@@ -492,6 +492,27 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
     .locator('[data-reader-epub-host]')
     .filter({ hasText: '分页测试段落 30' });
   const paginatedViewport = page.locator('.book-reader__content--paginated');
+  const getFirstVisibleTranslatedSegmentId = () =>
+    richHost.evaluate((host) => {
+      const viewport = document.querySelector<HTMLElement>(
+        '.book-reader__content--paginated',
+      );
+      if (viewport === null) return undefined;
+      const bounds = viewport.getBoundingClientRect();
+      return Array.from(
+        host.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-reader-segment-id][data-reader-language-side="translated"]',
+        ) ?? [],
+      ).find((segment) =>
+        Array.from(segment.getClientRects()).some(
+          (rect) =>
+            rect.right > bounds.left + 4 &&
+            rect.left < bounds.right - 4 &&
+            rect.bottom > bounds.top + 4 &&
+            rect.top < bounds.bottom - 4,
+        ),
+      )?.dataset.readerSegmentId;
+    });
   await expect
     .poll(() =>
       paginatedViewport.evaluate(
@@ -575,6 +596,13 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   const narrowSegment = page.locator(
     `[data-reader-segment-id="${firstSegmentId}"][data-reader-language-side="translated"]`,
   );
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.keyboard.press('PageDown');
+  await expect
+    .poll(() => paginatedViewport.evaluate((viewport) => viewport.scrollLeft))
+    .toBeGreaterThan(0);
+  const narrowAnchor = await getFirstVisibleTranslatedSegmentId();
+  expect(narrowAnchor).toBeDefined();
   await chooseScript('繁体字形');
   await expect
     .poll(getLanguageOrder)
@@ -582,6 +610,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       expect.objectContaining({ language: 'translated', text: '譯文 第一章' }),
     ]);
   await expect(narrowSegment).toBeAttached();
+  await expect.poll(getFirstVisibleTranslatedSegmentId).toBe(narrowAnchor);
   await expect
     .poll(() =>
       richHost.evaluate((host, segmentId) => {
@@ -603,13 +632,21 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       translated: expect.stringContaining('頭髮發展在裏面'),
     });
   expect(await getRichStructure()).toEqual(structureBeforeScript);
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1280, height: 500 });
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.keyboard.press('PageDown');
+  await expect
+    .poll(() => paginatedViewport.evaluate((viewport) => viewport.scrollLeft))
+    .toBeGreaterThan(0);
+  const wideAnchor = await getFirstVisibleTranslatedSegmentId();
+  expect(wideAnchor).toBeDefined();
   await chooseScript('简体字形');
   await expect
     .poll(getLanguageOrder)
     .toEqual([
       expect.objectContaining({ language: 'translated', text: '译文 第一章' }),
     ]);
+  await expect.poll(getFirstVisibleTranslatedSegmentId).toBe(wideAnchor);
   expect(await getRichStructure()).toEqual(structureBeforeScript);
   await chooseReadingLanguage('中日对照');
   await expect
