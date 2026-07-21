@@ -4992,3 +4992,104 @@ test('previews adjacent chapter edges before committing a chapter transition', a
   await expect.poll(currentStartOffset).toBeGreaterThanOrEqual(-70);
   await expect.poll(currentStartOffset).toBeLessThanOrEqual(1);
 });
+
+test('fills a large continuous viewport across consecutive short chapters and book edges', async ({
+  page,
+}) => {
+  const shortBookId = 'continuous-short-chapters.txt';
+  const chapterIds = Array.from({ length: 11 }, (_, index) => String(index));
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await expect(page.locator('.n-skeleton')).toHaveCount(0);
+  await page.evaluate(
+    async ({ bookId, ids }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter', 'reader-settings'],
+        'readwrite',
+      );
+      transaction.objectStore('metadata').put({
+        id: bookId,
+        createAt: 1,
+        toc: ids.map((chapterId, index) => ({
+          chapterId,
+          title: `短章 ${index + 1}`,
+        })),
+        sourceFormat: 'txt',
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+        sourceBookMetadata: {
+          title: '连续超短章测试',
+          authors: [],
+          languages: ['zh'],
+        },
+      });
+      ids.forEach((chapterId, index) => {
+        transaction.objectStore('chapter').put({
+          id: `${bookId}/${chapterId}`,
+          volumeId: bookId,
+          paragraphs: [`短章 ${index + 1}`, `第 ${index + 1} 章正文`],
+          segmentIds: [`short-${chapterId}-title`, `short-${chapterId}-body`],
+        });
+      });
+      transaction.objectStore('reader-settings').put({
+        id: 'default',
+        defaultMode: 'original',
+        translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+        autoTranslationPreloadPages: 3,
+        retranslationPolicy: 'ask',
+        fontSize: 18,
+        lineHeight: 1.9,
+        contentWidth: 840,
+        horizontalPadding: 24,
+        theme: 'light',
+        flow: 'scrolled',
+        updatedAt: 1,
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    { bookId: shortBookId, ids: chapterIds },
+  );
+
+  await page.goto(`/books/${shortBookId}/read/5`);
+  const previewIds = (direction: 'previous' | 'next') =>
+    page
+      .locator(`[data-reader-chapter-preview="${direction}"]`)
+      .evaluateAll((elements) =>
+        elements.map(
+          (element) => (element as HTMLElement).dataset.readerPreviewChapterId,
+        ),
+      );
+  await expect
+    .poll(() => previewIds('previous'))
+    .toEqual(['0', '1', '2', '3', '4']);
+  await expect
+    .poll(() => previewIds('next'))
+    .toEqual(['6', '7', '8', '9', '10']);
+  await expect(
+    page.locator(
+      '[data-reader-chapter-preview="previous"][data-reader-adjacent-preview="true"]',
+    ),
+  ).toHaveAttribute('data-reader-preview-chapter-id', '4');
+  await expect(
+    page.locator(
+      '[data-reader-chapter-preview="next"][data-reader-adjacent-preview="true"]',
+    ),
+  ).toHaveAttribute('data-reader-preview-chapter-id', '6');
+  await expect(page.locator('[data-reader-chapter-id]')).toHaveCount(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => previewIds('previous')).toHaveLength(5);
+  await expect.poll(() => previewIds('next')).toHaveLength(5);
+});
