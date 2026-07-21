@@ -77,11 +77,18 @@ const normalizeLanguageFamily = (language: string) => {
   return toISO2(base);
 };
 
-export const appendMissingDetectedLanguages = (
+export const reconcileDetectedLanguages = (
   existing: readonly string[],
   detected: readonly DetectedBookLanguage[],
 ) => {
+  if (detected.length === 0) return [...existing];
   const existingFamilies = new Set(existing.map(normalizeLanguageFamily));
+  const hasDetectedMetadataLanguage = detected.some((language) =>
+    existingFamilies.has(normalizeLanguageFamily(language)),
+  );
+  if (existing.length > 0 && !hasDetectedMetadataLanguage) {
+    return [...detected];
+  }
   return [
     ...existing,
     ...detected.filter(

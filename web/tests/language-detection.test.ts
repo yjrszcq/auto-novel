@@ -6,8 +6,8 @@ vi.hoisted(() => {
 
 import { RegexUtil } from '../src/util';
 import {
-  appendMissingDetectedLanguages,
   detectBookLanguages,
+  reconcileDetectedLanguages,
 } from '../src/domain/BookLanguageDetection';
 
 describe('language character detection', () => {
@@ -63,9 +63,11 @@ describe('language character detection', () => {
     expect(detectBookLanguages([[text]], 100)).toEqual([]);
   });
 
-  it('appends only language families absent from EPUB metadata', () => {
+  it('supplements compatible metadata and replaces completely conflicting metadata', () => {
     expect(
-      appendMissingDetectedLanguages(['ja-JP', 'eng'], ['ja', 'en', 'zh']),
+      reconcileDetectedLanguages(['ja-JP', 'eng'], ['ja', 'en', 'zh']),
     ).toEqual(['ja-JP', 'eng', 'zh']);
+    expect(reconcileDetectedLanguages(['zh-CN'], ['ja'])).toEqual(['ja']);
+    expect(reconcileDetectedLanguages(['ja'], [])).toEqual(['ja']);
   });
 });

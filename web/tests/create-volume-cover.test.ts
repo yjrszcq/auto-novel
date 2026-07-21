@@ -91,7 +91,7 @@ describe('local EPUB import cover', () => {
           authors: ['测试作者'],
           languages: ['ja'],
         },
-        bookMetadata: { languages: ['ja', 'zh'] },
+        bookMetadata: { languages: ['zh'] },
       }),
     });
   });

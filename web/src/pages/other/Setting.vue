@@ -229,8 +229,8 @@ onMounted(() => {
               >
                 <template #suffix>%</template>
               </n-input-number>
-              <n-text depth="3">
-                上传时自动补充置信度高于该值的正文语言；默认 95%。
+              <n-text depth="3" class="language-detection-setting__help">
+                仅采用高于阈值的正文检测结果；检测语言与文件元数据没有重合时以检测结果为准，否则补充缺失语言。
               </n-text>
             </div>
           </c-action-wrapper>
@@ -357,6 +357,10 @@ onMounted(() => {
   flex: 0 0 auto;
 }
 
+.language-detection-setting__help {
+  white-space: nowrap;
+}
+
 .reader-preload-setting__content {
   display: grid;
   grid-template-columns: minmax(160px, 240px) minmax(240px, 1fr);
@@ -387,6 +391,10 @@ onMounted(() => {
 
   .language-detection-setting__input {
     width: 100%;
+  }
+
+  .language-detection-setting__help {
+    white-space: normal;
   }
 
   .reader-preload-setting__content {

@@ -1,7 +1,7 @@
 import type { TxtImportPlan } from '@/model/TxtCatalog';
 import {
-  appendMissingDetectedLanguages,
   detectBookLanguages,
+  reconcileDetectedLanguages,
 } from '@/domain/BookLanguageDetection';
 import { parseFile, Srt } from '@/util/file';
 import { createUuid } from '@/util/uuid';
@@ -241,11 +241,16 @@ export const createVolume = async (
       languageDetectionConfidencePercent,
     );
     const sourceLanguages = sourceBookMetadata.languages ?? [];
-    const languages = appendMissingDetectedLanguages(
+    const languages = reconcileDetectedLanguages(
       sourceLanguages,
       detectedLanguages,
     );
-    if (languages.length > sourceLanguages.length) bookMetadata = { languages };
+    if (
+      languages.length !== sourceLanguages.length ||
+      languages.some((language, index) => language !== sourceLanguages[index])
+    ) {
+      bookMetadata = { languages };
+    }
   } else if (parsedFile.type === 'srt') {
     const lines = parsedFile.subtitles
       .flatMap((subtitle) => subtitle.text)
