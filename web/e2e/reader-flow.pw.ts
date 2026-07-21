@@ -1049,9 +1049,64 @@ test('opens a local bookshelf book safely through the current reader route', asy
     'height',
     '76px',
   );
-  await page.evaluate(() =>
-    window.scrollTo(0, document.documentElement.scrollHeight),
-  );
+  const crossChapterPreview = async (direction: 'previous' | 'next') => {
+    await expect(
+      page.locator(`[data-reader-chapter-preview="${direction}"]`),
+    ).toBeVisible();
+    await page.waitForTimeout(100);
+    await page.evaluate((targetDirection) => {
+      const preview = document.querySelector<HTMLElement>(
+        `[data-reader-chapter-preview="${targetDirection}"]`,
+      );
+      const edge =
+        targetDirection === 'next'
+          ? (document
+              .querySelector<HTMLElement>('.book-reader__app-bar')
+              ?.getBoundingClientRect().bottom ?? 0)
+          : (document
+              .querySelector<HTMLElement>('.book-reader__bottom-navigation')
+              ?.getBoundingClientRect().top ?? window.innerHeight);
+      const rect = preview?.getBoundingClientRect();
+      window.scrollTo(
+        0,
+        window.scrollY +
+          (targetDirection === 'next'
+            ? (rect?.top ?? 0) - edge - 4
+            : (rect?.bottom ?? 0) - edge + 4),
+      );
+    }, direction);
+    const wheelPoint = await page
+      .locator('.book-reader__content')
+      .evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          x: Math.max(
+            1,
+            Math.min(window.innerWidth - 1, rect.x + rect.width / 2),
+          ),
+          y: Math.max(
+            1,
+            Math.min(window.innerHeight - 1, window.innerHeight / 2),
+          ),
+        };
+      });
+    await page.mouse.move(wheelPoint.x, wheelPoint.y);
+    await page.mouse.wheel(0, direction === 'next' ? 50 : -50);
+  };
+  await page.evaluate(() => {
+    const current = document.querySelector<HTMLElement>(
+      '[data-reader-chapter-id]',
+    );
+    const navigation = document.querySelector<HTMLElement>(
+      '.book-reader__bottom-navigation',
+    );
+    window.scrollTo(
+      0,
+      window.scrollY +
+        (current?.getBoundingClientRect().bottom ?? 0) -
+        (navigation?.getBoundingClientRect().top ?? window.innerHeight),
+    );
+  });
   await expect
     .poll(() =>
       readerTop.evaluate((element) =>
@@ -1062,30 +1117,18 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page.locator('.book-reader__loading')).toHaveCount(0);
   await expect(
     readerContent.locator('.book-reader__continuous-chapter'),
-  ).toHaveCount(1);
+  ).toHaveCount(2);
   await expect(
     readerContent.locator('[data-reader-chapter-id="0"]'),
   ).toBeVisible();
-  await page.mouse.move(195, 400);
-  await page.mouse.wheel(0, 250);
+  await crossChapterPreview('next');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
   await expect(
     readerContent.locator('[data-reader-chapter-id="1"]'),
   ).toBeVisible();
-  await readerContent.dispatchEvent('wheel', { deltaY: -250 });
+  await crossChapterPreview('previous');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          document.documentElement.scrollHeight -
-          window.innerHeight -
-          window.scrollY,
-      ),
-    )
-    .toBeLessThan(3);
-  await readerContent.dispatchEvent('wheel', { deltaY: 250 });
+  await crossChapterPreview('next');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
   await expect
     .poll(() =>
@@ -1275,21 +1318,31 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect
     .poll(() =>
       readerContent
-        .locator('.reader-segment-layout')
+        .locator('[data-reader-chapter-id] .reader-segment-layout')
         .evaluate((element) => getComputedStyle(element).columnCount),
     )
     .toBe('auto');
   await page.keyboard.press('Escape');
-  await page.evaluate(() =>
-    window.scrollTo(0, document.documentElement.scrollHeight),
-  );
+  await page.evaluate(() => {
+    const current = document.querySelector<HTMLElement>(
+      '[data-reader-chapter-id]',
+    );
+    const navigation = document.querySelector<HTMLElement>(
+      '.book-reader__bottom-navigation',
+    );
+    window.scrollTo(
+      0,
+      window.scrollY +
+        (current?.getBoundingClientRect().bottom ?? 0) -
+        (navigation?.getBoundingClientRect().top ?? window.innerHeight),
+    );
+  });
   await expect(page.locator('.book-reader__loading')).toHaveCount(0);
   await expect(
     readerContent.locator('.book-reader__continuous-chapter'),
-  ).toHaveCount(1);
-  await readerContent.dispatchEvent('wheel', { deltaY: 250 });
+  ).toHaveCount(2);
+  await crossChapterPreview('next');
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '设置', exact: true }).click();
@@ -1812,6 +1865,9 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
   });
   await page.reload();
   await expect(readerContent).toHaveClass(/book-reader__content--scrolled/);
+  const activeScrolledLayout = readerContent.locator(
+    '[data-reader-chapter-id] .reader-segment-layout',
+  );
   const scrolledAnchor = readerContent.locator(
     '[data-reader-segment-id="mode-segment-40"] [data-reader-language-side="original"]',
   );
@@ -1864,7 +1920,7 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
   const scrollAnchor = await getScrollAnchor();
   expect(scrollAnchor).toBeTruthy();
   await page.keyboard.press('2');
-  await expect(layout).toHaveClass(
+  await expect(activeScrolledLayout).toHaveClass(
     /reader-segment-layout--translated-original/,
   );
   await expect
@@ -1876,7 +1932,9 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
     })
     .toBeLessThanOrEqual(2);
   await page.keyboard.press('4');
-  await expect(layout).toHaveClass(/reader-segment-layout--original$/);
+  await expect(activeScrolledLayout).toHaveClass(
+    /reader-segment-layout--original$/,
+  );
   await page.keyboard.press('ArrowRight');
   await expect(page).toHaveURL(new RegExp(`/read/1$`));
   await expect(
@@ -2178,7 +2236,7 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
     return result;
   }, toolsBookId);
   expect(persistedTools.bookmarks).toMatchObject([
-    { segmentId: 'tools-segment-0', offsetRatio: 0 },
+    { segmentId: 'tools-segment-1', offsetRatio: 0 },
   ]);
 });
 
@@ -4732,7 +4790,7 @@ test('loads only the current GPT workspace schema', async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test('scrolls one chapter at a time and crosses only at chapter boundaries', async ({
+test('previews adjacent chapter edges before committing a chapter transition', async ({
   page,
 }) => {
   const continuousBookId = 'chapter-scroll-boundary.txt';
@@ -4824,37 +4882,100 @@ test('scrolls one chapter at a time and crosses only at chapter boundaries', asy
 
   await page.goto(`/books/${continuousBookId}/read/1`);
   await expect.poll(loadedChapterIds).toEqual(['1']);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
+  await expect(
+    page.locator('[data-reader-chapter-preview="previous"]'),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-reader-chapter-preview="next"]'),
+  ).toBeVisible();
+  const currentStartOffset = () =>
+    page.evaluate(() => {
+      const current = document.querySelector<HTMLElement>(
+        '[data-reader-chapter-id]',
+      );
+      const appBar = document.querySelector<HTMLElement>(
+        '.book-reader__app-bar',
+      );
+      return (
+        (current?.getBoundingClientRect().top ?? 0) -
+        (appBar?.getBoundingClientRect().bottom ?? 0)
+      );
+    });
+  const currentEndOffset = () =>
+    page.evaluate(() => {
+      const current = document.querySelector<HTMLElement>(
+        '[data-reader-chapter-id]',
+      );
+      const navigation = document.querySelector<HTMLElement>(
+        '.book-reader__bottom-navigation',
+      );
+      return (
+        (current?.getBoundingClientRect().bottom ?? 0) -
+        (navigation?.getBoundingClientRect().top ?? window.innerHeight)
+      );
+    });
+  const crossPreview = async (direction: 'previous' | 'next') => {
+    await expect(
+      page.locator(`[data-reader-chapter-preview="${direction}"]`),
+    ).toBeVisible();
+    await page.waitForTimeout(100);
+    await page.evaluate((targetDirection) => {
+      const preview = document.querySelector<HTMLElement>(
+        `[data-reader-chapter-preview="${targetDirection}"]`,
+      );
+      const edge =
+        targetDirection === 'next'
+          ? (document
+              .querySelector<HTMLElement>('.book-reader__app-bar')
+              ?.getBoundingClientRect().bottom ?? 0)
+          : (document
+              .querySelector<HTMLElement>('.book-reader__bottom-navigation')
+              ?.getBoundingClientRect().top ?? window.innerHeight);
+      const rect = preview?.getBoundingClientRect();
+      window.scrollTo(
+        0,
+        window.scrollY +
+          (targetDirection === 'next'
+            ? (rect?.top ?? 0) - edge - 4
+            : (rect?.bottom ?? 0) - edge + 4),
+      );
+    }, direction);
+    const wheelPoint = await page
+      .locator('.book-reader__content')
+      .evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          x: Math.max(
+            1,
+            Math.min(window.innerWidth - 1, rect.x + rect.width / 2),
+          ),
+          y: Math.max(
+            1,
+            Math.min(window.innerHeight - 1, window.innerHeight / 2),
+          ),
+        };
+      });
+    await page.mouse.move(wheelPoint.x, wheelPoint.y);
+    await page.mouse.wheel(0, direction === 'next' ? 50 : -50);
+  };
+  await expect.poll(currentStartOffset).toBeGreaterThanOrEqual(-70);
+  await expect.poll(currentStartOffset).toBeLessThanOrEqual(1);
   await page.mouse.move(195, 400);
   await page.mouse.wheel(0, 300);
   await expect(page).toHaveURL(/\/read\/1$/);
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(100);
+  await expect.poll(currentStartOffset).toBeLessThan(-100);
 
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.mouse.wheel(0, -250);
+  await crossPreview('previous');
   await expect(page).toHaveURL(/\/read\/0$/);
   await expect.poll(loadedChapterIds).toEqual(['0']);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          document.documentElement.scrollHeight -
-          window.innerHeight -
-          window.scrollY,
-      ),
-    )
-    .toBeLessThan(3);
+  await expect.poll(currentEndOffset).toBeGreaterThanOrEqual(-1);
+  await expect.poll(currentEndOffset).toBeLessThanOrEqual(1);
 
   await page.goto(`/books/${continuousBookId}/read/1`);
   await expect.poll(loadedChapterIds).toEqual(['1']);
-  await page.mouse.move(195, 400);
-  await page.evaluate(() =>
-    window.scrollTo(0, document.documentElement.scrollHeight),
-  );
-  await page.mouse.wheel(0, 250);
+  await crossPreview('next');
   await expect(page).toHaveURL(/\/read\/2$/);
   await expect.poll(loadedChapterIds).toEqual(['2']);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
+  await expect.poll(currentStartOffset).toBeGreaterThanOrEqual(-70);
+  await expect.poll(currentStartOffset).toBeLessThanOrEqual(1);
 });

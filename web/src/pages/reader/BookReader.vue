@@ -185,6 +185,11 @@ let pendingChapterEdge: 'start' | 'end' | undefined;
 let loadUiRequestId = 0;
 const continuousChapters = shallowRef<ReaderChapterContent[]>([]);
 const continuousChapterInitialSegments = new Map<string, string | undefined>();
+const previousChapterPreview = shallowRef<ReaderChapterContent>();
+const nextChapterPreview = shallowRef<ReaderChapterContent>();
+let scrolledPreviewGeneration = 0;
+let scrolledPreviewInputDirection: 'previous' | 'next' | undefined;
+let scrolledPreviewInputAt = 0;
 let chapterBoundaryNavigationPending = false;
 let scrolledTouchStartY: number | undefined;
 let scrolledTouchStartedAtTop = false;
@@ -642,10 +647,15 @@ const updateViewportMetrics = () => {
   const activeChapter = getActiveContinuousChapterElement();
   if (resolvedFlow.value === 'scrolled' && activeChapter !== undefined) {
     const rect = activeChapter.getBoundingClientRect();
-    const readableDistance = Math.max(1, rect.height - window.innerHeight);
+    const visibleTop = getReaderVisibleTop();
+    const visibleBottom = getReaderVisibleBottom();
+    const readableDistance = Math.max(
+      1,
+      rect.height - (visibleBottom - visibleTop),
+    );
     viewportProgressRatio.value = Math.max(
       0,
-      Math.min(1, -rect.top / readableDistance),
+      Math.min(1, (visibleTop - rect.top) / readableDistance),
     );
     return;
   }
@@ -741,6 +751,15 @@ const handleViewportWheel = (event: WheelEvent) => {
   if (resolvedFlow.value === 'scrolled') {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
     const direction = event.deltaY < 0 ? 'previous' : 'next';
+    scrolledPreviewInputDirection = direction;
+    scrolledPreviewInputAt = performance.now();
+    if (
+      (direction === 'previous' &&
+        previousChapterPreview.value !== undefined) ||
+      (direction === 'next' && nextChapterPreview.value !== undefined)
+    ) {
+      return;
+    }
     if (navigateScrolledChapterBoundary(direction)) {
       event.preventDefault();
     }
@@ -778,10 +797,18 @@ const handleViewportTouchMove = (event: TouchEvent) => {
     return;
   }
   const delta = scrolledTouchStartY - currentY;
+  if (Math.abs(delta) > 8) {
+    scrolledPreviewInputDirection = delta < 0 ? 'previous' : 'next';
+    scrolledPreviewInputAt = performance.now();
+  }
   const direction =
-    delta > 48 && scrolledTouchStartedAtBottom
+    delta > 48 &&
+    scrolledTouchStartedAtBottom &&
+    nextChapterPreview.value === undefined
       ? 'next'
-      : delta < -48 && scrolledTouchStartedAtTop
+      : delta < -48 &&
+          scrolledTouchStartedAtTop &&
+          previousChapterPreview.value === undefined
         ? 'previous'
         : undefined;
   if (direction !== undefined && navigateScrolledChapterBoundary(direction)) {
@@ -796,6 +823,9 @@ const handleViewportTouchEnd = () => {
 };
 
 const handleViewportScroll = () => {
+  if (resolvedFlow.value === 'scrolled') {
+    syncScrolledPreviewBoundary();
+  }
   updateViewportMetrics();
   saveProgressThrottled();
 };
@@ -1206,7 +1236,8 @@ const load = async () => {
       };
     }
     initialSegmentId.value = targetSegment?.id;
-    initializeContinuousChapters(loaded.chapter);
+    await initializeContinuousChapters(loaded.chapter, loaded.chapters);
+    if (requestId !== loadUiRequestId) return;
     result.value = loaded;
     pendingChapterEdge = undefined;
     loading.value = false;
@@ -1219,9 +1250,13 @@ const load = async () => {
     await Promise.all([resolveMode(loaded), loadBookmarks(loaded.book.id)]);
     enableTemporaryReadingModes(loaded.chapter);
     if (requestId !== loadUiRequestId) return;
-    initializeContinuousChapters(loaded.chapter);
+    await initializeContinuousChapters(loaded.chapter, loaded.chapters);
+    if (requestId !== loadUiRequestId) return;
     result.value = loaded;
     loading.value = false;
+    if (resolvedFlow.value === 'scrolled') {
+      await scrollToChapterEdge('start');
+    }
     await restoreProgress(loaded);
     if (requestId !== loadUiRequestId) return;
     await restorePendingBookmark(loaded);
@@ -1249,6 +1284,9 @@ const load = async () => {
     startReadingTime(loaded.book.id);
     return;
   }
+  scrolledPreviewGeneration += 1;
+  previousChapterPreview.value = undefined;
+  nextChapterPreview.value = undefined;
   continuousChapters.value = [];
   result.value = loaded;
   loading.value = false;
@@ -1405,18 +1443,23 @@ const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
     rect.left < bounds.right - 1 &&
     rect.bottom > bounds.top + 1 &&
     rect.top < bounds.bottom - 1;
-  const candidates = getSegmentElements().flatMap((segment) =>
-    getSegmentLanguageElements(segment)
-      .filter((paragraph) =>
-        [...paragraph.getClientRects()].some(intersectsViewport),
-      )
-      .flatMap((paragraph) =>
-        getParagraphCharacterPositions(paragraph).map((position) => ({
-          ...position,
-          paragraph,
-          segment,
-        })),
-      ),
+  const segmentRoot =
+    resolvedFlow.value === 'scrolled'
+      ? getActiveContinuousChapterElement()
+      : undefined;
+  const candidates = getSegmentElements(segmentRoot ?? document).flatMap(
+    (segment) =>
+      getSegmentLanguageElements(segment)
+        .filter((paragraph) =>
+          [...paragraph.getClientRects()].some(intersectsViewport),
+        )
+        .flatMap((paragraph) =>
+          getParagraphCharacterPositions(paragraph).map((position) => ({
+            ...position,
+            paragraph,
+            segment,
+          })),
+        ),
   );
   const visible = candidates.filter(({ rect }) =>
     paginated
@@ -1438,7 +1481,13 @@ const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
     }
     return left.rect.left - right.rect.left;
   });
-  const first = visible[0];
+  const atScrolledChapterStart =
+    resolvedFlow.value === 'scrolled' &&
+    (getActiveContinuousChapterElement()?.getBoundingClientRect().top ?? -2) >=
+      -1;
+  const first = atScrolledChapterStart
+    ? candidates[0]
+    : (visible[0] ?? candidates[0]);
   const segmentId = first?.segment.dataset.readerSegmentId;
   if (first === undefined || segmentId === undefined) return undefined;
   const chapterId =
@@ -1465,7 +1514,11 @@ const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
 
 const restoreReaderPosition = (anchor: ReaderPositionAnchor | undefined) => {
   if (anchor === undefined) return;
-  const matchingSegments = getSegmentElements().filter(
+  const segmentRoot =
+    resolvedFlow.value === 'scrolled'
+      ? getContinuousChapterElement(anchor.chapterId)
+      : undefined;
+  const matchingSegments = getSegmentElements(segmentRoot ?? document).filter(
     (item) => item.dataset.readerSegmentId === anchor.segmentId,
   );
   const segment =
@@ -1694,16 +1747,20 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
   await nextTick();
   await nextTick();
   if (resolvedFlow.value === 'scrolled') {
+    scrolledPreviewInputDirection = undefined;
     for (let frame = 0; frame < 3; frame += 1) {
-      const scrollingElement = document.scrollingElement;
+      const currentChapter =
+        result.value?.kind === 'ready'
+          ? getContinuousChapterElement(result.value.chapter.chapterId)
+          : undefined;
+      const rect = currentChapter?.getBoundingClientRect();
       window.scrollTo({
         top:
           edge === 'start'
-            ? 0
-            : Math.max(
-                0,
-                (scrollingElement?.scrollHeight ?? 0) - window.innerHeight,
-              ),
+            ? window.scrollY + (rect?.top ?? 0) - getReaderVisibleTop()
+            : window.scrollY +
+              (rect?.bottom ?? window.innerHeight) -
+              getReaderVisibleBottom(),
         behavior: 'auto',
       });
       await new Promise<void>((resolve) =>
@@ -3084,6 +3141,7 @@ const nextChapterId = computed(() =>
 
 function navigateScrolledChapterBoundary(
   direction: 'previous' | 'next',
+  requireDocumentBoundary = true,
 ): boolean {
   if (chapterBoundaryNavigationPending) return false;
   const atBoundary =
@@ -3091,13 +3149,40 @@ function navigateScrolledChapterBoundary(
       ? window.scrollY <= 2
       : window.scrollY + window.innerHeight >=
         document.documentElement.scrollHeight - 2;
-  if (!atBoundary) return false;
+  if (requireDocumentBoundary && !atBoundary) return false;
   const chapterId =
     direction === 'previous' ? previousChapterId.value : nextChapterId.value;
   if (chapterId === undefined) return false;
   chapterBoundaryNavigationPending = true;
   navigate(chapterId, direction === 'previous' ? 'end' : 'start');
   return true;
+}
+
+const getChapterPreviewElement = (direction: 'previous' | 'next') =>
+  document.querySelector<HTMLElement>(
+    `[data-reader-chapter-preview="${direction}"]`,
+  );
+
+function syncScrolledPreviewBoundary() {
+  const direction = scrolledPreviewInputDirection;
+  if (
+    direction === undefined ||
+    performance.now() - scrolledPreviewInputAt > 500 ||
+    chapterBoundaryNavigationPending
+  ) {
+    return;
+  }
+  const preview = getChapterPreviewElement(direction);
+  if (preview === null) return;
+  const rect = preview.getBoundingClientRect();
+  const crossedBoundary =
+    direction === 'next'
+      ? rect.top <= getReaderVisibleTop() + 1
+      : rect.bottom >= getReaderVisibleBottom() - 1;
+  if (crossedBoundary) {
+    scrolledPreviewInputDirection = undefined;
+    navigateScrolledChapterBoundary(direction, false);
+  }
 }
 
 const continuousChapterElements = () => [
@@ -3137,14 +3222,60 @@ const getContinuousChapterElement = (chapterId: string) =>
     (element) => element.dataset.readerChapterId === chapterId,
   );
 
-const initializeContinuousChapters = (chapter: ReaderChapterContent) => {
-  chapterBoundaryNavigationPending = false;
+const chapterPreviewSegmentCount = 24;
+
+const initializeContinuousChapters = async (
+  chapter: ReaderChapterContent,
+  chapters: ReaderChapterSummary[],
+) => {
+  const generation = ++scrolledPreviewGeneration;
+  if (resolvedFlow.value !== 'scrolled') {
+    previousChapterPreview.value = undefined;
+    nextChapterPreview.value = undefined;
+    continuousChapters.value = [];
+    chapterBoundaryNavigationPending = false;
+    return;
+  }
+  const chapterIndex = chapters.findIndex(({ id }) => id === chapter.chapterId);
+  const loadPreview = async (
+    summary: ReaderChapterSummary | undefined,
+    direction: 'previous' | 'next',
+  ) => {
+    if (summary === undefined) return undefined;
+    try {
+      const adapter = await cachedAdapterPromise;
+      const adjacentChapter = withTemporaryTranslations(
+        await adapter.getChapter({
+          bookId: bookId.value,
+          chapterId: summary.id,
+        }),
+      );
+      return {
+        ...adjacentChapter,
+        segments:
+          direction === 'previous'
+            ? adjacentChapter.segments.slice(-chapterPreviewSegmentCount)
+            : adjacentChapter.segments.slice(0, chapterPreviewSegmentCount),
+      };
+    } catch {
+      return undefined;
+    }
+  };
+  const [previousPreview, nextPreview] = await Promise.all([
+    loadPreview(chapters[chapterIndex - 1], 'previous'),
+    loadPreview(chapters[chapterIndex + 1], 'next'),
+  ]);
+  if (generation !== scrolledPreviewGeneration) return;
+  previousChapterPreview.value = previousPreview;
+  nextChapterPreview.value = nextPreview;
   continuousChapterInitialSegments.clear();
   continuousChapterInitialSegments.set(
     chapter.chapterId,
     initialSegmentId.value ?? chapter.segments[0]?.id,
   );
-  continuousChapters.value = resolvedFlow.value === 'scrolled' ? [chapter] : [];
+  continuousChapters.value = [chapter];
+  scrolledPreviewInputDirection = undefined;
+  chapterBoundaryNavigationPending = false;
 };
 
 const chapterProgressPercent = computed(() => {
@@ -3302,7 +3433,10 @@ watch(
 watch(resolvedFlow, async (_flow, previousFlow) => {
   const segmentId = getActiveSegmentId(previousFlow);
   if (result.value?.kind === 'ready') {
-    initializeContinuousChapters(result.value.chapter);
+    await initializeContinuousChapters(
+      result.value.chapter,
+      result.value.chapters,
+    );
   }
   await nextTick();
   await nextTick();
@@ -3615,17 +3749,23 @@ onBeforeUnmount(() => {
       >
         <template v-if="resolvedFlow === 'scrolled'">
           <section
-            v-for="(chapter, chapterIndex) in continuousChapters"
+            v-if="previousChapterPreview !== undefined"
+            :key="`previous:${previousChapterPreview.chapterId}`"
+            class="book-reader__continuous-chapter book-reader__chapter-preview"
+            data-reader-chapter-preview="previous"
+          >
+            <ReaderSegmentLayout
+              :segments="previousChapterPreview.segments"
+              :mode="getChapterRenderedMode(previousChapterPreview)"
+              :flow="resolvedFlow"
+            />
+          </section>
+          <section
+            v-for="chapter in continuousChapters"
             :key="chapter.chapterId"
             class="book-reader__continuous-chapter"
             :data-reader-chapter-id="chapter.chapterId"
           >
-            <h2
-              v-if="chapterIndex > 0"
-              class="book-reader__continuous-chapter-title"
-            >
-              {{ displayReaderTitle(chapter) }}
-            </h2>
             <ReaderEpubLayout
               v-if="chapter.epub !== undefined"
               :epub="chapter.epub"
@@ -3647,6 +3787,21 @@ onBeforeUnmount(() => {
               :flow="resolvedFlow"
               continuous
               @content-change="handleSegmentContentChange"
+            />
+          </section>
+          <section
+            v-if="nextChapterPreview !== undefined"
+            :key="`next:${nextChapterPreview.chapterId}`"
+            class="book-reader__continuous-chapter book-reader__chapter-preview"
+            data-reader-chapter-preview="next"
+          >
+            <h2 class="book-reader__continuous-chapter-title">
+              {{ displayReaderTitle(nextChapterPreview) }}
+            </h2>
+            <ReaderSegmentLayout
+              :segments="nextChapterPreview.segments"
+              :mode="getChapterRenderedMode(nextChapterPreview)"
+              :flow="resolvedFlow"
             />
           </section>
         </template>
@@ -4723,6 +4878,13 @@ onBeforeUnmount(() => {
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid var(--reader-chrome-border);
+}
+
+.book-reader__chapter-preview[data-reader-chapter-preview='previous']::before,
+.book-reader__chapter-preview[data-reader-chapter-preview='next']::after {
+  display: block;
+  height: 100dvh;
+  content: '';
 }
 
 .book-reader__continuous-chapter-title {
