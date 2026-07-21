@@ -4123,7 +4123,7 @@ onBeforeUnmount(() => {
               :convert-original="chineseScriptSides.original"
               :convert-translated="chineseScriptSides.translated"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
-              preview
+              preview-direction="previous"
               @content-change="scheduleCurrentContinuousPreviewFill"
               @conversion-error="handleChineseScriptError"
               @link-activate="navigateToEpubHref"
@@ -4202,7 +4202,7 @@ onBeforeUnmount(() => {
               :convert-original="chineseScriptSides.original"
               :convert-translated="chineseScriptSides.translated"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
-              preview
+              preview-direction="next"
               @content-change="scheduleCurrentContinuousPreviewFill"
               @conversion-error="handleChineseScriptError"
               @link-activate="navigateToEpubHref"

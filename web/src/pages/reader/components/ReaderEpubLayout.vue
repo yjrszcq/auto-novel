@@ -20,7 +20,7 @@ const props = defineProps<{
   flow: ReaderFlow;
   doubleSpread?: boolean;
   layoutRevision: string;
-  preview?: boolean;
+  previewDirection?: 'previous' | 'next';
   bookId: string;
   chineseScript: ReaderChineseScript;
   convertOriginal: boolean;
@@ -178,20 +178,50 @@ const parseSlice = (slice: ReaderEpubDocumentSlice) => {
   return doc.getElementsByTagName('parsererror').length > 0 ? undefined : doc;
 };
 
-const trimSliceToSegments = (doc: Document) => {
-  if (!props.preview) return;
+const trimSliceToSegments = (
+  doc: Document,
+  documentIndex: number,
+  selectedDocumentIndexes: readonly number[],
+) => {
+  if (props.previewDirection === undefined) return;
   const segmentIds = new Set(props.segments.map((segment) => segment.id));
-  const prune = (element: Element): boolean => {
-    const segmentId = element.getAttribute('data-reader-segment-id');
-    if (segmentId !== null) return segmentIds.has(segmentId);
-    for (const child of Array.from(element.childNodes)) {
-      if (child instanceof Element ? !prune(child) : true) child.remove();
-    }
-    return element.children.length > 0;
-  };
-  for (const element of Array.from(doc.body.children)) {
-    if (!prune(element)) element.remove();
+  if (segmentIds.size === 0) return;
+  if (selectedDocumentIndexes.length === 0) {
+    doc.body.replaceChildren();
+    return;
   }
+  const firstDocumentIndex = selectedDocumentIndexes[0]!;
+  const lastDocumentIndex = selectedDocumentIndexes.at(-1)!;
+  const isBoundaryDocument =
+    props.previewDirection === 'next'
+      ? documentIndex === lastDocumentIndex
+      : documentIndex === firstDocumentIndex;
+  const isIncludedDocument =
+    props.previewDirection === 'next'
+      ? documentIndex <= lastDocumentIndex
+      : documentIndex >= firstDocumentIndex;
+  if (!isIncludedDocument) {
+    doc.body.replaceChildren();
+    return;
+  }
+  if (!isBoundaryDocument) return;
+  const selectedElements = Array.from(
+    doc.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
+  ).filter((element) => segmentIds.has(element.dataset.readerSegmentId ?? ''));
+  const boundary =
+    props.previewDirection === 'next'
+      ? selectedElements.at(-1)
+      : selectedElements[0];
+  if (boundary === undefined) return;
+  const range = doc.createRange();
+  if (props.previewDirection === 'next') {
+    range.setStart(doc.body, 0);
+    range.setEndAfter(boundary);
+  } else {
+    range.setStartBefore(boundary);
+    range.setEnd(doc.body, doc.body.childNodes.length);
+  }
+  doc.body.replaceChildren(range.cloneContents());
 };
 
 const removeTargetIdentity = (element: Element) => {
@@ -374,6 +404,9 @@ const resizeDocumentLayouts = () => {
 const renderSlice = async (
   host: HTMLElement,
   slice: ReaderEpubDocumentSlice,
+  parsed: Document | undefined,
+  documentIndex: number,
+  selectedDocumentIndexes: readonly number[],
   resourceSession: EpubResourceSession,
   isCurrent: () => boolean,
 ) => {
@@ -444,11 +477,10 @@ const renderSlice = async (
     );
     if (href !== undefined) emit('link-activate', href);
   });
-  const parsed = parseSlice(slice);
   if (parsed === undefined) {
     wrapper.textContent = '此 EPUB 章节的 XHTML 无法解析。';
   } else {
-    trimSliceToSegments(parsed);
+    trimSliceToSegments(parsed, documentIndex, selectedDocumentIndexes);
     await Promise.all(
       Array.from(parsed.body.children).map((element) =>
         sanitizeElement(element, slice, resourceSession),
@@ -471,6 +503,20 @@ const render = async () => {
   session?.dispose();
   const resourceSession = new EpubResourceSession(props.epub.resources);
   session = resourceSession;
+  const parsedDocuments = props.epub.documents.map(parseSlice);
+  const selectedSegmentIds = new Set(
+    props.segments.map((segment) => segment.id),
+  );
+  const selectedDocumentIndexes = parsedDocuments.flatMap((doc, index) =>
+    doc !== undefined &&
+    Array.from(
+      doc.querySelectorAll<HTMLElement>('[data-reader-segment-id]'),
+    ).some((element) =>
+      selectedSegmentIds.has(element.dataset.readerSegmentId ?? ''),
+    )
+      ? [index]
+      : [],
+  );
   await nextTick();
   const hosts = Array.from(
     layout.value?.querySelectorAll<HTMLElement>('[data-reader-epub-host]') ??
@@ -484,6 +530,9 @@ const render = async () => {
         : renderSlice(
             host,
             slice,
+            parsedDocuments[index],
+            index,
+            selectedDocumentIndexes,
             resourceSession,
             () =>
               generation === renderGeneration && session === resourceSession,
@@ -502,6 +551,7 @@ watch(
       props.flow,
       props.doubleSpread,
       props.layoutRevision,
+      props.previewDirection,
       props.bookId,
       props.chineseScript,
       props.convertOriginal,

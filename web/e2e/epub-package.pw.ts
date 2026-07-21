@@ -95,7 +95,8 @@ const createStandardsFixture = async () => {
     new TextReader(`<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一章</title>
 <link rel="stylesheet" href="../Styles/book.css"/></head><body>
-<section id="start"><h1 class="chapter-title" style="break-before: page">第一章</h1>
+<section id="start"><p class="preview-image"><img src="../Images/cover%20art.svg" alt="预览插图"/></p>
+<h1 class="chapter-title" style="break-before: page">第一章</h1>
 <p>第一段 <a href="notes.xhtml#note-1">参见附录</a> <a href="https://example.org/author">外部网站</a></p>
 <ul><li>第一项</li><li>第二项 <ruby>字<rt>じ</rt></ruby></li></ul>
 <table><tbody><tr><td>单元格</td></tr></tbody></table><aside class="vertical-note">纵排注记</aside>
@@ -447,6 +448,13 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
         fontWeight: getComputedStyle(
           host.shadowRoot!.querySelector('.chapter-title')!,
         ).fontWeight,
+        imageSrc: host.shadowRoot
+          ?.querySelector('img[alt="预览插图"]')
+          ?.getAttribute('src'),
+        imageLoaded:
+          host.shadowRoot?.querySelector<HTMLImageElement>(
+            'img[alt="预览插图"]',
+          )?.complete,
         lastOriginalParagraph: Array.from(
           host.shadowRoot?.querySelectorAll(
             'p[data-reader-language-side="original"]',
@@ -458,11 +466,28 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       title: '第一章',
       fontSize: '40.5px',
       fontWeight: '800',
-      lastOriginalParagraph: '分页测试段落 30',
+      imageSrc: expect.stringMatching(/^blob:/),
+      imageLoaded: true,
+      lastOriginalParagraph: expect.stringMatching(/^分页测试段落 \d+$/),
     });
-  await chooseFlow('自动（电脑分页，手机滚动）');
-
   await page.keyboard.press('ArrowRight');
+  const previousPreviewHost = page
+    .locator('[data-reader-chapter-preview="previous"] [data-reader-epub-host]')
+    .first();
+  await expect(previousPreviewHost).toBeAttached();
+  await expect
+    .poll(() =>
+      previousPreviewHost.evaluate((host) => {
+        const image =
+          host.shadowRoot?.querySelector<HTMLImageElement>('img[alt="封面"]');
+        return {
+          src: image?.getAttribute('src'),
+          loaded: image?.complete,
+        };
+      }),
+    )
+    .toEqual({ src: expect.stringMatching(/^blob:/), loaded: true });
+  await chooseFlow('自动（电脑分页，手机滚动）');
   await expect
     .poll(() =>
       page.locator('[data-reader-epub-host]').evaluate((host) => ({
@@ -545,7 +570,11 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
         internalTarget: internal?.getAttribute('data-epub-href'),
         externalHref: external?.getAttribute('href'),
         externalRel: external?.getAttribute('rel'),
-        imageSrc: shadow.querySelector('img')?.getAttribute('src'),
+        imageUsesBlobUrl:
+          shadow
+            .querySelector('img')
+            ?.getAttribute('src')
+            ?.startsWith('blob:') ?? false,
       };
     }, firstSegmentId);
   const structureBeforeScript = await getRichStructure();
