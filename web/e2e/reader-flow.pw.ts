@@ -1062,42 +1062,30 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page.locator('.book-reader__loading')).toHaveCount(0);
   await expect(
     readerContent.locator('.book-reader__continuous-chapter'),
-  ).toHaveCount(2);
-  await page.evaluate(() =>
-    window.scrollTo(0, document.documentElement.scrollHeight),
-  );
+  ).toHaveCount(1);
+  await expect(
+    readerContent.locator('[data-reader-chapter-id="0"]'),
+  ).toBeVisible();
+  await page.mouse.move(195, 400);
+  await page.mouse.wheel(0, 250);
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(3);
-  const expectContinuousChapterSeam = async () => {
-    await expect
-      .poll(() =>
-        readerContent.evaluate((element) => {
-          const chapters = [
-            ...element.querySelectorAll<HTMLElement>(
-              '.book-reader__continuous-chapter',
-            ),
-          ];
-          const previous = chapters[0]?.getBoundingClientRect();
-          const next = chapters[1]?.getBoundingClientRect();
-          return (
-            previous !== undefined &&
-            next !== undefined &&
-            previous.bottom > 0 &&
-            next.top < window.innerHeight
-          );
-        }),
-      )
-      .toBe(true);
-  };
-  const secondChapter = readerContent.locator('[data-reader-chapter-id="1"]');
-  await page.evaluate(() => window.scrollBy(0, -10));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
+  await expect(
+    readerContent.locator('[data-reader-chapter-id="1"]'),
+  ).toBeVisible();
+  await readerContent.dispatchEvent('wheel', { deltaY: -250 });
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/0$/);
-  await expectContinuousChapterSeam();
-  await secondChapter.evaluate(() =>
-    window.scrollTo(0, document.documentElement.scrollHeight),
-  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollHeight -
+          window.innerHeight -
+          window.scrollY,
+      ),
+    )
+    .toBeLessThan(3);
+  await readerContent.dispatchEvent('wheel', { deltaY: 250 });
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
   await expect
     .poll(() =>
@@ -1298,14 +1286,10 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(page.locator('.book-reader__loading')).toHaveCount(0);
   await expect(
     readerContent.locator('.book-reader__continuous-chapter'),
-  ).toHaveCount(2);
-  await page.evaluate(() =>
-    window.scrollTo(0, document.documentElement.scrollHeight),
-  );
+  ).toHaveCount(1);
+  await readerContent.dispatchEvent('wheel', { deltaY: 250 });
   await expect(page).toHaveURL(/\/books\/reader-flow\.txt\/read\/1$/);
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(3);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '设置', exact: true }).click();
@@ -4748,16 +4732,16 @@ test('loads only the current GPT workspace schema', async ({ page }) => {
   ).toHaveCount(0);
 });
 
-test('keeps continuous scrolling stable while adjacent chapters are loaded and trimmed', async ({
+test('scrolls one chapter at a time and crosses only at chapter boundaries', async ({
   page,
 }) => {
-  const continuousBookId = 'continuous-scroll-window.txt';
-  const chapterIds = Array.from({ length: 9 }, (_, index) => String(index));
+  const continuousBookId = 'chapter-scroll-boundary.txt';
+  const chapterIds = ['0', '1', '2'];
   const paragraphs = (chapterIndex: number) =>
     Array.from(
-      { length: 8 },
+      { length: chapterIndex === 0 ? 1_200 : 36 },
       (_, paragraphIndex) =>
-        `第 ${chapterIndex + 1} 章第 ${paragraphIndex + 1} 段连续滚动正文`,
+        `第 ${chapterIndex + 1} 章第 ${paragraphIndex + 1} 段单章滚动正文`,
     );
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -4829,8 +4813,6 @@ test('keeps continuous scrolling stable while adjacent chapters are loaded and t
     },
   );
 
-  const chapter = (chapterId: string) =>
-    page.locator(`[data-reader-chapter-id="${chapterId}"]`);
   const loadedChapterIds = () =>
     page
       .locator('[data-reader-chapter-id]')
@@ -4840,44 +4822,39 @@ test('keeps continuous scrolling stable while adjacent chapters are loaded and t
         ),
       );
 
-  await page.goto(`/books/${continuousBookId}/read/4`);
-  await expect(chapter('4')).toBeVisible();
-  await expect.poll(loadedChapterIds).toEqual(['3', '4', '5']);
-  const chapterFourTopBeforeBack = await chapter('4').evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
-  await page.mouse.wheel(0, -250);
-  await page.waitForTimeout(400);
-  const chapterFourTopAfterBack = await chapter('4').evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
-  expect(chapterFourTopAfterBack - chapterFourTopBeforeBack).toBeGreaterThan(
-    100,
-  );
-  expect(chapterFourTopAfterBack - chapterFourTopBeforeBack).toBeLessThan(600);
-
-  await page.goto(`/books/${continuousBookId}/read/4`);
-  await expect(chapter('4')).toBeVisible();
-  await expect.poll(loadedChapterIds).toEqual(['3', '4', '5']);
-  for (let index = 0; index < 8; index += 1) {
-    await page.mouse.wheel(0, 150);
-    await page.waitForTimeout(150);
-  }
+  await page.goto(`/books/${continuousBookId}/read/1`);
+  await expect.poll(loadedChapterIds).toEqual(['1']);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
+  await page.mouse.move(195, 400);
+  await page.mouse.wheel(0, 300);
+  await expect(page).toHaveURL(/\/read\/1$/);
   await expect
-    .poll(loadedChapterIds, { timeout: 10_000 })
-    .toEqual(['3', '4', '5', '6', '7']);
-  const chapterFourTopBeforeForward = await chapter('4').evaluate(
-    (element) => element.getBoundingClientRect().top,
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(100);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.mouse.wheel(0, -250);
+  await expect(page).toHaveURL(/\/read\/0$/);
+  await expect.poll(loadedChapterIds).toEqual(['0']);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollHeight -
+          window.innerHeight -
+          window.scrollY,
+      ),
+    )
+    .toBeLessThan(3);
+
+  await page.goto(`/books/${continuousBookId}/read/1`);
+  await expect.poll(loadedChapterIds).toEqual(['1']);
+  await page.mouse.move(195, 400);
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
   );
-  for (let index = 0; index < 4; index += 1) {
-    await page.mouse.wheel(0, 250);
-  }
-  await expect.poll(loadedChapterIds, { timeout: 10_000 }).not.toContain('3');
-  await page.waitForTimeout(500);
-  const chapterFourTopAfterForward = await chapter('4').evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
-  expect(
-    chapterFourTopBeforeForward - chapterFourTopAfterForward,
-  ).toBeGreaterThan(600);
+  await page.mouse.wheel(0, 250);
+  await expect(page).toHaveURL(/\/read\/2$/);
+  await expect.poll(loadedChapterIds).toEqual(['2']);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(3);
 });
