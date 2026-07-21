@@ -1,4 +1,5 @@
 import { BaiduApi } from '@/api';
+import type { BaiduTranslateConfig } from '@/api';
 import { RegexUtil } from '@/util';
 import type { Logger, SegmentContext, SegmentTranslator } from './Common';
 import { createBudgetSegmentor, createGlossaryWrapper } from './Common';
@@ -6,16 +7,18 @@ import { createBudgetSegmentor, createGlossaryWrapper } from './Common';
 export class BaiduTranslator implements SegmentTranslator {
   id = <const>'baidu';
   log: (message: string) => void;
-  constructor(log: Logger) {
+  constructor(
+    log: Logger,
+    private config: BaiduTranslateConfig,
+  ) {
     this.log = log;
   }
 
   async init() {
-    await BaiduApi.sug();
     return this;
   }
 
-  segmentor = createBudgetSegmentor(3500);
+  segmentor = createBudgetSegmentor(1800);
 
   async translate(
     seg: string[],
@@ -37,33 +40,15 @@ export class BaiduTranslator implements SegmentTranslator {
     } else if (RegexUtil.hasEnglishChars(query)) {
       from = 'en';
     }
-    const chunks = await BaiduApi.translate(query, from, { signal });
-
-    const lineParts: { paraIdx: number; dst: string }[] = [];
-    Array.from(chunks).forEach((chunk) => {
-      if (chunk.data.event === 'Translating') {
-        lineParts.push(...chunk.data.list);
-      }
+    const translations = await BaiduApi.translate(query, from, this.config, {
+      signal,
     });
-
-    const lines: string[] = [];
-    let currentParaIdx = 0;
-    let currentLine = '';
-    lineParts.forEach(({ paraIdx, dst }) => {
-      if (paraIdx === currentParaIdx) {
-        currentLine = currentLine + dst;
-      } else {
-        lines.push(currentLine);
-        currentParaIdx = paraIdx;
-        currentLine = dst;
-      }
-    });
-    lines.push(currentLine);
-
-    return lines;
+    return translations.flatMap((translation) => translation.split(/\r?\n/));
   }
 }
 
 export namespace BaiduTranslator {
-  export const create = (log: Logger) => new BaiduTranslator(log).init();
+  export type Config = BaiduTranslateConfig;
+  export const create = (log: Logger, config: Config) =>
+    new BaiduTranslator(log, config).init();
 }

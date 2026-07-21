@@ -1,5 +1,6 @@
 import type { LocalDownloadMode } from '@/model/LocalVolume';
 import type { TranslatorId } from '@/model/Translator';
+import type { TranslatorConfig } from '@/domain/translate';
 import { useLocalStorage } from '@/util';
 import { LSKey } from './key';
 
@@ -22,6 +23,16 @@ export interface Setting {
   languageDetectionConfidencePercent?: number;
   embedMetadataInOriginalDownload: boolean;
   embedMetadataInTranslatedDownload: boolean;
+  translationApi: {
+    baidu: {
+      appId: string;
+      secretKey: string;
+    };
+    youdao: {
+      appKey: string;
+      appSecret: string;
+    };
+  };
 }
 
 export namespace Setting {
@@ -46,6 +57,16 @@ export namespace Setting {
       defaultLanguageDetectionConfidencePercent,
     embedMetadataInOriginalDownload: false,
     embedMetadataInTranslatedDownload: false,
+    translationApi: {
+      baidu: {
+        appId: '',
+        secretKey: '',
+      },
+      youdao: {
+        appKey: '',
+        appSecret: '',
+      },
+    },
   };
 
   export const downloadModeOptions = [
@@ -73,10 +94,48 @@ export namespace Setting {
     typeof value === 'number' && Number.isFinite(value)
       ? Math.min(100, Math.max(0, Math.round(value)))
       : defaultLanguageDetectionConfidencePercent;
+
+  export const normalize = (value: Partial<Setting>): Setting => ({
+    ...defaultValue,
+    ...value,
+    downloadFormat: {
+      ...defaultValue.downloadFormat,
+      ...value.downloadFormat,
+    },
+    localVolumeOrder: {
+      ...defaultValue.localVolumeOrder,
+      ...value.localVolumeOrder,
+    },
+    translationApi: {
+      baidu: {
+        ...defaultValue.translationApi.baidu,
+        ...value.translationApi?.baidu,
+      },
+      youdao: {
+        ...defaultValue.translationApi.youdao,
+        ...value.translationApi?.youdao,
+      },
+    },
+  });
+
+  export const translatorConfig = (
+    setting: Setting,
+    id: 'baidu' | 'youdao',
+  ): TranslatorConfig | undefined => {
+    if (id === 'baidu') {
+      const appId = setting.translationApi.baidu.appId.trim();
+      const secretKey = setting.translationApi.baidu.secretKey.trim();
+      return appId && secretKey ? { id, appId, secretKey } : undefined;
+    }
+    const appKey = setting.translationApi.youdao.appKey.trim();
+    const appSecret = setting.translationApi.youdao.appSecret.trim();
+    return appKey && appSecret ? { id, appKey, appSecret } : undefined;
+  };
 }
 
 export const useSettingStore = defineStore(LSKey.Setting, () => {
   const setting = useLocalStorage<Setting>(LSKey.Setting, Setting.defaultValue);
+  setting.value = Setting.normalize(setting.value);
 
   return { setting };
 });

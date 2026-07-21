@@ -392,6 +392,17 @@ test('reviews OCR changes before generating a result', async ({ page }) => {
 
 test('manages and exports normalized glossary candidates', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'auto-novel:settings',
+      JSON.stringify({
+        translationApi: {
+          baidu: { appId: 'test-app-id', secretKey: 'test-secret-key' },
+          youdao: { appKey: 'test-app-key', appSecret: 'test-app-secret' },
+        },
+      }),
+    );
+  });
   await page.goto('/workspace/toolbox');
   await page.locator('input[type="file"]').setInputFiles({
     name: 'glossary.txt',
@@ -575,13 +586,13 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     'access-control-allow-origin': 'http://127.0.0.1:4173',
     'access-control-allow-credentials': 'true',
   };
-  await page.route('https://fanyi.baidu.com/sug', (route) =>
-    route.fulfill({ status: 200, headers: corsHeaders, body: '{}' }),
-  );
   await page.route(
-    'https://fanyi.baidu.com/ait/text/translate',
+    'https://fanyi-api.baidu.com/api/trans/vip/translate',
     async (route) => {
-      const query = route.request().postDataJSON()?.query as string;
+      const params = new URLSearchParams(route.request().postData() ?? '');
+      const query = params.get('q') ?? '';
+      expect(params.get('appid')).toBe('test-app-id');
+      expect(params.get('sign')).not.toBeNull();
       if (query.includes('\n') || query === 'ベータ') {
         await route.fulfill({
           status: 500,
@@ -590,27 +601,16 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
         });
         return;
       }
-      const event = {
-        errno: 0,
-        errmsg: '',
-        data: {
-          event: 'Translating',
-          message: '',
-          list: [
-            {
-              id: '1',
-              paraIdx: 0,
-              src: query,
-              dst: query === 'ガンマ' ? '伽马' : `译-${query}`,
-              metadata: '',
-            },
-          ],
-        },
-      };
       await route.fulfill({
         status: 200,
-        headers: { ...corsHeaders, 'content-type': 'text/event-stream' },
-        body: `data: ${JSON.stringify(event)}\n\n`,
+        headers: { ...corsHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          from: 'jp',
+          to: 'zh',
+          trans_result: [
+            { src: query, dst: query === 'ガンマ' ? '伽马' : `译-${query}` },
+          ],
+        }),
       });
     },
   );
@@ -633,6 +633,41 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       .filter({ hasText: 'カタカナ' })
       .getByPlaceholder('请输入中文翻译'),
   ).toHaveValue('片假名');
+
+  await page.route('https://openapi.youdao.com/api', async (route) => {
+    const params = new URLSearchParams(route.request().postData() ?? '');
+    const query = params.get('q') ?? '';
+    expect(params.get('appKey')).toBe('test-app-key');
+    expect(params.get('signType')).toBe('v3');
+    expect(params.get('sign')).not.toBeNull();
+    await route.fulfill({
+      status: 200,
+      headers: { ...corsHeaders, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        errorCode: '0',
+        translation: [
+          query
+            .split('\n')
+            .map((word) => (word === 'ベータ' ? '贝塔' : '有道伽马'))
+            .join('\n'),
+        ],
+      }),
+    });
+  });
+  await page.getByRole('button', { name: '有道翻译', exact: true }).click();
+  await expect(page.getByText('已翻译 2 个词语')).toBeVisible();
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'ベータ' })
+      .getByPlaceholder('请输入中文翻译'),
+  ).toHaveValue('贝塔');
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'ガンマ' })
+      .getByPlaceholder('请输入中文翻译'),
+  ).toHaveValue('有道伽马');
 
   const tableBounds = await page.locator('.glossary-table').boundingBox();
   expect(tableBounds).not.toBeNull();

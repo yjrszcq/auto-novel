@@ -3552,9 +3552,14 @@ test('persists the global reading version selected in Settings', async ({
     chineseScriptSelector.getByRole('radio', { name: '原文' }),
   ).toBeChecked();
   const preloadControl = page.locator('.reader-preload-setting__input');
-  const preloadHelp = page.locator('.reader-preload-setting__help');
   const languageDetectionInput = page.getByRole('textbox', {
     name: '语言检测置信度阈值',
+  });
+  const languageHelpButton = page.getByRole('button', {
+    name: '语言检测阈值说明',
+  });
+  const preloadHelpButton = page.getByRole('button', {
+    name: '自动翻译预翻译说明',
   });
   await expect(languageDetectionInput).toHaveValue('95');
   await languageDetectionInput.fill('97');
@@ -3584,11 +3589,55 @@ test('persists the global reading version selected in Settings', async ({
     ),
   ).toBe(true);
   const desktopPreloadBounds = desktopControlBounds[2]!;
-  const desktopHelpBounds = await preloadHelp.boundingBox();
-  expect(desktopHelpBounds).not.toBeNull();
-  expect(desktopHelpBounds!.x).toBeGreaterThanOrEqual(
-    desktopPreloadBounds.x + desktopPreloadBounds.width,
-  );
+  const desktopLanguageInputBounds = await page
+    .locator('.language-detection-setting__input')
+    .boundingBox();
+  expect(desktopLanguageInputBounds).not.toBeNull();
+  expect(
+    Math.abs(desktopLanguageInputBounds!.width - desktopPreloadBounds.width),
+  ).toBeLessThanOrEqual(1);
+  await languageHelpButton.click();
+  await expect(
+    page.getByText(
+      '仅采用高于阈值的正文检测结果；检测语言与文件元数据没有重合时以检测结果为准，否则补充缺失语言。',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await languageHelpButton.click();
+  await preloadHelpButton.click();
+  await expect(
+    page.getByText('提前翻译当前页之后的页数；0 表示只处理当前可见页。', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await preloadHelpButton.click();
+
+  const baiduAppId = page.getByRole('textbox', {
+    name: '百度翻译 App ID',
+  });
+  const baiduSecret = page.getByRole('textbox', { name: '百度翻译密钥' });
+  const youdaoAppKey = page.getByRole('textbox', {
+    name: '有道翻译应用 ID',
+  });
+  const youdaoSecret = page.getByRole('textbox', {
+    name: '有道翻译应用密钥',
+  });
+  await baiduAppId.fill('baidu-app');
+  await baiduSecret.fill('baidu-secret');
+  await youdaoAppKey.fill('youdao-app');
+  await youdaoSecret.fill('youdao-secret');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem('auto-novel:settings') ?? '{}')
+            .translationApi,
+      ),
+    )
+    .toEqual({
+      baidu: { appId: 'baidu-app', secretKey: 'baidu-secret' },
+      youdao: { appKey: 'youdao-app', appSecret: 'youdao-secret' },
+    });
   await selector.getByText('日中', { exact: true }).click();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
   await chineseScriptSelector.getByText('繁體中文', { exact: true }).click();
@@ -3650,6 +3699,8 @@ test('persists the global reading version selected in Settings', async ({
   ).toBeChecked();
   await expect(preloadInput).toHaveValue('7');
   await expect(languageDetectionInput).toHaveValue('97');
+  await expect(baiduAppId).toHaveValue('baidu-app');
+  await expect(youdaoAppKey).toHaveValue('youdao-app');
 
   await page.setViewportSize({ width: 390, height: 844 });
   const mobilePreloadLayout = await page
@@ -3667,14 +3718,10 @@ test('persists the global reading version selected in Settings', async ({
       return {
         row: toBounds(row),
         input: toBounds(row.querySelector('.reader-preload-setting__input')!),
-        help: toBounds(row.querySelector('.reader-preload-setting__help')!),
       };
     });
   const mobileLanguageInputBounds = await languageDetectionInput.boundingBox();
   expect(mobileLanguageInputBounds).not.toBeNull();
-  expect(mobilePreloadLayout.help.y).toBeGreaterThanOrEqual(
-    mobilePreloadLayout.input.y + mobilePreloadLayout.input.height,
-  );
   expect(mobilePreloadLayout.input.x).toBeGreaterThanOrEqual(
     mobilePreloadLayout.row.x,
   );
@@ -3687,6 +3734,21 @@ test('persists the global reading version selected in Settings', async ({
   expect(
     mobileLanguageInputBounds!.x + mobileLanguageInputBounds!.width,
   ).toBeLessThanOrEqual(390);
+  for (const helpButton of [languageHelpButton, preloadHelpButton]) {
+    await helpButton.click();
+    const popover = page.locator('.n-popover').filter({
+      hasText:
+        helpButton === languageHelpButton
+          ? '仅采用高于阈值的正文检测结果'
+          : '提前翻译当前页之后的页数',
+    });
+    await expect(popover).toBeVisible();
+    const bounds = await popover.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    await helpButton.click();
+  }
 });
 
 test('completes, persists, exports, and reads a concurrent GPT job', async ({

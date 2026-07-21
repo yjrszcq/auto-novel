@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { InfoOutlined } from '@vicons/material';
+
 import type {
   ReaderChineseScript,
   ReaderMode,
@@ -218,10 +220,10 @@ onMounted(() => {
             align="center"
             class="language-detection-setting"
           >
-            <div class="language-detection-setting__content">
+            <div class="number-setting-control">
               <n-input-number
                 v-model:value="languageDetectionConfidencePercent"
-                class="language-detection-setting__input"
+                class="number-setting-input language-detection-setting__input"
                 :min="0"
                 :max="100"
                 :precision="0"
@@ -229,9 +231,75 @@ onMounted(() => {
               >
                 <template #suffix>%</template>
               </n-input-number>
-              <n-text depth="3" class="language-detection-setting__help">
+              <n-popover
+                trigger="click"
+                placement="bottom-start"
+                :style="{
+                  maxWidth: 'min(360px, calc(100vw - 32px))',
+                  whiteSpace: 'normal',
+                }"
+              >
+                <template #trigger>
+                  <n-button
+                    class="setting-info-button"
+                    quaternary
+                    circle
+                    size="small"
+                    aria-label="语言检测阈值说明"
+                  >
+                    <template #icon>
+                      <n-icon :component="InfoOutlined" />
+                    </template>
+                  </n-button>
+                </template>
                 仅采用高于阈值的正文检测结果；检测语言与文件元数据没有重合时以检测结果为准，否则补充缺失语言。
-              </n-text>
+              </n-popover>
+            </div>
+          </c-action-wrapper>
+        </n-flex>
+      </n-list-item>
+
+      <n-list-item>
+        <n-flex vertical :size="8">
+          <b>翻译 API</b>
+          <c-action-wrapper
+            title="百度翻译"
+            align="center"
+            class="translation-api-setting"
+          >
+            <div class="translation-api-setting__fields">
+              <n-input
+                v-model:value="setting.translationApi.baidu.appId"
+                placeholder="App ID"
+                :input-props="{ 'aria-label': '百度翻译 App ID' }"
+              />
+              <n-input
+                v-model:value="setting.translationApi.baidu.secretKey"
+                type="password"
+                show-password-on="click"
+                placeholder="密钥"
+                :input-props="{ 'aria-label': '百度翻译密钥' }"
+              />
+            </div>
+          </c-action-wrapper>
+          <c-action-wrapper
+            title="有道翻译"
+            align="center"
+            class="translation-api-setting"
+          >
+            <div class="translation-api-setting__fields">
+              <n-input
+                v-model:value="setting.translationApi.youdao.appKey"
+                placeholder="应用 ID"
+                :input-props="{ 'aria-label': '有道翻译应用 ID' }"
+              />
+              <n-input
+                v-model:value="setting.translationApi.youdao.appSecret"
+                type="password"
+                show-password-on="click"
+                placeholder="应用密钥"
+                :input-props="{ 'aria-label': '有道翻译应用密钥' }"
+              />
             </div>
           </c-action-wrapper>
         </n-flex>
@@ -291,9 +359,9 @@ onMounted(() => {
             align="center"
             class="reader-setting-row reader-preload-setting"
           >
-            <div class="reader-preload-setting__content">
+            <div class="number-setting-control">
               <n-input-number
-                class="reader-preload-setting__input"
+                class="number-setting-input reader-preload-setting__input"
                 :value="readerSettings.autoTranslationPreloadPages"
                 :min="0"
                 :max="20"
@@ -304,9 +372,29 @@ onMounted(() => {
                 :disabled="readerSettingsLoading || readerSettingsSaving"
                 @update:value="updateAutoTranslationPreloadPages"
               />
-              <n-text depth="3" class="reader-preload-setting__help">
+              <n-popover
+                trigger="click"
+                placement="bottom-start"
+                :style="{
+                  maxWidth: 'min(320px, calc(100vw - 32px))',
+                  whiteSpace: 'normal',
+                }"
+              >
+                <template #trigger>
+                  <n-button
+                    class="setting-info-button"
+                    quaternary
+                    circle
+                    size="small"
+                    aria-label="自动翻译预翻译说明"
+                  >
+                    <template #icon>
+                      <n-icon :component="InfoOutlined" />
+                    </template>
+                  </n-button>
+                </template>
                 提前翻译当前页之后的页数；0 表示只处理当前可见页。
-              </n-text>
+              </n-popover>
             </div>
           </c-action-wrapper>
           <c-action-wrapper
@@ -345,61 +433,55 @@ onMounted(() => {
   gap: 16px;
 }
 
-.language-detection-setting__content {
+.number-setting-control {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
-.language-detection-setting__input {
-  width: 160px;
+.number-setting-input {
+  width: 240px;
   flex: 0 0 auto;
 }
 
-.language-detection-setting__help {
-  white-space: nowrap;
+.setting-info-button {
+  flex: 0 0 auto;
 }
 
-.reader-preload-setting__content {
+.translation-api-setting {
   display: grid;
-  grid-template-columns: minmax(160px, 240px) minmax(240px, 1fr);
+  grid-template-columns: 128px minmax(0, 1fr);
   align-items: center;
+  gap: 16px;
+}
+
+.translation-api-setting__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 320px));
   gap: 12px;
-}
-
-.reader-preload-setting__input {
-  width: 100%;
-}
-
-.reader-preload-setting__help {
-  line-height: 1.5;
 }
 
 @media (max-width: 700px) {
   .language-detection-setting,
-  .reader-setting-row {
+  .reader-setting-row,
+  .translation-api-setting {
     grid-template-columns: minmax(0, 1fr);
     gap: 6px;
   }
 
-  .language-detection-setting__content {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .language-detection-setting__input {
+  .number-setting-control {
     width: 100%;
   }
 
-  .language-detection-setting__help {
-    white-space: normal;
+  .number-setting-input {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
-  .reader-preload-setting__content {
+  .translation-api-setting__fields {
     grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
   }
 }
 </style>

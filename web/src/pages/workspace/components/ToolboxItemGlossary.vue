@@ -4,7 +4,12 @@ import { DeleteOutlineOutlined } from '@vicons/material';
 import type { TranslatorConfig } from '@/domain/translate';
 import { Translator } from '@/domain/translate';
 import { Glossary } from '@/model/Glossary';
-import { useGptWorkspaceStore, useSakuraWorkspaceStore } from '@/stores';
+import {
+  Setting,
+  useGptWorkspaceStore,
+  useSakuraWorkspaceStore,
+  useSettingStore,
+} from '@/stores';
 import { downloadFile } from '@/util';
 import type { ParsedFile } from '@/util/file';
 
@@ -36,6 +41,7 @@ const emit = defineEmits<{
 const message = useMessage();
 const gptWorkspace = useGptWorkspaceStore().ref;
 const sakuraWorkspace = useSakuraWorkspaceStore().ref;
+const { setting } = storeToRefs(useSettingStore());
 const selectedGptWorkerId = ref(gptWorkspace.value.workers[0]?.id);
 const selectedSakuraWorkerId = ref(sakuraWorkspace.value.workers[0]?.id);
 const gptWorkerOptions = computed(() =>
@@ -286,7 +292,9 @@ const downloadGlossary = () => {
 const translatorConfig = (
   id: 'baidu' | 'youdao' | 'gpt' | 'sakura',
 ): TranslatorConfig | undefined => {
-  if (id === 'baidu' || id === 'youdao') return { id };
+  if (id === 'baidu' || id === 'youdao') {
+    return Setting.translatorConfig(setting.value, id);
+  }
   if (id === 'gpt') {
     const worker = gptWorkspace.value.workers.find(
       ({ id }) => id === selectedGptWorkerId.value,
@@ -317,7 +325,13 @@ const translateCandidates = async (
   if (translating.value) return;
   const config = translatorConfig(id);
   if (config === undefined) {
-    message.error(`未选择 ${id === 'gpt' ? 'GPT' : 'Sakura'} 翻译器`);
+    if (id === 'baidu' || id === 'youdao') {
+      message.error(
+        `请先在设置页配置${id === 'baidu' ? '百度' : '有道'}翻译 API`,
+      );
+    } else {
+      message.error(`未选择 ${id === 'gpt' ? 'GPT' : 'Sakura'} 翻译器`);
+    }
     return;
   }
   const words = activeCandidates.value

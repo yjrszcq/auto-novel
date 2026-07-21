@@ -1,67 +1,63 @@
+import { MD5 } from 'crypto-es';
 import type { Options } from 'ky';
 import ky from 'ky';
 
-import { parseEventStream } from '@/util';
+const endpoint = 'https://fanyi-api.baidu.com/api/trans/vip/translate';
 
-const sug = () => {
-  const formData = new FormData();
-  formData.append('kw', 'test');
-  return ky
-    .post('https://fanyi.baidu.com/sug', {
-      body: formData,
-      credentials: 'include',
-      retry: 0,
-    })
-    .text();
+export interface BaiduTranslateConfig {
+  appId: string;
+  secretKey: string;
+}
+
+type BaiduTranslateResponse = {
+  from?: string;
+  to?: string;
+  trans_result?: { src: string; dst: string }[];
+  error_code?: string;
+  error_msg?: string;
 };
 
-const translate = (query: string, from: string, options: Options) => {
-  return ky
-    .post('https://fanyi.baidu.com/ait/text/translate', {
-      headers: {
-        accept: 'text/event-stream',
-      },
-      json: {
-        from,
-        to: 'zh',
-        query,
-        corpusIds: [],
-        domain: 'common',
-        milliTimestamp: Date.now(),
-        needPhonetic: false,
-        qcSettings: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'],
-        reference: '',
-      },
-      credentials: 'include',
+export const buildBaiduTranslateParams = (
+  query: string,
+  from: string,
+  config: BaiduTranslateConfig,
+  salt = Date.now().toString(),
+) => ({
+  q: query,
+  from,
+  to: 'zh',
+  appid: config.appId,
+  salt,
+  sign: MD5(`${config.appId}${query}${salt}${config.secretKey}`).toString(),
+});
+
+const translate = async (
+  query: string,
+  from: string,
+  config: BaiduTranslateConfig,
+  options?: Options,
+) => {
+  const client = window.Addon
+    ? ky.create({ fetch: window.Addon.fetch.bind(window.Addon) })
+    : ky;
+  const response = await client
+    .post(endpoint, {
+      body: new URLSearchParams(buildBaiduTranslateParams(query, from, config)),
       retry: 0,
       ...options,
     })
-    .text()
-    .then(parseEventStream<TranslateChunk>);
+    .json<BaiduTranslateResponse>();
+  if (
+    response.error_code !== undefined ||
+    response.trans_result === undefined
+  ) {
+    throw new Error(
+      `百度翻译错误 ${response.error_code ?? 'unknown'}：${response.error_msg ?? '响应格式错误'}`,
+    );
+  }
+  return response.trans_result.map(({ dst }) => dst);
 };
 
 export const BaiduApi = {
-  sug,
   translate,
-};
-
-type TranslateChunk = {
-  errno: number;
-  errmsg: string;
-  data:
-    | {
-        event: 'Start' | 'StartTranslation' | 'TranslationSucceed' | 'Finished';
-        message: string;
-      }
-    | {
-        event: 'Translating';
-        message: string;
-        list: {
-          id: string;
-          paraIdx: number;
-          src: string;
-          dst: string;
-          metadata: string;
-        }[];
-      };
 };

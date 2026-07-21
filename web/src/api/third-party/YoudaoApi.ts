@@ -1,118 +1,67 @@
-import { AES, MD5, Utf8 } from 'crypto-es';
+import { SHA256 } from 'crypto-es';
 import type { Options } from 'ky';
 import ky from 'ky';
 
-import { lazy } from '@/util';
-import { ensureCookie } from './util';
+const endpoint = 'https://openapi.youdao.com/api';
 
-const getClient = lazy(async () => {
-  const addon = window.Addon;
-  if (!addon) return ky;
+export interface YoudaoTranslateConfig {
+  appKey: string;
+  appSecret: string;
+}
 
-  const url = 'https://dict.youdao.com/';
-  const domain = '.youdao.com';
-  const keys = ['OUTFOX_SEARCH_USER_ID'];
+type YoudaoTranslateResponse = {
+  errorCode?: string;
+  translation?: string[];
+};
 
-  await ensureCookie(addon, url, domain, keys);
+const truncateForSign = (query: string) =>
+  query.length <= 20
+    ? query
+    : `${query.slice(0, 10)}${query.length}${query.slice(-10)}`;
 
-  return ky.create({
-    fetch: addon.fetch.bind(window.Addon),
-  });
+export const buildYoudaoTranslateParams = (
+  query: string,
+  from: string,
+  config: YoudaoTranslateConfig,
+  salt = crypto.randomUUID(),
+  curtime = Math.floor(Date.now() / 1000).toString(),
+) => ({
+  q: query,
+  from,
+  to: 'zh-CHS',
+  appKey: config.appKey,
+  salt,
+  sign: SHA256(
+    `${config.appKey}${truncateForSign(query)}${salt}${curtime}${config.appSecret}`,
+  ).toString(),
+  signType: 'v3',
+  curtime,
 });
 
-const getBaseBody = (key: string) => {
-  const c = 'fanyideskweb';
-  const p = 'webfanyi';
-  const t = Date.now().toString();
-
-  const sign = MD5(
-    `client=${c}&mysticTime=${t}&product=${p}&key=${key}`,
-  ).toString();
-  return {
-    sign,
-    client: c,
-    product: p,
-    appVersion: '1.0.0',
-    vendor: 'web',
-    pointParam: 'client,mysticTime,product',
-    mysticTime: t,
-    keyfrom: 'fanyi.web',
-  };
-};
-
-const decode = (src: string) => {
-  const dec = AES.decrypt(
-    src.replace(/_/g, '/').replace(/-/g, '+'),
-    MD5(
-      'ydsecret://query/key/B*RGygVywfNBwpmBaZg*WT7SIOUP2T0C9WHMZN39j^DAdaZhAnxvGcCY6VYFwnHl',
-    ),
-    {
-      iv: MD5(
-        'ydsecret://query/iv/C@lZe2YzHtZ2CYgaXKSVfsb7Y4QWHjITPPZ0nQp87fBeJ!Iv6v^6fvi2WN@bYpJ4',
-      ),
-    },
-  ).toString(Utf8);
-  return dec;
-};
-
-let key = 'fsdsogkndfokasodnaso';
-
-async function rlog() {
-  const client = await getClient();
-  client.get('https://rlogs.youdao.com/rlog.php', {
-    searchParams: {
-      _npid: 'fanyiweb',
-      _ncat: 'pageview',
-      _ncoo: (2147483647 * Math.random()).toString(),
-      _nssn: 'NULL',
-      _nver: '1.2.0',
-      _ntms: Date.now().toString(),
-    },
-    credentials: 'include',
-    retry: 0,
-  });
-}
-
-async function refreshKey() {
-  const client = await getClient();
+const translate = async (
+  query: string,
+  from: string,
+  config: YoudaoTranslateConfig,
+  options?: Options,
+) => {
+  const client = window.Addon
+    ? ky.create({ fetch: window.Addon.fetch.bind(window.Addon) })
+    : ky;
   const response = await client
-    .get('https://dict.youdao.com/webtranslate/key', {
-      searchParams: {
-        keyid: 'webfanyi-key-getter',
-        ...getBaseBody('asdjnjfenknafdfsdfsd'),
-      },
-      credentials: 'include',
-      retry: 0,
-    })
-    .json<{ data: { secretKey: string } }>();
-  key = response.data.secretKey;
-}
-
-async function webtranslate(query: string, from: string, options?: Options) {
-  const client = await getClient();
-  const resp = await client
-    .post('https://dict.youdao.com/webtranslate', {
-      body: new URLSearchParams({
-        i: query,
-        from,
-        to: 'zh-CHS',
-        dictResult: 'true',
-        keyid: 'webfanyi',
-        ...getBaseBody(key),
-      }),
-      headers: {
-        Accept: 'application/json, text/plain, */*',
-      },
-      credentials: 'include',
+    .post(endpoint, {
+      body: new URLSearchParams(
+        buildYoudaoTranslateParams(query, from, config),
+      ),
       retry: 0,
       ...options,
     })
-    .text();
-  return decode(resp);
-}
+    .json<YoudaoTranslateResponse>();
+  if (response.errorCode !== '0' || response.translation === undefined) {
+    throw new Error(`有道翻译错误 ${response.errorCode ?? 'unknown'}`);
+  }
+  return response.translation;
+};
 
 export const YoudaoApi = {
-  rlog,
-  refreshKey,
-  webtranslate,
+  translate,
 };

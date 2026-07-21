@@ -3,7 +3,12 @@ import type { TranslatorConfig } from '@/domain/translate';
 import { Translator } from '@/domain/translate';
 import type { Glossary } from '@/model/Glossary';
 import type { GptWorker, SakuraWorker, TranslatorId } from '@/model/Translator';
-import { useGptWorkspaceStore, useSakuraWorkspaceStore } from '@/stores';
+import {
+  Setting,
+  useGptWorkspaceStore,
+  useSakuraWorkspaceStore,
+  useSettingStore,
+} from '@/stores';
 import { useLocalStorage } from '@/util';
 
 import { consumeReaderInteractiveSelection } from '../reader/core/ReaderInteractiveHandoff';
@@ -61,6 +66,7 @@ watch(translatorId, () => {
 
 const gptWorkspaceRef = useGptWorkspaceStore().ref;
 const sakuraWorkspaceRef = useSakuraWorkspaceStore().ref;
+const { setting } = storeToRefs(useSettingStore());
 
 const selectedGptWorkerId = computed({
   get: () => translatorConfig.value.selectedGptWorkerId,
@@ -149,9 +155,14 @@ const translate = async () => {
       prevSegLength: worker.prevSegLength,
     };
   } else {
-    config = {
-      id,
-    };
+    const apiConfig = Setting.translatorConfig(setting.value, id);
+    if (apiConfig === undefined) {
+      message.error(
+        `请先在设置页配置${id === 'baidu' ? '百度' : '有道'}翻译 API`,
+      );
+      return;
+    }
+    config = apiConfig;
   }
 
   try {

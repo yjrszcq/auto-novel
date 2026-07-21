@@ -41,8 +41,8 @@ export type SegmentDispatcher = (request: {
 }) => Promise<{ output: string[]; workerId?: string }>;
 
 export type TranslatorConfig =
-  | { id: 'baidu' }
-  | { id: 'youdao' }
+  | ({ id: 'baidu' } & BaiduTranslator.Config)
+  | ({ id: 'youdao' } & YoudaoTranslator.Config)
   | ({ id: 'gpt' } & OpenAiTranslator.Config)
   | ({ id: 'sakura' } & SakuraTranslator.Config);
 
@@ -354,9 +354,9 @@ export namespace Translator {
     config: TranslatorConfig,
   ): Promise<SegmentTranslator> => {
     if (config.id === 'baidu') {
-      return BaiduTranslator.create(log);
+      return BaiduTranslator.create(log, config);
     } else if (config.id === 'youdao') {
-      return YoudaoTranslator.create(log);
+      return YoudaoTranslator.create(log, config);
     } else if (config.id === 'gpt') {
       return OpenAiTranslator.create(log, config);
     } else {
