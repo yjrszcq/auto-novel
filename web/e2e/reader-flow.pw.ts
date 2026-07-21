@@ -5208,6 +5208,8 @@ test('refills continuous previews after the viewport grows without moving the re
   await expect
     .poll(() => previewCount('next'))
     .toBeGreaterThan(countsBefore.next);
+  expect(await previewCount('previous')).toBeLessThanOrEqual(6);
+  expect(await previewCount('next')).toBeLessThanOrEqual(6);
   await expect
     .poll(async () => Math.abs((await currentSegmentOffset()) - offsetBefore))
     .toBeLessThanOrEqual(2);
