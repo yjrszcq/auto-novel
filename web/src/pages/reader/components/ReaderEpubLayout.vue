@@ -30,6 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'content-change': [];
   'link-activate': [href: string];
+  'conversion-error': [];
 }>();
 
 const layout = ref<HTMLElement>();
@@ -506,7 +507,10 @@ watch(
       props.convertOriginal,
       props.convertTranslated,
     ] as const,
-  () => void render(),
+  () =>
+    void render().catch(() => {
+      emit('conversion-error');
+    }),
   { immediate: true },
 );
 

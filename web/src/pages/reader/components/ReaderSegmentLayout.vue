@@ -25,6 +25,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'content-change': [anchorId?: string];
+  'conversion-error': [];
 }>();
 
 const getInitialRange = () =>
@@ -48,17 +49,21 @@ const refreshDisplayedSegments = async () => {
   const generation = ++conversionGeneration;
   const source = renderedSegments.value;
   displayedSegments.value = source;
-  const converted = await convertReaderSegments({
-    bookId: props.bookId,
-    script: props.chineseScript,
-    segments: source,
-    original: props.convertOriginal,
-    translated: props.convertTranslated,
-  });
-  if (generation !== conversionGeneration) return;
-  displayedSegments.value = converted;
-  await nextTick();
-  emit('content-change');
+  try {
+    const converted = await convertReaderSegments({
+      bookId: props.bookId,
+      script: props.chineseScript,
+      segments: source,
+      original: props.convertOriginal,
+      translated: props.convertTranslated,
+    });
+    if (generation !== conversionGeneration) return;
+    displayedSegments.value = converted;
+    await nextTick();
+    emit('content-change');
+  } catch {
+    if (generation === conversionGeneration) emit('conversion-error');
+  }
 };
 const hasPreviousSegments = computed(() => segmentRange.value.start > 0);
 const hasMoreSegments = computed(

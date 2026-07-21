@@ -108,7 +108,10 @@ import {
   type ReaderContinuousBufferDirection,
 } from './core/ReaderContinuousBuffer';
 import { planReaderChapterTransition } from './core/ReaderChapterTransition';
-import { getReaderChineseScriptSides } from './core/ReaderChineseScript';
+import {
+  getReaderChineseScriptSides,
+  readerChineseScriptService,
+} from './core/ReaderChineseScript';
 
 import {
   useGptWorkspaceStore,
@@ -163,6 +166,9 @@ const controlsVisible = ref(true);
 const selectedReaderText = ref('');
 const currentTime = ref('');
 let pendingInteractiveSelection = '';
+let pendingChineseScriptAnchor: ReaderPositionAnchor | undefined;
+let settingsPanelAnchor: ReaderPositionAnchor | undefined;
+let chineseScriptErrorShown = false;
 const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
 const readerPageCount = ref(1);
@@ -468,13 +474,22 @@ const openCatalog = async () => {
 
 const openSettings = () => {
   const shouldOpen = !showSettings.value;
+  if (shouldOpen) settingsPanelAnchor = captureReaderPosition();
   closeReaderPanels();
   showMobilePreloadHelp.value = false;
   showSettings.value = shouldOpen;
 };
 
-watch(showSettings, (visible) => {
-  if (!visible) showMobilePreloadHelp.value = false;
+watch(showSettings, async (visible) => {
+  if (visible) return;
+  showMobilePreloadHelp.value = false;
+  await nextTick();
+  if (pendingChineseScriptAnchor !== undefined) {
+    const anchor = pendingChineseScriptAnchor;
+    pendingChineseScriptAnchor = undefined;
+    restoreReaderPosition(anchor);
+  }
+  settingsPanelAnchor = undefined;
 });
 
 const openTools = () => {
@@ -1863,6 +1878,11 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
 
 const handleSegmentContentChange = async (anchorId?: string) => {
   await nextTick();
+  if (pendingChineseScriptAnchor !== undefined && !showSettings.value) {
+    const anchor = pendingChineseScriptAnchor;
+    pendingChineseScriptAnchor = undefined;
+    restoreReaderPosition(anchor);
+  }
   const pendingEdge = pendingScrolledContentEdge;
   if (
     pendingEdge !== undefined &&
@@ -1889,6 +1909,12 @@ const handleSegmentContentChange = async (anchorId?: string) => {
   }
   updateViewportMetrics();
   scheduleCurrentContinuousPreviewFill();
+};
+
+const handleChineseScriptError = () => {
+  if (chineseScriptErrorShown) return;
+  chineseScriptErrorShown = true;
+  message.error('中文字形转换加载失败，已保留原始字形');
 };
 
 const startReadingTime = (targetBookId: string) => {
@@ -1942,16 +1968,24 @@ const toggleCurrentSegmentSpeech = () => {
   if (result.value?.kind !== 'ready') {
     return;
   }
-  const segment = result.value.chapter.segments.find(
-    (item) => item.id === getActiveSegmentId(),
+  const segmentId = getActiveSegmentId();
+  const segmentElement = getSegmentElements().find(
+    (element) => element.dataset.readerSegmentId === segmentId,
   );
-  const text =
-    renderedMode.value === 'original' || segment?.translated === undefined
-      ? segment?.original
-      : segment.translated;
+  const preferredSide =
+    renderedMode.value === 'original' ? 'original' : 'translated';
+  const languageElement =
+    segmentElement === undefined
+      ? undefined
+      : getSegmentLanguageElements(segmentElement).find(
+          (element) => element.dataset.readerLanguageSide === preferredSide,
+        );
+  const text = languageElement?.textContent;
   const spoken = getSpeechController().speak(
     text ?? '',
-    renderedMode.value === 'original' ? 'ja-JP' : 'zh-CN',
+    preferredSide === 'translated' || chineseScriptSides.value.original
+      ? 'zh-CN'
+      : 'ja-JP',
     {
       onEnd: () => (isSpeaking.value = false),
       onError: () => (isSpeaking.value = false),
@@ -3751,6 +3785,21 @@ watch(
   { deep: true },
 );
 
+watch(
+  () => settings.value.chineseScript,
+  () => {
+    pendingChineseScriptAnchor = settingsPanelAnchor ?? captureReaderPosition();
+    chineseScriptErrorShown = false;
+  },
+  { flush: 'sync' },
+);
+
+watch(bookId, (nextBookId, previousBookId) => {
+  if (nextBookId !== previousBookId) {
+    readerChineseScriptService.releaseBook(previousBookId);
+  }
+});
+
 watch(resolvedFlow, async (_flow, previousFlow) => {
   const segmentId = getActiveSegmentId(previousFlow);
   if (result.value?.kind === 'ready') {
@@ -4104,6 +4153,7 @@ onBeforeUnmount(() => {
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               preview
               @content-change="scheduleCurrentContinuousPreviewFill"
+              @conversion-error="handleChineseScriptError"
               @link-activate="navigateToEpubHref"
             />
             <ReaderSegmentLayout
@@ -4115,6 +4165,7 @@ onBeforeUnmount(() => {
               :chinese-script="activeSettings.chineseScript"
               :convert-original="chineseScriptSides.original"
               :convert-translated="chineseScriptSides.translated"
+              @conversion-error="handleChineseScriptError"
             />
           </section>
           <section
@@ -4136,6 +4187,7 @@ onBeforeUnmount(() => {
               :double-spread="usesDoublePageSpread"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               @content-change="handleSegmentContentChange"
+              @conversion-error="handleChineseScriptError"
               @link-activate="navigateToEpubHref"
             />
             <ReaderSegmentLayout
@@ -4152,6 +4204,7 @@ onBeforeUnmount(() => {
               :convert-translated="chineseScriptSides.translated"
               continuous
               @content-change="handleSegmentContentChange"
+              @conversion-error="handleChineseScriptError"
             />
           </section>
           <section
@@ -4179,6 +4232,7 @@ onBeforeUnmount(() => {
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               preview
               @content-change="scheduleCurrentContinuousPreviewFill"
+              @conversion-error="handleChineseScriptError"
               @link-activate="navigateToEpubHref"
             />
             <ReaderSegmentLayout
@@ -4190,6 +4244,7 @@ onBeforeUnmount(() => {
               :chinese-script="activeSettings.chineseScript"
               :convert-original="chineseScriptSides.original"
               :convert-translated="chineseScriptSides.translated"
+              @conversion-error="handleChineseScriptError"
             />
           </section>
         </template>
@@ -4206,6 +4261,7 @@ onBeforeUnmount(() => {
           :double-spread="usesDoublePageSpread"
           :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
           @content-change="handleSegmentContentChange"
+          @conversion-error="handleChineseScriptError"
           @link-activate="navigateToEpubHref"
         />
         <ReaderSegmentLayout
@@ -4221,6 +4277,7 @@ onBeforeUnmount(() => {
           :convert-translated="chineseScriptSides.translated"
           :scroll-root="readerViewport"
           @content-change="handleSegmentContentChange"
+          @conversion-error="handleChineseScriptError"
         />
       </article>
     </template>

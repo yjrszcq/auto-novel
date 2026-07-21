@@ -2241,6 +2241,138 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
   ]);
 });
 
+test('keeps the reading anchor and speech text when Chinese script changes', async ({
+  page,
+}) => {
+  const bookId = 'reader-chinese-script.txt';
+  await page.addInitScript(() => {
+    const speechEvents: string[] = [];
+    class FakeUtterance {
+      lang = '';
+      constructor(public text: string) {}
+    }
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+      configurable: true,
+      value: FakeUtterance,
+    });
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel: () => {},
+        speak: (utterance: FakeUtterance) => speechEvents.push(utterance.text),
+      },
+    });
+    Object.assign(window, { __readerScriptSpeech: speechEvents });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await page.evaluate(async (id) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(
+      ['metadata', 'chapter', 'reader-settings'],
+      'readwrite',
+    );
+    transaction.objectStore('metadata').put({
+      id,
+      createAt: 1,
+      toc: [{ chapterId: '0', title: '字形测试' }],
+      sourceFormat: 'txt',
+      glossaryId: 'glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceBookMetadata: { title: id, languages: ['zh-CN'] },
+    });
+    const paragraphs = Array.from(
+      { length: 48 },
+      (_, index) => `第${index}段头发发展在里面`,
+    );
+    transaction.objectStore('chapter').put({
+      id: `${id}/0`,
+      volumeId: id,
+      paragraphs,
+      segmentIds: paragraphs.map((_, index) => `script-segment-${index}`),
+    });
+    transaction.objectStore('reader-settings').put({
+      id: 'default',
+      defaultMode: 'original',
+      translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+      chineseScript: 'none',
+      fontSize: 18,
+      lineHeight: 1.9,
+      contentWidth: 840,
+      horizontalPadding: 24,
+      theme: 'light',
+      flow: 'scrolled',
+      updatedAt: 1,
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, bookId);
+
+  await page.goto(`/books/${bookId}/read/0?segment=script-segment-24`);
+  const anchor = page.locator('[data-reader-segment-id="script-segment-24"]');
+  await expect(anchor).toContainText('头发发展在里面');
+  const offsetBefore = await anchor.evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  const scriptSetting = page
+    .locator('.book-reader__settings-grid .n-form-item')
+    .filter({ hasText: '中文字体' });
+  await scriptSetting.locator('.n-base-selection').click();
+  await page.getByText('繁体字形', { exact: true }).click();
+  await expect(anchor).toContainText('頭髮發展在裏面');
+  await page.keyboard.press('Escape');
+  const offsetAfter = await anchor.evaluate(
+    (element) => element.getBoundingClientRect().top,
+  );
+  expect(Math.abs(offsetAfter - offsetBefore)).toBeLessThanOrEqual(4);
+
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  await page.getByRole('button', { name: '朗读当前段', exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (
+          window as unknown as { __readerScriptSpeech: string[] }
+        ).__readerScriptSpeech.at(-1),
+      ),
+    )
+    .toContain('頭髮發展在裏面');
+
+  const persisted = await page.evaluate(async (id) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const chapter = await new Promise<{ paragraphs: string[] }>(
+      (resolve, reject) => {
+        const request = database
+          .transaction('chapter')
+          .objectStore('chapter')
+          .get(`${id}/0`);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      },
+    );
+    database.close();
+    return chapter.paragraphs[24];
+  }, bookId);
+  expect(persisted).toContain('头发发展在里面');
+});
+
 test('automatically translates a reader window without persisting a partial chapter', async ({
   page,
 }) => {
