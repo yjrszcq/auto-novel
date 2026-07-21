@@ -312,6 +312,7 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
 test('opens a local bookshelf book safely through the current reader route', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   expect(

@@ -207,6 +207,7 @@ let chapterBoundaryNavigationPending = false;
 let scrolledTouchStartY: number | undefined;
 let scrolledTouchStartedAtTop = false;
 let scrolledTouchStartedAtBottom = false;
+let scrolledPreviewBoundaryFrame: number | undefined;
 let pendingScrolledContentEdge:
   { chapterId: string; edge: 'start' | 'end' } | undefined;
 const isSpeaking = ref(false);
@@ -770,6 +771,7 @@ const handleViewportWheel = (event: WheelEvent) => {
       (direction === 'previous' && previousChapterPreviews.value.length > 0) ||
       (direction === 'next' && nextChapterPreviews.value.length > 0)
     ) {
+      scheduleScrolledPreviewBoundarySync();
       return;
     }
     if (navigateScrolledChapterBoundary(direction)) {
@@ -812,6 +814,7 @@ const handleViewportTouchMove = (event: TouchEvent) => {
   if (Math.abs(delta) > 8) {
     scrolledPreviewInputDirection = delta < 0 ? 'previous' : 'next';
     scrolledPreviewInputAt = performance.now();
+    scheduleScrolledPreviewBoundarySync();
   }
   const direction =
     delta > 48 &&
@@ -3202,6 +3205,16 @@ function syncScrolledPreviewBoundary() {
   }
 }
 
+function scheduleScrolledPreviewBoundarySync() {
+  if (scrolledPreviewBoundaryFrame !== undefined) {
+    cancelAnimationFrame(scrolledPreviewBoundaryFrame);
+  }
+  scrolledPreviewBoundaryFrame = requestAnimationFrame(() => {
+    scrolledPreviewBoundaryFrame = undefined;
+    syncScrolledPreviewBoundary();
+  });
+}
+
 const continuousChapterElements = () => [
   ...document.querySelectorAll<HTMLElement>('[data-reader-chapter-id]'),
 ];
@@ -3690,6 +3703,9 @@ onBeforeUnmount(() => {
   }
   if (scrolledPreviewFillFrame !== undefined) {
     cancelAnimationFrame(scrolledPreviewFillFrame);
+  }
+  if (scrolledPreviewBoundaryFrame !== undefined) {
+    cancelAnimationFrame(scrolledPreviewBoundaryFrame);
   }
   window.removeEventListener('keydown', handleReaderKeydown);
   document.removeEventListener('selectionchange', updateReaderSelection);
