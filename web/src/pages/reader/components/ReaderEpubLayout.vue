@@ -18,6 +18,7 @@ const props = defineProps<{
   flow: ReaderFlow;
   doubleSpread?: boolean;
   layoutRevision: string;
+  preview?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -168,6 +169,22 @@ const parseSlice = (slice: ReaderEpubDocumentSlice) => {
   const source = `<html xmlns="http://www.w3.org/1999/xhtml"><body>${slice.content}</body></html>`;
   const doc = new DOMParser().parseFromString(source, 'application/xhtml+xml');
   return doc.getElementsByTagName('parsererror').length > 0 ? undefined : doc;
+};
+
+const trimSliceToSegments = (doc: Document) => {
+  if (!props.preview) return;
+  const segmentIds = new Set(props.segments.map((segment) => segment.id));
+  const prune = (element: Element): boolean => {
+    const segmentId = element.getAttribute('data-reader-segment-id');
+    if (segmentId !== null) return segmentIds.has(segmentId);
+    for (const child of Array.from(element.childNodes)) {
+      if (child instanceof Element ? !prune(child) : true) child.remove();
+    }
+    return element.children.length > 0;
+  };
+  for (const element of Array.from(doc.body.children)) {
+    if (!prune(element)) element.remove();
+  }
 };
 
 const removeTargetIdentity = (element: Element) => {
@@ -383,6 +400,7 @@ const renderSlice = async (
   if (parsed === undefined) {
     wrapper.textContent = '此 EPUB 章节的 XHTML 无法解析。';
   } else {
+    trimSliceToSegments(parsed);
     await Promise.all(
       Array.from(parsed.body.children).map((element) =>
         sanitizeElement(element, slice, resourceSession),

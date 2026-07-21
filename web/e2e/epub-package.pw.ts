@@ -115,6 +115,7 @@ ${Array.from({ length: 30 }, (_, index) => `<p>分页测试段落 ${index + 1}</
     'OPS/Styles/book.css',
     new TextReader(`@font-face { font-family: Fixture; src: url('../Fonts/reader.woff2'); }
 body { font-family: Fixture; }
+.chapter-title { font-size: 2.25em; font-weight: 800; }
 .vertical-note { writing-mode: vertical-rl; }`),
   );
   await writer.add(
@@ -393,6 +394,48 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
     )
     .toMatch(/^blob:/);
 
+  const chooseFlow = async (label: string) => {
+    await page.getByRole('button', { name: '设置', exact: true }).click();
+    const flowSetting = page
+      .locator('.book-reader__settings-grid .n-form-item')
+      .filter({ hasText: '阅读流' });
+    await flowSetting.locator('.n-base-selection').click();
+    await page
+      .locator('.n-base-select-menu')
+      .getByText(label, { exact: true })
+      .click();
+    await page.keyboard.press('Escape');
+  };
+  await chooseFlow('滚动');
+  const nextPreviewHost = page
+    .locator('[data-reader-chapter-preview="next"] [data-reader-epub-host]')
+    .first();
+  await expect(nextPreviewHost).toBeAttached();
+  await expect
+    .poll(() =>
+      nextPreviewHost.evaluate((host) => ({
+        title: host.shadowRoot?.querySelector('.chapter-title')?.textContent,
+        fontSize: getComputedStyle(
+          host.shadowRoot!.querySelector('.chapter-title')!,
+        ).fontSize,
+        fontWeight: getComputedStyle(
+          host.shadowRoot!.querySelector('.chapter-title')!,
+        ).fontWeight,
+        lastOriginalParagraph: Array.from(
+          host.shadowRoot?.querySelectorAll(
+            'p[data-reader-language-side="original"]',
+          ) ?? [],
+        ).at(-1)?.textContent,
+      })),
+    )
+    .toMatchObject({
+      title: '第一章',
+      fontSize: '40.5px',
+      fontWeight: '800',
+      lastOriginalParagraph: '分页测试段落 18',
+    });
+  await chooseFlow('自动（电脑分页，手机滚动）');
+
   await page.keyboard.press('ArrowRight');
   await expect
     .poll(() =>
@@ -439,18 +482,6 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
   await expect
     .poll(() => paginatedViewport.evaluate((viewport) => viewport.scrollLeft))
     .toBe(0);
-  const chooseFlow = async (label: string) => {
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    const flowSetting = page
-      .locator('.book-reader__settings-grid .n-form-item')
-      .filter({ hasText: '阅读流' });
-    await flowSetting.locator('.n-base-selection').click();
-    await page
-      .locator('.n-base-select-menu')
-      .getByText(label, { exact: true })
-      .click();
-    await page.keyboard.press('Escape');
-  };
   await chooseFlow('滚动');
   await expect(page.locator('.book-reader__content--scrolled')).toBeVisible();
   await expect(richHost).not.toHaveAttribute('style', /width:/);

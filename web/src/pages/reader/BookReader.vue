@@ -3754,7 +3754,18 @@ onBeforeUnmount(() => {
             class="book-reader__continuous-chapter book-reader__chapter-preview"
             data-reader-chapter-preview="previous"
           >
+            <ReaderEpubLayout
+              v-if="previousChapterPreview.epub !== undefined"
+              :epub="previousChapterPreview.epub"
+              :segments="previousChapterPreview.segments"
+              :mode="getChapterRenderedMode(previousChapterPreview)"
+              :flow="resolvedFlow"
+              :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
+              preview
+              @link-activate="navigateToEpubHref"
+            />
             <ReaderSegmentLayout
+              v-else
               :segments="previousChapterPreview.segments"
               :mode="getChapterRenderedMode(previousChapterPreview)"
               :flow="resolvedFlow"
@@ -3795,10 +3806,18 @@ onBeforeUnmount(() => {
             class="book-reader__continuous-chapter book-reader__chapter-preview"
             data-reader-chapter-preview="next"
           >
-            <h2 class="book-reader__continuous-chapter-title">
-              {{ displayReaderTitle(nextChapterPreview) }}
-            </h2>
+            <ReaderEpubLayout
+              v-if="nextChapterPreview.epub !== undefined"
+              :epub="nextChapterPreview.epub"
+              :segments="nextChapterPreview.segments"
+              :mode="getChapterRenderedMode(nextChapterPreview)"
+              :flow="resolvedFlow"
+              :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
+              preview
+              @link-activate="navigateToEpubHref"
+            />
             <ReaderSegmentLayout
+              v-else
               :segments="nextChapterPreview.segments"
               :mode="getChapterRenderedMode(nextChapterPreview)"
               :flow="resolvedFlow"
@@ -4885,14 +4904,6 @@ onBeforeUnmount(() => {
   display: block;
   height: 100dvh;
   content: '';
-}
-
-.book-reader__continuous-chapter-title {
-  margin: 0 0 1em;
-  color: var(--reader-muted-color);
-  font-size: 0.92em;
-  font-weight: 600;
-  line-height: 1.5;
 }
 
 .book-reader__content--paginated {

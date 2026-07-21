@@ -4799,7 +4799,9 @@ test('previews adjacent chapter edges before committing a chapter transition', a
     Array.from(
       { length: chapterIndex === 0 ? 1_200 : 36 },
       (_, paragraphIndex) =>
-        `第 ${chapterIndex + 1} 章第 ${paragraphIndex + 1} 段单章滚动正文`,
+        paragraphIndex === 0
+          ? `第 ${chapterIndex + 1} 章`
+          : `第 ${chapterIndex + 1} 章第 ${paragraphIndex + 1} 段单章滚动正文`,
     );
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -4888,6 +4890,17 @@ test('previews adjacent chapter edges before committing a chapter transition', a
   await expect(
     page.locator('[data-reader-chapter-preview="next"]'),
   ).toBeVisible();
+  const nextChapterPreview = page.locator(
+    '[data-reader-chapter-preview="next"]',
+  );
+  await expect(
+    nextChapterPreview.locator('.book-reader__continuous-chapter-title'),
+  ).toHaveCount(0);
+  await expect(
+    nextChapterPreview.locator('.reader-segment__original', {
+      hasText: /^第 3 章$/,
+    }),
+  ).toHaveCount(1);
   const currentStartOffset = () =>
     page.evaluate(() => {
       const current = document.querySelector<HTMLElement>(
