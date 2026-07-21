@@ -58,4 +58,25 @@ describe('reader Chinese script conversion', () => {
     expect(convert).toHaveBeenCalledTimes(5);
     expect(load).toHaveBeenCalledTimes(1);
   });
+
+  it('retries a transient lazy-module failure', async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary chunk failure'))
+      .mockResolvedValue({
+        simplified: (text: string) => text,
+        traditional: (text: string) => `converted:${text}`,
+      });
+    const service = createReaderChineseScriptService({ load });
+    const request = () =>
+      service.convert({
+        bookId: 'book',
+        script: 'traditional',
+        text: 'text',
+      });
+
+    await expect(request()).rejects.toThrow('temporary chunk failure');
+    await expect(request()).resolves.toBe('converted:text');
+    expect(load).toHaveBeenCalledTimes(2);
+  });
 });

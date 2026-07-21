@@ -24,6 +24,16 @@ export const createReaderChineseScriptService = (options?: {
   let converters:
     Promise<Awaited<ReturnType<typeof loadConverters>>> | undefined;
 
+  const getConverters = () => {
+    if (converters === undefined) {
+      converters = (options?.load ?? loadConverters)();
+      converters.catch(() => {
+        converters = undefined;
+      });
+    }
+    return converters;
+  };
+
   const convert = async ({
     bookId,
     script,
@@ -41,8 +51,7 @@ export const createReaderChineseScriptService = (options?: {
       cache.set(key, cached);
       return cached;
     }
-    converters ??= (options?.load ?? loadConverters)();
-    const converted = (await converters)[script](text);
+    const converted = (await getConverters())[script](text);
     if (maximumEntries > 0) {
       cache.set(key, converted);
       while (cache.size > maximumEntries) {
