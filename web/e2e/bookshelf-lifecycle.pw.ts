@@ -1676,7 +1676,7 @@ test('converts configured TXT downloads to EPUB', async ({ page }) => {
     page
       .locator('.n-list-item')
       .filter({ hasText: '首页' })
-      .getByText('日文', { exact: true }),
+      .getByText('原文', { exact: true }),
   ).toBeVisible();
   await page.goto('/');
   await page

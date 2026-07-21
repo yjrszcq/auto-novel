@@ -2244,7 +2244,7 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
   ]);
 });
 
-test('keeps the reading anchor and speech text when Chinese script changes', async ({
+test('uses the global Chinese script for rendering and speech', async ({
   page,
 }) => {
   const bookId = 'reader-chinese-script.txt';
@@ -2306,7 +2306,7 @@ test('keeps the reading anchor and speech text when Chinese script changes', asy
       id: 'default',
       defaultMode: 'original',
       translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
-      chineseScript: 'none',
+      chineseScript: 'traditional',
       fontSize: 18,
       lineHeight: 1.9,
       contentWidth: 840,
@@ -2324,24 +2324,14 @@ test('keeps the reading anchor and speech text when Chinese script changes', asy
 
   await page.goto(`/books/${bookId}/read/0?segment=script-segment-24`);
   const anchor = page.locator('[data-reader-segment-id="script-segment-24"]');
-  await expect(anchor).toContainText('头发发展在里面');
-  const offsetBefore = await anchor.evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
+  await expect(anchor).toContainText('頭髮發展在裏面');
 
   await page.getByRole('button', { name: '设置', exact: true }).click();
-  const scriptSetting = page
-    .locator('.book-reader__settings-grid .n-form-item')
-    .filter({ hasText: '中文字体' });
-  await scriptSetting.locator('.n-base-selection').click();
-  await page.getByText('繁体字形', { exact: true }).click();
-  await expect(anchor).toContainText('頭髮發展在裏面');
+  await expect(
+    page.getByRole('dialog', { name: '阅读设置' }).getByText('中文字形'),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: '关闭阅读设置', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '阅读设置' })).toBeHidden();
-  const offsetAfter = await anchor.evaluate(
-    (element) => element.getBoundingClientRect().top,
-  );
-  expect(Math.abs(offsetAfter - offsetBefore)).toBeLessThanOrEqual(4);
 
   await page.getByRole('button', { name: '工具', exact: true }).click();
   await page.getByRole('button', { name: '朗读当前段', exact: true }).click();
@@ -2658,20 +2648,6 @@ test('automatically translates a reader window without persisting a partial chap
       'aria-pressed',
       'false',
     );
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    const temporaryScriptSetting = page
-      .getByRole('dialog', { name: '阅读设置' })
-      .locator('.n-form-item')
-      .filter({ hasText: '中文字体' });
-    await temporaryScriptSetting.locator('.n-base-selection').click();
-    await page.getByText('繁体字形', { exact: true }).last().click();
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    await expect(source).toContainText('譯文第1行');
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    await temporaryScriptSetting.locator('.n-base-selection').click();
-    await page.getByText('不转换', { exact: true }).last().click();
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    await expect(source).toContainText('译文第1行');
     await expect(
       page.locator('.reader-segment-layout').filter({ has: source }),
     ).toHaveClass(/reader-segment-layout--original-translated/);
@@ -3570,6 +3546,11 @@ test('persists the global reading version selected in Settings', async ({
   const selector = page.locator('#reader-default-mode');
   await expect(selector).toHaveAttribute('aria-busy', 'false');
   await expect(selector.getByRole('radio', { name: '询问' })).toHaveCount(0);
+  const chineseScriptSelector = page.locator('#reader-chinese-script');
+  await expect(chineseScriptSelector).toHaveAttribute('aria-busy', 'false');
+  await expect(
+    chineseScriptSelector.getByRole('radio', { name: '原文' }),
+  ).toBeChecked();
   const preloadControl = page.locator('.reader-preload-setting__input');
   const preloadHelp = page.locator('.reader-preload-setting__help');
   const languageDetectionInput = page.getByRole('textbox', {
@@ -3589,9 +3570,12 @@ test('persists the global reading version selected in Settings', async ({
     .toBe(97);
   const retranslationSelector = page.locator('#reader-retranslation-policy');
   const desktopControlBounds = await Promise.all(
-    [selector, preloadControl, retranslationSelector].map((control) =>
-      control.boundingBox(),
-    ),
+    [
+      selector,
+      chineseScriptSelector,
+      preloadControl,
+      retranslationSelector,
+    ].map((control) => control.boundingBox()),
   );
   expect(desktopControlBounds.every((bounds) => bounds !== null)).toBe(true);
   expect(
@@ -3599,7 +3583,7 @@ test('persists the global reading version selected in Settings', async ({
       (bounds) => Math.abs(bounds!.x - desktopControlBounds[0]!.x) <= 1,
     ),
   ).toBe(true);
-  const desktopPreloadBounds = desktopControlBounds[1]!;
+  const desktopPreloadBounds = desktopControlBounds[2]!;
   const desktopHelpBounds = await preloadHelp.boundingBox();
   expect(desktopHelpBounds).not.toBeNull();
   expect(desktopHelpBounds!.x).toBeGreaterThanOrEqual(
@@ -3607,6 +3591,10 @@ test('persists the global reading version selected in Settings', async ({
   );
   await selector.getByText('日中', { exact: true }).click();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
+  await chineseScriptSelector.getByText('繁體中文', { exact: true }).click();
+  await expect(
+    chineseScriptSelector.getByRole('radio', { name: '繁體中文' }),
+  ).toBeChecked();
 
   const preloadInput = page.getByRole('textbox', {
     name: '自动翻译预翻译页数',
@@ -3632,6 +3620,7 @@ test('persists the global reading version selected in Settings', async ({
           | {
               defaultMode?: string;
               autoTranslationPreloadPages?: number;
+              chineseScript?: string;
             }
           | undefined
         >((resolve, reject) => {
@@ -3644,40 +3633,55 @@ test('persists the global reading version selected in Settings', async ({
           : {
               defaultMode: setting.defaultMode,
               autoTranslationPreloadPages: setting.autoTranslationPreloadPages,
+              chineseScript: setting.chineseScript,
             };
       }),
     )
     .toEqual({
       defaultMode: 'original-translated',
       autoTranslationPreloadPages: 7,
+      chineseScript: 'traditional',
     });
 
   await page.reload();
   await expect(selector.getByRole('radio', { name: '日中' })).toBeChecked();
+  await expect(
+    chineseScriptSelector.getByRole('radio', { name: '繁體中文' }),
+  ).toBeChecked();
   await expect(preloadInput).toHaveValue('7');
   await expect(languageDetectionInput).toHaveValue('97');
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobilePreloadBounds = await preloadControl.boundingBox();
-  const mobileHelpBounds = await preloadHelp.boundingBox();
-  const mobilePreloadRowBounds = await page
+  const mobilePreloadLayout = await page
     .locator('.reader-preload-setting')
-    .boundingBox();
+    .evaluate((row) => {
+      const toBounds = (element: Element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        };
+      };
+      return {
+        row: toBounds(row),
+        input: toBounds(row.querySelector('.reader-preload-setting__input')!),
+        help: toBounds(row.querySelector('.reader-preload-setting__help')!),
+      };
+    });
   const mobileLanguageInputBounds = await languageDetectionInput.boundingBox();
-  expect(mobilePreloadBounds).not.toBeNull();
-  expect(mobileHelpBounds).not.toBeNull();
-  expect(mobilePreloadRowBounds).not.toBeNull();
   expect(mobileLanguageInputBounds).not.toBeNull();
-  expect(mobileHelpBounds!.y).toBeGreaterThanOrEqual(
-    mobilePreloadBounds!.y + mobilePreloadBounds!.height,
+  expect(mobilePreloadLayout.help.y).toBeGreaterThanOrEqual(
+    mobilePreloadLayout.input.y + mobilePreloadLayout.input.height,
   );
-  expect(mobilePreloadBounds!.x).toBeGreaterThanOrEqual(
-    mobilePreloadRowBounds!.x,
+  expect(mobilePreloadLayout.input.x).toBeGreaterThanOrEqual(
+    mobilePreloadLayout.row.x,
   );
   expect(
-    mobilePreloadBounds!.x + mobilePreloadBounds!.width,
+    mobilePreloadLayout.input.x + mobilePreloadLayout.input.width,
   ).toBeLessThanOrEqual(
-    mobilePreloadRowBounds!.x + mobilePreloadRowBounds!.width,
+    mobilePreloadLayout.row.x + mobilePreloadLayout.row.width,
   );
   expect(mobileLanguageInputBounds!.x).toBeGreaterThanOrEqual(0);
   expect(

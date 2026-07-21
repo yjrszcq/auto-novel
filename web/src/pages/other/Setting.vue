@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type {
+  ReaderChineseScript,
   ReaderMode,
   ReaderRetranslationPolicy,
   ReaderSettingsRecord,
@@ -46,6 +47,14 @@ const readerRetranslationPolicyOptions: {
   { label: '询问', value: 'ask' },
   { label: '替换', value: 'replace' },
   { label: '不替换', value: 'keep' },
+];
+const readerChineseScriptOptions: {
+  label: string;
+  value: ReaderChineseScript;
+}[] = [
+  { label: '原文', value: 'none' },
+  { label: '简体中文', value: 'simplified' },
+  { label: '繁體中文', value: 'traditional' },
 ];
 const playSound = (source: string) => {
   return new Audio(source).play();
@@ -108,6 +117,16 @@ const updateRetranslationPolicy = (value: string | number) => {
   void persistReaderSettings((current) => ({
     ...current,
     retranslationPolicy: value,
+  }));
+};
+
+const updateReaderChineseScript = (value: string | number) => {
+  if (value !== 'none' && value !== 'simplified' && value !== 'traditional') {
+    return;
+  }
+  void persistReaderSettings((current) => ({
+    ...current,
+    chineseScript: value,
   }));
 };
 
@@ -250,6 +269,21 @@ onMounted(() => {
               :value="readerSettings.defaultMode"
               :options="readerModeOptions"
               @update:value="updateDefaultReaderMode"
+            />
+          </c-action-wrapper>
+          <c-action-wrapper
+            title="中文字形"
+            align="center"
+            class="reader-setting-row"
+          >
+            <c-radio-group
+              id="reader-chinese-script"
+              size="small"
+              :aria-busy="readerSettingsLoading"
+              :value="readerSettings.chineseScript"
+              :options="readerChineseScriptOptions"
+              :disabled="readerSettingsLoading || readerSettingsSaving"
+              @update:value="updateReaderChineseScript"
             />
           </c-action-wrapper>
           <c-action-wrapper

@@ -52,7 +52,7 @@ export namespace Setting {
     { label: '中文', value: 'zh' },
     { label: '中日', value: 'zh-jp' },
     { label: '日中', value: 'jp-zh' },
-    { label: '日文', value: 'jp' },
+    { label: '原文', value: 'jp' },
   ];
   export const themeOptions = [
     { label: '亮色主题', value: 'light' },

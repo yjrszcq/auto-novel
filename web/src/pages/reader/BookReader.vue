@@ -166,8 +166,6 @@ const controlsVisible = ref(true);
 const selectedReaderText = ref('');
 const currentTime = ref('');
 let pendingInteractiveSelection = '';
-let pendingChineseScriptAnchor: ReaderPositionAnchor | undefined;
-let settingsPanelAnchor: ReaderPositionAnchor | undefined;
 let chineseScriptErrorShown = false;
 const readerViewport = ref<HTMLElement | null>(null);
 const readerSegments = ref<InstanceType<typeof ReaderSegmentLayout>>();
@@ -474,23 +472,10 @@ const openCatalog = async () => {
 
 const openSettings = () => {
   const shouldOpen = !showSettings.value;
-  if (shouldOpen) settingsPanelAnchor = captureReaderPosition();
   closeReaderPanels();
   showMobilePreloadHelp.value = false;
   showSettings.value = shouldOpen;
 };
-
-watch(showSettings, async (visible) => {
-  if (visible) return;
-  showMobilePreloadHelp.value = false;
-  await nextTick();
-  if (pendingChineseScriptAnchor !== undefined) {
-    const anchor = pendingChineseScriptAnchor;
-    pendingChineseScriptAnchor = undefined;
-    restoreReaderPosition(anchor);
-  }
-  settingsPanelAnchor = undefined;
-});
 
 const openTools = () => {
   const shouldOpen = !showTools.value;
@@ -1879,11 +1864,6 @@ const scrollToChapterEdge = async (edge: 'start' | 'end') => {
 
 const handleSegmentContentChange = async (anchorId?: string) => {
   await nextTick();
-  if (pendingChineseScriptAnchor !== undefined && !showSettings.value) {
-    const anchor = pendingChineseScriptAnchor;
-    pendingChineseScriptAnchor = undefined;
-    restoreReaderPosition(anchor);
-  }
   const pendingEdge = pendingScrolledContentEdge;
   if (
     pendingEdge !== undefined &&
@@ -3786,15 +3766,6 @@ watch(
   { deep: true },
 );
 
-watch(
-  () => settings.value.chineseScript,
-  () => {
-    pendingChineseScriptAnchor = settingsPanelAnchor ?? captureReaderPosition();
-    chineseScriptErrorShown = false;
-  },
-  { flush: 'sync' },
-);
-
 watch(bookId, (nextBookId, previousBookId) => {
   if (nextBookId !== previousBookId) {
     readerChineseScriptService.releaseBook(previousBookId);
@@ -4813,18 +4784,6 @@ onBeforeUnmount(() => {
                 { label: '询问', value: 'ask' },
                 { label: '替换', value: 'replace' },
                 { label: '不替换', value: 'keep' },
-              ]"
-            />
-          </n-form-item>
-        </div>
-        <div class="book-reader__settings-half">
-          <n-form-item label="中文字体">
-            <n-select
-              v-model:value="settings.chineseScript"
-              :options="[
-                { label: '不转换', value: 'none' },
-                { label: '简体字形', value: 'simplified' },
-                { label: '繁体字形', value: 'traditional' },
               ]"
             />
           </n-form-item>
