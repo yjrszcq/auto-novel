@@ -53,7 +53,9 @@ export const planReaderChapterTransition = ({
 
   if (direction === 'previous') {
     if (groupStart === 0) return;
-    return { checkpointIndex: groupStart, targetIndex: groupStart - 1 };
+    return groupEnd > groupStart
+      ? { checkpointIndex: groupStart, targetIndex: groupStart - 1 }
+      : { checkpointIndex: currentIndex - 1, targetIndex: currentIndex - 1 };
   }
 
   const checkpointIndex = groupEnd + 1;

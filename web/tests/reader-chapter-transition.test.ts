@@ -77,6 +77,14 @@ describe('reader hierarchical chapter transitions', () => {
         direction: 'next',
       }),
     ).toEqual({ checkpointIndex: 1, targetIndex: 1 });
+    expect(
+      planReaderChapterTransition({
+        chapters,
+        navigation: navigation.filter(({ id }) => id !== 'part-nav'),
+        currentIndex: 1,
+        direction: 'previous',
+      }),
+    ).toEqual({ checkpointIndex: 0, targetIndex: 0 });
   });
 
   it('does not group a parent and child separated by another chapter', () => {

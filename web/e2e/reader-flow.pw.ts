@@ -1057,7 +1057,7 @@ test('opens a local bookshelf book safely through the current reader route', asy
     await page.waitForTimeout(100);
     await page.evaluate((targetDirection) => {
       const preview = document.querySelector<HTMLElement>(
-        `[data-reader-chapter-preview="${targetDirection}"]`,
+        `[data-reader-chapter-preview="${targetDirection}"][data-reader-adjacent-preview="true"]`,
       );
       const edge =
         targetDirection === 'next'
@@ -4889,6 +4889,11 @@ test('previews adjacent chapter edges before committing a chapter transition', a
     page.locator('[data-reader-chapter-preview="previous"]'),
   ).toBeVisible();
   await expect(
+    page.locator(
+      '[data-reader-chapter-preview="previous"][data-reader-adjacent-preview="true"]',
+    ),
+  ).toHaveAttribute('data-reader-preview-chapter-id', '0');
+  await expect(
     page.locator('[data-reader-chapter-preview="next"]'),
   ).toBeVisible();
   const nextChapterPreview = page.locator(
@@ -4930,12 +4935,14 @@ test('previews adjacent chapter edges before committing a chapter transition', a
     });
   const crossPreview = async (direction: 'previous' | 'next') => {
     await expect(
-      page.locator(`[data-reader-chapter-preview="${direction}"]`),
+      page.locator(
+        `[data-reader-chapter-preview="${direction}"][data-reader-adjacent-preview="true"]`,
+      ),
     ).toBeVisible();
     await page.waitForTimeout(100);
     await page.evaluate((targetDirection) => {
       const preview = document.querySelector<HTMLElement>(
-        `[data-reader-chapter-preview="${targetDirection}"]`,
+        `[data-reader-chapter-preview="${targetDirection}"][data-reader-adjacent-preview="true"]`,
       );
       const edge =
         targetDirection === 'next'
@@ -4975,9 +4982,14 @@ test('previews adjacent chapter edges before committing a chapter transition', a
   await expect.poll(currentStartOffset).toBeGreaterThanOrEqual(-70);
   await expect.poll(currentStartOffset).toBeLessThanOrEqual(1);
   await page.mouse.move(195, 400);
-  await page.mouse.wheel(0, 300);
+  await page.mouse.wheel(0, 600);
   await expect(page).toHaveURL(/\/read\/1$/);
-  await expect.poll(currentStartOffset).toBeLessThan(-100);
+  await expect.poll(currentStartOffset).toBeLessThan(-50);
+  await expect(
+    page.locator(
+      '[data-reader-chapter-preview="previous"][data-reader-adjacent-preview="true"]',
+    ),
+  ).toHaveAttribute('data-reader-preview-chapter-id', '0');
 
   await crossPreview('previous');
   await expect(page).toHaveURL(/\/read\/0$/);
