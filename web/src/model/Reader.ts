@@ -4,6 +4,7 @@ export type ReaderMode =
 export type ReaderFlow = 'auto' | 'paginated' | 'scrolled';
 
 export type ReaderRetranslationPolicy = 'ask' | 'replace' | 'keep';
+export type ReaderChineseScript = 'none' | 'simplified' | 'traditional';
 
 export interface ReaderBookshelfState {
   bookId: string;
@@ -18,6 +19,7 @@ export interface ReaderSettingsRecord {
   translationPriority: ('gpt' | 'sakura' | 'youdao' | 'baidu')[];
   autoTranslationPreloadPages: number;
   retranslationPolicy: ReaderRetranslationPolicy;
+  chineseScript: ReaderChineseScript;
   fontSize: number;
   lineHeight: number;
   contentWidth: number;

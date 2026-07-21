@@ -10,6 +10,7 @@ export const defaultReaderSettings: ReaderSettingsRecord = {
   translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
   autoTranslationPreloadPages: 3,
   retranslationPolicy: 'ask',
+  chineseScript: 'none',
   fontSize: 18,
   lineHeight: 1.9,
   contentWidth: 840,
@@ -37,6 +38,11 @@ export const normalizeReaderRetranslationPolicy = (
 ): ReaderRetranslationPolicy =>
   value === 'replace' || value === 'keep' ? value : 'ask';
 
+export const normalizeReaderChineseScript = (
+  value: ReaderSettingsRecord['chineseScript'] | undefined,
+): ReaderSettingsRecord['chineseScript'] =>
+  value === 'simplified' || value === 'traditional' ? value : 'none';
+
 export const normalizeReaderSettings = (
   value: Partial<ReaderSettingsRecord> | undefined,
 ): ReaderSettingsRecord => ({
@@ -50,6 +56,7 @@ export const normalizeReaderSettings = (
   retranslationPolicy: normalizeReaderRetranslationPolicy(
     value?.retranslationPolicy,
   ),
+  chineseScript: normalizeReaderChineseScript(value?.chineseScript),
   fontSize: Math.max(12, Math.min(value?.fontSize ?? 18, 32)),
   lineHeight: Math.max(1.2, Math.min(value?.lineHeight ?? 1.9, 2.8)),
   contentWidth: Math.max(480, Math.min(value?.contentWidth ?? 840, 1200)),

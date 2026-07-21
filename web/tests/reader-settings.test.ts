@@ -5,6 +5,7 @@ import {
   applyReaderStyleOverride,
   defaultReaderSettings,
   normalizeReaderAutoTranslationPreloadPages,
+  normalizeReaderChineseScript,
   normalizeReaderRetranslationPolicy,
   normalizeReaderSettings,
   serializeReaderSettings,
@@ -17,6 +18,17 @@ describe('reader settings', () => {
     expect(defaultReaderSettings.flow).toBe('auto');
     expect(defaultReaderSettings.autoTranslationPreloadPages).toBe(3);
     expect(defaultReaderSettings.retranslationPolicy).toBe('ask');
+    expect(defaultReaderSettings.chineseScript).toBe('none');
+  });
+
+  it('normalizes the optional Chinese script preference', () => {
+    expect(normalizeReaderChineseScript(undefined)).toBe('none');
+    expect(normalizeReaderChineseScript('simplified')).toBe('simplified');
+    expect(normalizeReaderChineseScript('traditional')).toBe('traditional');
+    expect(
+      normalizeReaderSettings({ chineseScript: 'invalid' as never })
+        .chineseScript,
+    ).toBe('none');
   });
 
   it('normalizes the retranslation completion policy', () => {

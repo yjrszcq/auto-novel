@@ -4636,6 +4636,18 @@ onBeforeUnmount(() => {
             />
           </n-form-item>
         </div>
+        <div class="book-reader__settings-half">
+          <n-form-item label="中文字体">
+            <n-select
+              v-model:value="settings.chineseScript"
+              :options="[
+                { label: '不转换', value: 'none' },
+                { label: '简体字形', value: 'simplified' },
+                { label: '繁体字形', value: 'traditional' },
+              ]"
+            />
+          </n-form-item>
+        </div>
         <div
           v-if="requiresWholeChapterTranslation"
           class="book-reader__settings-reading-language"

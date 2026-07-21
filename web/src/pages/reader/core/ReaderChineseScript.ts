@@ -1,4 +1,6 @@
-export type ReaderChineseScript = 'none' | 'simplified' | 'traditional';
+import type { ReaderChineseScript } from '@/model/Reader';
+
+export type { ReaderChineseScript } from '@/model/Reader';
 
 type Converter = (text: string) => string;
 
