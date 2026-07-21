@@ -2237,7 +2237,7 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
     return result;
   }, toolsBookId);
   expect(persistedTools.bookmarks).toMatchObject([
-    { segmentId: 'tools-segment-1', offsetRatio: 0 },
+    { segmentId: 'tools-segment-0', offsetRatio: 0 },
   ]);
 });
 
@@ -5212,4 +5212,122 @@ test('refills continuous previews after the viewport grows without moving the re
     .poll(async () => Math.abs((await currentSegmentOffset()) - offsetBefore))
     .toBeLessThanOrEqual(2);
   await expect(page.locator('[data-reader-chapter-id]')).toHaveCount(1);
+});
+
+test('stops continuous buffers naturally at first, last, and single-chapter boundaries', async ({
+  page,
+}) => {
+  const boundaryBookId = 'continuous-book-boundaries.txt';
+  const singleBookId = 'continuous-single-chapter.txt';
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await expect(page.locator('.n-skeleton')).toHaveCount(0);
+  await page.evaluate(
+    async ({ boundaryId, singleId }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter', 'reader-settings'],
+        'readwrite',
+      );
+      const metadata = transaction.objectStore('metadata');
+      const chapter = transaction.objectStore('chapter');
+      metadata.put({
+        id: boundaryId,
+        createAt: 1,
+        toc: ['0', '1', '2'].map((chapterId) => ({ chapterId })),
+        sourceFormat: 'txt',
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+        sourceBookMetadata: {
+          title: '首尾边界测试',
+          authors: [],
+          languages: ['zh'],
+        },
+      });
+      ['0', '1', '2'].forEach((chapterId) => {
+        chapter.put({
+          id: `${boundaryId}/${chapterId}`,
+          volumeId: boundaryId,
+          paragraphs: [`边界章 ${chapterId}`, `边界正文 ${chapterId}`],
+          segmentIds: [`boundary-${chapterId}-0`, `boundary-${chapterId}-1`],
+        });
+      });
+      metadata.put({
+        id: singleId,
+        createAt: 1,
+        toc: [{ chapterId: '0' }],
+        sourceFormat: 'txt',
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+        sourceBookMetadata: {
+          title: '单章边界测试',
+          authors: [],
+          languages: ['zh'],
+        },
+      });
+      chapter.put({
+        id: `${singleId}/0`,
+        volumeId: singleId,
+        paragraphs: ['唯一章节', '唯一正文'],
+        segmentIds: ['single-0', 'single-1'],
+      });
+      transaction.objectStore('reader-settings').put({
+        id: 'default',
+        defaultMode: 'original',
+        translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+        autoTranslationPreloadPages: 3,
+        retranslationPolicy: 'ask',
+        fontSize: 18,
+        lineHeight: 1.9,
+        contentWidth: 840,
+        horizontalPadding: 24,
+        theme: 'light',
+        flow: 'scrolled',
+        updatedAt: 1,
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    { boundaryId: boundaryBookId, singleId: singleBookId },
+  );
+
+  await page.goto(`/books/${boundaryBookId}/read/0`);
+  await expect(
+    page.locator('[data-reader-chapter-preview="previous"]'),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('[data-reader-chapter-preview="next"]'),
+  ).toHaveCount(2);
+  await page.mouse.move(195, 300);
+  await page.mouse.wheel(0, -200);
+  await expect(page).toHaveURL(/\/read\/0$/);
+
+  await page.goto(`/books/${boundaryBookId}/read/2`);
+  await expect(
+    page.locator('[data-reader-chapter-preview="previous"]'),
+  ).toHaveCount(2);
+  await expect(
+    page.locator('[data-reader-chapter-preview="next"]'),
+  ).toHaveCount(0);
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.mouse.wheel(0, 200);
+  await expect(page).toHaveURL(/\/read\/2$/);
+
+  await page.goto(`/books/${singleBookId}/read/0`);
+  await expect(page.locator('[data-reader-chapter-preview]')).toHaveCount(0);
+  await page.mouse.wheel(0, -200);
+  await page.mouse.wheel(0, 200);
+  await expect(page).toHaveURL(/continuous-single-chapter\.txt\/read\/0$/);
 });

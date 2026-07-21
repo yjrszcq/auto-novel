@@ -432,7 +432,7 @@ test('imports a canonical EPUB 3 package and preserves its nested navigation', a
       title: '第一章',
       fontSize: '40.5px',
       fontWeight: '800',
-      lastOriginalParagraph: '分页测试段落 18',
+      lastOriginalParagraph: '分页测试段落 30',
     });
   await chooseFlow('自动（电脑分页，手机滚动）');
 
