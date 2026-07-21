@@ -5094,3 +5094,122 @@ test('fills a large continuous viewport across consecutive short chapters and bo
   await expect.poll(() => previewIds('previous')).toHaveLength(5);
   await expect.poll(() => previewIds('next')).toHaveLength(5);
 });
+
+test('refills continuous previews after the viewport grows without moving the reading anchor', async ({
+  page,
+}) => {
+  const responsiveBookId = 'continuous-responsive-buffer.txt';
+  const chapterIds = Array.from({ length: 15 }, (_, index) => String(index));
+  const paragraphs = (chapterIndex: number) =>
+    Array.from(
+      { length: 18 },
+      (_, paragraphIndex) =>
+        `第 ${chapterIndex + 1} 章第 ${paragraphIndex + 1} 段响应式缓冲正文`,
+    );
+  await page.setViewportSize({ width: 390, height: 480 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await expect(page.locator('.n-skeleton')).toHaveCount(0);
+  await page.evaluate(
+    async ({ bookId, ids, chapterParagraphs }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter', 'reader-settings'],
+        'readwrite',
+      );
+      transaction.objectStore('metadata').put({
+        id: bookId,
+        createAt: 1,
+        toc: ids.map((chapterId, index) => ({
+          chapterId,
+          title: `响应章 ${index + 1}`,
+        })),
+        sourceFormat: 'txt',
+        glossaryId: 'glossary',
+        glossary: {},
+        favoredId: 'default',
+        sourceBookMetadata: {
+          title: '响应式连续缓冲测试',
+          authors: [],
+          languages: ['zh'],
+        },
+      });
+      ids.forEach((chapterId, index) => {
+        transaction.objectStore('chapter').put({
+          id: `${bookId}/${chapterId}`,
+          volumeId: bookId,
+          paragraphs: chapterParagraphs[index],
+          segmentIds: chapterParagraphs[index].map(
+            (_, paragraphIndex) => `responsive-${chapterId}-${paragraphIndex}`,
+          ),
+        });
+      });
+      transaction.objectStore('reader-settings').put({
+        id: 'default',
+        defaultMode: 'original',
+        translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+        autoTranslationPreloadPages: 3,
+        retranslationPolicy: 'ask',
+        fontSize: 18,
+        lineHeight: 1.9,
+        contentWidth: 840,
+        horizontalPadding: 24,
+        theme: 'light',
+        flow: 'scrolled',
+        updatedAt: 1,
+      });
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    },
+    {
+      bookId: responsiveBookId,
+      ids: chapterIds,
+      chapterParagraphs: chapterIds.map((_, index) => paragraphs(index)),
+    },
+  );
+
+  await page.goto(`/books/${responsiveBookId}/read/7`);
+  const previewCount = (direction: 'previous' | 'next') =>
+    page.locator(`[data-reader-chapter-preview="${direction}"]`).count();
+  await expect.poll(() => previewCount('previous')).toBeGreaterThan(0);
+  await expect.poll(() => previewCount('next')).toBeGreaterThan(0);
+  const countsBefore = {
+    previous: await previewCount('previous'),
+    next: await previewCount('next'),
+  };
+  const currentSegmentOffset = () =>
+    page.evaluate(() => {
+      const segment = document.querySelector<HTMLElement>(
+        '[data-reader-chapter-id="7"] [data-reader-segment-id="responsive-7-0"]',
+      );
+      const appBar = document.querySelector<HTMLElement>(
+        '.book-reader__app-bar',
+      );
+      return (
+        (segment?.getBoundingClientRect().top ?? 0) -
+        (appBar?.getBoundingClientRect().bottom ?? 0)
+      );
+    });
+  const offsetBefore = await currentSegmentOffset();
+
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await expect
+    .poll(() => previewCount('previous'))
+    .toBeGreaterThan(countsBefore.previous);
+  await expect
+    .poll(() => previewCount('next'))
+    .toBeGreaterThan(countsBefore.next);
+  await expect
+    .poll(async () => Math.abs((await currentSegmentOffset()) - offsetBefore))
+    .toBeLessThanOrEqual(2);
+  await expect(page.locator('[data-reader-chapter-id]')).toHaveCount(1);
+});

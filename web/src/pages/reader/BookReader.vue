@@ -167,6 +167,9 @@ const readerPageCount = ref(1);
 const readerPageIndex = ref(0);
 const viewportProgressRatio = ref(0);
 let paginatedAnchorSegmentId: string | undefined;
+let lastScrolledLayoutAnchor:
+  | { chapterId: string; segmentId: string; viewportTopOffset: number }
+  | undefined;
 let viewportResizeFrame: number | undefined;
 const isDesktopReader = useMediaQuery('(min-width: 768px)');
 const usesDoublePageSpread = useMediaQuery('(min-width: 916px)');
@@ -200,6 +203,7 @@ interface ReaderChapterPreview {
 const previousChapterPreviews = shallowRef<ReaderChapterPreview[]>([]);
 const nextChapterPreviews = shallowRef<ReaderChapterPreview[]>([]);
 let scrolledPreviewGeneration = 0;
+let scrolledPreviewFillRequest = 0;
 let scrolledPreviewFillFrame: number | undefined;
 let scrolledPreviewInputDirection: 'previous' | 'next' | undefined;
 let scrolledPreviewInputAt = 0;
@@ -671,6 +675,7 @@ const updateViewportMetrics = () => {
       0,
       Math.min(1, (visibleTop - rect.top) / readableDistance),
     );
+    rememberScrolledLayoutAnchor();
     return;
   }
   const scrollable = document.documentElement.scrollHeight - window.innerHeight;
@@ -846,13 +851,16 @@ const handleViewportScroll = () => {
 };
 
 const handleViewportResize = () => {
+  const scrolledAnchor = lastScrolledLayoutAnchor;
   if (viewportResizeFrame !== undefined) {
     cancelAnimationFrame(viewportResizeFrame);
   }
   viewportResizeFrame = requestAnimationFrame(() => {
     viewportResizeFrame = undefined;
     if (resolvedFlow.value !== 'paginated') {
+      restoreScrolledLayoutAnchor(scrolledAnchor);
       updateViewportMetrics();
+      scheduleCurrentContinuousPreviewFill();
       return;
     }
     scrollToSegment(paginatedAnchorSegmentId);
@@ -1342,6 +1350,7 @@ const chooseMode = async (mode: ReaderMode) => {
   await nextTick();
   restoreReaderPosition(anchor);
   updateViewportMetrics();
+  scheduleCurrentContinuousPreviewFill();
   await saveProgress();
 };
 
@@ -1441,6 +1450,49 @@ const getSegmentSourceLine = (chapterId: string, segmentId: string) => {
   return chapter?.segments.find((segment) => segment.id === segmentId)
     ?.sourceLine;
 };
+
+function rememberScrolledLayoutAnchor() {
+  if (resolvedFlow.value !== 'scrolled') return;
+  const chapter = getActiveContinuousChapterElement();
+  const chapterId = chapter?.dataset.readerChapterId;
+  const segmentId = viewportSegmentId.value;
+  const segment =
+    chapter === undefined || segmentId === undefined
+      ? undefined
+      : getSegmentElements(chapter).find(
+          (item) => item.dataset.readerSegmentId === segmentId,
+        );
+  if (
+    chapterId === undefined ||
+    segmentId === undefined ||
+    segment === undefined
+  )
+    return;
+  lastScrolledLayoutAnchor = {
+    chapterId,
+    segmentId,
+    viewportTopOffset:
+      segment.getBoundingClientRect().top - getReaderVisibleTop(),
+  };
+}
+
+function restoreScrolledLayoutAnchor(anchor: typeof lastScrolledLayoutAnchor) {
+  if (anchor === undefined || resolvedFlow.value !== 'scrolled') return;
+  const chapter = getContinuousChapterElement(anchor.chapterId);
+  const segment =
+    chapter === undefined
+      ? undefined
+      : getSegmentElements(chapter).find(
+          (item) => item.dataset.readerSegmentId === anchor.segmentId,
+        );
+  if (segment === undefined) return;
+  window.scrollBy({
+    top:
+      segment.getBoundingClientRect().top -
+      (getReaderVisibleTop() + anchor.viewportTopOffset),
+    behavior: 'auto',
+  });
+}
 
 const captureReaderPosition = (): ReaderPositionAnchor | undefined => {
   const viewport = readerViewport.value;
@@ -1816,6 +1868,7 @@ const handleSegmentContentChange = async (anchorId?: string) => {
     pendingScrolledContentEdge = undefined;
     await scrollToChapterEdge(pendingEdge.edge);
     updateViewportMetrics();
+    scheduleCurrentContinuousPreviewFill();
     return;
   }
   if (
@@ -1823,12 +1876,14 @@ const handleSegmentContentChange = async (anchorId?: string) => {
     scrollToEpubHref(requestedEpubHref.value)
   ) {
     updateViewportMetrics();
+    scheduleCurrentContinuousPreviewFill();
     return;
   }
   if (anchorId !== undefined && resolvedFlow.value !== 'paginated') {
     scrollToSegment(anchorId);
   }
   updateViewportMetrics();
+  scheduleCurrentContinuousPreviewFill();
 };
 
 const startReadingTime = (targetBookId: string) => {
@@ -3311,9 +3366,29 @@ const waitForContinuousPreviewLayout = async () => {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 };
 
+const applyChapterPreviews = async (
+  direction: ReaderContinuousBufferDirection,
+  previews: ReaderChapterPreview[],
+  chapterId: string,
+) => {
+  const previousTop =
+    direction === 'previous'
+      ? getContinuousChapterElement(chapterId)?.getBoundingClientRect().top
+      : undefined;
+  setChapterPreviews(direction, previews);
+  await waitForContinuousPreviewLayout();
+  if (previousTop === undefined) return;
+  const nextTop =
+    getContinuousChapterElement(chapterId)?.getBoundingClientRect().top;
+  if (nextTop !== undefined && Math.abs(nextTop - previousTop) > 0.5) {
+    window.scrollBy({ top: nextTop - previousTop, behavior: 'auto' });
+  }
+};
+
 const fillContinuousPreviewDirection = async (
   direction: ReaderContinuousBufferDirection,
   generation: number,
+  fillRequest: number,
   chapter: ReaderChapterContent,
   chapters: ReaderChapterSummary[],
 ) => {
@@ -3324,12 +3399,18 @@ const fillContinuousPreviewDirection = async (
   for (let step = 0; step < 100; step += 1) {
     if (
       generation !== scrolledPreviewGeneration ||
+      fillRequest !== scrolledPreviewFillRequest ||
       resolvedFlow.value !== 'scrolled'
     ) {
       return;
     }
     await waitForContinuousPreviewLayout();
-    if (generation !== scrolledPreviewGeneration) return;
+    if (
+      generation !== scrolledPreviewGeneration ||
+      fillRequest !== scrolledPreviewFillRequest
+    ) {
+      return;
+    }
     const previews = getChapterPreviews(direction);
     const activePreview =
       direction === 'previous' ? previews[0] : previews.at(-1);
@@ -3357,7 +3438,7 @@ const fillContinuousPreviewDirection = async (
     });
     if (decision.kind === 'stop') return;
     if (decision.kind === 'expand-segments' && activePreview !== undefined) {
-      setChapterPreviews(
+      await applyChapterPreviews(
         direction,
         previews.map((preview) =>
           preview !== activePreview
@@ -3375,6 +3456,7 @@ const fillContinuousPreviewDirection = async (
                   ),
                 },
         ),
+        chapter.chapterId,
       );
       continue;
     }
@@ -3388,17 +3470,23 @@ const fillContinuousPreviewDirection = async (
           chapterId: summary.id,
         }),
       );
-      if (generation !== scrolledPreviewGeneration) return;
+      if (
+        generation !== scrolledPreviewGeneration ||
+        fillRequest !== scrolledPreviewFillRequest
+      ) {
+        return;
+      }
       const preview = createChapterPreview(
         loaded,
         adjacentSummaryIndex,
         direction,
       );
-      setChapterPreviews(
+      await applyChapterPreviews(
         direction,
         direction === 'previous'
           ? [preview, ...getChapterPreviews(direction)]
           : [...getChapterPreviews(direction), preview],
+        chapter.chapterId,
       );
     } catch {
       return;
@@ -3411,17 +3499,41 @@ const scheduleContinuousPreviewFill = (
   chapter: ReaderChapterContent,
   chapters: ReaderChapterSummary[],
 ) => {
+  const fillRequest = ++scrolledPreviewFillRequest;
   if (scrolledPreviewFillFrame !== undefined) {
     cancelAnimationFrame(scrolledPreviewFillFrame);
   }
   scrolledPreviewFillFrame = requestAnimationFrame(() => {
     scrolledPreviewFillFrame = undefined;
     void Promise.all([
-      fillContinuousPreviewDirection('previous', generation, chapter, chapters),
-      fillContinuousPreviewDirection('next', generation, chapter, chapters),
+      fillContinuousPreviewDirection(
+        'previous',
+        generation,
+        fillRequest,
+        chapter,
+        chapters,
+      ),
+      fillContinuousPreviewDirection(
+        'next',
+        generation,
+        fillRequest,
+        chapter,
+        chapters,
+      ),
     ]);
   });
 };
+
+function scheduleCurrentContinuousPreviewFill() {
+  if (resolvedFlow.value !== 'scrolled' || result.value?.kind !== 'ready') {
+    return;
+  }
+  scheduleContinuousPreviewFill(
+    scrolledPreviewGeneration,
+    result.value.chapter,
+    result.value.chapters,
+  );
+}
 
 const initializeContinuousChapters = async (
   chapter: ReaderChapterContent,
@@ -3429,6 +3541,7 @@ const initializeContinuousChapters = async (
 ) => {
   const generation = ++scrolledPreviewGeneration;
   if (resolvedFlow.value !== 'scrolled') {
+    scrolledPreviewFillRequest += 1;
     if (scrolledPreviewFillFrame !== undefined) {
       cancelAnimationFrame(scrolledPreviewFillFrame);
       scrolledPreviewFillFrame = undefined;
@@ -3671,10 +3784,12 @@ watch(
     activeSettings.value.horizontalPadding,
   ],
   async () => {
-    const segmentId = getActiveSegmentId();
+    const anchor = captureReaderPosition();
     await nextTick();
-    scrollToSegment(segmentId);
+    await nextTick();
+    restoreReaderPosition(anchor);
     updateViewportMetrics();
+    scheduleCurrentContinuousPreviewFill();
   },
 );
 
@@ -3692,6 +3807,7 @@ onBeforeUnmount(() => {
   loadUiRequestId += 1;
   searchUiRequestId += 1;
   scrolledPreviewGeneration += 1;
+  scrolledPreviewFillRequest += 1;
   void controllerPromise.then((controller) => controller.cancel());
   void searchControllerPromise.then((controller) => controller.cancel());
   stopAutomaticTranslation(false, false);
@@ -3947,6 +4063,7 @@ onBeforeUnmount(() => {
               :flow="resolvedFlow"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               preview
+              @content-change="scheduleCurrentContinuousPreviewFill"
               @link-activate="navigateToEpubHref"
             />
             <ReaderSegmentLayout
@@ -4001,6 +4118,7 @@ onBeforeUnmount(() => {
               :flow="resolvedFlow"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               preview
+              @content-change="scheduleCurrentContinuousPreviewFill"
               @link-activate="navigateToEpubHref"
             />
             <ReaderSegmentLayout

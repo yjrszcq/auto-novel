@@ -320,6 +320,7 @@ const resizeDocumentLayouts = () => {
         sizeDocumentLayout(host, wrapper, slice);
       }
     });
+    emit('content-change');
   });
 };
 
