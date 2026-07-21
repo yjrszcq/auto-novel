@@ -3,6 +3,8 @@ import type {
   ReaderChapterSummary,
   ReaderContentAdapter,
 } from '@/model/Reader';
+import type { ReaderChineseScript } from '@/model/Reader';
+import { readerChineseScriptService } from './ReaderChineseScript';
 
 export interface ReaderSearchResult {
   chapterId: string;
@@ -23,12 +25,20 @@ const createExcerpt = (text: string, index: number, queryLength: number) => {
   );
 };
 
-export const searchReaderChapters = (
+export const searchReaderChapters = async (
   chapters: ReaderChapterContent[],
   query: string,
   maximumResults = readerSearchResultLimit,
-): ReaderSearchResult[] => {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
+  options?: { bookId?: string; excerptScript?: ReaderChineseScript },
+): Promise<ReaderSearchResult[]> => {
+  const bookId = options?.bookId ?? chapters[0]?.bookId ?? 'reader-search';
+  const normalizedQuery = (
+    await readerChineseScriptService.convert({
+      bookId,
+      script: 'simplified',
+      text: query.trim(),
+    })
+  ).toLocaleLowerCase();
   if (normalizedQuery.length === 0) {
     return [];
   }
@@ -49,14 +59,26 @@ export const searchReaderChapters = (
             ]),
       ];
       for (const { languageSide, text } of candidates) {
-        const index = text.toLocaleLowerCase().indexOf(normalizedQuery);
+        const normalizedText = (
+          await readerChineseScriptService.convert({
+            bookId,
+            script: 'simplified',
+            text,
+          })
+        ).toLocaleLowerCase();
+        const index = normalizedText.indexOf(normalizedQuery);
         if (index < 0) continue;
+        const excerpt = createExcerpt(text, index, normalizedQuery.length);
         results.push({
           chapterId: chapter.chapterId,
           chapterTitle: chapter.title,
           segmentId: segment.id,
           languageSide,
-          excerpt: createExcerpt(text, index, normalizedQuery.length),
+          excerpt: await readerChineseScriptService.convert({
+            bookId,
+            script: options?.excerptScript ?? 'none',
+            text: excerpt,
+          }),
         });
         if (results.length >= limit) return results;
       }
@@ -88,6 +110,7 @@ export const createReaderSearchController = (
     bookId: string;
     chapters: ReaderChapterSummary[];
     query: string;
+    excerptScript?: ReaderChineseScript;
   }): Promise<ReaderSearchResponse> => {
     const currentRequest = ++requestId;
     const found: ReaderSearchResult[] = [];
@@ -102,11 +125,12 @@ export const createReaderSearchController = (
       );
       if (currentRequest !== requestId) return { kind: 'stale' };
       found.push(
-        ...searchReaderChapters(
+        ...(await searchReaderChapters(
           chapters,
           input.query,
           maximumResults - found.length,
-        ),
+          { bookId: input.bookId, excerptScript: input.excerptScript },
+        )),
       );
       if (found.length >= maximumResults) {
         return { kind: 'results', results: found, truncated: true };

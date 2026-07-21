@@ -634,6 +634,7 @@ const runSearch = async () => {
       bookId,
       chapters: result.value.chapters,
       query,
+      excerptScript: activeSettings.value.chineseScript,
     });
     if (response.kind === 'stale' || requestId !== searchUiRequestId) return;
     searchResults.value = response.results;

@@ -2021,7 +2021,7 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
       gpt: {
         glossaryId: 'gpt-glossary',
         glossary: {},
-        paragraphs: ['唯一搜索译文'],
+        paragraphs: ['唯一搜尋譯文'],
       },
     });
     transaction.objectStore('reader-settings').put({
@@ -2114,10 +2114,13 @@ test('keeps reader search, bookmarks, speech, and lookups on stable segments', a
 
   await page.getByRole('button', { name: '全文搜索', exact: true }).click();
   const searchDialog = page.getByRole('dialog', { name: '全文搜索' });
-  await searchDialog.getByPlaceholder('搜索原文和译文').fill('唯一搜索译文');
+  await searchDialog.getByPlaceholder('搜索原文和译文').fill('唯一搜寻译文');
   await searchDialog.getByRole('button', { name: '搜索', exact: true }).click();
   await expect(
     searchDialog.getByText('工具第二章', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    searchDialog.getByText('唯一搜尋譯文', { exact: true }),
   ).toBeVisible();
   await expect(searchDialog.getByText('译文', { exact: true })).toBeVisible();
   await searchDialog.getByText('工具第二章', { exact: true }).click();

@@ -38,8 +38,8 @@ const createChapterContent = (chapterId: string): ReaderChapterContent => ({
 });
 
 describe('local reader search', () => {
-  it('searches local original and translated segments with stable jump targets', () => {
-    expect(
+  it('searches local original and translated segments with stable jump targets', async () => {
+    await expect(
       searchReaderChapters(
         [
           {
@@ -59,7 +59,7 @@ describe('local reader search', () => {
         ],
         '世界',
       ),
-    ).toEqual([
+    ).resolves.toEqual([
       {
         chapterId: 'chapter',
         chapterTitle: '第一章',
@@ -70,7 +70,7 @@ describe('local reader search', () => {
     ]);
   });
 
-  it('bounds search output', () => {
+  it('bounds search output', async () => {
     const chapters = Array.from({ length: 1_000 }, (_, index) => ({
       bookId: 'book',
       chapterId: `${index}`,
@@ -84,7 +84,31 @@ describe('local reader search', () => {
         },
       ],
     }));
-    expect(searchReaderChapters(chapters, '命中', 25)).toHaveLength(25);
+    await expect(
+      searchReaderChapters(chapters, '命中', 25),
+    ).resolves.toHaveLength(25);
+  });
+
+  it('matches simplified and traditional forms while preserving stable targets', async () => {
+    const chapter = {
+      bookId: 'book',
+      chapterId: 'chapter',
+      chapterIndex: 0,
+      title: '第一章',
+      segments: [{ id: 'stable-id', index: 0, original: '頭髮在裏面發展' }],
+    };
+    await expect(
+      searchReaderChapters([chapter], '头发在里面发展', 10, {
+        excerptScript: 'simplified',
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        chapterId: 'chapter',
+        segmentId: 'stable-id',
+        languageSide: 'original',
+        excerpt: '头发在里面发展',
+      }),
+    ]);
   });
 
   it('loads search batches only until the configured result cap is reached', async () => {
