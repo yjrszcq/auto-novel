@@ -20,6 +20,7 @@ const secondary = computed(
           :icon="icon"
           :icon-hidden="iconHidden"
           :secondary="secondary"
+          :aria-label="tooltip"
           circle
           v-bind="$attrs"
         />

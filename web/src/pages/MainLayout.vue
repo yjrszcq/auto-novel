@@ -122,6 +122,7 @@ watch(
           circle
           :focusable="false"
           style="margin: 0 8px"
+          aria-label="打开导航菜单"
           @click="showMenuModal = true"
         >
           <n-icon size="24" :component="MenuOutlined" />

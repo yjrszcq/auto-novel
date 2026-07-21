@@ -1936,11 +1936,73 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
   await expect(activeScrolledLayout).toHaveClass(
     /reader-segment-layout--original$/,
   );
+  await page.evaluate(() => {
+    const selector = '[data-reader-segment-id="mode-chapter-1-segment"]';
+    const state = {
+      maximumCount: 0,
+      duplicateLocations: [] as Array<{
+        chapterId?: string;
+        previewChapterId?: string;
+        previewDirection?: string;
+      }>,
+    };
+    const update = () => {
+      const matches = [...document.querySelectorAll<HTMLElement>(selector)];
+      state.maximumCount = Math.max(state.maximumCount, matches.length);
+      if (matches.length > 1) {
+        state.duplicateLocations = matches.map((element) => {
+          const chapter = element.closest<HTMLElement>(
+            '[data-reader-chapter-id]',
+          );
+          const preview = element.closest<HTMLElement>(
+            '[data-reader-chapter-preview]',
+          );
+          return {
+            chapterId: chapter?.dataset.readerChapterId,
+            previewChapterId: preview?.dataset.readerPreviewChapterId,
+            previewDirection: preview?.dataset.readerChapterPreview,
+          };
+        });
+      }
+    };
+    const observer = new MutationObserver(update);
+    observer.observe(document.querySelector('.book-reader__content')!, {
+      childList: true,
+      subtree: true,
+    });
+    update();
+    Object.assign(window, {
+      __readerDuplicateSegmentAudit: { state, observer },
+    });
+  });
   await page.keyboard.press('ArrowRight');
   await expect(page).toHaveURL(new RegExp(`/read/1$`));
   await expect(
     readerContent.locator('[data-reader-segment-id="mode-chapter-1-segment"]'),
-  ).toBeVisible();
+  ).toHaveCount(1);
+  const duplicateSegmentAudit = await page.evaluate(() => {
+    const audit = (
+      window as typeof window & {
+        __readerDuplicateSegmentAudit: {
+          state: {
+            maximumCount: number;
+            duplicateLocations: Array<{
+              chapterId?: string;
+              previewChapterId?: string;
+              previewDirection?: string;
+            }>;
+          };
+          observer: MutationObserver;
+        };
+      }
+    ).__readerDuplicateSegmentAudit;
+    audit.observer.disconnect();
+    return audit.state;
+  });
+  expect(duplicateSegmentAudit).toEqual({
+    maximumCount: 1,
+    duplicateLocations: [],
+  });
   await page.keyboard.press('ArrowLeft');
   await expect(page).toHaveURL(new RegExp(`/read/0$`));
   expect(pageErrors).toEqual([]);

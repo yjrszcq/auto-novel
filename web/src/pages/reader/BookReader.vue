@@ -3577,9 +3577,13 @@ function scheduleCurrentContinuousPreviewFill() {
   if (resolvedFlow.value !== 'scrolled' || result.value?.kind !== 'ready') {
     return;
   }
+  const currentChapter =
+    continuousChapters.value.find(
+      (chapter) => chapter.chapterId === requestedChapterId.value,
+    ) ?? result.value.chapter;
   scheduleContinuousPreviewFill(
     scrolledPreviewGeneration,
-    result.value.chapter,
+    currentChapter,
     result.value.chapters,
   );
 }
