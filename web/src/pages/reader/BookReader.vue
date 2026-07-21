@@ -108,6 +108,7 @@ import {
   type ReaderContinuousBufferDirection,
 } from './core/ReaderContinuousBuffer';
 import { planReaderChapterTransition } from './core/ReaderChapterTransition';
+import { getReaderChineseScriptSides } from './core/ReaderChineseScript';
 
 import {
   useGptWorkspaceStore,
@@ -336,6 +337,9 @@ const requiresWholeChapterTranslation = computed(
   () =>
     result.value?.kind !== 'ready' ||
     result.value.book.requiresWholeChapterTranslation,
+);
+const chineseScriptSides = computed(() =>
+  getReaderChineseScriptSides(requiresWholeChapterTranslation.value),
 );
 const hasIncompleteChapter = computed(
   () =>
@@ -4093,6 +4097,10 @@ onBeforeUnmount(() => {
               :segments="getPreviewSegments(preview)"
               :mode="getChapterRenderedMode(preview.chapter)"
               :flow="resolvedFlow"
+              :book-id="bookId"
+              :chinese-script="activeSettings.chineseScript"
+              :convert-original="chineseScriptSides.original"
+              :convert-translated="chineseScriptSides.translated"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               preview
               @content-change="scheduleCurrentContinuousPreviewFill"
@@ -4103,6 +4111,10 @@ onBeforeUnmount(() => {
               :segments="getPreviewSegments(preview)"
               :mode="getChapterRenderedMode(preview.chapter)"
               :flow="resolvedFlow"
+              :book-id="bookId"
+              :chinese-script="activeSettings.chineseScript"
+              :convert-original="chineseScriptSides.original"
+              :convert-translated="chineseScriptSides.translated"
             />
           </section>
           <section
@@ -4117,6 +4129,10 @@ onBeforeUnmount(() => {
               :segments="chapter.segments"
               :mode="getChapterRenderedMode(chapter)"
               :flow="resolvedFlow"
+              :book-id="bookId"
+              :chinese-script="activeSettings.chineseScript"
+              :convert-original="chineseScriptSides.original"
+              :convert-translated="chineseScriptSides.translated"
               :double-spread="usesDoublePageSpread"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               @content-change="handleSegmentContentChange"
@@ -4130,6 +4146,10 @@ onBeforeUnmount(() => {
                 continuousChapterInitialSegments.get(chapter.chapterId)
               "
               :flow="resolvedFlow"
+              :book-id="bookId"
+              :chinese-script="activeSettings.chineseScript"
+              :convert-original="chineseScriptSides.original"
+              :convert-translated="chineseScriptSides.translated"
               continuous
               @content-change="handleSegmentContentChange"
             />
@@ -4152,6 +4172,10 @@ onBeforeUnmount(() => {
               :segments="getPreviewSegments(preview)"
               :mode="getChapterRenderedMode(preview.chapter)"
               :flow="resolvedFlow"
+              :book-id="bookId"
+              :chinese-script="activeSettings.chineseScript"
+              :convert-original="chineseScriptSides.original"
+              :convert-translated="chineseScriptSides.translated"
               :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
               preview
               @content-change="scheduleCurrentContinuousPreviewFill"
@@ -4162,6 +4186,10 @@ onBeforeUnmount(() => {
               :segments="getPreviewSegments(preview)"
               :mode="getChapterRenderedMode(preview.chapter)"
               :flow="resolvedFlow"
+              :book-id="bookId"
+              :chinese-script="activeSettings.chineseScript"
+              :convert-original="chineseScriptSides.original"
+              :convert-translated="chineseScriptSides.translated"
             />
           </section>
         </template>
@@ -4171,6 +4199,10 @@ onBeforeUnmount(() => {
           :segments="result.chapter.segments"
           :mode="renderedMode"
           :flow="resolvedFlow"
+          :book-id="bookId"
+          :chinese-script="activeSettings.chineseScript"
+          :convert-original="chineseScriptSides.original"
+          :convert-translated="chineseScriptSides.translated"
           :double-spread="usesDoublePageSpread"
           :layout-revision="`${activeSettings.fontSize}/${activeSettings.lineHeight}/${activeSettings.horizontalPadding}`"
           @content-change="handleSegmentContentChange"
@@ -4183,6 +4215,10 @@ onBeforeUnmount(() => {
           :mode="renderedMode"
           :initial-segment-id="initialSegmentId"
           :flow="resolvedFlow"
+          :book-id="bookId"
+          :chinese-script="activeSettings.chineseScript"
+          :convert-original="chineseScriptSides.original"
+          :convert-translated="chineseScriptSides.translated"
           :scroll-root="readerViewport"
           @content-change="handleSegmentContentChange"
         />

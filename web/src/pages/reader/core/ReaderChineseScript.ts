@@ -1,4 +1,5 @@
 import type { ReaderChineseScript } from '@/model/Reader';
+import type { ReaderSegment } from '@/model/Reader';
 
 export type { ReaderChineseScript } from '@/model/Reader';
 
@@ -76,3 +77,79 @@ export const createReaderChineseScriptService = (options?: {
 };
 
 export const readerChineseScriptService = createReaderChineseScriptService();
+
+export const getReaderChineseScriptSides = (
+  requiresWholeChapterTranslation: boolean,
+) => ({
+  original: !requiresWholeChapterTranslation,
+  translated: requiresWholeChapterTranslation,
+});
+
+export const convertReaderSegments = async ({
+  bookId,
+  script,
+  segments,
+  original,
+  translated,
+}: {
+  bookId: string;
+  script: ReaderChineseScript;
+  segments: ReaderSegment[];
+  original: boolean;
+  translated: boolean;
+}) =>
+  Promise.all(
+    segments.map(async (segment) => ({
+      ...segment,
+      original: original
+        ? await readerChineseScriptService.convert({
+            bookId,
+            script,
+            text: segment.original,
+          })
+        : segment.original,
+      translated:
+        translated && segment.translated !== undefined
+          ? await readerChineseScriptService.convert({
+              bookId,
+              script,
+              text: segment.translated,
+            })
+          : segment.translated,
+    })),
+  );
+
+export const convertReaderTextParts = async ({
+  bookId,
+  script,
+  parts,
+}: {
+  bookId: string;
+  script: ReaderChineseScript;
+  parts: string[];
+}) => {
+  const source = parts.join('');
+  const converted = await readerChineseScriptService.convert({
+    bookId,
+    script,
+    text: source,
+  });
+  const convertedCharacters = Array.from(converted);
+  const sourceLengths = parts.map((part) => Array.from(part).length);
+  if (
+    convertedCharacters.length ===
+    sourceLengths.reduce((sum, length) => sum + length, 0)
+  ) {
+    let offset = 0;
+    return sourceLengths.map((length) => {
+      const part = convertedCharacters.slice(offset, offset + length).join('');
+      offset += length;
+      return part;
+    });
+  }
+  return Promise.all(
+    parts.map((text) =>
+      readerChineseScriptService.convert({ bookId, script, text }),
+    ),
+  );
+};

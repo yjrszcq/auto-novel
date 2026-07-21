@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type {
   ReaderEpubChapterContent,
+  ReaderChineseScript,
   ReaderEpubDocumentSlice,
   ReaderFlow,
   ReaderSegment,
@@ -10,6 +11,7 @@ import { EpubResourceSession } from '../core/EpubResources';
 import type { RenderedReaderMode } from '../core/BilingualLayout';
 
 import { resolveEpubArchiveHref } from '@/util/file/epub';
+import { convertReaderTextParts } from '../core/ReaderChineseScript';
 
 const props = defineProps<{
   epub: ReaderEpubChapterContent;
@@ -19,6 +21,10 @@ const props = defineProps<{
   doubleSpread?: boolean;
   layoutRevision: string;
   preview?: boolean;
+  bookId: string;
+  chineseScript: ReaderChineseScript;
+  convertOriginal: boolean;
+  convertTranslated: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -240,6 +246,46 @@ const applyReaderMode = (wrapper: HTMLElement) => {
     });
 };
 
+const convertElementText = async (element: HTMLElement) => {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  let node = walker.nextNode();
+  while (node !== null) {
+    nodes.push(node as Text);
+    node = walker.nextNode();
+  }
+  const sourceParts = nodes.map((text) => text.data);
+  const convertedParts = await convertReaderTextParts({
+    bookId: props.bookId,
+    script: props.chineseScript,
+    parts: sourceParts,
+  });
+  nodes.forEach((text, index) => (text.data = convertedParts[index] ?? ''));
+};
+
+const applyChineseScript = async (wrapper: HTMLElement) => {
+  const sides = [
+    ...(props.convertOriginal ? ['original'] : []),
+    ...(props.convertTranslated ? ['translated'] : []),
+  ];
+  await Promise.all(
+    sides.flatMap((side) =>
+      Array.from(
+        wrapper.querySelectorAll<HTMLElement>(
+          `[data-reader-language-side="${side}"]`,
+        ),
+      )
+        .filter(
+          (element) =>
+            element.parentElement?.closest(
+              `[data-reader-language-side="${side}"]`,
+            ) === null,
+        )
+        .map(convertElementText),
+    ),
+  );
+};
+
 const sizeDocumentLayout = (
   host: HTMLElement,
   wrapper: HTMLElement,
@@ -409,6 +455,7 @@ const renderSlice = async (
     );
     wrapper.append(...Array.from(parsed.body.childNodes));
     applyReaderMode(wrapper);
+    await applyChineseScript(wrapper);
   }
   content.append(wrapper);
   if (isCurrent()) {
@@ -454,6 +501,10 @@ watch(
       props.flow,
       props.doubleSpread,
       props.layoutRevision,
+      props.bookId,
+      props.chineseScript,
+      props.convertOriginal,
+      props.convertTranslated,
     ] as const,
   () => void render(),
   { immediate: true },

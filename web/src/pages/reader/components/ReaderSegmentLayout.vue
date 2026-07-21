@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { ReaderSegment } from '@/model/Reader';
+import type { ReaderChineseScript, ReaderSegment } from '@/model/Reader';
 
 import type { RenderedReaderMode } from '../core/BilingualLayout';
 import type { ResolvedReaderFlow } from '../core/ReaderFlow';
@@ -8,6 +8,7 @@ import {
   expandSegmentRange,
   getInitialSegmentRange,
 } from '../core/ReaderSegmentWindow';
+import { convertReaderSegments } from '../core/ReaderChineseScript';
 
 const props = defineProps<{
   segments: ReaderSegment[];
@@ -16,6 +17,10 @@ const props = defineProps<{
   flow: ResolvedReaderFlow;
   scrollRoot?: HTMLElement;
   continuous?: boolean;
+  bookId: string;
+  chineseScript: ReaderChineseScript;
+  convertOriginal: boolean;
+  convertTranslated: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -36,6 +41,25 @@ const segmentRange = ref(getInitialRange());
 const renderedSegments = computed(() =>
   props.segments.slice(segmentRange.value.start, segmentRange.value.end),
 );
+const displayedSegments = shallowRef<ReaderSegment[]>([]);
+let conversionGeneration = 0;
+
+const refreshDisplayedSegments = async () => {
+  const generation = ++conversionGeneration;
+  const source = renderedSegments.value;
+  displayedSegments.value = source;
+  const converted = await convertReaderSegments({
+    bookId: props.bookId,
+    script: props.chineseScript,
+    segments: source,
+    original: props.convertOriginal,
+    translated: props.convertTranslated,
+  });
+  if (generation !== conversionGeneration) return;
+  displayedSegments.value = converted;
+  await nextTick();
+  emit('content-change');
+};
 const hasPreviousSegments = computed(() => segmentRange.value.start > 0);
 const hasMoreSegments = computed(
   () => segmentRange.value.end < props.segments.length,
@@ -173,7 +197,19 @@ watch(
       observeMoreSegments();
     }),
 );
+watch(
+  () => [
+    renderedSegments.value,
+    props.bookId,
+    props.chineseScript,
+    props.convertOriginal,
+    props.convertTranslated,
+  ],
+  () => void refreshDisplayedSegments(),
+  { immediate: true },
+);
 onBeforeUnmount(() => {
+  conversionGeneration += 1;
   loadPreviousObserver?.disconnect();
   loadMoreObserver?.disconnect();
 });
@@ -196,7 +232,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-for="segment in renderedSegments"
+      v-for="segment in displayedSegments"
       :key="segment.id"
       class="reader-segment"
       :data-reader-segment-id="segment.id"

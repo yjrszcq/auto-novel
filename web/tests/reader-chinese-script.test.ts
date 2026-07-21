@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createReaderChineseScriptService } from '../src/pages/reader/core/ReaderChineseScript';
+import {
+  convertReaderSegments,
+  convertReaderTextParts,
+  createReaderChineseScriptService,
+  getReaderChineseScriptSides,
+} from '../src/pages/reader/core/ReaderChineseScript';
 
 describe('reader Chinese script conversion', () => {
+  it('selects only the Chinese language side for each kind of book', () => {
+    expect(getReaderChineseScriptSides(false)).toEqual({
+      original: true,
+      translated: false,
+    });
+    expect(getReaderChineseScriptSides(true)).toEqual({
+      original: false,
+      translated: true,
+    });
+  });
+
   it('uses standard OpenCC contextual conversion without regional phrases', async () => {
     const service = createReaderChineseScriptService();
 
@@ -78,5 +94,38 @@ describe('reader Chinese script conversion', () => {
     await expect(request()).rejects.toThrow('temporary chunk failure');
     await expect(request()).resolves.toBe('converted:text');
     expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it('converts only the requested segment side without mutating source data', async () => {
+    const segments = [
+      { id: 'segment', index: 0, original: '头发', translated: '发展' },
+    ];
+    const converted = await convertReaderSegments({
+      bookId: 'book',
+      script: 'traditional',
+      segments,
+      original: false,
+      translated: true,
+    });
+
+    expect(converted).toEqual([
+      { id: 'segment', index: 0, original: '头发', translated: '發展' },
+    ]);
+    expect(segments[0]).toEqual({
+      id: 'segment',
+      index: 0,
+      original: '头发',
+      translated: '发展',
+    });
+  });
+
+  it('preserves phrase context split across EPUB text nodes', async () => {
+    await expect(
+      convertReaderTextParts({
+        bookId: 'epub',
+        script: 'traditional',
+        parts: ['头', '发与发', '展'],
+      }),
+    ).resolves.toEqual(['頭', '髮與發', '展']);
   });
 });
