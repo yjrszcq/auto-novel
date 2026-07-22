@@ -2404,7 +2404,13 @@ const runAutomaticTranslationOnce = async () => {
     {
       loadChapter: (chapterId) =>
         repository.getChapter(bookId.value, chapterId),
-      translate: async (selection, originals, glossary, signal) => {
+      translate: async (
+        selection,
+        originals,
+        glossary,
+        signal,
+        onTranslated,
+      ) => {
         if (!automaticTranslationSession.isActive(selection)) return [];
         const translator = await Translator.create(runtime.config, false);
         return translator.translate(
@@ -2412,6 +2418,7 @@ const runAutomaticTranslationOnce = async () => {
           { force: true, glossary, signal },
           {
             concurrency: selection.source === 'gpt' ? runtime.concurrency : 1,
+            onTranslatedLines: onTranslated,
           },
         );
       },

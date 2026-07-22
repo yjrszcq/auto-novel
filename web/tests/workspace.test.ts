@@ -22,10 +22,10 @@ import {
 } from '../src/model/Translator';
 
 describe('workspace task descriptors', () => {
-  it('normalizes translation settings to documented safe bounds', () => {
+  it('normalizes translation settings to their documented ranges', () => {
     expect(normalizeTranslationConcurrency(Number.POSITIVE_INFINITY)).toBe(1);
     expect(normalizeTranslationConcurrency(0)).toBe(1);
-    expect(normalizeTranslationConcurrency(99)).toBe(16);
+    expect(normalizeTranslationConcurrency(99)).toBe(99);
     expect(normalizeFormatRetryCount(Number.POSITIVE_INFINITY)).toBe(3);
     expect(normalizeFormatRetryCount(-1)).toBe(0);
     expect(normalizeFormatRetryCount(99)).toBe(10);

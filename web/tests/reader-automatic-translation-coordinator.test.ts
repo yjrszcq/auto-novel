@@ -31,6 +31,14 @@ const target = (index: number): ReaderAutomaticTranslationTarget => ({
   original: ['原文一', '原文二'][index]!,
 });
 
+const deferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+};
+
 describe('reader automatic translation coordinator', () => {
   it('keeps partial chapter results in memory and commits only after completion', async () => {
     const session = new ReaderAutomaticTranslationSession();
@@ -97,6 +105,55 @@ describe('reader automatic translation coordinator', () => {
     expect(order).toEqual(['persist', 'render']);
   });
 
+  it('exposes completed translation batches before the whole window finishes', async () => {
+    const session = new ReaderAutomaticTranslationSession();
+    const generation = session.start(selection);
+    const firstDraft = deferred();
+    const releaseFinalResult = deferred();
+    const drafts = vi.fn(() => firstDraft.resolve());
+    const commits = vi.fn();
+    const coordinator = new ReaderAutomaticTranslationCoordinator(session, {
+      loadChapter: async () => createChapter(),
+      translate: async (
+        _selection,
+        _originals,
+        _glossary,
+        _signal,
+        onTranslated,
+      ) => {
+        await onTranslated([{ index: 0, translated: '译文一' }]);
+        await releaseFinalResult.promise;
+        return ['译文一', '译文二'];
+      },
+      commit: commits,
+      onDraft: drafts,
+    });
+
+    const translation = coordinator.translateTargets({
+      generation,
+      selection,
+      targets: [target(0), target(1)],
+      glossary: {},
+      concurrency: 1,
+      signal: new AbortController().signal,
+    });
+    await firstDraft.promise;
+
+    expect(drafts).toHaveBeenCalledWith(selection, [
+      {
+        chapterId: 'chapter',
+        segmentId: 'segment-0',
+        translated: '译文一',
+      },
+    ]);
+    expect(commits).not.toHaveBeenCalled();
+
+    releaseFinalResult.resolve();
+    await translation;
+    expect(drafts).toHaveBeenCalledTimes(2);
+    expect(commits).toHaveBeenCalledOnce();
+  });
+
   it('reuses only current-glossary persisted paragraphs', async () => {
     const session = new ReaderAutomaticTranslationSession();
     const generation = session.start(selection);
@@ -128,6 +185,7 @@ describe('reader automatic translation coordinator', () => {
       ['原文二'],
       {},
       expect.any(AbortSignal),
+      expect.any(Function),
     );
     expect(commits.mock.calls[0]?.[2].paragraphs).toEqual([
       '已有译文',
@@ -209,6 +267,7 @@ describe('reader automatic translation coordinator', () => {
       ['原文一', '原文二'],
       { 人名: '译名' },
       expect.any(AbortSignal),
+      expect.any(Function),
     );
     expect(commit).not.toHaveBeenCalled();
     expect(candidate).toHaveBeenCalledWith(retranslation, 'chapter', {

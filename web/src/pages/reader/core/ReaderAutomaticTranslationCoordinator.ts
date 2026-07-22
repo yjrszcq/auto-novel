@@ -19,6 +19,9 @@ export interface ReaderAutomaticTranslationCoordinatorDependencies {
     originals: string[],
     glossary: ChapterTranslation['glossary'],
     signal: AbortSignal,
+    onTranslated: (
+      lines: Array<{ index: number; translated: string }>,
+    ) => Promise<void>,
   ) => Promise<string[]>;
   commit: (
     selection: ReaderAutomaticTranslationSelection,
@@ -197,11 +200,64 @@ export class ReaderAutomaticTranslationCoordinator {
           return;
         }
         try {
+          const acceptedIndexes = new Set<number>();
+          let completedExternally = false;
+          const acceptTranslated = async (
+            lines: Array<{ index: number; translated: string }>,
+          ) => {
+            if (completedExternally || lines.length === 0) return;
+            const indexes = new Set<number>();
+            const values = lines.map(({ index, translated }) => {
+              const target = claimed[index];
+              if (
+                target === undefined ||
+                indexes.has(index) ||
+                acceptedIndexes.has(index)
+              ) {
+                throw new Error('翻译结果段落索引不匹配');
+              }
+              if (!hasTranslation(translated)) {
+                throw new Error('翻译结果包含空白内容');
+              }
+              indexes.add(index);
+              return {
+                chapterId: target.chapterId,
+                segmentId: target.segmentId,
+                translated,
+              };
+            });
+            if (!this.session.accepts(generation) || workerSignal.aborted) {
+              return;
+            }
+            const persisted = await this.dependencies.persistDraft?.(
+              selection,
+              chapter,
+              values,
+            );
+            if (persisted === false) {
+              completedExternally = true;
+              this.session.release(generation, claimed);
+              await this.dependencies.onChapterAlreadyComplete?.(
+                selection,
+                chapterId,
+              );
+              return;
+            }
+            if (
+              !this.session.store(generation, values) ||
+              workerSignal.aborted
+            ) {
+              return;
+            }
+            indexes.forEach((index) => acceptedIndexes.add(index));
+            this.dependencies.onDraft?.(selection, values);
+          };
           const translated = await this.dependencies.translate(
             selection,
             claimed.map(({ original }) => original),
             glossary,
             workerSignal,
+            acceptTranslated,
           );
           if (translated.length !== claimed.length) {
             throw new Error('翻译结果行数不匹配');
@@ -209,31 +265,16 @@ export class ReaderAutomaticTranslationCoordinator {
           if (translated.some((value) => !hasTranslation(value))) {
             throw new Error('翻译结果包含空白内容');
           }
-          const values = claimed.map((target, index) => ({
-            chapterId: target.chapterId,
-            segmentId: target.segmentId,
-            translated: translated[index] ?? '',
-          }));
+          await acceptTranslated(
+            translated.flatMap((value, index) =>
+              acceptedIndexes.has(index) ? [] : [{ index, translated: value }],
+            ),
+          );
+          if (completedExternally) return;
           if (!this.session.accepts(generation) || workerSignal.aborted) {
             this.session.release(generation, claimed);
             return;
           }
-          const persisted = await this.dependencies.persistDraft?.(
-            selection,
-            chapter,
-            values,
-          );
-          if (persisted === false) {
-            this.session.release(generation, claimed);
-            await this.dependencies.onChapterAlreadyComplete?.(
-              selection,
-              chapterId,
-            );
-            return;
-          }
-          if (!this.session.store(generation, values) || workerSignal.aborted)
-            return;
-          this.dependencies.onDraft?.(selection, values);
           const complete = buildCompleteReaderChapterTranslation({
             chapter,
             chapterId,

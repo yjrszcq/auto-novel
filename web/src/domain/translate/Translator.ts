@@ -28,6 +28,11 @@ export type SegmentProgressInfo = {
   status: 'start' | 'success' | 'complete' | 'failed';
 };
 
+export type TranslatedLine = {
+  index: number;
+  translated: string;
+};
+
 export type TranslationSegmentAssignment = {
   chapter?: { index?: number; total?: number; id?: string };
   segmentIndex: number;
@@ -56,6 +61,7 @@ type TranslateRuntimeOptions = {
     id?: string;
   };
   onSegmentProgress?: (info: SegmentProgressInfo) => void;
+  onTranslatedLines?: (lines: TranslatedLine[]) => Promise<void> | void;
 };
 
 export class Translator {
@@ -111,12 +117,22 @@ export class Translator {
     const textZh = await emptyLineFilterWrapper(
       textJp,
       oldTextZh,
-      async (textJp, oldTextZh) => {
+      async (textJp, oldTextZh, originalLineIndexes) => {
         if (textJp.length === 0) return [];
 
         const segs = this.segTranslator.segmentor(textJp, oldTextZh);
         const size = segs.length;
         const segsZh: Array<string[] | undefined> = new Array(size);
+        const remainingLineParts = new Map<number, number>();
+        segs.forEach(([, , sourceLineIndexes]) => {
+          sourceLineIndexes.forEach((sourceLineIndex) => {
+            remainingLineParts.set(
+              sourceLineIndex,
+              (remainingLineParts.get(sourceLineIndex) ?? 0) + 1,
+            );
+          });
+        });
+        let translatedLineQueue = Promise.resolve();
         const usesSequentialContext =
           this.segTranslator instanceof SakuraTranslator;
         const sequentialContext = Array.from(
@@ -193,6 +209,38 @@ export class Translator {
               throw new Error('翻译结果行数不匹配。不应当出现，请反馈给站长。');
             }
             segsZh[segIndex] = segZh;
+            const completedLineIndexes = new Set<number>();
+            sourceLineIndexes.forEach((sourceLineIndex) => {
+              const remaining =
+                (remainingLineParts.get(sourceLineIndex) ?? 0) - 1;
+              remainingLineParts.set(sourceLineIndex, remaining);
+              if (remaining === 0) completedLineIndexes.add(sourceLineIndex);
+            });
+            if (
+              completedLineIndexes.size > 0 &&
+              options?.onTranslatedLines !== undefined
+            ) {
+              const lines = [...completedLineIndexes].map((sourceLineIndex) => {
+                let translated = '';
+                segs.forEach(([, , indexes], completedSegmentIndex) => {
+                  const output = segsZh[completedSegmentIndex];
+                  if (output === undefined) return;
+                  indexes.forEach((index, partIndex) => {
+                    if (index === sourceLineIndex) {
+                      translated += output[partIndex] ?? '';
+                    }
+                  });
+                });
+                return {
+                  index: originalLineIndexes[sourceLineIndex]!,
+                  translated,
+                };
+              });
+              translatedLineQueue = translatedLineQueue.then(() =>
+                options.onTranslatedLines!(lines),
+              );
+              await translatedLineQueue;
+            }
             if (usesSequentialContext) {
               segZh.forEach((part, partIndex) => {
                 const sourceLineIndex = sourceLineIndexes[partIndex];
@@ -402,14 +450,17 @@ const emptyLineFilterWrapper = async (
   callback: (
     textJp: string[],
     oldTextZh: string[] | undefined,
+    originalLineIndexes: number[],
   ) => Promise<string[]>,
 ) => {
   const textJpFiltered: string[] = [];
   const oldTextZhFiltered: string[] = [];
+  const originalLineIndexes: number[] = [];
   for (let i = 0; i < textJp.length; i++) {
     const lineJp = textJp[i].replace(/\r?\n|\r/g, '');
     if (!(lineJp.trim() === '' || lineJp.startsWith('<图片>'))) {
       textJpFiltered.push(lineJp);
+      originalLineIndexes.push(i);
       if (oldTextZh !== undefined) {
         const lineZh = oldTextZh[i];
         oldTextZhFiltered.push(lineZh);
@@ -420,6 +471,7 @@ const emptyLineFilterWrapper = async (
   const textZh = await callback(
     textJpFiltered,
     oldTextZh === undefined ? undefined : oldTextZhFiltered,
+    originalLineIndexes,
   );
 
   const recoveredTextZh: string[] = [];

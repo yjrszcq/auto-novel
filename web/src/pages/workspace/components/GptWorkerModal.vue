@@ -4,7 +4,7 @@ import type { FormInst, FormItemRule, FormRules } from 'naive-ui';
 import type { GptWorker } from '@/model/Translator';
 import {
   normalizeTranslationConcurrency,
-  translationConcurrencyBounds,
+  translationConcurrencyMinimum,
 } from '@/model/Translator';
 import { useGptWorkspaceStore } from '@/stores';
 
@@ -98,10 +98,8 @@ const formRules: FormRules = {
   concurrency: [
     {
       validator: (rule: FormItemRule, value: number) =>
-        Number.isFinite(value) &&
-        value >= translationConcurrencyBounds.minimum &&
-        value <= translationConcurrencyBounds.maximum,
-      message: '并发量必须在 1–16 之间',
+        Number.isFinite(value) && value >= translationConcurrencyMinimum,
+      message: '并发量不能小于 1',
       trigger: 'input',
     },
   ],
@@ -189,13 +187,13 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
         <n-input-number
           v-model:value="formValue.concurrency"
           :show-button="false"
-          :min="translationConcurrencyBounds.minimum"
-          :max="translationConcurrencyBounds.maximum"
+          :min="translationConcurrencyMinimum"
         />
       </n-form-item-row>
 
       <n-text depth="3" style="display: block; font-size: 12px">
-        并发量是该翻译器的请求上限；共享池的实际总上限是所有已启动翻译器之和。遇到限流时会自动降低实际吞吐并退避重试。
+        并发量是该翻译器的请求上限，其不应超过 API
+        的并发量限制；共享池的实际总上限是所有已启动翻译器之和。遇到限流时会自动降低实际吞吐并退避重试。
       </n-text>
 
       <n-text depth="3" style="display: block; font-size: 12px">

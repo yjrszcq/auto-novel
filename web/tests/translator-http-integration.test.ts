@@ -25,6 +25,14 @@ import { startOpenAiTestServer } from './helpers/openai-test-server';
 
 const cleanupCallbacks: Array<() => Promise<void>> = [];
 
+const deferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+};
+
 afterEach(async () => {
   await Promise.all(cleanupCallbacks.splice(0).map((cleanup) => cleanup()));
   await Promise.all([
@@ -72,6 +80,85 @@ describe('translator HTTP integration', () => {
       authorization: 'Bearer integration-key',
       body: { model: 'integration-model', stream: true },
     });
+  });
+
+  it('reports completed lines while later concurrent requests are pending', async () => {
+    const releaseSecond = deferred();
+    const firstReported = deferred();
+    const server = await startOpenAiTestServer({
+      onChat: async (request) => {
+        if (request.index === 1) await releaseSecond.promise;
+        return { content: request.index === 0 ? '译文一' : '译文二' };
+      },
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'progress-key',
+      model: 'progress-model',
+    });
+    translator.segTranslator.segmentor = createBudgetSegmentor(100, 1);
+    const reported: Array<Array<{ index: number; translated: string }>> = [];
+    let settled = false;
+
+    const translation = translator.translate(['原文一', '原文二'], undefined, {
+      concurrency: 2,
+      onTranslatedLines: (lines) => {
+        reported.push(lines);
+        if (lines.some(({ index }) => index === 0)) firstReported.resolve();
+      },
+    });
+    void translation.finally(() => {
+      settled = true;
+    });
+    await firstReported.promise;
+
+    expect(reported).toEqual([[{ index: 0, translated: '译文一' }]]);
+    expect(settled).toBe(false);
+
+    releaseSecond.resolve();
+    await expect(translation).resolves.toEqual(['译文一', '译文二']);
+    expect(reported).toEqual([
+      [{ index: 0, translated: '译文一' }],
+      [{ index: 1, translated: '译文二' }],
+    ]);
+  });
+
+  it('waits for every slice before reporting a split source line', async () => {
+    const releaseFirst = deferred();
+    const secondFinished = deferred();
+    const server = await startOpenAiTestServer({
+      onChat: async (request) => {
+        if (request.index === 0) {
+          await releaseFirst.promise;
+          return { content: '前半' };
+        }
+        secondFinished.resolve();
+        return { content: '后半' };
+      },
+    });
+    cleanupCallbacks.push(server.close);
+    const translator = await Translator.create({
+      id: 'gpt',
+      endpoint: server.endpoint,
+      key: 'split-progress-key',
+      model: 'split-progress-model',
+    });
+    translator.segTranslator.segmentor = createBudgetSegmentor(2);
+    const reported: Array<Array<{ index: number; translated: string }>> = [];
+
+    const translation = translator.translate(['甲乙丙丁'], undefined, {
+      concurrency: 2,
+      onTranslatedLines: (lines) => reported.push(lines),
+    });
+    await secondFinished.promise;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(reported).toEqual([]);
+
+    releaseFirst.resolve();
+    await expect(translation).resolves.toEqual(['前半后半']);
+    expect(reported).toEqual([[{ index: 0, translated: '前半后半' }]]);
   });
 
   it('detects and translates through a Sakura-compatible endpoint', async () => {

@@ -8,7 +8,7 @@ import {
   normalizeTranslationConcurrency,
   sakuraContextLengthBounds,
   sakuraSegmentLengthBounds,
-  translationConcurrencyBounds,
+  translationConcurrencyMinimum,
 } from '@/model/Translator';
 import { useSakuraWorkspaceStore } from '@/stores';
 
@@ -98,10 +98,8 @@ const formRules: FormRules = {
   concurrency: [
     {
       validator: (rule: FormItemRule, value: number) =>
-        Number.isFinite(value) &&
-        value >= translationConcurrencyBounds.minimum &&
-        value <= translationConcurrencyBounds.maximum,
-      message: '并发量必须在 1–16 之间',
+        Number.isFinite(value) && value >= translationConcurrencyMinimum,
+      message: '并发量不能小于 1',
       trigger: 'input',
     },
   ],
@@ -189,8 +187,7 @@ const verb = computed(() => (props.worker === undefined ? '添加' : '更新'));
         <n-input-number
           v-model:value="formValue.concurrency"
           :show-button="false"
-          :min="translationConcurrencyBounds.minimum"
-          :max="translationConcurrencyBounds.maximum"
+          :min="translationConcurrencyMinimum"
         />
       </n-form-item-row>
 

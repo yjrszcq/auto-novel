@@ -1,6 +1,6 @@
 export type TranslatorId = 'sakura' | 'baidu' | 'youdao' | 'gpt';
 
-export const translationConcurrencyBounds = { minimum: 1, maximum: 16 };
+export const translationConcurrencyMinimum = 1;
 export const formatRetryBounds = { minimum: 0, maximum: 10 };
 export const sakuraSegmentLengthBounds = { minimum: 100, maximum: 8_000 };
 export const sakuraContextLengthBounds = { minimum: 0, maximum: 8_000 };
@@ -16,7 +16,9 @@ const normalizeBoundedInteger = (
   );
 
 export const normalizeTranslationConcurrency = (value?: number) =>
-  normalizeBoundedInteger(value, 1, translationConcurrencyBounds);
+  Number.isFinite(value)
+    ? Math.max(translationConcurrencyMinimum, Math.floor(value!))
+    : translationConcurrencyMinimum;
 
 export const normalizeFormatRetryCount = (value?: number) =>
   normalizeBoundedInteger(value, 3, formatRetryBounds);
