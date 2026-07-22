@@ -11,6 +11,7 @@ import type {
 import { readerModeLabels } from '../reader/core/ReaderMode';
 import {
   defaultReaderSettings,
+  normalizeReaderAutoTranslationChunkParagraphs,
   normalizeReaderAutoTranslationPreloadParagraphs,
   normalizeReaderSettings,
   serializeReaderSettings,
@@ -111,11 +112,19 @@ const updateDefaultReaderMode = (value: string | number) => {
   }));
 };
 
-const updateAutoTranslationPreloadPages = (value: number | null) => {
+const updateAutoTranslationPreloadParagraphs = (value: number | null) => {
   void persistReaderSettings((current) => ({
     ...current,
     autoTranslationPreloadParagraphs:
       normalizeReaderAutoTranslationPreloadParagraphs(value),
+  }));
+};
+
+const updateAutoTranslationChunkParagraphs = (value: number | null) => {
+  void persistReaderSettings((current) => ({
+    ...current,
+    autoTranslationChunkParagraphs:
+      normalizeReaderAutoTranslationChunkParagraphs(value),
   }));
 };
 
@@ -440,7 +449,7 @@ onMounted(() => {
             />
           </c-action-wrapper>
           <c-action-wrapper
-            title="自动翻译预翻译"
+            title="自动翻译预翻译段数"
             align="center"
             class="reader-setting-row reader-preload-setting"
           >
@@ -449,13 +458,13 @@ onMounted(() => {
                 class="number-setting-input reader-preload-setting__input"
                 :value="readerSettings.autoTranslationPreloadParagraphs"
                 :min="0"
-                :max="20"
+                :max="1000"
                 :precision="0"
                 :input-props="{
-                  'aria-label': '自动翻译预翻译页数',
+                  'aria-label': '自动翻译预翻译段数',
                 }"
                 :disabled="readerSettingsLoading || readerSettingsSaving"
-                @update:value="updateAutoTranslationPreloadPages"
+                @update:value="updateAutoTranslationPreloadParagraphs"
               />
               <n-popover
                 v-if="!isMobile"
@@ -479,7 +488,7 @@ onMounted(() => {
                     </template>
                   </n-button>
                 </template>
-                提前翻译当前页之后的页数；0 表示只处理当前可见页。
+                提前翻译当前可见内容之后的自然段；0 表示只处理当前可见段。
               </n-popover>
               <n-button
                 v-else
@@ -495,6 +504,24 @@ onMounted(() => {
                 </template>
               </n-button>
             </div>
+          </c-action-wrapper>
+          <c-action-wrapper
+            title="自动翻译切块段数"
+            align="center"
+            class="reader-setting-row"
+          >
+            <n-input-number
+              class="number-setting-input reader-chunk-setting__input"
+              :value="readerSettings.autoTranslationChunkParagraphs"
+              :min="1"
+              :max="50"
+              :precision="0"
+              :input-props="{
+                'aria-label': '自动翻译切块段数',
+              }"
+              :disabled="readerSettingsLoading || readerSettingsSaving"
+              @update:value="updateAutoTranslationChunkParagraphs"
+            />
           </c-action-wrapper>
           <c-action-wrapper
             title="重翻完成后"
@@ -527,7 +554,7 @@ onMounted(() => {
       title="自动翻译预翻译"
       aria-label="自动翻译预翻译"
     >
-      提前翻译当前页之后的页数；0 表示只处理当前可见页。
+      提前翻译当前可见内容之后的自然段；0 表示只处理当前可见段。
     </c-modal>
     <c-modal
       v-model:show="showDownloadMetadataHelp"

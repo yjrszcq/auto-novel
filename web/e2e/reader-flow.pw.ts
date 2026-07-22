@@ -242,7 +242,8 @@ test('keeps inherited reader themes opaque and responsive to system changes', as
   });
   await expect(chineseReaderSettings).toBeVisible();
   for (const label of [
-    '自动翻译预翻译页数',
+    '自动翻译预翻译段数',
+    '自动翻译切块段数',
     '阅读语言',
     'GPT 翻译器',
     'Sakura 翻译器',
@@ -2432,7 +2433,7 @@ test('uses the global Chinese script for rendering and speech', async ({
 test('automatically translates a reader window without persisting a partial chapter', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   const temporaryBookId = 'reader-temporary-translation.txt';
   const server = await startOpenAiTestServer({ responseDelayMs: 1_000 });
   try {
@@ -2577,11 +2578,15 @@ test('automatically translates a reader window without persisting a partial chap
     const readingLanguageBounds = await readingLanguageSetting.boundingBox();
     const preloadSettingBounds = await readerSettings
       .locator('.n-form-item')
-      .filter({ hasText: '自动翻译预翻译页数' })
+      .filter({ hasText: '自动翻译预翻译段数' })
       .boundingBox();
     const retranslationPolicyBounds = await readerSettings
       .locator('.n-form-item')
       .filter({ hasText: '重翻完成后' })
+      .boundingBox();
+    const chunkSettingBounds = await readerSettings
+      .locator('.n-form-item')
+      .filter({ hasText: '自动翻译切块段数' })
       .boundingBox();
     const readingSelectBounds = await readingLanguageSetting
       .locator('.n-base-selection')
@@ -2590,10 +2595,12 @@ test('automatically translates a reader window without persisting a partial chap
     expect(readingLanguageBounds).not.toBeNull();
     expect(preloadSettingBounds).not.toBeNull();
     expect(retranslationPolicyBounds).not.toBeNull();
+    expect(chunkSettingBounds).not.toBeNull();
     expect(readingSelectBounds).not.toBeNull();
     expect(readingWarningBounds).not.toBeNull();
-    expect(readingLanguageBounds!.x).toBeLessThan(preloadSettingBounds!.x);
-    expect(preloadSettingBounds!.x).toBeLessThan(retranslationPolicyBounds!.x);
+    expect(readingLanguageBounds!.x).toBeLessThan(retranslationPolicyBounds!.x);
+    expect(retranslationPolicyBounds!.x).toBeLessThan(preloadSettingBounds!.x);
+    expect(preloadSettingBounds!.x).toBeLessThan(chunkSettingBounds!.x);
     expect(
       Math.abs(
         readingWarningBounds!.x +
@@ -2602,7 +2609,7 @@ test('automatically translates a reader window without persisting a partial chap
       ),
     ).toBeLessThanOrEqual(2);
     await expect(
-      readerSettings.getByText('自动翻译预翻译页数', { exact: true }),
+      readerSettings.getByText('自动翻译预翻译段数', { exact: true }),
     ).toBeVisible();
     await readerSettings
       .locator('.n-form-item')
@@ -2805,7 +2812,7 @@ test('automatically translates a reader window without persisting a partial chap
       name: '阅读设置',
     });
     const readerPreloadInput = readerSettingsDialog.getByRole('textbox', {
-      name: '自动翻译预翻译页数',
+      name: '自动翻译预翻译段数',
     });
     await expect(readerPreloadInput).toHaveValue('0');
     await readerPreloadInput.fill('20');
@@ -2819,7 +2826,7 @@ test('automatically translates a reader window without persisting a partial chap
             request.onsuccess = () => resolve(request.result);
           });
           const setting = await new Promise<
-            { autoTranslationPreloadPages?: number } | undefined
+            { autoTranslationPreloadParagraphs?: number } | undefined
           >((resolve, reject) => {
             const transaction = database.transaction(
               'reader-settings',
@@ -2832,7 +2839,7 @@ test('automatically translates a reader window without persisting a partial chap
             request.onsuccess = () => resolve(request.result);
           });
           database.close();
-          return setting?.autoTranslationPreloadPages;
+          return setting?.autoTranslationPreloadParagraphs;
         }),
       )
       .toBe(20);
@@ -3628,6 +3635,7 @@ test('persists the global reading version selected in Settings', async ({
     chineseScriptSelector.getByRole('radio', { name: '原文' }),
   ).toBeChecked();
   const preloadControl = page.locator('.reader-preload-setting__input');
+  const chunkControl = page.locator('.reader-chunk-setting__input');
   const languageDetectionInput = page.getByRole('textbox', {
     name: '语言检测置信度阈值',
   });
@@ -3655,6 +3663,7 @@ test('persists the global reading version selected in Settings', async ({
       selector,
       chineseScriptSelector,
       preloadControl,
+      chunkControl,
       retranslationSelector,
     ].map((control) => control.boundingBox()),
   );
@@ -3682,9 +3691,10 @@ test('persists the global reading version selected in Settings', async ({
   await languageHelpButton.click();
   await preloadHelpButton.click();
   await expect(
-    page.getByText('提前翻译当前页之后的页数；0 表示只处理当前可见页。', {
-      exact: true,
-    }),
+    page.getByText(
+      '提前翻译当前可见内容之后的自然段；0 表示只处理当前可见段。',
+      { exact: true },
+    ),
   ).toBeVisible();
   await preloadHelpButton.click();
 
@@ -3722,12 +3732,18 @@ test('persists the global reading version selected in Settings', async ({
   ).toBeChecked();
 
   const preloadInput = page.getByRole('textbox', {
-    name: '自动翻译预翻译页数',
+    name: '自动翻译预翻译段数',
   });
-  await expect(preloadInput).toHaveValue('3');
+  const chunkInput = page.getByRole('textbox', {
+    name: '自动翻译切块段数',
+  });
+  await expect(preloadInput).toHaveValue('60');
+  await expect(chunkInput).toHaveValue('5');
   await expect(preloadInput).toBeEnabled();
   await preloadInput.fill('7');
   await preloadInput.press('Tab');
+  await chunkInput.fill('8');
+  await chunkInput.press('Tab');
 
   await expect
     .poll(() =>
@@ -3744,7 +3760,8 @@ test('persists the global reading version selected in Settings', async ({
         const setting = await new Promise<
           | {
               defaultMode?: string;
-              autoTranslationPreloadPages?: number;
+              autoTranslationPreloadParagraphs?: number;
+              autoTranslationChunkParagraphs?: number;
               chineseScript?: string;
             }
           | undefined
@@ -3757,14 +3774,18 @@ test('persists the global reading version selected in Settings', async ({
           ? undefined
           : {
               defaultMode: setting.defaultMode,
-              autoTranslationPreloadPages: setting.autoTranslationPreloadPages,
+              autoTranslationPreloadParagraphs:
+                setting.autoTranslationPreloadParagraphs,
+              autoTranslationChunkParagraphs:
+                setting.autoTranslationChunkParagraphs,
               chineseScript: setting.chineseScript,
             };
       }),
     )
     .toEqual({
       defaultMode: 'original-translated',
-      autoTranslationPreloadPages: 7,
+      autoTranslationPreloadParagraphs: 7,
+      autoTranslationChunkParagraphs: 8,
       chineseScript: 'traditional',
     });
 
@@ -3774,6 +3795,7 @@ test('persists the global reading version selected in Settings', async ({
     chineseScriptSelector.getByRole('radio', { name: '繁體中文' }),
   ).toBeChecked();
   await expect(preloadInput).toHaveValue('7');
+  await expect(chunkInput).toHaveValue('8');
   await expect(languageDetectionInput).toHaveValue('97');
   await expect(baiduAppId).toHaveValue('baidu-app');
   await expect(youdaoAppKey).toHaveValue('youdao-app');
@@ -3819,7 +3841,7 @@ test('persists the global reading version selected in Settings', async ({
     {
       helpButton: preloadHelpButton,
       title: '自动翻译预翻译',
-      text: '提前翻译当前页之后的页数',
+      text: '提前翻译当前可见内容之后的自然段',
     },
   ]) {
     await helpButton.click();

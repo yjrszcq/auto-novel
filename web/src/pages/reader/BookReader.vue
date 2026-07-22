@@ -102,6 +102,7 @@ import {
 import {
   applyReaderStyleOverride,
   defaultReaderSettings,
+  normalizeReaderAutoTranslationChunkParagraphs,
   normalizeReaderAutoTranslationPreloadParagraphs,
   normalizeReaderSettings,
   serializeReaderSettings,
@@ -1214,9 +1215,14 @@ const toggleQuickTheme = () => {
   settings.value.theme = isDarkReaderTheme.value ? 'light' : 'dark';
 };
 
-const updateAutoTranslationPreloadPages = (value: number | null) => {
+const updateAutoTranslationPreloadParagraphs = (value: number | null) => {
   settings.value.autoTranslationPreloadParagraphs =
     normalizeReaderAutoTranslationPreloadParagraphs(value);
+};
+
+const updateAutoTranslationChunkParagraphs = (value: number | null) => {
+  settings.value.autoTranslationChunkParagraphs =
+    normalizeReaderAutoTranslationChunkParagraphs(value);
 };
 
 const readerStyle = computed(() => ({
@@ -3985,6 +3991,7 @@ watch(
     viewportSegmentId.value,
     readerPageIndex.value,
     settings.value.autoTranslationPreloadParagraphs,
+    settings.value.autoTranslationChunkParagraphs,
   ],
   () => scheduleAutomaticTranslation(),
 );
@@ -4936,12 +4943,12 @@ onBeforeUnmount(() => {
         </div>
         <div
           v-if="requiresWholeChapterTranslation"
-          class="book-reader__settings-quarter"
+          class="book-reader__settings-quarter book-reader__settings-preload"
         >
           <n-form-item>
             <template #label>
               <span class="book-reader__settings-label">
-                自动翻译预翻译页数
+                自动翻译预翻译段数
                 <n-popover
                   v-if="isDesktopReader"
                   trigger="click"
@@ -4960,7 +4967,7 @@ onBeforeUnmount(() => {
                       <n-icon :component="InfoOutlined" />
                     </button>
                   </template>
-                  提前翻译当前页之后的页数；0 表示只处理当前可见页。
+                  提前翻译当前可见内容之后的自然段；0 表示只处理当前可见段。
                 </n-popover>
                 <button
                   v-else
@@ -4977,18 +4984,18 @@ onBeforeUnmount(() => {
             <n-input-number
               :value="settings.autoTranslationPreloadParagraphs"
               :min="0"
-              :max="20"
+              :max="1000"
               :precision="0"
               :input-props="{
-                'aria-label': '自动翻译预翻译页数',
+                'aria-label': '自动翻译预翻译段数',
               }"
-              @update:value="updateAutoTranslationPreloadPages"
+              @update:value="updateAutoTranslationPreloadParagraphs"
             />
           </n-form-item>
         </div>
         <div
           v-if="requiresWholeChapterTranslation"
-          class="book-reader__settings-quarter"
+          class="book-reader__settings-quarter book-reader__settings-retranslation"
         >
           <n-form-item label="重翻完成后">
             <n-select
@@ -4998,6 +5005,23 @@ onBeforeUnmount(() => {
                 { label: '替换原有翻译', value: 'replace' },
                 { label: '不替换原有翻译', value: 'keep' },
               ]"
+            />
+          </n-form-item>
+        </div>
+        <div
+          v-if="requiresWholeChapterTranslation"
+          class="book-reader__settings-quarter book-reader__settings-chunk"
+        >
+          <n-form-item label="自动翻译切块段数">
+            <n-input-number
+              :value="settings.autoTranslationChunkParagraphs"
+              :min="1"
+              :max="50"
+              :precision="0"
+              :input-props="{
+                'aria-label': '自动翻译切块段数',
+              }"
+              @update:value="updateAutoTranslationChunkParagraphs"
             />
           </n-form-item>
         </div>
@@ -5035,7 +5059,7 @@ onBeforeUnmount(() => {
       class="book-reader__mobile-preload-help"
       role="tooltip"
     >
-      提前翻译当前页之后的页数；0 表示只处理当前可见页。
+      提前翻译当前可见内容之后的自然段；0 表示只处理当前可见段。
     </div>
   </n-config-provider>
 </template>
@@ -5440,13 +5464,28 @@ onBeforeUnmount(() => {
 }
 
 .book-reader__settings-half,
-.book-reader__settings-reading-language,
 .book-reader__settings-translator {
   grid-column: span 2;
 }
 
-.book-reader__settings-quarter {
-  grid-column: span 1;
+.book-reader__settings-reading-language {
+  grid-column: 1;
+  grid-row: 4;
+}
+
+.book-reader__settings-retranslation {
+  grid-column: 2;
+  grid-row: 4;
+}
+
+.book-reader__settings-preload {
+  grid-column: 3;
+  grid-row: 4;
+}
+
+.book-reader__settings-chunk {
+  grid-column: 4;
+  grid-row: 4;
 }
 
 .book-reader__settings-label,
@@ -5795,6 +5834,11 @@ onBeforeUnmount(() => {
   .book-reader__settings-reading-language,
   .book-reader__settings-translator {
     grid-column: 1 / -1;
+  }
+
+  .book-reader__settings-reading-language,
+  .book-reader__settings-quarter {
+    grid-row: auto;
   }
 }
 </style>
