@@ -68,6 +68,7 @@ const sakuraWorkerOptions = computed(() =>
   })),
 );
 const showTranslatorConfigModal = ref(false);
+const showGlossaryTransferModal = ref(false);
 const sourceCounts = shallowRef(new Map<string, number>());
 const extractionLoading = ref(false);
 const extractionError = ref('');
@@ -637,40 +638,14 @@ onBeforeUnmount(() => {
           @action="showTranslatorConfigModal = true"
         />
         <c-button
-          class="glossary-action glossary-action--import"
-          label="导入术语表"
-          :disabled="extractionLoading || translating || applying"
+          class="glossary-action glossary-action--transfer"
+          label="术语表"
+          :type="showGlossaryTransferModal ? 'primary' : 'default'"
+          :aria-expanded="showGlossaryTransferModal"
+          aria-haspopup="dialog"
           size="small"
           :round="false"
-          @action="glossaryImportInput?.click()"
-        />
-        <c-button
-          class="glossary-action glossary-action--copy"
-          label="复制术语表"
-          :disabled="
-            extractionLoading || translating || activeCandidates.length === 0
-          "
-          size="small"
-          :round="false"
-          @action="copyGlossary"
-        />
-        <c-button
-          class="glossary-action glossary-action--download"
-          label="下载术语表"
-          :disabled="
-            extractionLoading || translating || activeCandidates.length === 0
-          "
-          size="small"
-          :round="false"
-          @action="downloadGlossary"
-        />
-        <input
-          ref="glossaryImportInput"
-          class="glossary-import-input"
-          type="file"
-          accept=".txt,.json,text/plain,application/json"
-          aria-label="选择要导入的术语表文件"
-          @change="importGlossary"
+          @action="showGlossaryTransferModal = true"
         />
       </n-flex>
     </div>
@@ -789,6 +764,48 @@ onBeforeUnmount(() => {
       "
     />
   </n-flex>
+
+  <c-modal
+    v-model:show="showGlossaryTransferModal"
+    title="术语表"
+    style="width: min(440px, calc(100vw - 16px))"
+  >
+    <n-flex align="center" class="glossary-transfer-actions">
+      <c-button
+        label="导入术语表"
+        :disabled="extractionLoading || translating || applying"
+        size="small"
+        :round="false"
+        @action="glossaryImportInput?.click()"
+      />
+      <c-button
+        label="复制术语表"
+        :disabled="
+          extractionLoading || translating || activeCandidates.length === 0
+        "
+        size="small"
+        :round="false"
+        @action="copyGlossary"
+      />
+      <c-button
+        label="下载术语表"
+        :disabled="
+          extractionLoading || translating || activeCandidates.length === 0
+        "
+        size="small"
+        :round="false"
+        @action="downloadGlossary"
+      />
+      <input
+        ref="glossaryImportInput"
+        class="glossary-import-input"
+        type="file"
+        accept=".txt,.json,text/plain,application/json"
+        aria-label="选择要导入的术语表文件"
+        @change="importGlossary"
+      />
+    </n-flex>
+  </c-modal>
 
   <c-modal
     v-model:show="showTranslatorConfigModal"
@@ -931,6 +948,10 @@ onBeforeUnmount(() => {
 
 .glossary-import-input {
   display: none;
+}
+
+.glossary-transfer-actions {
+  flex-wrap: wrap;
 }
 
 .glossary-empty-state {
@@ -1102,44 +1123,30 @@ onBeforeUnmount(() => {
     grid-column: 3;
   }
 
-  .glossary-action--import {
+  .glossary-action--transfer {
     grid-row: 2;
     grid-column: 1;
     justify-self: start;
-  }
-
-  .glossary-action--copy {
-    grid-row: 2;
-    grid-column: 2 / span 2;
-    justify-self: center;
-  }
-
-  .glossary-action--download {
-    grid-row: 2;
-    grid-column: 4;
-    justify-self: end;
   }
 
   .glossary-action--select {
-    grid-row: 3;
-    grid-column: 1;
-    justify-self: start;
+    grid-row: 2;
+    grid-column: 2;
   }
 
   .glossary-action--remove {
-    grid-row: 3;
-    grid-column: 2 / span 2;
-    justify-self: center;
+    grid-row: 2;
+    grid-column: 3;
   }
 
   .glossary-action--undo {
-    grid-row: 3;
+    grid-row: 2;
     grid-column: 4;
     justify-self: end;
   }
 
   .glossary-action--cancel {
-    grid-row: 4;
+    grid-row: 3;
     grid-column: 1;
   }
 }

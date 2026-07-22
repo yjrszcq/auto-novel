@@ -5092,7 +5092,20 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   );
   await expect(
     firstMobileWorker.locator('.pool-worker__endpoint'),
-  ).toHaveAttribute('href', 'http://127.0.0.1:1');
+  ).not.toHaveAttribute('href');
+  expect(
+    await firstMobileWorker.locator('.drag-trigger').evaluate((handle) => {
+      const thing = handle.closest('.n-thing');
+      if (thing === null) return Number.POSITIVE_INFINITY;
+      const thingBounds = thing.getBoundingClientRect();
+      const handleBounds = handle.getBoundingClientRect();
+      return Math.abs(
+        handleBounds.top +
+          handleBounds.height / 2 -
+          (thingBounds.top + thingBounds.height / 2),
+      );
+    }),
+  ).toBeLessThanOrEqual(1);
   const firstMobileWorkerActions = firstMobileWorker.locator(
     '.pool-worker__actions',
   );

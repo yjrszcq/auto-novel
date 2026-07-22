@@ -531,11 +531,24 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: /^(百度|有道|GPT|Sakura) 翻译$/ }),
   ).toHaveCount(0);
-  const importButton = page.getByRole('button', {
-    name: '导入术语表',
+  const glossaryTransferButton = page.getByRole('button', {
+    name: '术语表',
     exact: true,
   });
-  await expect(importButton).toBeVisible();
+  await expect(glossaryTransferButton).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '导入术语表', exact: true }),
+  ).toHaveCount(0);
+  await glossaryTransferButton.click();
+  const glossaryTransferModal = page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('heading', { name: '术语表' }) });
+  await expect(glossaryTransferModal).toBeVisible();
+  for (const name of ['导入术语表', '复制术语表', '下载术语表']) {
+    await expect(
+      glossaryTransferModal.getByRole('button', { name, exact: true }),
+    ).toBeVisible();
+  }
   const importFileInput = page.getByLabel('选择要导入的术语表文件');
   await importFileInput.setInputFiles({
     name: 'imported-glossary.txt',
@@ -545,6 +558,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(
     page.getByText('已导入 2 个词语', { exact: true }),
   ).toBeVisible();
+  await glossaryTransferModal.getByRole('button', { name: 'close' }).click();
   await expect(
     page
       .getByRole('row')
@@ -570,9 +584,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     '扫描',
     '翻译',
     '翻译器配置',
-    '导入术语表',
-    '复制术语表',
-    '下载术语表',
+    '术语表',
     '全选当前',
     '移除所选',
     '撤销删除',
@@ -594,8 +606,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   expect(mobileActionButtonBounds[1]!.y).toBe(mobileActionButtonBounds[2]!.y);
   expect(mobileActionButtonBounds[3]!.y).toBe(mobileActionButtonBounds[4]!.y);
   expect(mobileActionButtonBounds[4]!.y).toBe(mobileActionButtonBounds[5]!.y);
-  expect(mobileActionButtonBounds[6]!.y).toBe(mobileActionButtonBounds[7]!.y);
-  expect(mobileActionButtonBounds[7]!.y).toBe(mobileActionButtonBounds[8]!.y);
+  expect(mobileActionButtonBounds[5]!.y).toBe(mobileActionButtonBounds[6]!.y);
   expect(
     Math.abs(
       mobileActionButtonBounds[0]!.x - glossaryActionsBoundsAfterImport!.x,
@@ -768,7 +779,10 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   expect(tableBounds!.x + tableBounds!.width).toBeLessThanOrEqual(390);
 
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: '下载术语表', exact: true }).click();
+  await glossaryTransferButton.click();
+  await glossaryTransferModal
+    .getByRole('button', { name: '下载术语表', exact: true })
+    .click();
   expect((await download).suggestedFilename()).toBe('工具箱术语表.txt');
 });
 

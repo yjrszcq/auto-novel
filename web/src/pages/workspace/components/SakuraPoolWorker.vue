@@ -82,14 +82,9 @@ const testWorker = async () => {
             {{ worker.segLength }} / {{ worker.prevSegLength }}
           </n-text>
         </div>
-        <n-a
-          class="pool-worker__endpoint"
-          :href="worker.endpoint"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <n-text depth="3" class="pool-worker__endpoint">
           {{ worker.endpoint }}
-        </n-a>
+        </n-text>
       </div>
     </template>
 
@@ -182,6 +177,13 @@ const testWorker = async () => {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+:deep(.n-thing-avatar) {
+  display: flex;
+  align-self: center;
+  align-items: center;
+  margin-top: 0;
 }
 
 @media (max-width: 639px) {
