@@ -5132,7 +5132,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   ).toBeLessThan(0.1);
   expect(
     workerActionBounds.every(
-      (bounds) => bounds!.width === 32 && bounds!.height === 32,
+      (bounds) => bounds!.width < 32 && bounds!.height < 32,
     ),
   ).toBe(true);
 

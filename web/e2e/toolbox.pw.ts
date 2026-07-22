@@ -566,6 +566,36 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     glossaryActionsBoundsAfterImport!.x +
       glossaryActionsBoundsAfterImport!.width,
   ).toBeLessThanOrEqual(390);
+  const mobileActionButtons = [
+    '扫描',
+    '翻译',
+    '翻译器配置',
+    '导入术语表',
+    '复制术语表',
+    '下载术语表',
+    '全选当前',
+    '移除所选',
+    '撤销删除',
+  ].map((name) => page.getByRole('button', { name, exact: true }));
+  const mobileActionButtonBounds = await Promise.all(
+    mobileActionButtons.map((button) => button.boundingBox()),
+  );
+  expect(
+    mobileActionButtonBounds.every(
+      (bounds) =>
+        bounds !== null &&
+        bounds.x >= glossaryActionsBoundsAfterImport!.x &&
+        bounds.x + bounds.width <=
+          glossaryActionsBoundsAfterImport!.x +
+            glossaryActionsBoundsAfterImport!.width,
+    ),
+  ).toBe(true);
+  expect(mobileActionButtonBounds[0]!.y).toBe(mobileActionButtonBounds[1]!.y);
+  expect(mobileActionButtonBounds[1]!.y).toBe(mobileActionButtonBounds[2]!.y);
+  expect(mobileActionButtonBounds[3]!.y).toBe(mobileActionButtonBounds[4]!.y);
+  expect(mobileActionButtonBounds[4]!.y).toBe(mobileActionButtonBounds[5]!.y);
+  expect(mobileActionButtonBounds[6]!.y).toBe(mobileActionButtonBounds[7]!.y);
+  expect(mobileActionButtonBounds[7]!.y).toBe(mobileActionButtonBounds[8]!.y);
   await expect(translatorConfigButton).toHaveAttribute(
     'aria-expanded',
     'false',

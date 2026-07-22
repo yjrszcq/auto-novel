@@ -191,15 +191,9 @@ const testWorker = async () => {
 
   .pool-worker__actions {
     display: grid !important;
-    grid-template-columns: repeat(2, 32px);
-    grid-auto-rows: 32px;
+    grid-template-columns: repeat(2, max-content);
     justify-content: end !important;
     gap: 6px !important;
-  }
-
-  .pool-worker__actions > * {
-    width: 32px;
-    height: 32px;
   }
 }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { DeleteOutlineOutlined } from '@vicons/material';
+import { useMediaQuery } from '@vueuse/core';
 
 import type { TranslatorConfig } from '@/domain/translate';
 import { Translator } from '@/domain/translate';
@@ -40,6 +41,7 @@ const emit = defineEmits<{
 }>();
 
 const message = useMessage();
+const isMobile = useMediaQuery('(max-width: 639px)');
 const gptWorkspace = useGptWorkspaceStore().ref;
 const sakuraWorkspace = useSakuraWorkspaceStore().ref;
 const { setting } = storeToRefs(useSettingStore());
@@ -516,6 +518,8 @@ onBeforeUnmount(() => {
           </span>
         </n-text>
         <c-button
+          v-if="!isMobile"
+          class="glossary-toolbar__desktop-action"
           :label="extractionLoading ? '扫描中' : '扫描'"
           :disabled="
             extractionLoading ||
@@ -529,6 +533,8 @@ onBeforeUnmount(() => {
           @action="scanTerms"
         />
         <c-button
+          v-if="!isMobile"
+          class="glossary-toolbar__desktop-action"
           label="翻译器配置"
           :type="showTranslatorConfigModal ? 'primary' : 'default'"
           :aria-expanded="showTranslatorConfigModal"
@@ -544,6 +550,7 @@ onBeforeUnmount(() => {
       <n-flex align="center" class="glossary-selection-actions">
         <c-button
           v-if="applyLabel"
+          class="glossary-action glossary-action--apply"
           :label="applyLabel"
           :disabled="
             !scanCompleted || extractionLoading || translating || applying
@@ -555,6 +562,7 @@ onBeforeUnmount(() => {
           @action="applyGlossary"
         />
         <c-button
+          class="glossary-action glossary-action--select"
           :label="allVisibleSelected ? '取消全选' : '全选当前'"
           :disabled="visibleCandidates.length === 0"
           size="small"
@@ -562,6 +570,7 @@ onBeforeUnmount(() => {
           @action="toggleSelectAll"
         />
         <c-button
+          class="glossary-action glossary-action--remove"
           label="移除所选"
           :disabled="selectedWords.length === 0"
           size="small"
@@ -569,6 +578,7 @@ onBeforeUnmount(() => {
           @action="removeWords(selectedWords)"
         />
         <c-button
+          class="glossary-action glossary-action--undo"
           label="撤销删除"
           :disabled="deletionHistory.length === 0"
           size="small"
@@ -582,6 +592,22 @@ onBeforeUnmount(() => {
 
       <n-flex align="center" class="glossary-utility-actions">
         <c-button
+          v-if="isMobile"
+          class="glossary-action glossary-action--scan"
+          :label="extractionLoading ? '扫描中' : '扫描'"
+          :disabled="
+            extractionLoading ||
+            translating ||
+            applying ||
+            (files.length === 0 && loadFiles === undefined)
+          "
+          :loading="extractionLoading"
+          size="small"
+          :round="false"
+          @action="scanTerms"
+        />
+        <c-button
+          class="glossary-action glossary-action--translate"
           label="翻译"
           :disabled="translating || activeCandidates.length === 0"
           size="small"
@@ -590,12 +616,25 @@ onBeforeUnmount(() => {
         />
         <c-button
           v-if="translating"
+          class="glossary-action glossary-action--cancel"
           label="取消翻译"
           size="small"
           :round="false"
           @action="cancelTranslation"
         />
         <c-button
+          v-if="isMobile"
+          class="glossary-action glossary-action--config"
+          label="翻译器配置"
+          :type="showTranslatorConfigModal ? 'primary' : 'default'"
+          :aria-expanded="showTranslatorConfigModal"
+          aria-haspopup="dialog"
+          size="small"
+          :round="false"
+          @action="showTranslatorConfigModal = true"
+        />
+        <c-button
+          class="glossary-action glossary-action--import"
           label="导入术语表"
           :disabled="extractionLoading || translating || applying"
           size="small"
@@ -603,6 +642,7 @@ onBeforeUnmount(() => {
           @action="glossaryImportInput?.click()"
         />
         <c-button
+          class="glossary-action glossary-action--copy"
           label="复制术语表"
           :disabled="
             extractionLoading || translating || activeCandidates.length === 0
@@ -612,6 +652,7 @@ onBeforeUnmount(() => {
           @action="copyGlossary"
         />
         <c-button
+          class="glossary-action glossary-action--download"
           label="下载术语表"
           :disabled="
             extractionLoading || translating || activeCandidates.length === 0
@@ -880,6 +921,11 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
+.glossary-action--scan,
+.glossary-action--config {
+  display: none;
+}
+
 .glossary-import-input {
   display: none;
 }
@@ -969,6 +1015,10 @@ onBeforeUnmount(() => {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  .glossary-toolbar__desktop-action {
+    display: none;
+  }
+
   .glossary-toolbar__minimum-input {
     width: 100px;
   }
@@ -998,18 +1048,75 @@ onBeforeUnmount(() => {
   }
 
   .glossary-actions {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(4, max-content);
+    justify-content: start;
     gap: 8px;
   }
 
   .glossary-selection-actions,
   .glossary-utility-actions {
-    width: 100%;
-    align-items: stretch;
+    display: contents !important;
   }
 
-  .glossary-utility-actions {
-    justify-content: flex-start;
+  .glossary-action--scan,
+  .glossary-action--config {
+    display: inline-flex;
+  }
+
+  .glossary-action--apply {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .glossary-action--scan {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .glossary-action--translate {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .glossary-action--config {
+    grid-row: 1;
+    grid-column: 4;
+  }
+
+  .glossary-action--import {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .glossary-action--copy {
+    grid-row: 2;
+    grid-column: 2 / span 2;
+  }
+
+  .glossary-action--download {
+    grid-row: 2;
+    grid-column: 4;
+  }
+
+  .glossary-action--select {
+    grid-row: 3;
+    grid-column: 1;
+  }
+
+  .glossary-action--remove {
+    grid-row: 3;
+    grid-column: 2 / span 2;
+  }
+
+  .glossary-action--undo {
+    grid-row: 3;
+    grid-column: 4;
+  }
+
+  .glossary-action--cancel {
+    grid-row: 4;
+    grid-column: 1;
   }
 }
 </style>
