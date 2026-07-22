@@ -134,7 +134,6 @@ corepack pnpm test:runtime-smoke http://127.0.0.1:8011 docker
 `html/` 中的 HTML 文件也可直接编辑，用于显示应用内说明：
 
 - `html/info.html`：首页公告。
-- `html/info-bookshelf.html`：书架页说明。
 - `html/info-gpt.html`：GPT 工作区说明。
 - `html/info-sakura.html`：Sakura 工作区说明。
 

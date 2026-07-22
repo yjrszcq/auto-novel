@@ -3503,7 +3503,6 @@ test('uses a configured default cover for a local book without one', async ({
     page.getByRole('button', { name: '前往工作区', exact: true }),
   ).toHaveCount(0);
   await expect(page.getByPlaceholder('输入书名，搜索书架')).toBeVisible();
-  await expect(page.locator('.bookshelf-page__notice')).toHaveCount(0);
   await expect(page.locator('.bookshelf-page h1')).toHaveCount(0);
   const bookshelfLayout = await page.evaluate(() => {
     const bounds = (selector: string) => {

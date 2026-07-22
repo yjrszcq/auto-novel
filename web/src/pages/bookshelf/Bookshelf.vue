@@ -26,18 +26,15 @@ import BookCard from './components/BookCard.vue';
 import { useLocalVolumeManager } from '@/pages/workspace/LocalVolumeManager';
 import { useLocalVolumeStore, useSettingStore } from '@/stores';
 import { downloadFile } from '@/util';
-import { useRuntimePanel } from '@/util/useRuntimePanel';
 
 const props = withDefaults(
   defineProps<{
     embedded?: boolean;
     hideSearch?: boolean;
-    hideNotice?: boolean;
   }>(),
   {
     embedded: false,
     hideSearch: false,
-    hideNotice: false,
   },
 );
 const query = defineModel<string>('query', { default: '' });
@@ -66,7 +63,6 @@ const message = useMessage();
 const localVolumeManager = useLocalVolumeManager();
 const settingStore = useSettingStore();
 const { setting } = storeToRefs(settingStore);
-const { html: infoPanelHtml } = useRuntimePanel('html/info-bookshelf.html');
 
 const sortOptions: { label: string; value: BookshelfSort }[] = [
   { label: '最近阅读', value: 'recent-read' },
@@ -502,13 +498,6 @@ onMounted(reload);
           :consistent-menu-width="false"
         />
       </div>
-      <bulletin
-        v-if="!props.hideNotice && infoPanelHtml"
-        class="bookshelf-page__notice"
-      >
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div v-html="infoPanelHtml" />
-      </bulletin>
     </header>
 
     <n-skeleton v-if="loading" text :repeat="8" />
@@ -799,10 +788,6 @@ onMounted(reload);
 
 .bookshelf-page h1 {
   margin: 0;
-}
-
-.bookshelf-page__notice {
-  grid-column: 1 / -1;
 }
 
 .bookshelf-toolbar {

@@ -101,12 +101,7 @@ const handleSearch = () => {
       <div v-html="infoPanelHtml" />
     </bulletin>
 
-    <BookshelfCollection
-      v-model:query="keyword"
-      embedded
-      hide-search
-      hide-notice
-    />
+    <BookshelfCollection v-model:query="keyword" embedded hide-search />
   </div>
 </template>
 
