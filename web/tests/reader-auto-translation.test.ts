@@ -52,14 +52,14 @@ describe('reader automatic translator selection', () => {
 });
 
 describe('reader automatic translation window', () => {
-  it('prioritizes visible text and plans forward across chapters by page capacity', () => {
+  it('prioritizes visible text and plans an exact count across chapters', () => {
     const planned = planReaderAutomaticTranslationWindow({
       chapters: [
         chapter('0', ['甲甲', '乙乙']),
         chapter('1', ['丙丙', '丁丁']),
       ],
       visible: [{ chapterId: '0', segmentId: '0-1' }],
-      preloadPages: 2,
+      preloadParagraphs: 2,
     });
 
     expect(planned.current.map(({ segmentId }) => segmentId)).toEqual(['0-1']);
@@ -67,14 +67,14 @@ describe('reader automatic translation window', () => {
       '1-0',
       '1-1',
     ]);
-    expect(planned.prefetchCharacterBudget).toBe(4);
+    expect(planned.prefetchParagraphLimit).toBe(2);
   });
 
   it('ignores blank source lines and clamps invalid pretranslation counts', () => {
     const planned = planReaderAutomaticTranslationWindow({
       chapters: [chapter('0', ['甲', '', '乙', '丙'])],
       visible: [{ chapterId: '0', segmentId: '0-0' }],
-      preloadPages: 100,
+      preloadParagraphs: 100,
     });
 
     expect(planned.all.map(({ segmentId }) => segmentId)).toEqual([
@@ -82,7 +82,19 @@ describe('reader automatic translation window', () => {
       '0-2',
       '0-3',
     ]);
-    expect(planned.prefetchCharacterBudget).toBe(20);
+    expect(planned.prefetchParagraphLimit).toBe(100);
+  });
+
+  it('allows visible-only planning with zero pretranslation paragraphs', () => {
+    const planned = planReaderAutomaticTranslationWindow({
+      chapters: [chapter('0', ['甲', '乙', '丙'])],
+      visible: [{ chapterId: '0', segmentId: '0-1' }],
+      preloadParagraphs: 0,
+    });
+
+    expect(planned.current.map(({ segmentId }) => segmentId)).toEqual(['0-1']);
+    expect(planned.prefetch).toEqual([]);
+    expect(planned.all.map(({ segmentId }) => segmentId)).toEqual(['0-1']);
   });
 });
 

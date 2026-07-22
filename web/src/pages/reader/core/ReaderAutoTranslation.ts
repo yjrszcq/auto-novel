@@ -34,8 +34,7 @@ export interface ReaderAutomaticTranslationWindow {
   current: ReaderAutomaticTranslationTarget[];
   prefetch: ReaderAutomaticTranslationTarget[];
   all: ReaderAutomaticTranslationTarget[];
-  visibleCharacterCount: number;
-  prefetchCharacterBudget: number;
+  prefetchParagraphLimit: number;
 }
 
 export const resolveNextReaderRetranslationChapter = (
@@ -180,19 +179,18 @@ const sameSelection = (
 const sourceLength = (text: string) => text.trim().length;
 
 /**
- * Plans visible work first, then enough following source text to approximate
- * the configured number of viewport-sized pages. The caller controls which
- * chapters are available, so the same planner works for paginated and
- * continuously-scrolled chapter windows.
+ * Plans visible work first, then an exact number of following non-empty
+ * paragraphs. The caller controls which chapters are available, so planning
+ * can continue across chapter boundaries without joining translation chunks.
  */
 export const planReaderAutomaticTranslationWindow = ({
   chapters,
   visible,
-  preloadPages,
+  preloadParagraphs,
 }: {
   chapters: ReaderChapterContent[];
   visible: Array<{ chapterId: string; segmentId: string }>;
-  preloadPages: number;
+  preloadParagraphs: number;
 }): ReaderAutomaticTranslationWindow => {
   const ordered = chapters.flatMap((chapter) =>
     chapter.segments.flatMap((segment) =>
@@ -213,37 +211,26 @@ export const planReaderAutomaticTranslationWindow = ({
     visibleKeys.has(targetKey(target)) ? [index] : [],
   );
   const current = visibleIndexes.map((index) => ordered[index]!);
-  const visibleCharacterCount = Math.max(
-    1,
-    current.reduce((total, target) => total + sourceLength(target.original), 0),
-  );
-  const normalizedPreloadPages = Math.max(
+  const prefetchParagraphLimit = Math.max(
     0,
-    Math.min(Number.isFinite(preloadPages) ? Math.floor(preloadPages) : 0, 20),
+    Math.min(
+      Number.isFinite(preloadParagraphs) ? Math.floor(preloadParagraphs) : 0,
+      1_000,
+    ),
   );
-  const prefetchCharacterBudget =
-    visibleCharacterCount * normalizedPreloadPages;
-  const prefetch: ReaderAutomaticTranslationTarget[] = [];
-  let prefetchedCharacters = 0;
   const firstPrefetchIndex =
     visibleIndexes.length === 0
       ? ordered.length
       : Math.max(...visibleIndexes) + 1;
-  for (
-    let index = firstPrefetchIndex;
-    index < ordered.length && prefetchedCharacters < prefetchCharacterBudget;
-    index += 1
-  ) {
-    const target = ordered[index]!;
-    prefetch.push(target);
-    prefetchedCharacters += sourceLength(target.original);
-  }
+  const prefetch = ordered.slice(
+    firstPrefetchIndex,
+    firstPrefetchIndex + prefetchParagraphLimit,
+  );
   return {
     current,
     prefetch,
     all: [...current, ...prefetch],
-    visibleCharacterCount,
-    prefetchCharacterBudget,
+    prefetchParagraphLimit,
   };
 };
 

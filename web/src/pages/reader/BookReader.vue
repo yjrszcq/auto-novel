@@ -2340,14 +2340,10 @@ const collectAutomaticTranslationChapters = async (
     const planned = planReaderAutomaticTranslationWindow({
       chapters: [...chapters.values()],
       visible,
-      preloadPages: settings.value.autoTranslationPreloadParagraphs,
+      preloadParagraphs: settings.value.autoTranslationPreloadParagraphs,
     });
-    const prefetchedCharacters = planned.prefetch.reduce(
-      (total, target) => total + target.original.trim().length,
-      0,
-    );
     if (
-      prefetchedCharacters >= planned.prefetchCharacterBudget ||
+      planned.prefetch.length >= planned.prefetchParagraphLimit ||
       nextIndex >= ready.chapters.length
     ) {
       break;
@@ -2418,11 +2414,7 @@ const runAutomaticTranslationOnce = async () => {
       current: targets,
       prefetch: [],
       all: targets,
-      visibleCharacterCount: targets.reduce(
-        (total, target) => total + target.original.trim().length,
-        0,
-      ),
-      prefetchCharacterBudget: 0,
+      prefetchParagraphLimit: 0,
     };
   } else {
     const ready = result.value;
@@ -2434,7 +2426,7 @@ const runAutomaticTranslationOnce = async () => {
     planned = planReaderAutomaticTranslationWindow({
       chapters,
       visible,
-      preloadPages: settings.value.autoTranslationPreloadParagraphs,
+      preloadParagraphs: settings.value.autoTranslationPreloadParagraphs,
     });
     const visibleChapterIndexes = visible.flatMap(({ chapterId }) => {
       const index = ready.chapters.findIndex(({ id }) => id === chapterId);
@@ -2470,12 +2462,11 @@ const runAutomaticTranslationOnce = async () => {
         ),
       );
       const continuationTargets: typeof planned.all = [];
-      const continuationCharacterBudget = Math.max(
+      const continuationParagraphLimit = Math.max(
         1,
-        planned.visibleCharacterCount,
-        planned.prefetchCharacterBudget,
+        planned.current.length,
+        planned.prefetchParagraphLimit,
       );
-      let continuationCharacters = 0;
       for (const segment of continuationChapter.segments) {
         const key = temporaryTranslationKey(
           continuationChapter.chapterId,
@@ -2499,8 +2490,7 @@ const runAutomaticTranslationOnce = async () => {
           segmentIndex: segment.index,
           original: segment.original,
         });
-        continuationCharacters += sourceLength;
-        if (continuationCharacters >= continuationCharacterBudget) break;
+        if (continuationTargets.length >= continuationParagraphLimit) break;
       }
       planned = {
         ...planned,
