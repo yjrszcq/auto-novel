@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyReaderStyleOverride,
   defaultReaderSettings,
-  normalizeReaderAutoTranslationPreloadPages,
+  normalizeReaderAutoTranslationChunkParagraphs,
+  normalizeReaderAutoTranslationPreloadParagraphs,
   normalizeReaderChineseScript,
   normalizeReaderRetranslationPolicy,
   normalizeReaderSettings,
@@ -16,7 +17,8 @@ describe('reader settings', () => {
     expect(normalizeReaderSettings(undefined)).toEqual(defaultReaderSettings);
     expect(defaultReaderSettings.defaultMode).toBe('translated');
     expect(defaultReaderSettings.flow).toBe('auto');
-    expect(defaultReaderSettings.autoTranslationPreloadPages).toBe(3);
+    expect(defaultReaderSettings.autoTranslationPreloadParagraphs).toBe(60);
+    expect(defaultReaderSettings.autoTranslationChunkParagraphs).toBe(5);
     expect(defaultReaderSettings.retranslationPolicy).toBe('ask');
     expect(defaultReaderSettings.chineseScript).toBe('none');
   });
@@ -42,21 +44,46 @@ describe('reader settings', () => {
     ).toBe('ask');
   });
 
-  it('normalizes automatic translation preloading to whole pages', () => {
-    expect(normalizeReaderAutoTranslationPreloadPages(null)).toBe(3);
-    expect(normalizeReaderAutoTranslationPreloadPages(7.8)).toBe(7);
+  it('normalizes automatic translation preloading to whole paragraphs', () => {
+    expect(normalizeReaderAutoTranslationPreloadParagraphs(null)).toBe(60);
+    expect(normalizeReaderAutoTranslationPreloadParagraphs(77.8)).toBe(77);
     expect(
-      normalizeReaderSettings({ autoTranslationPreloadPages: 4.9 })
-        .autoTranslationPreloadPages,
-    ).toBe(4);
+      normalizeReaderSettings({ autoTranslationPreloadParagraphs: 84.9 })
+        .autoTranslationPreloadParagraphs,
+    ).toBe(84);
     expect(
-      normalizeReaderSettings({ autoTranslationPreloadPages: -1 })
-        .autoTranslationPreloadPages,
+      normalizeReaderSettings({ autoTranslationPreloadParagraphs: -1 })
+        .autoTranslationPreloadParagraphs,
     ).toBe(0);
     expect(
-      normalizeReaderSettings({ autoTranslationPreloadPages: 99 })
-        .autoTranslationPreloadPages,
-    ).toBe(20);
+      normalizeReaderSettings({ autoTranslationPreloadParagraphs: 9_999 })
+        .autoTranslationPreloadParagraphs,
+    ).toBe(1_000);
+  });
+
+  it('normalizes chunk size and migrates the old page setting', () => {
+    expect(normalizeReaderAutoTranslationChunkParagraphs(null)).toBe(5);
+    expect(normalizeReaderAutoTranslationChunkParagraphs(8.9)).toBe(8);
+    expect(normalizeReaderAutoTranslationChunkParagraphs(0)).toBe(1);
+    expect(normalizeReaderAutoTranslationChunkParagraphs(99)).toBe(50);
+    expect(
+      normalizeReaderSettings({ autoTranslationPreloadPages: 4 })
+        .autoTranslationPreloadParagraphs,
+    ).toBe(80);
+    expect(
+      normalizeReaderSettings({
+        autoTranslationPreloadPages: 4,
+        autoTranslationPreloadParagraphs: 75,
+      }).autoTranslationPreloadParagraphs,
+    ).toBe(75);
+
+    const legacy = {
+      ...defaultReaderSettings,
+      autoTranslationPreloadPages: 3,
+    };
+    expect(serializeReaderSettings(legacy)).not.toHaveProperty(
+      'autoTranslationPreloadPages',
+    );
   });
 
   it('normalizes partial records and clamps unsafe values', () => {

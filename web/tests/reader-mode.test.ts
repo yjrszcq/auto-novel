@@ -18,7 +18,8 @@ const settings: ReaderSettingsRecord = {
   id: 'default',
   defaultMode: 'translated',
   translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
-  autoTranslationPreloadPages: 3,
+  autoTranslationPreloadParagraphs: 60,
+  autoTranslationChunkParagraphs: 5,
   retranslationPolicy: 'ask',
   updatedAt: 1,
 };

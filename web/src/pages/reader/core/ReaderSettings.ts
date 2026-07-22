@@ -8,7 +8,8 @@ export const defaultReaderSettings: ReaderSettingsRecord = {
   id: 'default',
   defaultMode: 'translated',
   translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
-  autoTranslationPreloadPages: 3,
+  autoTranslationPreloadParagraphs: 60,
+  autoTranslationChunkParagraphs: 5,
   retranslationPolicy: 'ask',
   chineseScript: 'none',
   fontSize: 18,
@@ -20,7 +21,7 @@ export const defaultReaderSettings: ReaderSettingsRecord = {
   updatedAt: 0,
 };
 
-export const normalizeReaderAutoTranslationPreloadPages = (
+export const normalizeReaderAutoTranslationPreloadParagraphs = (
   value: number | null | undefined,
 ) =>
   Math.max(
@@ -28,8 +29,21 @@ export const normalizeReaderAutoTranslationPreloadPages = (
     Math.min(
       Number.isFinite(value)
         ? Math.floor(value!)
-        : defaultReaderSettings.autoTranslationPreloadPages,
-      20,
+        : defaultReaderSettings.autoTranslationPreloadParagraphs,
+      1_000,
+    ),
+  );
+
+export const normalizeReaderAutoTranslationChunkParagraphs = (
+  value: number | null | undefined,
+) =>
+  Math.max(
+    1,
+    Math.min(
+      Number.isFinite(value)
+        ? Math.floor(value!)
+        : defaultReaderSettings.autoTranslationChunkParagraphs,
+      50,
     ),
   );
 
@@ -43,37 +57,59 @@ export const normalizeReaderChineseScript = (
 ): ReaderSettingsRecord['chineseScript'] =>
   value === 'simplified' || value === 'traditional' ? value : 'none';
 
+type LegacyReaderSettings = Partial<ReaderSettingsRecord> & {
+  autoTranslationPreloadPages?: number;
+};
+
 export const normalizeReaderSettings = (
-  value: Partial<ReaderSettingsRecord> | undefined,
-): ReaderSettingsRecord => ({
-  ...defaultReaderSettings,
-  ...value,
-  id: 'default',
-  defaultMode: value?.defaultMode ?? defaultReaderSettings.defaultMode,
-  autoTranslationPreloadPages: normalizeReaderAutoTranslationPreloadPages(
-    value?.autoTranslationPreloadPages,
-  ),
-  retranslationPolicy: normalizeReaderRetranslationPolicy(
-    value?.retranslationPolicy,
-  ),
-  chineseScript: normalizeReaderChineseScript(value?.chineseScript),
-  fontSize: Math.max(12, Math.min(value?.fontSize ?? 18, 32)),
-  lineHeight: Math.max(1.2, Math.min(value?.lineHeight ?? 1.9, 2.8)),
-  contentWidth: Math.max(480, Math.min(value?.contentWidth ?? 840, 1200)),
-  horizontalPadding: Math.max(12, Math.min(value?.horizontalPadding ?? 24, 64)),
-  theme: value?.theme ?? 'system',
-  flow:
-    value?.flow === 'paginated' || value?.flow === 'scrolled'
-      ? value.flow
-      : 'auto',
-});
+  value: LegacyReaderSettings | undefined,
+): ReaderSettingsRecord => {
+  const legacyPreloadParagraphs =
+    value?.autoTranslationPreloadPages === undefined
+      ? undefined
+      : value.autoTranslationPreloadPages * 20;
+  return {
+    ...defaultReaderSettings,
+    ...value,
+    id: 'default',
+    defaultMode: value?.defaultMode ?? defaultReaderSettings.defaultMode,
+    autoTranslationPreloadParagraphs:
+      normalizeReaderAutoTranslationPreloadParagraphs(
+        value?.autoTranslationPreloadParagraphs ?? legacyPreloadParagraphs,
+      ),
+    autoTranslationChunkParagraphs:
+      normalizeReaderAutoTranslationChunkParagraphs(
+        value?.autoTranslationChunkParagraphs,
+      ),
+    retranslationPolicy: normalizeReaderRetranslationPolicy(
+      value?.retranslationPolicy,
+    ),
+    chineseScript: normalizeReaderChineseScript(value?.chineseScript),
+    fontSize: Math.max(12, Math.min(value?.fontSize ?? 18, 32)),
+    lineHeight: Math.max(1.2, Math.min(value?.lineHeight ?? 1.9, 2.8)),
+    contentWidth: Math.max(480, Math.min(value?.contentWidth ?? 840, 1200)),
+    horizontalPadding: Math.max(
+      12,
+      Math.min(value?.horizontalPadding ?? 24, 64),
+    ),
+    theme: value?.theme ?? 'system',
+    flow:
+      value?.flow === 'paginated' || value?.flow === 'scrolled'
+        ? value.flow
+        : 'auto',
+  };
+};
 
 export const serializeReaderSettings = (
   value: ReaderSettingsRecord,
-): ReaderSettingsRecord => ({
-  ...value,
-  translationPriority: [...value.translationPriority],
-});
+): ReaderSettingsRecord => {
+  const serialized = {
+    ...value,
+    translationPriority: [...value.translationPriority],
+  };
+  delete (serialized as LegacyReaderSettings).autoTranslationPreloadPages;
+  return serialized;
+};
 
 export const applyReaderStyleOverride = (
   settings: ReaderSettingsRecord,

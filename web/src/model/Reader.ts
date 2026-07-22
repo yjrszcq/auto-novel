@@ -17,7 +17,8 @@ export interface ReaderSettingsRecord {
   id: 'default';
   defaultMode: ReaderMode;
   translationPriority: ('gpt' | 'sakura' | 'youdao' | 'baidu')[];
-  autoTranslationPreloadPages: number;
+  autoTranslationPreloadParagraphs: number;
+  autoTranslationChunkParagraphs: number;
   retranslationPolicy: ReaderRetranslationPolicy;
   chineseScript: ReaderChineseScript;
   fontSize: number;

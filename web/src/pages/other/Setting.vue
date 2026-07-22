@@ -11,7 +11,7 @@ import type {
 import { readerModeLabels } from '../reader/core/ReaderMode';
 import {
   defaultReaderSettings,
-  normalizeReaderAutoTranslationPreloadPages,
+  normalizeReaderAutoTranslationPreloadParagraphs,
   normalizeReaderSettings,
   serializeReaderSettings,
 } from '../reader/core/ReaderSettings';
@@ -114,8 +114,8 @@ const updateDefaultReaderMode = (value: string | number) => {
 const updateAutoTranslationPreloadPages = (value: number | null) => {
   void persistReaderSettings((current) => ({
     ...current,
-    autoTranslationPreloadPages:
-      normalizeReaderAutoTranslationPreloadPages(value),
+    autoTranslationPreloadParagraphs:
+      normalizeReaderAutoTranslationPreloadParagraphs(value),
   }));
 };
 
@@ -447,7 +447,7 @@ onMounted(() => {
             <div class="number-setting-control">
               <n-input-number
                 class="number-setting-input reader-preload-setting__input"
-                :value="readerSettings.autoTranslationPreloadPages"
+                :value="readerSettings.autoTranslationPreloadParagraphs"
                 :min="0"
                 :max="20"
                 :precision="0"

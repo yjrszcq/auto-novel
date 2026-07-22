@@ -101,7 +101,7 @@ import {
 import {
   applyReaderStyleOverride,
   defaultReaderSettings,
-  normalizeReaderAutoTranslationPreloadPages,
+  normalizeReaderAutoTranslationPreloadParagraphs,
   normalizeReaderSettings,
   serializeReaderSettings,
 } from './core/ReaderSettings';
@@ -1214,8 +1214,8 @@ const toggleQuickTheme = () => {
 };
 
 const updateAutoTranslationPreloadPages = (value: number | null) => {
-  settings.value.autoTranslationPreloadPages =
-    normalizeReaderAutoTranslationPreloadPages(value);
+  settings.value.autoTranslationPreloadParagraphs =
+    normalizeReaderAutoTranslationPreloadParagraphs(value);
 };
 
 const readerStyle = computed(() => ({
@@ -2340,7 +2340,7 @@ const collectAutomaticTranslationChapters = async (
     const planned = planReaderAutomaticTranslationWindow({
       chapters: [...chapters.values()],
       visible,
-      preloadPages: settings.value.autoTranslationPreloadPages,
+      preloadPages: settings.value.autoTranslationPreloadParagraphs,
     });
     const prefetchedCharacters = planned.prefetch.reduce(
       (total, target) => total + target.original.trim().length,
@@ -2434,7 +2434,7 @@ const runAutomaticTranslationOnce = async () => {
     planned = planReaderAutomaticTranslationWindow({
       chapters,
       visible,
-      preloadPages: settings.value.autoTranslationPreloadPages,
+      preloadPages: settings.value.autoTranslationPreloadParagraphs,
     });
     const visibleChapterIndexes = visible.flatMap(({ chapterId }) => {
       const index = ready.chapters.findIndex(({ id }) => id === chapterId);
@@ -3956,7 +3956,7 @@ watch(
     viewportChapterId.value,
     viewportSegmentId.value,
     readerPageIndex.value,
-    settings.value.autoTranslationPreloadPages,
+    settings.value.autoTranslationPreloadParagraphs,
   ],
   () => scheduleAutomaticTranslation(),
 );
@@ -4947,7 +4947,7 @@ onBeforeUnmount(() => {
               </span>
             </template>
             <n-input-number
-              :value="settings.autoTranslationPreloadPages"
+              :value="settings.autoTranslationPreloadParagraphs"
               :min="0"
               :max="20"
               :precision="0"
