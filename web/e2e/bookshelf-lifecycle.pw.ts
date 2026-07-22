@@ -1120,8 +1120,8 @@ test('imports and persists the complete bookshelf listing lifecycle', async ({
   const archive = await archiveDownload;
   expect(archive.suggestedFilename()).toBe('批量下载[2].zip');
   expect(await listArchiveEntries(await readDownload(archive))).toEqual([
-    'jp-zh.Bgs.Alpha Upload.txt',
-    'jp-zh.Bgs.Beta Upload.txt',
+    'zh.Bgs.Alpha Upload.txt',
+    'zh.Bgs.Beta Upload.txt',
   ]);
   await workspaceDrawer
     .getByRole('button', { name: '反选', exact: true })

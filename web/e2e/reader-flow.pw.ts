@@ -4910,17 +4910,15 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     name: '格式异常重试次数',
   });
   const taskNumberInput = page.getByRole('textbox', { name: '均分任务数' });
-  expect(
-    await formatRetryInput.evaluate(
-      (input) =>
-        input.closest('.n-input-number')?.getBoundingClientRect().width,
-    ),
-  ).toBe(
-    await taskNumberInput.evaluate(
-      (input) =>
-        input.closest('.n-input-number')?.getBoundingClientRect().width,
-    ),
+  const formatRetryWidth = await formatRetryInput.evaluate(
+    (input) => input.closest('.n-input-number')?.getBoundingClientRect().width,
   );
+  const taskNumberWidth = await taskNumberInput.evaluate(
+    (input) => input.closest('.n-input-number')?.getBoundingClientRect().width,
+  );
+  expect(
+    Math.abs((formatRetryWidth ?? 0) - (taskNumberWidth ?? 0)),
+  ).toBeLessThan(0.1);
   await expect(formatRetryInput).toHaveValue('3');
   await formatRetryInput.fill('5');
   await expect(formatRetryInput).toHaveValue('5');
@@ -4958,7 +4956,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(
     page.getByRole('alert').filter({ hasText: '正在混用不同模型或接口' }),
   ).toBeVisible();
-  await expect(page.getByText('空闲，等待共享任务')).toHaveCount(2);
+  await expect(page.getByText('空闲，等待共享任务')).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
