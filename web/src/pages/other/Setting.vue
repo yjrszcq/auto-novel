@@ -24,6 +24,7 @@ const { setting } = storeToRefs(settingStore);
 const message = useMessage();
 const isMobile = useMediaQuery('(max-width: 639px)');
 const showLanguageDetectionHelp = ref(false);
+const showDownloadMetadataHelp = ref(false);
 const showReaderPreloadHelp = ref(false);
 const readerSettings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 const readerSettingsLoading = ref(true);
@@ -175,26 +176,6 @@ onMounted(() => {
 
       <n-list-item>
         <n-flex vertical>
-          <b>首页</b>
-          <c-action-wrapper title="下载语言">
-            <c-radio-group
-              v-model:value="setting.homeDownloadMode"
-              :options="Setting.downloadModeOptions"
-              size="small"
-            />
-          </c-action-wrapper>
-          <c-action-wrapper title="优先下载">
-            <c-radio-group
-              v-model:value="setting.homeDownloadPriority"
-              :options="Setting.homeDownloadPriorityOptions"
-              size="small"
-            />
-          </c-action-wrapper>
-        </n-flex>
-      </n-list-item>
-
-      <n-list-item>
-        <n-flex vertical>
           <b>工作区</b>
           <n-checkbox v-model:checked="setting.autoTopJobWhenAddTask">
             工作区添加时自动置顶
@@ -324,19 +305,105 @@ onMounted(() => {
       </n-list-item>
 
       <n-list-item>
-        <n-flex vertical>
-          <b>本地 EPUB 下载</b>
-          <n-checkbox v-model:checked="setting.embedMetadataInOriginalDownload">
-            原文下载时展示信息嵌入元数据
-          </n-checkbox>
-          <n-checkbox
-            v-model:checked="setting.embedMetadataInTranslatedDownload"
+        <n-flex vertical :size="8">
+          <b>下载</b>
+          <c-action-wrapper
+            title="下载语言"
+            align="center"
+            class="download-setting-row"
           >
-            译文下载时展示信息嵌入元数据
-          </n-checkbox>
-          <n-text depth="3">
-            仅修改下载副本，浏览器中保存的原始 EPUB 不会改变。
-          </n-text>
+            <c-radio-group
+              v-model:value="setting.homeDownloadMode"
+              :options="Setting.downloadModeOptions"
+              size="small"
+            />
+          </c-action-wrapper>
+          <c-action-wrapper
+            title="优先下载"
+            align="center"
+            class="download-setting-row"
+          >
+            <c-radio-group
+              v-model:value="setting.homeDownloadPriority"
+              :options="Setting.homeDownloadPriorityOptions"
+              size="small"
+            />
+          </c-action-wrapper>
+          <c-action-wrapper
+            title="展示信息嵌入"
+            align="center"
+            class="download-setting-row"
+          >
+            <div class="download-metadata-setting">
+              <n-button-group size="small">
+                <n-button
+                  :type="
+                    setting.embedMetadataInOriginalDownload
+                      ? 'primary'
+                      : 'default'
+                  "
+                  :aria-pressed="setting.embedMetadataInOriginalDownload"
+                  @click="
+                    setting.embedMetadataInOriginalDownload =
+                      !setting.embedMetadataInOriginalDownload
+                  "
+                >
+                  原文
+                </n-button>
+                <n-button
+                  :type="
+                    setting.embedMetadataInTranslatedDownload
+                      ? 'primary'
+                      : 'default'
+                  "
+                  :aria-pressed="setting.embedMetadataInTranslatedDownload"
+                  @click="
+                    setting.embedMetadataInTranslatedDownload =
+                      !setting.embedMetadataInTranslatedDownload
+                  "
+                >
+                  译文
+                </n-button>
+              </n-button-group>
+              <n-popover
+                v-if="!isMobile"
+                trigger="click"
+                placement="top-start"
+                :style="{
+                  maxWidth: 'min(360px, calc(100vw - 32px))',
+                  whiteSpace: 'normal',
+                }"
+              >
+                <template #trigger>
+                  <n-button
+                    class="setting-info-button"
+                    quaternary
+                    circle
+                    size="small"
+                    aria-label="展示信息嵌入说明"
+                  >
+                    <template #icon>
+                      <n-icon :component="InfoOutlined" />
+                    </template>
+                  </n-button>
+                </template>
+                仅修改下载副本，浏览器中保存的原始 EPUB 不会改变。
+              </n-popover>
+              <n-button
+                v-else
+                class="setting-info-button"
+                quaternary
+                circle
+                size="small"
+                aria-label="展示信息嵌入说明"
+                @click="showDownloadMetadataHelp = true"
+              >
+                <template #icon>
+                  <n-icon :component="InfoOutlined" />
+                </template>
+              </n-button>
+            </div>
+          </c-action-wrapper>
         </n-flex>
       </n-list-item>
 
@@ -462,6 +529,13 @@ onMounted(() => {
     >
       提前翻译当前页之后的页数；0 表示只处理当前可见页。
     </c-modal>
+    <c-modal
+      v-model:show="showDownloadMetadataHelp"
+      title="展示信息嵌入"
+      aria-label="展示信息嵌入"
+    >
+      仅修改下载副本，浏览器中保存的原始 EPUB 不会改变。
+    </c-modal>
   </div>
 </template>
 
@@ -471,6 +545,20 @@ onMounted(() => {
   grid-template-columns: 128px minmax(0, 1fr);
   align-items: center;
   gap: 16px;
+}
+
+.download-setting-row {
+  display: grid !important;
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.download-metadata-setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .language-detection-setting {

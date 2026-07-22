@@ -152,6 +152,7 @@ const readerGlossaryInitialCandidateCounts = shallowRef<
   Record<string, number> | undefined
 >();
 const readerGlossaryInitialExcludedWords = shallowRef<string[]>([]);
+const readerGlossaryEditorRevision = ref(0);
 let readerGlossaryRequest = 0;
 let readerGlossaryCandidateSave = Promise.resolve();
 const interactiveInitialText = ref<string>();
@@ -502,6 +503,7 @@ const openReaderGlossary = async () => {
     readerGlossaryInitialExcludedWords.value = [
       ...(volume.glossaryExcludedWords ?? []),
     ];
+    readerGlossaryEditorRevision.value += 1;
   } catch (reason) {
     if (request === readerGlossaryRequest && showReaderGlossary.value) {
       readerGlossaryError.value = String(reason);
@@ -4516,6 +4518,7 @@ onBeforeUnmount(() => {
       </n-alert>
       <Suspense v-else>
         <ToolboxItemGlossary
+          :key="readerGlossaryEditorRevision"
           :files="emptyReaderGlossaryFiles"
           :load-files="loadReaderGlossaryFiles"
           :initial-glossary="readerGlossaryInitial"

@@ -19,6 +19,7 @@ const error = ref('');
 const initialGlossary = shallowRef<Glossary>({});
 const initialCandidateCounts = shallowRef<Record<string, number>>();
 const initialExcludedWords = shallowRef<string[]>([]);
+const editorRevision = ref(0);
 const emptyFiles: ParsedFile[] = [];
 let loadRequest = 0;
 let candidateSave = Promise.resolve();
@@ -38,6 +39,7 @@ const loadVolume = async () => {
         ? undefined
         : { ...volume.glossaryCandidateCounts };
     initialExcludedWords.value = [...(volume.glossaryExcludedWords ?? [])];
+    editorRevision.value += 1;
   } catch (reason) {
     if (request === loadRequest && props.show) error.value = String(reason);
   } finally {
@@ -110,6 +112,7 @@ const applyGlossary = async (glossary: Glossary, excludedWords: string[]) => {
     <n-alert v-else-if="error" type="error">加载失败：{{ error }}</n-alert>
     <Suspense v-else>
       <ToolboxItemGlossary
+        :key="editorRevision"
         :files="emptyFiles"
         :load-files="loadFiles"
         :initial-glossary="initialGlossary"

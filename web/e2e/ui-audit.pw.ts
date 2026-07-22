@@ -98,6 +98,7 @@ for (const viewport of [
   test(`keeps primary ${viewport.name} routes and overlays inside the viewport`, async ({
     browser,
   }) => {
+    test.setTimeout(60_000);
     for (const route of routes) {
       const page = await browser.newPage({
         viewport: { width: viewport.width, height: viewport.height },
@@ -146,6 +147,68 @@ for (const viewport of [
       await expectWithinViewport(dialog, page);
       await page.keyboard.press('Escape');
       await expect(dialog).toHaveCount(0);
+    }
+
+    await page.goto('/setting');
+    const settingItems = page.getByRole('listitem');
+    const translationApiItem = settingItems.filter({
+      has: page.getByText('翻译 API', { exact: true }),
+    });
+    const downloadItem = settingItems.filter({
+      has: page.getByText('下载', { exact: true }),
+    });
+    await expect(downloadItem).toBeVisible();
+    await expect(
+      translationApiItem.locator('xpath=following-sibling::*[1]'),
+    ).toContainText('下载');
+    await expect(
+      settingItems.filter({ has: page.getByText('首页', { exact: true }) }),
+    ).toHaveCount(0);
+    await expect(
+      settingItems.filter({
+        has: page.getByText('本地 EPUB 下载', { exact: true }),
+      }),
+    ).toHaveCount(0);
+    const originalMetadataButton = downloadItem.getByRole('button', {
+      name: '原文',
+      exact: true,
+    });
+    const translatedMetadataButton = downloadItem.getByRole('button', {
+      name: '译文',
+      exact: true,
+    });
+    await expect(originalMetadataButton).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await expect(translatedMetadataButton).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await originalMetadataButton.click();
+    await expect(originalMetadataButton).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await downloadItem
+      .getByRole('button', { name: '展示信息嵌入说明' })
+      .click();
+    const downloadHelpText =
+      '仅修改下载副本，浏览器中保存的原始 EPUB 不会改变。';
+    if (viewport.name === 'mobile') {
+      const helpDialog = page
+        .getByRole('dialog')
+        .filter({ has: page.getByText(downloadHelpText, { exact: true }) });
+      await expect(helpDialog).toBeVisible();
+      await expectWithinViewport(helpDialog, page);
+      await page.keyboard.press('Escape');
+    } else {
+      const helpPopover = page
+        .locator('.n-popover')
+        .filter({ hasText: downloadHelpText });
+      await expect(helpPopover).toBeVisible();
+      await expectWithinViewport(helpPopover, page);
+      await page.keyboard.press('Escape');
     }
 
     if (viewport.name === 'mobile') {

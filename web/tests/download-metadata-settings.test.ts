@@ -12,6 +12,25 @@ describe('download metadata settings', () => {
     expect(Setting.defaultValue.embedMetadataInTranslatedDownload).toBe(false);
   });
 
+  it('builds every translated download from the shared language and priority', () => {
+    expect(
+      Setting.translationDownloadOptions({
+        ...Setting.defaultValue,
+        homeDownloadMode: 'jp-zh',
+        homeDownloadPriority: 'sakura',
+        downloadFormat: {
+          mode: 'zh',
+          translationsMode: 'parallel',
+          translations: ['gpt'],
+        },
+      }),
+    ).toEqual({
+      mode: 'jp-zh',
+      translationsMode: 'priority',
+      translations: ['sakura'],
+    });
+  });
+
   it('defaults and normalizes the language detection threshold', () => {
     expect(Setting.defaultValue.languageDetectionConfidencePercent).toBe(95);
     expect(Setting.normalizeLanguageDetectionConfidencePercent(undefined)).toBe(

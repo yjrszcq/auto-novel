@@ -35,7 +35,7 @@ import { formatReadingDuration } from '../reader/core/ReaderStats';
 import { useLocalVolumeManager } from '../workspace/LocalVolumeManager';
 import TxtCatalogPreviewModal from '../workspace/components/TxtCatalogPreviewModal.vue';
 
-import { useLocalVolumeStore, useSettingStore } from '@/stores';
+import { Setting, useLocalVolumeStore, useSettingStore } from '@/stores';
 import { reconstructTxtVolumeText } from '@/stores/local/RebuildTxtVolume';
 import { downloadFile } from '@/util';
 
@@ -396,20 +396,14 @@ const downloadOriginal = async () => {
 };
 
 const downloadTranslated = async () => {
-  const translations = setting.value.downloadFormat.translations.filter(
-    (translator): translator is LocalTranslator =>
-      translator === 'gpt' || translator === 'sakura',
-  );
-  if (setting.value.homeDownloadMode !== 'jp' && translations.length === 0) {
-    message.warning('请先在设置中启用 GPT 或 Sakura');
-    return;
-  }
+  const { mode, translationsMode, translations } =
+    Setting.translationDownloadOptions(setting.value);
   try {
     const repository = await repositoryPromise;
     const { filename, blob } = await repository.getTranslationFile({
       id: bookId.value,
-      mode: setting.value.homeDownloadMode,
-      translationsMode: setting.value.downloadFormat.translationsMode,
+      mode,
+      translationsMode,
       translations,
       embedMetadata: shouldEmbedDownloadMetadata(
         entry.value!.volume,

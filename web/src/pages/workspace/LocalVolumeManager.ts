@@ -79,8 +79,8 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
       const settingStore = useSettingStore();
       const { setting } = storeToRefs(settingStore);
 
-      const { translationsMode, translations } = setting.value.downloadFormat;
-      const mode = setting.value.homeDownloadMode;
+      const { mode, translationsMode, translations } =
+        Setting.translationDownloadOptions(setting.value);
 
       const repo = await useLocalVolumeStore();
       const getDownload = async (id: string) => {

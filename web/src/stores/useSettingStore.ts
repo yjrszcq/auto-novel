@@ -88,6 +88,11 @@ export namespace Setting {
     { label: 'GPT', value: 'gpt' },
     { label: 'Sakura', value: 'sakura' },
   ];
+  export const translationDownloadOptions = (setting: Setting) => ({
+    mode: setting.homeDownloadMode,
+    translationsMode: 'priority' as const,
+    translations: [setting.homeDownloadPriority],
+  });
   export const normalizeLanguageDetectionConfidencePercent = (
     value: number | null | undefined,
   ) =>

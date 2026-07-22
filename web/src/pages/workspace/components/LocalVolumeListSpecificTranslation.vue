@@ -86,7 +86,8 @@ const queueVolume = (volumeId: string, total: number = 65536) => {
 };
 
 const downloadVolume = async (volumeId: string) => {
-  const { mode } = setting.value.downloadFormat;
+  const { mode, translationsMode, translations } =
+    Setting.translationDownloadOptions(setting.value);
   const repo = await useLocalVolumeStore();
 
   try {
@@ -95,8 +96,8 @@ const downloadVolume = async (volumeId: string) => {
     const { filename, blob } = await repo.getTranslationFile({
       id: volumeId,
       mode,
-      translationsMode: 'priority',
-      translations: [props.type],
+      translationsMode,
+      translations,
       embedMetadata: shouldEmbedDownloadMetadata(
         volume,
         'translated',
@@ -143,14 +144,6 @@ const progressFilterFunc = computed(() => {
         <c-radio-group
           v-model:value="progressFilter"
           :options="progressFilterOptions"
-          size="small"
-        />
-      </c-action-wrapper>
-
-      <c-action-wrapper title="语言">
-        <c-radio-group
-          v-model:value="setting.downloadFormat.mode"
-          :options="Setting.downloadModeOptions"
           size="small"
         />
       </c-action-wrapper>

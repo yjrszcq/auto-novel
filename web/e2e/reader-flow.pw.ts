@@ -3897,8 +3897,8 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
             homeDownloadMode: 'jp',
             downloadFormat: {
               mode: 'zh',
-              translationsMode: 'priority',
-              translations: ['gpt'],
+              translationsMode: 'parallel',
+              translations: ['sakura'],
             },
           }),
         );
@@ -4139,7 +4139,7 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     await page.goto('/setting');
     await page
       .getByRole('listitem')
-      .filter({ has: page.getByText('首页', { exact: true }) })
+      .filter({ has: page.getByText('下载', { exact: true }) })
       .getByText('中文', { exact: true })
       .click();
     await page.goto(`/books/${volumeId}/details`);
@@ -5090,16 +5090,25 @@ test('edits and auto-scans an empty glossary for a queued book', async ({
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
     });
-    const transaction = database.transaction(['metadata', 'file'], 'readwrite');
+    const transaction = database.transaction(
+      ['metadata', 'chapter', 'file'],
+      'readwrite',
+    );
     transaction.objectStore('metadata').put({
       id: bookId,
       createAt: 1,
-      toc: [],
+      toc: [{ chapterId: 'chapter', title: '术语表测试' }],
       sourceFormat: 'txt',
       glossaryId: 'empty-glossary',
       glossary: {},
       favoredId: 'default',
       sourceBookMetadata: { title: bookId, languages: ['ja'] },
+    });
+    transaction.objectStore('chapter').put({
+      id: `${bookId}/chapter`,
+      volumeId: bookId,
+      paragraphs: ['テスト'],
+      segmentIds: ['segment-0'],
     });
     transaction.objectStore('file').put({
       id: bookId,
@@ -5160,6 +5169,42 @@ test('edits and auto-scans an empty glossary for a queued book', async ({
   }, volumeId);
   expect(glossary.glossary).toEqual({ テスト: '队列译名' });
   expect(glossary.glossaryCandidateCounts).toEqual({ テスト: 12 });
+
+  await page.goto(`/books/${volumeId}/read/chapter`);
+  await page.getByRole('button', { name: '工具', exact: true }).click();
+  const readerTools = page.getByRole('dialog', { name: '阅读工具' });
+  await readerTools
+    .getByRole('button', { name: '术语表', exact: true })
+    .click();
+  const readerGlossary = page.getByRole('dialog', { name: '术语表处理' });
+  const readerRow = readerGlossary
+    .locator('tbody tr')
+    .filter({ hasText: 'テスト' });
+  await expect(readerRow.locator('input')).toHaveValue('队列译名');
+  await readerRow.locator('input').fill('阅读器译名');
+  await readerGlossary
+    .getByRole('button', { name: '应用到本书', exact: true })
+    .click();
+  await expect(
+    page.getByText('术语表已应用，未完成的自动翻译缓存已清除', {
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  await page.goto('/workspace/gpt');
+  const refreshedQueueItem = page
+    .locator('.n-list-item')
+    .filter({ hasText: volumeId });
+  await refreshedQueueItem.getByRole('button', { name: '编辑术语表' }).click();
+  const refreshedDialog = page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('heading', { name: '编辑术语表' }) });
+  await expect(
+    refreshedDialog
+      .locator('tbody tr')
+      .filter({ hasText: 'テスト' })
+      .locator('input'),
+  ).toHaveValue('阅读器译名');
 });
 
 test('loads only the current GPT workspace schema', async ({ page }) => {
