@@ -52,9 +52,10 @@ const calculateExpired = (volume: LocalVolumeMetadata) =>
 
 const queueVolumes = (volumes: LocalVolumeMetadata[]) => {
   const ids = volumes.map((it) => it.id);
-  const { formatRetryCount } = translateOptions.value!.getTranslateTaskParams();
+  const { level, formatRetryCount } =
+    translateOptions.value!.getTranslateTaskParams();
   const { success, failed } = store.queueJobsToWorkspace(ids, {
-    level: 'expire',
+    level,
     type: props.type,
     shouldTop: shouldTopJob.value ?? false,
     formatRetryCount,

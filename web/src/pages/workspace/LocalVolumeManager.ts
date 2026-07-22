@@ -213,7 +213,7 @@ export const useLocalVolumeManager = defineStore('LocalVolumeManager', {
         shouldTop,
         formatRetryCount = 3,
       }: {
-        level: 'expire' | 'all';
+        level: 'normal' | 'expire' | 'all';
         type: 'gpt' | 'sakura';
         shouldTop: boolean;
         formatRetryCount?: number;

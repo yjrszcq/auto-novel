@@ -19,9 +19,28 @@ import {
   normalizeSakuraSegmentLength,
   normalizeTranslationConcurrency,
   TranslateTaskDescriptor,
+  translateLevelLabel,
 } from '../src/model/Translator';
 
 describe('workspace task descriptors', () => {
+  it.each([
+    ['normal', undefined],
+    ['expire', '过期章节'],
+    ['all', '全部章节'],
+  ] as const)('preserves the %s translation level', (level, label) => {
+    const task = TranslateTaskDescriptor.local('book/a', {
+      level,
+      translateMetadata: true,
+      forceMetadata: false,
+      startIndex: 0,
+      endIndex: 65536,
+      formatRetryCount: 3,
+    });
+
+    expect(TranslateTaskDescriptor.parse(task).params.level).toBe(level);
+    expect(translateLevelLabel(level)).toBe(label);
+  });
+
   it('normalizes translation settings to their documented ranges', () => {
     expect(normalizeTranslationConcurrency(Number.POSITIVE_INFINITY)).toBe(1);
     expect(normalizeTranslationConcurrency(0)).toBe(1);

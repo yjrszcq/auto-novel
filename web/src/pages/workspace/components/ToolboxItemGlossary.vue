@@ -819,15 +819,47 @@ onBeforeUnmount(() => {
 @media (max-width: 639px) {
   .glossary-table {
     max-width: 100%;
-    overflow-x: auto;
   }
 
-  .glossary-table :deep(.n-scrollbar-container) {
-    overflow-x: auto;
+  .glossary-table :deep(table) {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
   }
 
   .glossary-table__translation {
-    min-width: 180px;
+    min-width: 0;
+  }
+
+  .glossary-table :deep(th),
+  .glossary-table :deep(td) {
+    padding-right: 5px;
+    padding-left: 5px;
+    overflow-wrap: anywhere;
+  }
+
+  .glossary-table :deep(th:nth-child(1)) {
+    width: 38px;
+  }
+
+  .glossary-table :deep(th:nth-child(2)) {
+    width: 42px;
+  }
+
+  .glossary-table :deep(th:nth-child(3)) {
+    width: 18%;
+  }
+
+  .glossary-table :deep(th:nth-child(5)) {
+    width: 48px;
+  }
+
+  .glossary-table :deep(th:nth-child(6)) {
+    width: 38px;
+  }
+
+  .glossary-table__translation :deep(.n-input) {
+    width: 100%;
   }
 
   .glossary-translator-actions,

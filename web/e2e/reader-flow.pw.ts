@@ -5447,6 +5447,18 @@ test('edits and auto-scans an empty glossary for a queued book', async ({
   expect(tableBounds!.x + tableBounds!.width).toBeLessThanOrEqual(
     bounds!.x + bounds!.width,
   );
+  expect(
+    await dialog
+      .locator('.glossary-table table')
+      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+  const operationHeaderBounds = await dialog
+    .getByRole('columnheader', { name: '操作', exact: true })
+    .boundingBox();
+  expect(operationHeaderBounds).not.toBeNull();
+  expect(
+    operationHeaderBounds!.x + operationHeaderBounds!.width,
+  ).toBeLessThanOrEqual(bounds!.x + bounds!.width);
   const row = dialog.locator('tbody tr').filter({ hasText: 'テスト' });
   await expect(row).toBeVisible();
   await row.locator('input').fill('队列译名');

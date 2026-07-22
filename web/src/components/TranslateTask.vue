@@ -12,7 +12,10 @@ import type {
   TranslateTaskDesc,
   TranslateTaskParams,
 } from '@/model/Translator';
-import { normalizeTranslationConcurrency } from '@/model/Translator';
+import {
+  normalizeTranslationConcurrency,
+  translateLevelLabel,
+} from '@/model/Translator';
 import { releaseKeepAlive, requestKeepAlive } from '@/util';
 
 import CTaskCard from './CTaskCard.vue';
@@ -216,13 +219,8 @@ const runTask = async (
     };
     let label = `${idToLaber[translatorId]}翻译`;
     const suffixParts: string[] = [];
-    if (params.level === 'expire') {
-      suffixParts.push('过期章节');
-    } else if (params.level === 'all') {
-      suffixParts.push('全部章节');
-    } else if (params.level === 'sync') {
-      suffixParts.push('源站同步');
-    }
+    const levelLabel = translateLevelLabel(params.level);
+    if (levelLabel !== undefined) suffixParts.push(levelLabel);
     if (params.forceMetadata) {
       suffixParts.push('重翻目录');
     }

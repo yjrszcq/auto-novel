@@ -96,6 +96,15 @@ export type TranslateTaskParams = {
   chapterIds?: string[];
 };
 
+export const translateLevelLabel = (
+  level: TranslateTaskParams['level'],
+): string | undefined => {
+  if (level === 'expire') return '过期章节';
+  if (level === 'all') return '全部章节';
+  if (level === 'sync') return '源站同步';
+  return undefined;
+};
+
 export type TranslateTaskCallback = {
   onStart: (total: number, chapterIds: string[]) => void;
   onChapterSuccess: (state: {
