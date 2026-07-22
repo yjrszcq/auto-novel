@@ -3891,6 +3891,17 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
             jobRecords: [],
           }),
         );
+        localStorage.setItem(
+          'auto-novel:settings',
+          JSON.stringify({
+            homeDownloadMode: 'jp',
+            downloadFormat: {
+              mode: 'zh',
+              translationsMode: 'priority',
+              translations: ['gpt'],
+            },
+          }),
+        );
 
         const database = await new Promise<IDBDatabase>((resolve, reject) => {
           const request = indexedDB.open('volumes');
@@ -4112,6 +4123,25 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
         .filter({ hasText: volumeId })
         .getByText('已完成'),
     ).toBeVisible();
+    const recordDownloadPromise = page.waitForEvent('download');
+    await page
+      .getByRole('button', { name: '下载本地小说', exact: true })
+      .click();
+    const recordDownload = await recordDownloadPromise;
+    const recordDownloadStream = await recordDownload.createReadStream();
+    const recordChunks: Buffer[] = [];
+    for await (const chunk of recordDownloadStream) {
+      recordChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    expect(Buffer.concat(recordChunks).toString('utf8')).toBe(
+      '第一章原文一\n第一章原文二\n第二章原文一\n第二章原文二',
+    );
+    await page.goto('/setting');
+    await page
+      .getByRole('listitem')
+      .filter({ has: page.getByText('首页', { exact: true }) })
+      .getByText('中文', { exact: true })
+      .click();
     await page.goto(`/books/${volumeId}/details`);
     await expect(page.getByText('总计 2 / GPT 2 / Sakura 0')).toBeVisible();
 
