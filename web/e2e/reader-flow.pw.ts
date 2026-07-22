@@ -5528,6 +5528,53 @@ test('edits and auto-scans an empty glossary for a queued book', async ({
   ).toBeLessThanOrEqual(bounds!.x + bounds!.width);
   const row = dialog.locator('tbody tr').filter({ hasText: 'テスト' });
   await expect(row).toBeVisible();
+  const mobileActionRows = dialog.locator('.glossary-mobile-actions__row');
+  await expect(mobileActionRows).toHaveCount(2);
+  for (const [rowIndex, names] of [
+    [0, ['保存到本书', '扫描', '翻译', '翻译器配置']],
+    [1, ['全选当前', '移除所选', '撤销删除', '术语表']],
+  ] as const) {
+    const actionRow = mobileActionRows.nth(rowIndex);
+    const actionRowBounds = await actionRow.boundingBox();
+    const buttonBounds = await Promise.all(
+      names.map((name) =>
+        actionRow.getByRole('button', { name, exact: true }).boundingBox(),
+      ),
+    );
+    expect(actionRowBounds).not.toBeNull();
+    expect(buttonBounds.every((button) => button !== null)).toBe(true);
+    const buttonCenterY = (
+      button: NonNullable<(typeof buttonBounds)[number]>,
+    ) => button.y + button.height / 2;
+    expect(
+      Math.abs(
+        buttonCenterY(buttonBounds[0]!) - buttonCenterY(buttonBounds[1]!),
+      ),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(
+        buttonCenterY(buttonBounds[1]!) - buttonCenterY(buttonBounds[2]!),
+      ),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(
+        buttonCenterY(buttonBounds[2]!) - buttonCenterY(buttonBounds[3]!),
+      ),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      buttonBounds[1]!.x - (buttonBounds[0]!.x + buttonBounds[0]!.width),
+    ).toBeLessThanOrEqual(20);
+    expect(
+      buttonBounds[2]!.x - (buttonBounds[1]!.x + buttonBounds[1]!.width),
+    ).toBeLessThanOrEqual(20);
+    expect(
+      Math.abs(
+        buttonBounds[3]!.x +
+          buttonBounds[3]!.width -
+          (actionRowBounds!.x + actionRowBounds!.width),
+      ),
+    ).toBeLessThanOrEqual(1);
+  }
   await row.locator('input').fill('队列译名');
   await dialog.getByRole('button', { name: '保存到本书' }).click();
   await expect(

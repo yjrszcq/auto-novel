@@ -419,7 +419,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     .locator('.n-empty__icon')
     .boundingBox();
   const glossaryActionsBounds = await page
-    .locator('.glossary-actions')
+    .locator('.glossary-mobile-actions')
     .boundingBox();
   expect(emptyIconBounds).not.toBeNull();
   expect(glossaryActionsBounds).not.toBeNull();
@@ -544,11 +544,26 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     .getByRole('dialog')
     .filter({ has: page.getByRole('heading', { name: '术语表' }) });
   await expect(glossaryTransferModal).toBeVisible();
-  for (const name of ['导入术语表', '复制术语表', '下载术语表']) {
-    await expect(
-      glossaryTransferModal.getByRole('button', { name, exact: true }),
-    ).toBeVisible();
-  }
+  const glossaryTransferModalBounds = await glossaryTransferModal.boundingBox();
+  expect(glossaryTransferModalBounds).not.toBeNull();
+  expect(glossaryTransferModalBounds!.width).toBeLessThanOrEqual(300);
+  const transferButtonBounds = await Promise.all(
+    ['导入术语表', '复制术语表', '下载术语表'].map(async (name) => {
+      const button = glossaryTransferModal.getByRole('button', {
+        name,
+        exact: true,
+      });
+      await expect(button).toBeVisible();
+      return button.boundingBox();
+    }),
+  );
+  expect(transferButtonBounds.every((bounds) => bounds !== null)).toBe(true);
+  expect(transferButtonBounds[0]!.x).toBe(transferButtonBounds[1]!.x);
+  expect(transferButtonBounds[1]!.x).toBe(transferButtonBounds[2]!.x);
+  expect(transferButtonBounds[0]!.width).toBe(transferButtonBounds[1]!.width);
+  expect(transferButtonBounds[1]!.width).toBe(transferButtonBounds[2]!.width);
+  expect(transferButtonBounds[0]!.y).toBeLessThan(transferButtonBounds[1]!.y);
+  expect(transferButtonBounds[1]!.y).toBeLessThan(transferButtonBounds[2]!.y);
   const importFileInput = page.getByLabel('选择要导入的术语表文件');
   await importFileInput.setInputFiles({
     name: 'imported-glossary.txt',
@@ -572,7 +587,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       .getByPlaceholder('请输入中文翻译'),
   ).toHaveValue('导入词');
   const glossaryActionsBoundsAfterImport = await page
-    .locator('.glossary-actions')
+    .locator('.glossary-mobile-actions')
     .boundingBox();
   expect(glossaryActionsBoundsAfterImport).not.toBeNull();
   expect(glossaryActionsBoundsAfterImport!.x).toBeGreaterThanOrEqual(0);
@@ -629,9 +644,10 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect
     .poll(() =>
       page.locator('.glossary-toolbar').evaluate((toolbar) => {
-        const button = toolbar.querySelector<HTMLElement>(
+        const buttons = toolbar.querySelectorAll<HTMLElement>(
           '[aria-haspopup="dialog"]',
         );
+        const button = buttons.item(buttons.length - 1);
         if (button === null) return Number.POSITIVE_INFINITY;
         const toolbarBounds = toolbar.getBoundingClientRect();
         const buttonBounds = button.getBoundingClientRect();
@@ -639,6 +655,21 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       }),
     )
     .toBeLessThanOrEqual(2);
+  const desktopTransferBounds = await glossaryTransferButton.boundingBox();
+  const desktopConfigBounds = await translatorConfigButton.boundingBox();
+  expect(desktopTransferBounds).not.toBeNull();
+  expect(desktopConfigBounds).not.toBeNull();
+  expect(desktopTransferBounds!.x).toBeLessThan(desktopConfigBounds!.x);
+  expect(
+    desktopConfigBounds!.x -
+      (desktopTransferBounds!.x + desktopTransferBounds!.width),
+  ).toBeLessThanOrEqual(12);
+  const desktopScanBounds = await scanButton.boundingBox();
+  const desktopTranslateBounds = await translateButton.boundingBox();
+  expect(desktopScanBounds).not.toBeNull();
+  expect(desktopTranslateBounds).not.toBeNull();
+  expect(centerY(desktopScanBounds!)).toBe(centerY(desktopTranslateBounds!));
+  expect(desktopScanBounds!.x).toBeLessThan(desktopTranslateBounds!.x);
   await translatorConfigButton.click();
   await expect(translatorConfigButton).toHaveAttribute('aria-expanded', 'true');
   const translatorConfigModal = page.getByRole('dialog');

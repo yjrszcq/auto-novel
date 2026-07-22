@@ -518,43 +518,38 @@ onBeforeUnmount(() => {
             {{ visibleCandidates.length }}
           </span>
         </n-text>
-        <c-button
+        <n-flex
           v-if="!isMobile"
-          class="glossary-toolbar__desktop-action"
-          :label="extractionLoading ? '扫描中' : '扫描'"
-          :disabled="
-            extractionLoading ||
-            translating ||
-            applying ||
-            (files.length === 0 && loadFiles === undefined)
-          "
-          :loading="extractionLoading"
-          size="small"
-          :round="false"
-          @action="scanTerms"
-        />
-        <c-button
-          v-if="!isMobile"
-          class="glossary-toolbar__desktop-action"
-          label="翻译器配置"
-          :type="showTranslatorConfigModal ? 'primary' : 'default'"
-          :aria-expanded="showTranslatorConfigModal"
-          aria-haspopup="dialog"
-          size="small"
-          :round="false"
-          @action="showTranslatorConfigModal = true"
-        />
+          :size="8"
+          :wrap="false"
+          class="glossary-toolbar__desktop-actions"
+        >
+          <c-button
+            label="术语表"
+            :type="showGlossaryTransferModal ? 'primary' : 'default'"
+            :aria-expanded="showGlossaryTransferModal"
+            aria-haspopup="dialog"
+            size="small"
+            :round="false"
+            @action="showGlossaryTransferModal = true"
+          />
+          <c-button
+            label="翻译器配置"
+            :type="showTranslatorConfigModal ? 'primary' : 'default'"
+            :aria-expanded="showTranslatorConfigModal"
+            aria-haspopup="dialog"
+            size="small"
+            :round="false"
+            @action="showTranslatorConfigModal = true"
+          />
+        </n-flex>
       </div>
     </div>
 
-    <div
-      class="glossary-actions"
-      :class="{ 'glossary-actions--has-apply': applyLabel }"
-    >
+    <div v-if="!isMobile" class="glossary-actions glossary-actions--desktop">
       <n-flex align="center" class="glossary-selection-actions">
         <c-button
           v-if="applyLabel"
-          class="glossary-action glossary-action--apply"
           :label="applyLabel"
           :disabled="
             !scanCompleted || extractionLoading || translating || applying
@@ -566,7 +561,6 @@ onBeforeUnmount(() => {
           @action="applyGlossary"
         />
         <c-button
-          class="glossary-action glossary-action--select"
           :label="allVisibleSelected ? '取消全选' : '全选当前'"
           :disabled="visibleCandidates.length === 0"
           size="small"
@@ -574,7 +568,6 @@ onBeforeUnmount(() => {
           @action="toggleSelectAll"
         />
         <c-button
-          class="glossary-action glossary-action--remove"
           label="移除所选"
           :disabled="selectedWords.length === 0"
           size="small"
@@ -582,7 +575,6 @@ onBeforeUnmount(() => {
           @action="removeWords(selectedWords)"
         />
         <c-button
-          class="glossary-action glossary-action--undo"
           label="撤销删除"
           :disabled="deletionHistory.length === 0"
           size="small"
@@ -596,8 +588,6 @@ onBeforeUnmount(() => {
 
       <n-flex align="center" class="glossary-utility-actions">
         <c-button
-          v-if="isMobile"
-          class="glossary-action glossary-action--scan"
           :label="extractionLoading ? '扫描中' : '扫描'"
           :disabled="
             extractionLoading ||
@@ -611,7 +601,6 @@ onBeforeUnmount(() => {
           @action="scanTerms"
         />
         <c-button
-          class="glossary-action glossary-action--translate"
           label="翻译"
           :disabled="translating || activeCandidates.length === 0"
           size="small"
@@ -620,15 +609,51 @@ onBeforeUnmount(() => {
         />
         <c-button
           v-if="translating"
-          class="glossary-action glossary-action--cancel"
           label="取消翻译"
           size="small"
           :round="false"
           @action="cancelTranslation"
         />
+      </n-flex>
+    </div>
+
+    <div v-else class="glossary-mobile-actions">
+      <div class="glossary-mobile-actions__row">
+        <n-flex :size="4" align="center" :wrap="false">
+          <c-button
+            v-if="applyLabel"
+            :label="applyLabel"
+            :disabled="
+              !scanCompleted || extractionLoading || translating || applying
+            "
+            :loading="applying"
+            type="primary"
+            size="small"
+            :round="false"
+            @action="applyGlossary"
+          />
+          <c-button
+            :label="extractionLoading ? '扫描中' : '扫描'"
+            :disabled="
+              extractionLoading ||
+              translating ||
+              applying ||
+              (files.length === 0 && loadFiles === undefined)
+            "
+            :loading="extractionLoading"
+            size="small"
+            :round="false"
+            @action="scanTerms"
+          />
+          <c-button
+            label="翻译"
+            :disabled="translating || activeCandidates.length === 0"
+            size="small"
+            :round="false"
+            @action="translateCandidates(selectedTranslatorId)"
+          />
+        </n-flex>
         <c-button
-          v-if="isMobile"
-          class="glossary-action glossary-action--config"
           label="翻译器配置"
           :type="showTranslatorConfigModal ? 'primary' : 'default'"
           :aria-expanded="showTranslatorConfigModal"
@@ -637,8 +662,32 @@ onBeforeUnmount(() => {
           :round="false"
           @action="showTranslatorConfigModal = true"
         />
+      </div>
+      <div class="glossary-mobile-actions__row">
+        <n-flex :size="4" align="center" :wrap="false">
+          <c-button
+            :label="allVisibleSelected ? '取消全选' : '全选当前'"
+            :disabled="visibleCandidates.length === 0"
+            size="small"
+            :round="false"
+            @action="toggleSelectAll"
+          />
+          <c-button
+            label="移除所选"
+            :disabled="selectedWords.length === 0"
+            size="small"
+            :round="false"
+            @action="removeWords(selectedWords)"
+          />
+          <c-button
+            label="撤销删除"
+            :disabled="deletionHistory.length === 0"
+            size="small"
+            :round="false"
+            @action="undoDelete"
+          />
+        </n-flex>
         <c-button
-          class="glossary-action glossary-action--transfer"
           label="术语表"
           :type="showGlossaryTransferModal ? 'primary' : 'default'"
           :aria-expanded="showGlossaryTransferModal"
@@ -647,7 +696,17 @@ onBeforeUnmount(() => {
           :round="false"
           @action="showGlossaryTransferModal = true"
         />
-      </n-flex>
+      </div>
+      <c-button
+        v-if="translating"
+        label="取消翻译"
+        size="small"
+        :round="false"
+        @action="cancelTranslation"
+      />
+      <n-text v-if="lastDeletedHint" depth="3">
+        最近删除：{{ lastDeletedHint }}
+      </n-text>
     </div>
 
     <n-alert v-if="extractionError" type="error">
@@ -768,7 +827,7 @@ onBeforeUnmount(() => {
   <c-modal
     v-model:show="showGlossaryTransferModal"
     title="术语表"
-    style="width: min(440px, calc(100vw - 16px))"
+    style="width: min(300px, calc(100vw - 16px))"
   >
     <n-flex align="center" class="glossary-transfer-actions">
       <c-button
@@ -908,7 +967,7 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.glossary-toolbar__row--secondary > :last-child {
+.glossary-toolbar__desktop-actions {
   margin-left: auto;
 }
 
@@ -941,17 +1000,18 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-.glossary-action--scan,
-.glossary-action--config {
-  display: none;
-}
-
 .glossary-import-input {
   display: none;
 }
 
 .glossary-transfer-actions {
+  width: 100%;
+  flex-direction: column;
   flex-wrap: wrap;
+}
+
+.glossary-transfer-actions > * {
+  width: 100%;
 }
 
 .glossary-empty-state {
@@ -1008,7 +1068,6 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .glossary-utility-actions,
   .glossary-translator-selectors {
     width: 100%;
   }
@@ -1039,7 +1098,7 @@ onBeforeUnmount(() => {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .glossary-toolbar__desktop-action {
+  .glossary-toolbar__desktop-actions {
     display: none;
   }
 
@@ -1066,88 +1125,29 @@ onBeforeUnmount(() => {
     display: inline;
   }
 
-  .glossary-toolbar__row--secondary > :last-child {
-    margin-left: 0;
-    justify-self: end;
-  }
-
-  .glossary-actions {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .glossary-mobile-actions {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
     gap: 8px;
   }
 
-  .glossary-selection-actions,
-  .glossary-utility-actions {
-    display: contents !important;
+  .glossary-mobile-actions__row {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
   }
 
-  .glossary-action--scan,
-  .glossary-action--config {
-    display: inline-flex;
+  .glossary-mobile-actions__row > :first-child {
+    min-width: 0;
   }
 
-  .glossary-action {
-    justify-self: center;
-  }
-
-  .glossary-action--apply {
-    grid-row: 1;
-    grid-column: 1;
-    justify-self: start;
-  }
-
-  .glossary-action--scan {
-    grid-row: 1;
-    grid-column: 1;
-    justify-self: start;
-  }
-
-  .glossary-action--translate {
-    grid-row: 1;
-    grid-column: 2 / span 2;
-  }
-
-  .glossary-action--config {
-    grid-row: 1;
-    grid-column: 4;
-    justify-self: end;
-  }
-
-  .glossary-actions--has-apply .glossary-action--scan {
-    grid-column: 2;
-    justify-self: center;
-  }
-
-  .glossary-actions--has-apply .glossary-action--translate {
-    grid-column: 3;
-  }
-
-  .glossary-action--transfer {
-    grid-row: 2;
-    grid-column: 1;
-    justify-self: start;
-  }
-
-  .glossary-action--select {
-    grid-row: 2;
-    grid-column: 2;
-  }
-
-  .glossary-action--remove {
-    grid-row: 2;
-    grid-column: 3;
-  }
-
-  .glossary-action--undo {
-    grid-row: 2;
-    grid-column: 4;
-    justify-self: end;
-  }
-
-  .glossary-action--cancel {
-    grid-row: 3;
-    grid-column: 1;
+  .glossary-mobile-actions :deep(.n-button) {
+    padding-right: 8px;
+    padding-left: 8px;
   }
 }
 </style>
