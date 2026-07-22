@@ -42,8 +42,6 @@ const translatorConfig = computed(
     },
 );
 
-const endpointPrefix = computed(() => `${props.worker.segLength}@`);
-
 const testWorker = async () => {
   if (testingTranslator.value || props.active || props.starting) return;
   testingTranslator.value = true;
@@ -77,10 +75,22 @@ const testWorker = async () => {
     </template>
 
     <template #header>
-      {{ worker.id }}
-      <n-text depth="3" style="font-size: 12px; padding-left: 2px">
-        {{ endpointPrefix }}{{ worker.endpoint }}
-      </n-text>
+      <div class="pool-worker__identity">
+        <div class="pool-worker__identity-primary">
+          <span class="pool-worker__name">{{ worker.id }}</span>
+          <n-text depth="3" class="pool-worker__config">
+            {{ worker.segLength }} / {{ worker.prevSegLength }}
+          </n-text>
+        </div>
+        <n-a
+          class="pool-worker__endpoint"
+          :href="worker.endpoint"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ worker.endpoint }}
+        </n-a>
+      </div>
     </template>
 
     <template #description>
@@ -95,11 +105,12 @@ const testWorker = async () => {
     </template>
 
     <template #header-extra>
-      <n-flex :size="6" :wrap="true" justify="end">
+      <n-flex :size="6" :wrap="true" justify="end" class="pool-worker__actions">
         <c-button
           v-if="active"
           label="停止"
           :icon="StopOutlined"
+          compact-on-mobile
           size="tiny"
           secondary
           @action="emit('stop', worker.id)"
@@ -110,6 +121,7 @@ const testWorker = async () => {
           :icon="PlayArrowOutlined"
           :disabled="starting"
           :icon-hidden="starting"
+          compact-on-mobile
           size="tiny"
           secondary
           @action="emit('start', worker)"
@@ -147,3 +159,56 @@ const testWorker = async () => {
     :worker="worker"
   />
 </template>
+
+<style scoped>
+.pool-worker__identity {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.pool-worker__identity-primary {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.pool-worker__config,
+.pool-worker__endpoint {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .pool-worker__identity {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .pool-worker__identity-primary {
+    flex-wrap: wrap;
+  }
+
+  .pool-worker__name {
+    font-weight: 600;
+  }
+
+  .pool-worker__config,
+  .pool-worker__endpoint {
+    font-size: 12px;
+  }
+
+  .pool-worker__actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, 32px);
+    justify-content: end !important;
+    gap: 6px !important;
+  }
+}
+</style>

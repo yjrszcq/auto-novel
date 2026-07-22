@@ -5078,6 +5078,52 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   });
   await page.reload();
 
+  const firstMobileWorker = page
+    .locator('.n-list-item')
+    .filter({ hasText: 'mobile-worker-a' });
+  await expect(firstMobileWorker.locator('.pool-worker__name')).toHaveText(
+    'mobile-worker-a',
+  );
+  await expect(firstMobileWorker.locator('.pool-worker__config')).toHaveText(
+    'mobile-model-a[ey-a]',
+  );
+  await expect(firstMobileWorker.locator('.pool-worker__endpoint')).toHaveText(
+    'http://127.0.0.1:1',
+  );
+  await expect(
+    firstMobileWorker.locator('.pool-worker__endpoint'),
+  ).toHaveAttribute('href', 'http://127.0.0.1:1');
+  const firstMobileWorkerActions = firstMobileWorker.locator(
+    '.pool-worker__actions',
+  );
+  expect(
+    await firstMobileWorkerActions.evaluate(
+      (element) =>
+        getComputedStyle(element).gridTemplateColumns.split(' ').length,
+    ),
+  ).toBe(2);
+  const startButton = firstMobileWorker.getByRole('button', {
+    name: '启动',
+    exact: true,
+  });
+  await expect(startButton.locator('.c-button__label')).toBeHidden();
+  const workerActionButtons = [
+    startButton,
+    firstMobileWorker.getByRole('button', { name: '测试', exact: true }),
+    firstMobileWorker.getByRole('button', {
+      name: '设置（请先停止）',
+      exact: true,
+    }),
+    firstMobileWorker.getByRole('button', { name: '删除', exact: true }),
+  ];
+  const workerActionBounds = await Promise.all(
+    workerActionButtons.map((button) => button.boundingBox()),
+  );
+  expect(workerActionBounds.every((bounds) => bounds !== null)).toBe(true);
+  expect(workerActionBounds[0]!.y).toBe(workerActionBounds[1]!.y);
+  expect(workerActionBounds[2]!.y).toBe(workerActionBounds[3]!.y);
+  expect(workerActionBounds[2]!.y).toBeGreaterThan(workerActionBounds[0]!.y);
+
   const gptAutomaticQueue = page.getByRole('button', {
     name: '自动队列',
   });
