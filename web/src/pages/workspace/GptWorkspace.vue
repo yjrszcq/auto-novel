@@ -248,6 +248,24 @@ const stopAllWorkers = () => {
   }
 };
 
+const workerControlOptions = computed(() => [
+  {
+    label: '启动全部',
+    key: 'start',
+    disabled: workspaceRef.value.workers.length === 0,
+  },
+  {
+    label: '停止全部',
+    key: 'stop',
+    disabled: pipelineSnapshot.value.workers.length === 0,
+  },
+]);
+
+const handleWorkerControl = (key: string | number) => {
+  if (key === 'start') void startAllWorkers();
+  if (key === 'stop') stopAllWorkers();
+};
+
 const activeWorkerConfigs = computed(() => {
   const activeIds = new Set(
     pipelineSnapshot.value.workers.map((worker) => worker.id),
@@ -373,33 +391,25 @@ onBeforeUnmount(() => {
         compact-on-mobile
         @action="showCreateWorkerModal = true"
       />
+      <c-button-confirm
+        hint="真的要清空缓存吗？"
+        label="清空缓存"
+        :icon="DeleteOutlineOutlined"
+        compact-on-mobile
+        @action="clearCache"
+      />
+      <n-dropdown
+        trigger="click"
+        placement="bottom-end"
+        :options="workerControlOptions"
+        :keyboard="false"
+        @select="handleWorkerControl"
+      >
+        <n-button circle aria-label="批量控制翻译器">
+          <n-icon :component="MoreVertOutlined" />
+        </n-button>
+      </n-dropdown>
     </section-header>
-
-    <n-flex vertical>
-      <c-action-wrapper title="操作" align="center">
-        <n-button-group size="small">
-          <c-button
-            label="启动全部"
-            :round="false"
-            :disabled="workspaceRef.workers.length === 0"
-            @action="startAllWorkers"
-          />
-          <c-button
-            label="停止全部"
-            :round="false"
-            :disabled="pipelineSnapshot.workers.length === 0"
-            @action="stopAllWorkers"
-          />
-          <c-button-confirm
-            hint="真的要清空缓存吗？"
-            label="清空缓存"
-            :icon="DeleteOutlineOutlined"
-            :round="false"
-            @action="clearCache"
-          />
-        </n-button-group>
-      </c-action-wrapper>
-    </n-flex>
 
     <n-alert
       v-if="mixesWorkerConfigurations"

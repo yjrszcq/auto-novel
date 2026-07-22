@@ -4344,7 +4344,10 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
     );
     await page.reload();
 
-    await page.getByRole('button', { name: '启动全部', exact: true }).click();
+    await page
+      .getByRole('button', { name: '批量控制翻译器', exact: true })
+      .click();
+    await page.getByText('启动全部', { exact: true }).click();
     await twoRequestsArrived;
     expect(server.maximumActiveRequests).toBe(2);
     const activeJob = page.locator('.job-queue').filter({ hasText: volumeId });
@@ -5098,7 +5101,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     page
       .getByRole('button', { name: '清空缓存' })
       .locator('.c-button-confirm__label'),
-  ).toBeVisible();
+  ).toBeHidden();
   await expect(
     page
       .getByRole('button', { name: '本地书架', exact: true })
@@ -5106,6 +5109,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   ).toBeHidden();
   for (const button of [
     page.getByRole('button', { name: '添加翻译器' }),
+    page.getByRole('button', { name: '清空缓存' }),
     page.getByRole('button', { name: '本地书架', exact: true }),
     gptAutomaticQueue,
   ]) {
@@ -5213,7 +5217,10 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(formatRetryInput).toHaveValue('5');
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: '启动全部', exact: true }).click();
+  await page
+    .getByRole('button', { name: '批量控制翻译器', exact: true })
+    .click();
+  await page.getByText('启动全部', { exact: true }).click();
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   const metricsPanel = page.getByRole('dialog', {
     name: '翻译器运行统计',
@@ -5243,7 +5250,10 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
 
   await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
   await expect(metricsPanel).toHaveCount(0);
-  await page.getByRole('button', { name: '停止全部', exact: true }).click();
+  await page
+    .getByRole('button', { name: '批量控制翻译器', exact: true })
+    .click();
+  await page.getByText('停止全部', { exact: true }).click();
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   await expect(
     metricsPanel
@@ -5274,7 +5284,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     page
       .getByRole('button', { name: '清空缓存' })
       .locator('.c-button-confirm__label'),
-  ).toBeVisible();
+  ).toBeHidden();
   await expect(
     page
       .getByRole('button', { name: '本地书架', exact: true })
@@ -5282,6 +5292,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   ).toBeHidden();
   for (const button of [
     page.getByRole('button', { name: '添加翻译器' }),
+    page.getByRole('button', { name: '清空缓存' }),
     page.getByRole('button', { name: '本地书架', exact: true }),
     sakuraAutomaticQueue,
   ]) {
@@ -5331,12 +5342,11 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(
     page.getByRole('textbox', { name: '格式异常重试次数' }),
   ).toHaveValue('3');
-  await expect(
-    page.getByRole('button', { name: '启动全部', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '停止全部', exact: true }),
-  ).toBeVisible();
+  await page
+    .getByRole('button', { name: '批量控制翻译器', exact: true })
+    .click();
+  await expect(page.getByText('启动全部', { exact: true })).toBeVisible();
+  await expect(page.getByText('停止全部', { exact: true })).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 
