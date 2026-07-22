@@ -6,6 +6,10 @@ import type { TranslationCacheEvent } from '@/repos/useTranslationCache';
 import type { Glossary } from '@/model/Glossary';
 import type { TranslatorId } from '@/model/Translator';
 
+import { estimateTranslationSize } from './TranslationBudget';
+
+export { estimateTranslationSize } from './TranslationBudget';
+
 export type TranslationSegment = [
   input: string[],
   previous: string[] | undefined,
@@ -121,20 +125,6 @@ export const createGlossaryWrapper = (glossary: Glossary) => {
     const textZhDecoded = decode(textZh);
     return textZhDecoded;
   };
-};
-
-export const estimateTranslationSize = (text: string) => {
-  let size = 0;
-  for (const character of text) {
-    if (/\s/u.test(character)) size += 0.25;
-    else if (/^[\x00-\x7f]$/u.test(character)) size += 0.5;
-    else if (
-      /\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}/u.test(character)
-    ) {
-      size += 1;
-    } else size += 1;
-  }
-  return size;
 };
 
 const splitLineByBudget = (line: string, budget: number) => {

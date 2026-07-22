@@ -10,6 +10,8 @@ import { ProviderBackoff } from './ProviderBackoff';
 type OpenAi = ReturnType<typeof createOpenAiApi>;
 type FormatCorrection = { attempt: number; issue: string };
 
+export const openAiTranslationSegmentBudget = 1_500;
+
 export class OpenAiTranslator implements SegmentTranslator {
   id = <const>'gpt';
   cacheIdentity: Readonly<Record<string, unknown>>;
@@ -29,7 +31,7 @@ export class OpenAiTranslator implements SegmentTranslator {
     this.api = createOpenAiApi(endpoint, key);
   }
 
-  segmentor = createBudgetSegmentor(1_500, 30, 4);
+  segmentor = createBudgetSegmentor(openAiTranslationSegmentBudget, 30, 4);
 
   async translate(seg: string[], context: SegmentContext): Promise<string[]> {
     const { glossary, signal } = context;

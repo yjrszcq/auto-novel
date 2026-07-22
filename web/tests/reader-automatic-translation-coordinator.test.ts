@@ -6,7 +6,10 @@ import {
   type ReaderAutomaticTranslationSelection,
   type ReaderAutomaticTranslationTarget,
 } from '@/pages/reader/core/ReaderAutoTranslation';
-import { ReaderAutomaticTranslationCoordinator } from '@/pages/reader/core/ReaderAutomaticTranslationCoordinator';
+import {
+  ReaderAutomaticTranslationCoordinator,
+  splitReaderAutomaticTranslationTargets,
+} from '@/pages/reader/core/ReaderAutomaticTranslationCoordinator';
 
 const selection: ReaderAutomaticTranslationSelection = {
   source: 'gpt',
@@ -40,6 +43,101 @@ const deferred = () => {
 };
 
 describe('reader automatic translation coordinator', () => {
+  it('splits complete paragraphs by count and character budget without crossing chapters', () => {
+    const targets = [
+      ...['甲甲', '乙乙', '丙丙', '丁丁'].map((original, segmentIndex) => ({
+        chapterId: 'first',
+        segmentId: `first-${segmentIndex}`,
+        segmentIndex,
+        original,
+      })),
+      {
+        chapterId: 'second',
+        segmentId: 'second-0',
+        segmentIndex: 0,
+        original: '超长完整自然段',
+      },
+      {
+        chapterId: 'second',
+        segmentId: 'second-1',
+        segmentIndex: 1,
+        original: '末段',
+      },
+    ];
+
+    const chunks = splitReaderAutomaticTranslationTargets({
+      targets,
+      maximumParagraphs: 3,
+      maximumCharacters: 5,
+    });
+
+    expect(
+      chunks.map(({ chapterId, targets: values }) => ({
+        chapterId,
+        segments: values.map(({ segmentId }) => segmentId),
+      })),
+    ).toEqual([
+      { chapterId: 'first', segments: ['first-0', 'first-1'] },
+      { chapterId: 'first', segments: ['first-2', 'first-3'] },
+      { chapterId: 'second', segments: ['second-0'] },
+      { chapterId: 'second', segments: ['second-1'] },
+    ]);
+  });
+
+  it('uses configured concurrency for independent chunks and commits once', async () => {
+    const paragraphs = ['一', '二', '三', '四'];
+    const chunkTargets = paragraphs.map((original, segmentIndex) => ({
+      chapterId: 'chapter',
+      segmentId: `segment-${segmentIndex}`,
+      segmentIndex,
+      original,
+    }));
+    const session = new ReaderAutomaticTranslationSession();
+    const generation = session.start(selection);
+    const bothStarted = deferred();
+    const release = deferred();
+    let active = 0;
+    let maximumActive = 0;
+    const translate = vi.fn(async (_selection, originals: string[]) => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      if (active === 2) bothStarted.resolve();
+      await release.promise;
+      active -= 1;
+      return originals.map((original) => `译-${original}`);
+    });
+    const commit = vi.fn();
+    const coordinator = new ReaderAutomaticTranslationCoordinator(session, {
+      loadChapter: async () => createChapter(paragraphs),
+      translate,
+      commit,
+    });
+
+    const pending = coordinator.translateTargets({
+      generation,
+      selection,
+      targets: chunkTargets,
+      glossary: {},
+      concurrency: 2,
+      maximumChunkParagraphs: 2,
+      maximumChunkCharacters: 100,
+      signal: new AbortController().signal,
+    });
+    await bothStarted.promise;
+    release.resolve();
+    await pending;
+
+    expect(translate).toHaveBeenCalledTimes(2);
+    expect(maximumActive).toBe(2);
+    expect(commit).toHaveBeenCalledOnce();
+    expect(commit.mock.calls[0]?.[2].paragraphs).toEqual([
+      '译-一',
+      '译-二',
+      '译-三',
+      '译-四',
+    ]);
+  });
+
   it('keeps partial chapter results in memory and commits only after completion', async () => {
     const session = new ReaderAutomaticTranslationSession();
     const generation = session.start(selection);

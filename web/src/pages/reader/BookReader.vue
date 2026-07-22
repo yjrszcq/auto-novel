@@ -33,6 +33,7 @@ import type { GptWorker, SakuraWorker } from '@/model/Translator';
 import { Translator } from '@/domain/translate';
 import type { TranslatorConfig } from '@/domain/translate';
 import { getChapterFormalTranslationRevision } from '@/domain/translate/ChapterTranslationCompletion';
+import { openAiTranslationSegmentBudget } from '@/domain/translate/TranslatorOpenAi';
 import { useMediaQuery, useThrottleFn } from '@vueuse/core';
 import { darkTheme, lightTheme } from 'naive-ui';
 import type { GlobalThemeOverrides } from 'naive-ui';
@@ -2517,7 +2518,7 @@ const runAutomaticTranslationOnce = async () => {
           originals,
           { force: true, glossary, signal },
           {
-            concurrency: selection.source === 'gpt' ? runtime.concurrency : 1,
+            concurrency: 1,
             onTranslatedLines: onTranslated,
           },
         );
@@ -2564,8 +2565,15 @@ const runAutomaticTranslationOnce = async () => {
     selection: runtime.selection,
     targets: planned.all,
     glossary: runtime.glossary,
-    concurrency:
-      runtime.selection.source === 'sakura' ? runtime.concurrency : 1,
+    concurrency: runtime.concurrency,
+    maximumChunkParagraphs: settings.value.autoTranslationChunkParagraphs,
+    maximumChunkCharacters:
+      runtime.selection.source === 'gpt'
+        ? openAiTranslationSegmentBudget
+        : runtime.config.id === 'sakura'
+          ? runtime.config.segLength
+          : 1,
+    chunkParagraphOverhead: runtime.selection.source === 'gpt' ? 4 : 0,
     signal: controller.signal,
   });
 };

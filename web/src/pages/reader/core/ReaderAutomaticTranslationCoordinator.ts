@@ -4,6 +4,7 @@ import type {
 } from '@/model/LocalVolume';
 import { runWithConcurrency } from '@/domain/translate/Concurrency';
 import { hasCompleteChapterTranslation } from '@/domain/translate/ChapterTranslationCompletion';
+import { estimateTranslationSize } from '@/domain/translate/TranslationBudget';
 
 import type {
   ReaderAutomaticTranslationResult,
@@ -56,19 +57,61 @@ const hasSourceText = (value: string) => value.trim().length > 0;
 const hasTranslation = (value: string | undefined) =>
   (value?.trim().length ?? 0) > 0;
 
-const groupTargetsByChapter = (targets: ReaderAutomaticTranslationTarget[]) => {
+export const splitReaderAutomaticTranslationTargets = ({
+  targets,
+  maximumParagraphs,
+  maximumCharacters,
+  paragraphOverhead = 0,
+}: {
+  targets: ReaderAutomaticTranslationTarget[];
+  maximumParagraphs: number;
+  maximumCharacters: number;
+  paragraphOverhead?: number;
+}) => {
+  const paragraphLimit = Number.isFinite(maximumParagraphs)
+    ? Math.max(1, Math.floor(maximumParagraphs))
+    : 1;
+  const characterLimit = Number.isFinite(maximumCharacters)
+    ? Math.max(1, maximumCharacters)
+    : 1;
+  const overhead = Number.isFinite(paragraphOverhead)
+    ? Math.max(0, paragraphOverhead)
+    : 0;
   const groups = new Map<string, ReaderAutomaticTranslationTarget[]>();
   targets.forEach((target) => {
     const group = groups.get(target.chapterId) ?? [];
     group.push(target);
     groups.set(target.chapterId, group);
   });
-  return [...groups.entries()].map(([chapterId, values]) => ({
-    chapterId,
-    targets: values.sort(
-      (left, right) => left.segmentIndex - right.segmentIndex,
-    ),
-  }));
+  return [...groups.entries()].flatMap(([chapterId, values]) => {
+    const chunks: Array<{
+      chapterId: string;
+      targets: ReaderAutomaticTranslationTarget[];
+    }> = [];
+    let chunk: ReaderAutomaticTranslationTarget[] = [];
+    let chunkSize = 0;
+    const flush = () => {
+      if (chunk.length === 0) return;
+      chunks.push({ chapterId, targets: chunk });
+      chunk = [];
+      chunkSize = 0;
+    };
+    values
+      .sort((left, right) => left.segmentIndex - right.segmentIndex)
+      .forEach((target) => {
+        const targetSize = estimateTranslationSize(target.original) + overhead;
+        if (
+          chunk.length >= paragraphLimit ||
+          (chunk.length > 0 && chunkSize + targetSize > characterLimit)
+        ) {
+          flush();
+        }
+        chunk.push(target);
+        chunkSize += targetSize;
+      });
+    flush();
+    return chunks;
+  });
 };
 
 const reusableParagraphs = (
@@ -120,6 +163,8 @@ export const buildCompleteReaderChapterTranslation = ({
 };
 
 export class ReaderAutomaticTranslationCoordinator {
+  private readonly completingChapters = new Set<string>();
+
   constructor(
     private readonly session: ReaderAutomaticTranslationSession,
     private readonly dependencies: ReaderAutomaticTranslationCoordinatorDependencies,
@@ -131,6 +176,9 @@ export class ReaderAutomaticTranslationCoordinator {
     targets,
     glossary,
     concurrency,
+    maximumChunkParagraphs = Number.MAX_SAFE_INTEGER,
+    maximumChunkCharacters = Number.MAX_SAFE_INTEGER,
+    chunkParagraphOverhead = 0,
     signal,
   }: {
     generation: number;
@@ -138,9 +186,17 @@ export class ReaderAutomaticTranslationCoordinator {
     targets: ReaderAutomaticTranslationTarget[];
     glossary: ChapterTranslation['glossary'];
     concurrency: number;
+    maximumChunkParagraphs?: number;
+    maximumChunkCharacters?: number;
+    chunkParagraphOverhead?: number;
     signal: AbortSignal;
   }) {
-    const groups = groupTargetsByChapter(targets);
+    const groups = splitReaderAutomaticTranslationTargets({
+      targets,
+      maximumParagraphs: maximumChunkParagraphs,
+      maximumCharacters: maximumChunkCharacters,
+      paragraphOverhead: chunkParagraphOverhead,
+    });
     await runWithConcurrency(
       groups,
       Math.max(1, concurrency),
@@ -187,6 +243,8 @@ export class ReaderAutomaticTranslationCoordinator {
             return;
           }
           complete.glossary = { ...glossary };
+          if (this.completingChapters.has(chapterId)) return;
+          this.completingChapters.add(chapterId);
           if ((selection.purpose ?? 'automatic') === 'retranslate') {
             await this.dependencies.onRetranslationComplete?.(
               selection,
@@ -289,6 +347,8 @@ export class ReaderAutomaticTranslationCoordinator {
             return;
           }
           complete.glossary = { ...glossary };
+          if (this.completingChapters.has(chapterId)) return;
+          this.completingChapters.add(chapterId);
           if ((selection.purpose ?? 'automatic') === 'retranslate') {
             await this.dependencies.onRetranslationComplete?.(
               selection,
