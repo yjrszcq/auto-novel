@@ -183,6 +183,7 @@ const searchTruncated = ref(false);
 let searchUiRequestId = 0;
 const showMobileTranslationNotice = ref(false);
 const showMobilePreloadHelp = ref(false);
+const showMobileChunkHelp = ref(false);
 const controlsVisible = ref(true);
 const selectedReaderText = ref('');
 const currentTime = ref('');
@@ -460,7 +461,9 @@ const hasOpenReaderPanel = () =>
   showRetranslationSelection.value ||
   showRetranslationDecision.value ||
   showReaderGlossary.value ||
-  showMobileTranslationNotice.value;
+  showMobileTranslationNotice.value ||
+  showMobilePreloadHelp.value ||
+  showMobileChunkHelp.value;
 
 const closeReaderPanels = () => {
   if (showRetranslationDecision.value && pendingRetranslation.value) {
@@ -479,6 +482,8 @@ const closeReaderPanels = () => {
   }
   showReaderGlossary.value = false;
   showMobileTranslationNotice.value = false;
+  showMobilePreloadHelp.value = false;
+  showMobileChunkHelp.value = false;
 };
 
 const openCatalog = async () => {
@@ -496,6 +501,7 @@ const openSettings = () => {
   const shouldOpen = !showSettings.value;
   closeReaderPanels();
   showMobilePreloadHelp.value = false;
+  showMobileChunkHelp.value = false;
   showSettings.value = shouldOpen;
 };
 
@@ -2146,6 +2152,16 @@ const loadedReaderChapters = () => {
   );
 };
 
+const replacePreviewChapter = (
+  previews: ReaderChapterPreview[],
+  chapter: ReaderChapterContent,
+) =>
+  previews.map((preview) =>
+    preview.chapter.chapterId === chapter.chapterId
+      ? { ...preview, chapter }
+      : preview,
+  );
+
 const renderTemporaryTranslations = async (changedChapterIds: Set<string>) => {
   const ready = result.value;
   if (ready?.kind !== 'ready') return;
@@ -2236,6 +2252,14 @@ const discardAutomaticTranslationChapterDraft = async (
   continuousChapters.value = continuousChapters.value.map((loaded) =>
     loaded.chapterId === chapterId ? chapter : loaded,
   );
+  previousChapterPreviews.value = replacePreviewChapter(
+    previousChapterPreviews.value,
+    chapter,
+  );
+  nextChapterPreviews.value = replacePreviewChapter(
+    nextChapterPreviews.value,
+    chapter,
+  );
   result.value = {
     ...latest,
     chapters,
@@ -2317,6 +2341,14 @@ const adoptCompletedChapterTranslation = async (chapterId: string) => {
   continuousChapters.value = continuousChapters.value.map((loaded) =>
     loaded.chapterId === chapterId ? chapter : loaded,
   );
+  previousChapterPreviews.value = replacePreviewChapter(
+    previousChapterPreviews.value,
+    chapter,
+  );
+  nextChapterPreviews.value = replacePreviewChapter(
+    nextChapterPreviews.value,
+    chapter,
+  );
   result.value = {
     ...latest,
     chapters,
@@ -2335,41 +2367,14 @@ const collectAutomaticTranslationChapters = async (
 ) => {
   const ready = result.value;
   if (ready?.kind !== 'ready') return [];
-  const completedChapterIds = new Set(
-    ready.chapters
-      .filter(({ translationStatus }) => translationStatus === 'complete')
-      .map(({ id }) => id),
-  );
-  const visibleChapterIds = new Set(visible.map(({ chapterId }) => chapterId));
   const chapters = new Map(
-    loadedReaderChapters()
-      .filter(
-        (chapter) =>
-          visibleChapterIds.has(chapter.chapterId) ||
-          !completedChapterIds.has(chapter.chapterId),
-      )
-      .map((chapter) => [chapter.chapterId, chapter]),
+    loadedReaderChapters().map((chapter) => [chapter.chapterId, chapter]),
   );
   const visibleIndexes = visible.flatMap(({ chapterId }) => {
     const index = ready.chapters.findIndex(({ id }) => id === chapterId);
     return index < 0 ? [] : [index];
   });
   if (visibleIndexes.length === 0) return [...chapters.values()];
-  const continuationSummary = ready.chapters
-    .slice(Math.min(...visibleIndexes))
-    .find(({ translationStatus }) => translationStatus !== 'complete');
-  if (
-    continuationSummary !== undefined &&
-    !chapters.has(continuationSummary.id)
-  ) {
-    const chapter = await (
-      await cachedAdapterPromise
-    ).getChapter({
-      bookId: bookId.value,
-      chapterId: continuationSummary.id,
-    });
-    chapters.set(chapter.chapterId, chapter);
-  }
   let nextIndex = Math.max(...visibleIndexes) + 1;
   const adapter = await cachedAdapterPromise;
   while (true) {
@@ -2386,12 +2391,7 @@ const collectAutomaticTranslationChapters = async (
     }
     const summary = ready.chapters[nextIndex];
     nextIndex += 1;
-    if (
-      summary === undefined ||
-      completedChapterIds.has(summary.id) ||
-      chapters.has(summary.id)
-    )
-      continue;
+    if (summary === undefined || chapters.has(summary.id)) continue;
     const chapter = await adapter.getChapter({
       bookId: bookId.value,
       chapterId: summary.id,
@@ -2464,75 +2464,6 @@ const runAutomaticTranslationOnce = async () => {
       visible,
       preloadParagraphs: settings.value.autoTranslationPreloadParagraphs,
     });
-    const visibleChapterIndexes = visible.flatMap(({ chapterId }) => {
-      const index = ready.chapters.findIndex(({ id }) => id === chapterId);
-      return index < 0 ? [] : [index];
-    });
-    const continuationSummary = ready.chapters
-      .slice(
-        visibleChapterIndexes.length === 0
-          ? 0
-          : Math.min(...visibleChapterIndexes),
-      )
-      .find(({ translationStatus }) => translationStatus !== 'complete');
-    const continuationChapter = chapters.find(
-      ({ chapterId }) => chapterId === continuationSummary?.id,
-    );
-    const plannedHasUntranslatedTarget = planned.all.some((target) => {
-      const segment = chapters
-        .find(({ chapterId }) => chapterId === target.chapterId)
-        ?.segments.find(({ id }) => id === target.segmentId);
-      return (
-        (segment?.translated?.trim().length ?? 0) === 0 &&
-        automaticTranslationSession.get(
-          runtime.selection,
-          target.chapterId,
-          target.segmentId,
-        ) === undefined
-      );
-    });
-    if (continuationChapter !== undefined && !plannedHasUntranslatedTarget) {
-      const plannedKeys = new Set(
-        planned.all.map(({ chapterId, segmentId }) =>
-          temporaryTranslationKey(chapterId, segmentId),
-        ),
-      );
-      const continuationTargets: typeof planned.all = [];
-      const continuationParagraphLimit = Math.max(
-        1,
-        planned.current.length,
-        planned.prefetchParagraphLimit,
-      );
-      for (const segment of continuationChapter.segments) {
-        const key = temporaryTranslationKey(
-          continuationChapter.chapterId,
-          segment.id,
-        );
-        const sourceLength = segment.original.trim().length;
-        if (
-          sourceLength === 0 ||
-          plannedKeys.has(key) ||
-          automaticTranslationSession.get(
-            runtime.selection,
-            continuationChapter.chapterId,
-            segment.id,
-          ) !== undefined
-        ) {
-          continue;
-        }
-        continuationTargets.push({
-          chapterId: continuationChapter.chapterId,
-          segmentId: segment.id,
-          segmentIndex: segment.index,
-          original: segment.original,
-        });
-        if (continuationTargets.length >= continuationParagraphLimit) break;
-      }
-      planned = {
-        ...planned,
-        all: [...planned.all, ...continuationTargets],
-      };
-    }
   }
   if (planned.all.length === 0) return;
   const coordinator = new ReaderAutomaticTranslationCoordinator(
@@ -4974,8 +4905,7 @@ onBeforeUnmount(() => {
                   class="book-reader__settings-info"
                   type="button"
                   aria-label="自动翻译预翻译说明"
-                  :aria-expanded="showMobilePreloadHelp"
-                  @click.stop="showMobilePreloadHelp = !showMobilePreloadHelp"
+                  @click.stop="showMobilePreloadHelp = true"
                 >
                   <n-icon :component="InfoOutlined" />
                 </button>
@@ -5012,7 +4942,42 @@ onBeforeUnmount(() => {
           v-if="requiresWholeChapterTranslation"
           class="book-reader__settings-quarter book-reader__settings-chunk"
         >
-          <n-form-item label="自动翻译切块段数">
+          <n-form-item>
+            <template #label>
+              <span class="book-reader__settings-label">
+                自动翻译切块段数
+                <n-popover
+                  v-if="isDesktopReader"
+                  trigger="click"
+                  placement="bottom-start"
+                  :style="{
+                    maxWidth: 'min(360px, calc(100vw - 32px))',
+                    whiteSpace: 'normal',
+                  }"
+                >
+                  <template #trigger>
+                    <button
+                      class="book-reader__settings-info"
+                      type="button"
+                      aria-label="自动翻译切块段数说明"
+                    >
+                      <n-icon :component="InfoOutlined" />
+                    </button>
+                  </template>
+                  每个并发翻译请求最多包含的完整自然段数，默认 5
+                  段；遇到翻译器字数上限或章末会提前结束当前块。每块翻完后立即显示，不等待整章完成。
+                </n-popover>
+                <button
+                  v-else
+                  class="book-reader__settings-info"
+                  type="button"
+                  aria-label="自动翻译切块段数说明"
+                  @click.stop="showMobileChunkHelp = true"
+                >
+                  <n-icon :component="InfoOutlined" />
+                </button>
+              </span>
+            </template>
             <n-input-number
               :value="settings.autoTranslationChunkParagraphs"
               :min="1"
@@ -5054,13 +5019,20 @@ onBeforeUnmount(() => {
       </n-form>
     </ReaderBottomSheet>
 
-    <div
-      v-if="showSettings && showMobilePreloadHelp && !isDesktopReader"
-      class="book-reader__mobile-preload-help"
-      role="tooltip"
+    <ReaderBottomSheet
+      v-model:show="showMobilePreloadHelp"
+      title="自动翻译预翻译段数"
     >
       提前翻译当前可见内容之后的自然段；0 表示只处理当前可见段。
-    </div>
+    </ReaderBottomSheet>
+
+    <ReaderBottomSheet
+      v-model:show="showMobileChunkHelp"
+      title="自动翻译切块段数"
+    >
+      每个并发翻译请求最多包含的完整自然段数，默认 5
+      段；遇到翻译器字数上限或章末会提前结束当前块。每块翻完后立即显示，不等待整章完成。
+    </ReaderBottomSheet>
   </n-config-provider>
 </template>
 
@@ -5529,24 +5501,6 @@ onBeforeUnmount(() => {
   font-size: 18px;
 }
 
-.book-reader__mobile-preload-help {
-  position: fixed;
-  top: calc(var(--reader-app-bar-height) + 12px);
-  right: 16px;
-  left: 16px;
-  z-index: 3000;
-  max-width: 420px;
-  padding: 10px 12px;
-  margin: 0 auto;
-  color: var(--reader-text-color);
-  line-height: 1.5;
-  background: var(--reader-chrome-background);
-  border: 1px solid var(--reader-chrome-border);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
-  pointer-events: none;
-}
-
 .book-reader__loading {
   display: grid;
   min-height: calc(100dvh - 100px);
@@ -5831,14 +5785,28 @@ onBeforeUnmount(() => {
     grid-column: span 1;
   }
 
-  .book-reader__settings-reading-language,
   .book-reader__settings-translator {
     grid-column: 1 / -1;
   }
 
-  .book-reader__settings-reading-language,
-  .book-reader__settings-quarter {
-    grid-row: auto;
+  .book-reader__settings-reading-language {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .book-reader__settings-retranslation {
+    grid-column: 2;
+    grid-row: 4;
+  }
+
+  .book-reader__settings-preload {
+    grid-column: 1;
+    grid-row: 5;
+  }
+
+  .book-reader__settings-chunk {
+    grid-column: 2;
+    grid-row: 5;
   }
 }
 </style>

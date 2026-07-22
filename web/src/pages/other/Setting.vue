@@ -27,6 +27,7 @@ const isMobile = useMediaQuery('(max-width: 639px)');
 const showLanguageDetectionHelp = ref(false);
 const showDownloadMetadataHelp = ref(false);
 const showReaderPreloadHelp = ref(false);
+const showReaderChunkHelp = ref(false);
 const readerSettings = ref<ReaderSettingsRecord>({ ...defaultReaderSettings });
 const readerSettingsLoading = ref(true);
 const readerSettingsSaving = ref(false);
@@ -510,18 +511,58 @@ onMounted(() => {
             align="center"
             class="reader-setting-row"
           >
-            <n-input-number
-              class="number-setting-input reader-chunk-setting__input"
-              :value="readerSettings.autoTranslationChunkParagraphs"
-              :min="1"
-              :max="50"
-              :precision="0"
-              :input-props="{
-                'aria-label': '自动翻译切块段数',
-              }"
-              :disabled="readerSettingsLoading || readerSettingsSaving"
-              @update:value="updateAutoTranslationChunkParagraphs"
-            />
+            <div class="number-setting-control">
+              <n-input-number
+                class="number-setting-input reader-chunk-setting__input"
+                :value="readerSettings.autoTranslationChunkParagraphs"
+                :min="1"
+                :max="50"
+                :precision="0"
+                :input-props="{
+                  'aria-label': '自动翻译切块段数',
+                }"
+                :disabled="readerSettingsLoading || readerSettingsSaving"
+                @update:value="updateAutoTranslationChunkParagraphs"
+              />
+              <n-popover
+                v-if="!isMobile"
+                trigger="click"
+                placement="bottom-start"
+                :style="{
+                  maxWidth: 'min(360px, calc(100vw - 32px))',
+                  whiteSpace: 'normal',
+                }"
+              >
+                <template #trigger>
+                  <n-button
+                    class="setting-info-button"
+                    quaternary
+                    circle
+                    size="small"
+                    aria-label="自动翻译切块段数说明"
+                  >
+                    <template #icon>
+                      <n-icon :component="InfoOutlined" />
+                    </template>
+                  </n-button>
+                </template>
+                每个并发翻译请求最多包含的完整自然段数，默认 5
+                段；遇到翻译器字数上限或章末会提前结束当前块。每块翻完后立即显示，不等待整章完成。
+              </n-popover>
+              <n-button
+                v-else
+                class="setting-info-button"
+                quaternary
+                circle
+                size="small"
+                aria-label="自动翻译切块段数说明"
+                @click="showReaderChunkHelp = true"
+              >
+                <template #icon>
+                  <n-icon :component="InfoOutlined" />
+                </template>
+              </n-button>
+            </div>
           </c-action-wrapper>
           <c-action-wrapper
             title="重翻完成后"
@@ -555,6 +596,14 @@ onMounted(() => {
       aria-label="自动翻译预翻译"
     >
       提前翻译当前可见内容之后的自然段；0 表示只处理当前可见段。
+    </c-modal>
+    <c-modal
+      v-model:show="showReaderChunkHelp"
+      title="自动翻译切块段数"
+      aria-label="自动翻译切块段数"
+    >
+      每个并发翻译请求最多包含的完整自然段数，默认 5
+      段；遇到翻译器字数上限或章末会提前结束当前块。每块翻完后立即显示，不等待整章完成。
     </c-modal>
     <c-modal
       v-model:show="showDownloadMetadataHelp"

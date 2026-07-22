@@ -1022,25 +1022,63 @@ test('opens a local bookshelf book safely through the current reader route', asy
   await expect(
     mobileReaderSettings.getByText('GPT 翻译器', { exact: true }),
   ).toBeVisible();
-  const mobileSettingsBoundsBeforeHelp =
-    await mobileReaderSettings.boundingBox();
+  const mobileTranslationSettingBounds = await Promise.all(
+    ['阅读语言', '重翻完成后', '自动翻译预翻译段数', '自动翻译切块段数'].map(
+      (label) =>
+        mobileReaderSettings
+          .locator('.n-form-item')
+          .filter({ hasText: label })
+          .boundingBox(),
+    ),
+  );
+  expect(
+    mobileTranslationSettingBounds.every((bounds) => bounds !== null),
+  ).toBe(true);
+  const [mobileReading, mobileRetranslation, mobilePreload, mobileChunk] =
+    mobileTranslationSettingBounds.map((bounds) => bounds!);
+  expect(Math.abs(mobileReading.y - mobileRetranslation.y)).toBeLessThanOrEqual(
+    1,
+  );
+  expect(Math.abs(mobilePreload.y - mobileChunk.y)).toBeLessThanOrEqual(1);
+  expect(mobileReading.x).toBeLessThan(mobileRetranslation.x);
+  expect(mobilePreload.x).toBeLessThan(mobileChunk.x);
+  expect(Math.abs(mobileReading.x - mobilePreload.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(mobileRetranslation.x - mobileChunk.x)).toBeLessThanOrEqual(
+    1,
+  );
+  expect(mobileReading.y).toBeLessThan(mobilePreload.y);
   await mobileReaderSettings
     .getByRole('button', { name: '自动翻译预翻译说明' })
     .click();
-  const preloadExplanation = page.locator('.book-reader__mobile-preload-help');
-  await expect(preloadExplanation).toBeVisible();
+  const preloadExplanation = page.getByRole('dialog', {
+    name: '自动翻译预翻译段数',
+  });
+  await expect(preloadExplanation).toContainText(
+    '提前翻译当前可见内容之后的自然段',
+  );
   const preloadExplanationBounds = await preloadExplanation.boundingBox();
   expect(preloadExplanationBounds).not.toBeNull();
   expect(preloadExplanationBounds!.x).toBeGreaterThanOrEqual(0);
   expect(
     preloadExplanationBounds!.x + preloadExplanationBounds!.width,
   ).toBeLessThanOrEqual(390);
-  expect(await mobileReaderSettings.boundingBox()).toEqual(
-    mobileSettingsBoundsBeforeHelp,
-  );
-  await mobileReaderSettings
-    .getByRole('button', { name: '自动翻译预翻译说明' })
+  await preloadExplanation
+    .getByRole('button', { name: '关闭自动翻译预翻译段数' })
     .click();
+  await expect(preloadExplanation).toHaveCount(0);
+  await mobileReaderSettings
+    .getByRole('button', { name: '自动翻译切块段数说明' })
+    .click();
+  const chunkExplanation = page.getByRole('dialog', {
+    name: '自动翻译切块段数',
+  });
+  await expect(chunkExplanation).toContainText(
+    '每块翻完后立即显示，不等待整章完成',
+  );
+  await chunkExplanation
+    .getByRole('button', { name: '关闭自动翻译切块段数' })
+    .click();
+  await expect(chunkExplanation).toHaveCount(0);
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '夜晚', exact: true }).click();
   await translationToggle.click();
@@ -2611,6 +2649,16 @@ test('automatically translates a reader window without persisting a partial chap
     await expect(
       readerSettings.getByText('自动翻译预翻译段数', { exact: true }),
     ).toBeVisible();
+    const readerChunkHelpButton = readerSettings.getByRole('button', {
+      name: '自动翻译切块段数说明',
+    });
+    await readerChunkHelpButton.click();
+    await expect(
+      page.locator('.n-popover').filter({
+        hasText: '每块翻完后立即显示，不等待整章完成',
+      }),
+    ).toBeVisible();
+    await readerChunkHelpButton.click();
     await readerSettings
       .locator('.n-form-item')
       .filter({ hasText: 'GPT 翻译器' })
@@ -2743,6 +2791,13 @@ test('automatically translates a reader window without persisting a partial chap
     }, temporaryBookId);
     expect(persistedChapter).not.toHaveProperty('gpt');
     expect(server.requests.length).toBeGreaterThan(0);
+    expect(server.maximumActiveRequests).toBe(2);
+    expect(
+      server.requests.every(({ body }) => {
+        const prompt = body.messages.at(-1)?.content ?? '';
+        return Array.from(prompt.matchAll(/^#\d+:/gm)).length <= 5;
+      }),
+    ).toBe(true);
     expect(
       server.requests.every(
         ({ body }) => body.model === 'reader-selected-model',
@@ -3645,6 +3700,9 @@ test('persists the global reading version selected in Settings', async ({
   const preloadHelpButton = page.getByRole('button', {
     name: '自动翻译预翻译说明',
   });
+  const chunkHelpButton = page.getByRole('button', {
+    name: '自动翻译切块段数说明',
+  });
   await expect(languageDetectionInput).toHaveValue('95');
   await languageDetectionInput.fill('97');
   await languageDetectionInput.press('Tab');
@@ -3697,6 +3755,13 @@ test('persists the global reading version selected in Settings', async ({
     ),
   ).toBeVisible();
   await preloadHelpButton.click();
+  await chunkHelpButton.click();
+  await expect(
+    page.locator('.n-popover').filter({
+      hasText: '每块翻完后立即显示，不等待整章完成',
+    }),
+  ).toBeVisible();
+  await chunkHelpButton.click();
 
   const baiduAppId = page.getByRole('textbox', {
     name: '百度翻译 App ID',
@@ -3842,6 +3907,11 @@ test('persists the global reading version selected in Settings', async ({
       helpButton: preloadHelpButton,
       title: '自动翻译预翻译',
       text: '提前翻译当前可见内容之后的自然段',
+    },
+    {
+      helpButton: chunkHelpButton,
+      title: '自动翻译切块段数',
+      text: '每块翻完后立即显示，不等待整章完成',
     },
   ]) {
     await helpButton.click();
@@ -4709,9 +4779,10 @@ test('pretranslates across chapters and stops continuous retranslation at an unt
         }
         transaction.objectStore('reader-settings').put({
           id: 'default',
-          defaultMode: 'original',
+          defaultMode: 'original-translated',
           translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
-          autoTranslationPreloadPages: 0,
+          autoTranslationPreloadParagraphs: 1,
+          autoTranslationChunkParagraphs: 5,
           retranslationPolicy: 'replace',
           fontSize: 18,
           lineHeight: 1.9,
@@ -4773,8 +4844,62 @@ test('pretranslates across chapters and stops continuous retranslation at an unt
         { timeout: 15_000 },
       )
       .toEqual({ requests: expect.any(Number), translated: ['译文第1行'] });
+    const nextChapterPreview = page.locator(
+      '[data-reader-preview-chapter-id="1"]',
+    );
+    await expect(nextChapterPreview).toContainText('译文第1行');
     await expect(page).toHaveURL(new RegExp(`/read/0$`));
-    await automaticButton.click();
+    await automaticButton.evaluate((button) => button.click());
+    await expect
+      .poll(() =>
+        page
+          .locator('.book-reader__app-bar-translation')
+          .getByRole('button', { name: 'GPT 自动翻译', exact: true })
+          .evaluateAll(
+            (buttons) =>
+              buttons.length === 0 ||
+              buttons.every(
+                (button) => button.getAttribute('aria-pressed') === 'false',
+              ),
+          ),
+      )
+      .toBe(true);
+    await page.evaluate(async (bookId) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('volumes');
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      const transaction = database.transaction(
+        ['metadata', 'chapter'],
+        'readwrite',
+      );
+      const chapterStore = transaction.objectStore('chapter');
+      const metadataStore = transaction.objectStore('metadata');
+      const chapterRequest = chapterStore.get(`${bookId}/2`);
+      const metadataRequest = metadataStore.get(bookId);
+      await new Promise<void>((resolve, reject) => {
+        chapterRequest.onsuccess = () => resolve();
+        chapterRequest.onerror = () => reject(chapterRequest.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        metadataRequest.onsuccess = () => resolve();
+        metadataRequest.onerror = () => reject(metadataRequest.error);
+      });
+      const chapter = chapterRequest.result;
+      const metadata = metadataRequest.result;
+      delete chapter.gpt;
+      delete metadata.toc[2].gpt;
+      chapterStore.put(chapter);
+      metadataStore.put(metadata);
+      await new Promise<void>((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+      database.close();
+    }, volumeId);
+    await page.reload();
+    await expect(page.locator('[data-reader-segment-id="0-0"]')).toBeVisible();
 
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await page
