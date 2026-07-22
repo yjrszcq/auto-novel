@@ -2487,7 +2487,7 @@ test('automatically translates a reader window without persisting a partial chap
         toc: [{ chapterId: '0', title: '临时翻译章节' }],
         sourceFormat: 'txt',
         glossaryId: 'glossary',
-        glossary: { テスト: '测试', ダミー: '过期术语' },
+        glossary: {},
         favoredId: 'default',
         sourceBookMetadata: {
           title: '临时翻译测试',
@@ -2630,9 +2630,7 @@ test('automatically translates a reader window without persisting a partial chap
     await glossaryMinimumInput.fill('1');
     await glossaryMinimumInput.press('Enter');
     await expect(
-      glossaryDialog.getByText('尚未扫描，点击“扫描”读取源文件', {
-        exact: true,
-      }),
+      glossaryDialog.locator('tbody tr').filter({ hasText: 'テスト' }),
     ).toBeVisible();
     await glossaryDialog
       .getByRole('button', { name: '扫描', exact: true })
@@ -2652,7 +2650,7 @@ test('automatically translates a reader window without persisting a partial chap
       untranslatedGlossaryRow.getByText('未翻译', { exact: true }),
     ).toBeVisible();
     await expect(
-      glossaryRow.getByText('已翻译', { exact: true }),
+      glossaryRow.getByText('未翻译', { exact: true }),
     ).toBeVisible();
     await glossaryRow.locator('input').fill('');
     await expect(

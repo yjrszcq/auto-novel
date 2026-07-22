@@ -30,6 +30,7 @@ const props = defineProps<{
   initialCandidateCounts?: Record<string, number>;
   initialExcludedWords?: string[];
   initialMinimumCount?: number;
+  autoScanIfEmpty?: boolean;
   applyLabel?: string;
   applying?: boolean;
 }>();
@@ -210,6 +211,26 @@ const scanTerms = async () => {
     if (request === extractionRequest) extractionLoading.value = false;
   }
 };
+
+watch(
+  () => [
+    props.autoScanIfEmpty,
+    props.initialCandidateCounts,
+    Object.keys(props.initialGlossary ?? {}).length,
+  ],
+  () => {
+    if (
+      !props.autoScanIfEmpty ||
+      props.initialCandidateCounts !== undefined ||
+      Object.keys(props.initialGlossary ?? {}).length > 0 ||
+      scanCompleted.value
+    ) {
+      return;
+    }
+    void scanTerms();
+  },
+  { immediate: true },
+);
 
 const setSelected = (word: string, selected: boolean) => {
   selectedWords.value = selected

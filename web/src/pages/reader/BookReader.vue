@@ -4522,6 +4522,7 @@ onBeforeUnmount(() => {
           :initial-candidate-counts="readerGlossaryInitialCandidateCounts"
           :initial-excluded-words="readerGlossaryInitialExcludedWords"
           :initial-minimum-count="10"
+          auto-scan-if-empty
           :applying="readerGlossaryApplying"
           apply-label="应用到本书"
           @apply="applyReaderGlossary"
