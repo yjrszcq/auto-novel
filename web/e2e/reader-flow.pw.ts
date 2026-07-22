@@ -2616,7 +2616,7 @@ test('automatically translates a reader window without persisting a partial chap
     await page.getByRole('button', { name: '设置', exact: true }).click();
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await expect(
-      toolsDialog.getByRole('button', { name: '重翻当前章', exact: true }),
+      toolsDialog.getByRole('button', { name: '重新翻译', exact: true }),
     ).toBeDisabled();
     await page
       .getByRole('dialog', { name: '阅读工具' })
@@ -2701,7 +2701,7 @@ test('automatically translates a reader window without persisting a partial chap
       'true',
     );
     await expect(source).toContainText('译文第1行', { timeout: 15_000 });
-    await automaticTranslationButton.click();
+    await automaticTranslationButton.evaluate((button) => button.click());
     await expect(
       page.getByText('已停止自动翻译', { exact: true }),
     ).toBeVisible();
@@ -2943,7 +2943,7 @@ test('automatically translates a reader window without persisting a partial chap
       .click();
     await page.getByRole('button', { name: '设置', exact: true }).click();
     await page.getByRole('button', { name: '工具', exact: true }).click();
-    for (const label of ['术语表', '清除翻译缓存', '重翻当前章']) {
+    for (const label of ['术语表', '清除翻译缓存', '重新翻译']) {
       await expect(
         page
           .getByRole('dialog', { name: '阅读工具' })
@@ -2952,14 +2952,32 @@ test('automatically translates a reader window without persisting a partial chap
     }
     const retranslateButton = page
       .getByRole('dialog', { name: '阅读工具' })
-      .getByRole('button', { name: '重翻当前章', exact: true });
+      .getByRole('button', { name: '重新翻译', exact: true });
     await expect(retranslateButton).toBeEnabled();
     await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
     await retranslateButton.click();
     const retranslationSourceDialog = page.getByRole('dialog', {
-      name: '重翻当前章',
+      name: '重新翻译',
     });
-    await page.getByRole('button', { name: '关闭重翻当前章' }).click();
+    await expect(
+      retranslationSourceDialog.getByRole('radio', {
+        name: '仅本章',
+        exact: true,
+      }),
+    ).toBeChecked();
+    await expect(
+      retranslationSourceDialog.getByText('遇到未翻译章', { exact: true }),
+    ).toHaveCount(0);
+    await retranslationSourceDialog
+      .getByText('连续重翻', { exact: true })
+      .click();
+    await expect(
+      retranslationSourceDialog.getByRole('radio', {
+        name: '停止',
+        exact: true,
+      }),
+    ).toBeChecked();
+    await page.getByRole('button', { name: '关闭重新翻译' }).click();
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
     await retranslateButton.click();
@@ -2967,15 +2985,13 @@ test('automatically translates a reader window without persisting a partial chap
       .getByRole('button', { name: 'GPT 自动翻译', exact: true })
       .click();
     await expect(
-      page.getByText('已开始使用 GPT 重翻当前章', { exact: true }),
+      page.getByText('已开始使用 GPT 重新翻译当前章', { exact: true }),
     ).toBeVisible();
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await expect(retranslateButton).toHaveAttribute('aria-pressed', 'true');
     await expect(retranslateButton).toHaveClass(/n-button--primary-type/);
     await retranslateButton.click();
-    await expect(page.getByRole('dialog', { name: '重翻当前章' })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole('dialog', { name: '重新翻译' })).toHaveCount(0);
     await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
     await expect(retranslateButton).not.toHaveClass(/n-button--primary-type/);
     await expect(
@@ -2991,7 +3007,7 @@ test('automatically translates a reader window without persisting a partial chap
     await expect(retranslationDecision).toBeVisible({ timeout: 15_000 });
     expect(server.requests.at(-1)?.body.model).toBe('reader-selected-model');
     await retranslationDecision
-      .getByRole('button', { name: '不替换', exact: true })
+      .getByRole('button', { name: '不替换原有翻译', exact: true })
       .click();
     await expect(
       page.getByText('已保留原译文，重翻结果仍在缓存中', { exact: true }),
@@ -3967,6 +3983,10 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
       .filter({ hasText: 'integration-worker-b' });
     await expect(firstWorker).toBeVisible();
     await expect(secondWorker).toBeVisible();
+    const logButton = page.getByRole('button', { name: '日志', exact: true });
+    const taskLog = page.locator('.n-card').filter({ hasText: 'GPT翻译' });
+    await expect(logButton).toHaveAttribute('aria-pressed', 'false');
+    await expect(taskLog).toBeHidden();
     await firstWorker
       .getByRole('button', { name: '启动', exact: true })
       .click();
@@ -3976,6 +3996,14 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     await twoRequestsArrived;
     expect(server.activeRequests).toBe(2);
     expect(server.requests).toHaveLength(2);
+    const activeJob = page.locator('.job-queue').filter({ hasText: volumeId });
+    await expect(activeJob.getByText('翻译中', { exact: true })).toBeVisible();
+    await expect(activeJob.locator('.job-queue__chapter')).toHaveCount(2);
+    await logButton.click();
+    await expect(logButton).toHaveAttribute('aria-pressed', 'true');
+    await expect(taskLog).toBeVisible();
+    await logButton.click();
+    await expect(taskLog).toBeHidden();
     await page.getByRole('button', { name: '翻译器运行统计' }).click();
     const metricsPanel = page.getByRole('dialog', {
       name: '翻译器运行统计',
@@ -4032,15 +4060,27 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
       .toEqual({
         queued: 0,
         records: 1,
-        progress: {
+        progress: expect.objectContaining({
           finished: 2,
           error: 0,
           total: 2,
           elapsedMs: expect.any(Number),
-        },
+        }),
       });
     expect(server.requests).toHaveLength(3);
     expect(server.maximumActiveRequests).toBe(2);
+    await expect(
+      firstWorker.getByRole('button', { name: '启动', exact: true }),
+    ).toBeVisible();
+    await expect(
+      secondWorker.getByRole('button', { name: '启动', exact: true }),
+    ).toBeVisible();
+    for (const worker of [firstWorker, secondWorker]) {
+      await expect(worker.getByRole('button', { name: '测试' })).toBeEnabled();
+      await expect(
+        worker.getByRole('button', { name: '设置（请先停止）' }),
+      ).toBeEnabled();
+    }
     await page.getByRole('button', { name: '翻译器运行统计' }).click();
     const completedMetricsPanel = page.getByRole('dialog', {
       name: '翻译器运行统计',
@@ -4291,11 +4331,11 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
     );
     await page.reload();
 
-    await page.getByRole('button', { name: '批量控制翻译器' }).click();
-    await page.getByText('启动全部', { exact: true }).click();
+    await page.getByRole('button', { name: '启动全部', exact: true }).click();
     await twoRequestsArrived;
     expect(server.maximumActiveRequests).toBe(2);
-    await expect(page.getByText(/章节 \d\/2 · 分段 1\/1/)).toHaveCount(0);
+    const activeJob = page.locator('.job-queue').filter({ hasText: volumeId });
+    await expect(activeJob.locator('.job-queue__chapter')).toHaveCount(2);
     const incompatibleCard = page
       .locator('.n-list-item')
       .filter({ hasText: 'sakura-worker-incompatible' });
@@ -4337,6 +4377,16 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
         }),
       )
       .toEqual([0, 1]);
+    for (const workerId of ['sakura-worker-a', 'sakura-worker-b']) {
+      const worker = page.locator('.n-list-item').filter({ hasText: workerId });
+      await expect(
+        worker.getByRole('button', { name: '启动', exact: true }),
+      ).toBeVisible();
+      await expect(worker.getByRole('button', { name: '测试' })).toBeEnabled();
+      await expect(
+        worker.getByRole('button', { name: '设置（请先停止）' }),
+      ).toBeEnabled();
+    }
 
     const translated = await page.evaluate(async (bookId) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -4528,6 +4578,206 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
     expect(translated).toEqual([['已完成第一章'], ['恢复后的第二章']]);
   } finally {
     releaseSecondRequest();
+    await server.close();
+  }
+});
+
+test('pretranslates across chapters and stops continuous retranslation at an untranslated chapter', async ({
+  page,
+}) => {
+  test.setTimeout(45_000);
+  const volumeId = 'reader-cross-chapter-translation.txt';
+  const nonce = `${Date.now()}`;
+  const server = await startOpenAiTestServer({ responseDelayMs: 250 });
+  try {
+    await page.addInitScript((endpoint) => {
+      localStorage.setItem(
+        'auto-novel:workspace:gpt',
+        JSON.stringify({
+          workers: [
+            {
+              id: 'reader-cross-chapter-worker',
+              endpoint,
+              model: 'reader-cross-chapter-model',
+              key: 'reader-cross-chapter-key',
+              concurrency: 1,
+            },
+          ],
+          jobs: [],
+          jobRecords: [],
+        }),
+      );
+    }, server.endpoint);
+    await page.goto('/');
+    await expect(
+      page.getByRole('heading', { name: '轻小说机翻机器人' }),
+    ).toBeVisible();
+    await expect(page.locator('.n-skeleton')).toHaveCount(0);
+    await page.evaluate(
+      async ({ bookId, nonce }) => {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('volumes');
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => resolve(request.result);
+        });
+        const transaction = database.transaction(
+          ['metadata', 'chapter', 'reader-settings'],
+          'readwrite',
+        );
+        transaction.objectStore('metadata').put({
+          id: bookId,
+          createAt: 1,
+          toc: [
+            { chapterId: '0', title: '第一章', gpt: 'glossary' },
+            { chapterId: '1', title: '第二章' },
+            { chapterId: '2', title: '第三章' },
+          ],
+          sourceFormat: 'txt',
+          glossaryId: 'glossary',
+          glossary: {},
+          favoredId: 'default',
+          sourceBookMetadata: { title: bookId, languages: ['ja'] },
+        });
+        transaction.objectStore('chapter').put({
+          id: `${bookId}/0`,
+          volumeId: bookId,
+          paragraphs: [`跨章回归甲零${nonce}`, `跨章回归甲一${nonce}`],
+          segmentIds: ['0-0', '0-1'],
+          gpt: {
+            glossaryId: 'glossary',
+            glossary: {},
+            paragraphs: ['旧译文', ''],
+          },
+        });
+        for (const chapterId of ['1', '2']) {
+          transaction.objectStore('chapter').put({
+            id: `${bookId}/${chapterId}`,
+            volumeId: bookId,
+            paragraphs: [
+              `跨章回归${chapterId === '1' ? '乙' : '丙'}零${nonce}`,
+            ],
+            segmentIds: [`${chapterId}-0`],
+          });
+        }
+        transaction.objectStore('reader-settings').put({
+          id: 'default',
+          defaultMode: 'original',
+          translationPriority: ['gpt', 'sakura', 'youdao', 'baidu'],
+          autoTranslationPreloadPages: 0,
+          retranslationPolicy: 'replace',
+          fontSize: 18,
+          lineHeight: 1.9,
+          contentWidth: 840,
+          horizontalPadding: 24,
+          theme: 'system',
+          flow: 'scrolled',
+          updatedAt: 1,
+        });
+        await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        });
+        database.close();
+      },
+      { bookId: volumeId, nonce },
+    );
+
+    await page.goto(`/books/${volumeId}/read/0`);
+    const currentSource = page.locator('[data-reader-segment-id="0-0"]');
+    await expect(currentSource).toBeVisible();
+    await currentSource.evaluate((element) =>
+      element.scrollIntoView({ block: 'center', behavior: 'auto' }),
+    );
+    const automaticButton = page
+      .locator('.book-reader__app-bar-translation')
+      .getByRole('button', { name: 'GPT 自动翻译', exact: true });
+    await automaticButton.click();
+    await expect(
+      page.getByText('已开启 GPT 自动翻译', { exact: true }),
+    ).toBeVisible();
+    await expect
+      .poll(
+        async () => ({
+          requests: server.requests.length,
+          translated: await page.evaluate(async (bookId) => {
+            const database = await new Promise<IDBDatabase>(
+              (resolve, reject) => {
+                const request = indexedDB.open('volumes');
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+              },
+            );
+            const request = database
+              .transaction('chapter', 'readonly')
+              .objectStore('chapter')
+              .get(`${bookId}/1`);
+            const translated = await new Promise<string[] | undefined>(
+              (resolve, reject) => {
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () =>
+                  resolve(request.result?.gpt?.paragraphs);
+              },
+            );
+            database.close();
+            return translated;
+          }, volumeId),
+        }),
+        { timeout: 15_000 },
+      )
+      .toEqual({ requests: expect.any(Number), translated: ['译文第1行'] });
+    await expect(page).toHaveURL(new RegExp(`/read/0$`));
+    await automaticButton.click();
+
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '阅读工具' })
+      .getByRole('button', { name: '重新翻译', exact: true })
+      .click();
+    const retranslation = page.getByRole('dialog', { name: '重新翻译' });
+    await retranslation.getByText('连续重翻', { exact: true }).click();
+    await expect(
+      retranslation.getByRole('radio', { name: '停止', exact: true }),
+    ).toBeChecked();
+    await retranslation
+      .getByRole('button', { name: 'GPT 自动翻译', exact: true })
+      .click();
+
+    await expect
+      .poll(() => server.requests.length, { timeout: 15_000 })
+      .toBeGreaterThanOrEqual(4);
+    await expect
+      .poll(() =>
+        page.evaluate(async (bookId) => {
+          const database = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('volumes');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+          });
+          const transaction = database.transaction('chapter', 'readonly');
+          const requests = ['0', '1', '2'].map((chapterId) =>
+            transaction.objectStore('chapter').get(`${bookId}/${chapterId}`),
+          );
+          const translations = await new Promise<Array<string[] | undefined>>(
+            (resolve, reject) => {
+              transaction.oncomplete = () =>
+                resolve(
+                  requests.map((request) => request.result?.gpt?.paragraphs),
+                );
+              transaction.onerror = () => reject(transaction.error);
+            },
+          );
+          database.close();
+          return translations;
+        }, volumeId),
+      )
+      .toEqual([['译文第1行', '译文第2行'], ['译文第1行'], undefined]);
+    await page.getByRole('button', { name: '工具', exact: true }).click();
+    await expect(
+      page
+        .getByRole('dialog', { name: '阅读工具' })
+        .getByRole('button', { name: '重新翻译', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  } finally {
     await server.close();
   }
 });
@@ -4816,7 +5066,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     page
       .getByRole('button', { name: '清空缓存' })
       .locator('.c-button-confirm__label'),
-  ).toBeHidden();
+  ).toBeVisible();
   await expect(
     page
       .getByRole('button', { name: '本地书架', exact: true })
@@ -4824,12 +5074,19 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   ).toBeHidden();
   for (const button of [
     page.getByRole('button', { name: '添加翻译器' }),
-    page.getByRole('button', { name: '清空缓存' }),
     page.getByRole('button', { name: '本地书架', exact: true }),
     gptAutomaticQueue,
   ]) {
     await expectButtonIconCentered(button);
   }
+  const gptLogButton = page.getByRole('button', {
+    name: '日志',
+    exact: true,
+  });
+  await expect(gptLogButton).toHaveAttribute('aria-pressed', 'false');
+  await gptLogButton.click();
+  await expect(gptLogButton).toHaveAttribute('aria-pressed', 'true');
+  await gptLogButton.click();
   await gptAutomaticQueue.hover();
   await expect(
     page.getByText('自动处理后续任务：已开启', { exact: true }),
@@ -4924,18 +5181,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(formatRetryInput).toHaveValue('5');
   await page.keyboard.press('Escape');
 
-  const workerControl = page.getByRole('button', {
-    name: '批量控制翻译器',
-  });
-  await workerControl.click();
-  const workerMenuBounds = await page
-    .locator('.n-dropdown-menu:visible')
-    .boundingBox();
-  expect(workerMenuBounds).not.toBeNull();
-  expect(workerMenuBounds!.x + workerMenuBounds!.width).toBeLessThanOrEqual(
-    390,
-  );
-  await page.getByText('启动全部', { exact: true }).click();
+  await page.getByRole('button', { name: '启动全部', exact: true }).click();
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   const metricsPanel = page.getByRole('dialog', {
     name: '翻译器运行统计',
@@ -4965,8 +5211,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
 
   await metricsPanel.getByRole('button', { name: '关闭运行统计' }).click();
   await expect(metricsPanel).toHaveCount(0);
-  await workerControl.click();
-  await page.getByText('停止全部', { exact: true }).click();
+  await page.getByRole('button', { name: '停止全部', exact: true }).click();
   await page.getByRole('button', { name: '翻译器运行统计' }).click();
   await expect(
     metricsPanel
@@ -4997,7 +5242,7 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
     page
       .getByRole('button', { name: '清空缓存' })
       .locator('.c-button-confirm__label'),
-  ).toBeHidden();
+  ).toBeVisible();
   await expect(
     page
       .getByRole('button', { name: '本地书架', exact: true })
@@ -5005,7 +5250,6 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   ).toBeHidden();
   for (const button of [
     page.getByRole('button', { name: '添加翻译器' }),
-    page.getByRole('button', { name: '清空缓存' }),
     page.getByRole('button', { name: '本地书架', exact: true }),
     sakuraAutomaticQueue,
   ]) {
@@ -5055,9 +5299,12 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   await expect(
     page.getByRole('textbox', { name: '格式异常重试次数' }),
   ).toHaveValue('3');
-  await page.getByRole('button', { name: '批量控制翻译器' }).click();
-  await expect(page.getByText('启动全部', { exact: true })).toBeVisible();
-  await expect(page.getByText('停止全部', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '启动全部', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '停止全部', exact: true }),
+  ).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 

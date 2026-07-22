@@ -53,13 +53,26 @@ export interface TranslateJob {
   finishAt?: number;
 }
 
+export type TranslateChapterProgress = {
+  key: string;
+  chapterIndex?: number;
+  chapterTotal?: number;
+  totalSegments: number;
+  successSegments: number;
+  failureSegments: number;
+  status: 'waiting' | 'running' | 'success' | 'failure';
+};
+
+export type TranslateJobProgress = {
+  finished: number;
+  error: number;
+  total: number;
+  elapsedMs: number;
+  chapters?: TranslateChapterProgress[];
+};
+
 export type TranslateJobRecord = TranslateJob & {
-  progress?: {
-    finished: number;
-    error: number;
-    total: number;
-    elapsedMs: number;
-  };
+  progress?: TranslateJobProgress;
 };
 
 export namespace TranslateJob {

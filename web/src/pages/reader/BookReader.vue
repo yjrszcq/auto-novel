@@ -86,9 +86,13 @@ import {
   getReaderAutomaticTranslationSelectionCacheKey,
   planReaderAutomaticTranslationWindow,
   ReaderAutomaticTranslationSession,
+  resolveNextReaderRetranslationChapter,
   resolveReaderAutomaticTranslationWorker,
   type ReaderAutomaticTranslationSelection,
   type ReaderAutomaticTranslationSource,
+  type ReaderRetranslationOptions,
+  type ReaderRetranslationScope,
+  type ReaderRetranslationUntranslatedPolicy,
 } from './core/ReaderAutoTranslation';
 import {
   buildCompleteReaderChapterTranslation,
@@ -141,6 +145,9 @@ const showSearch = ref(false);
 const showInteractiveTranslation = ref(false);
 const showRetranslationSelection = ref(false);
 const showRetranslationDecision = ref(false);
+const retranslationScope = ref<ReaderRetranslationScope>('chapter');
+const retranslationUntranslatedPolicy =
+  ref<ReaderRetranslationUntranslatedPolicy>('stop');
 const showReaderGlossary = ref(false);
 const readerGlossaryLoading = ref(false);
 const readerGlossaryApplying = ref(false);
@@ -237,6 +244,7 @@ const pendingRetranslation = shallowRef<{
   selection: ReaderAutomaticTranslationSelection;
   chapterId: string;
   translation: ChapterTranslation;
+  nextChapterId?: string;
 }>();
 
 const repositoryPromise = useLocalVolumeStore();
@@ -2088,6 +2096,7 @@ type ActiveAutomaticTranslationRuntime = {
   concurrency: number;
   glossary: Record<string, string>;
   targetChapterId?: string;
+  retranslation?: ReaderRetranslationOptions;
 };
 
 let activeAutomaticTranslationRuntime:
@@ -2213,6 +2222,8 @@ const markAutomaticTranslationCommitted = async (
   ) {
     stopAutomaticTranslation(false);
     message.success('全书翻译已完成');
+  } else {
+    scheduleAutomaticTranslation();
   }
 };
 
@@ -2290,15 +2301,28 @@ const collectAutomaticTranslationChapters = async (
       .map(({ id }) => id),
   );
   const chapters = new Map(
-    loadedReaderChapters()
-      .filter((chapter) => !completedChapterIds.has(chapter.chapterId))
-      .map((chapter) => [chapter.chapterId, chapter]),
+    loadedReaderChapters().map((chapter) => [chapter.chapterId, chapter]),
   );
   const visibleIndexes = visible.flatMap(({ chapterId }) => {
-    const index = chapters.get(chapterId)?.chapterIndex;
-    return index === undefined ? [] : [index];
+    const index = ready.chapters.findIndex(({ id }) => id === chapterId);
+    return index < 0 ? [] : [index];
   });
   if (visibleIndexes.length === 0) return [...chapters.values()];
+  const continuationSummary = ready.chapters
+    .slice(Math.min(...visibleIndexes))
+    .find(({ translationStatus }) => translationStatus !== 'complete');
+  if (
+    continuationSummary !== undefined &&
+    !chapters.has(continuationSummary.id)
+  ) {
+    const chapter = await (
+      await cachedAdapterPromise
+    ).getChapter({
+      bookId: bookId.value,
+      chapterId: continuationSummary.id,
+    });
+    chapters.set(chapter.chapterId, chapter);
+  }
   let nextIndex = Math.max(...visibleIndexes) + 1;
   const adapter = await cachedAdapterPromise;
   while (true) {
@@ -2390,6 +2414,8 @@ const runAutomaticTranslationOnce = async () => {
       prefetchCharacterBudget: 0,
     };
   } else {
+    const ready = result.value;
+    if (ready?.kind !== 'ready') return;
     const visible = getVisibleReaderSegments();
     if (visible.length === 0) return;
     const chapters = await collectAutomaticTranslationChapters(visible);
@@ -2399,6 +2425,77 @@ const runAutomaticTranslationOnce = async () => {
       visible,
       preloadPages: settings.value.autoTranslationPreloadPages,
     });
+    const visibleChapterIndexes = visible.flatMap(({ chapterId }) => {
+      const index = ready.chapters.findIndex(({ id }) => id === chapterId);
+      return index < 0 ? [] : [index];
+    });
+    const continuationSummary = ready.chapters
+      .slice(
+        visibleChapterIndexes.length === 0
+          ? 0
+          : Math.min(...visibleChapterIndexes),
+      )
+      .find(({ translationStatus }) => translationStatus !== 'complete');
+    const continuationChapter = chapters.find(
+      ({ chapterId }) => chapterId === continuationSummary?.id,
+    );
+    const plannedHasUntranslatedTarget = planned.all.some((target) => {
+      const segment = chapters
+        .find(({ chapterId }) => chapterId === target.chapterId)
+        ?.segments.find(({ id }) => id === target.segmentId);
+      return (
+        (segment?.translated?.trim().length ?? 0) === 0 &&
+        automaticTranslationSession.get(
+          runtime.selection,
+          target.chapterId,
+          target.segmentId,
+        ) === undefined
+      );
+    });
+    if (continuationChapter !== undefined && !plannedHasUntranslatedTarget) {
+      const plannedKeys = new Set(
+        planned.all.map(({ chapterId, segmentId }) =>
+          temporaryTranslationKey(chapterId, segmentId),
+        ),
+      );
+      const continuationTargets: typeof planned.all = [];
+      const continuationCharacterBudget = Math.max(
+        1,
+        planned.visibleCharacterCount,
+        planned.prefetchCharacterBudget,
+      );
+      let continuationCharacters = 0;
+      for (const segment of continuationChapter.segments) {
+        const key = temporaryTranslationKey(
+          continuationChapter.chapterId,
+          segment.id,
+        );
+        const sourceLength = segment.original.trim().length;
+        if (
+          sourceLength === 0 ||
+          plannedKeys.has(key) ||
+          automaticTranslationSession.get(
+            runtime.selection,
+            continuationChapter.chapterId,
+            segment.id,
+          ) !== undefined
+        ) {
+          continue;
+        }
+        continuationTargets.push({
+          chapterId: continuationChapter.chapterId,
+          segmentId: segment.id,
+          segmentIndex: segment.index,
+          original: segment.original,
+        });
+        continuationCharacters += sourceLength;
+        if (continuationCharacters >= continuationCharacterBudget) break;
+      }
+      planned = {
+        ...planned,
+        all: [...planned.all, ...continuationTargets],
+      };
+    }
   }
   if (planned.all.length === 0) return;
   const coordinator = new ReaderAutomaticTranslationCoordinator(
@@ -2449,7 +2546,12 @@ const runAutomaticTranslationOnce = async () => {
         return stored !== undefined;
       },
       onChapterAlreadyComplete: discardAutomaticTranslationChapterDraft,
-      onDraft: showAutomaticTranslationDraft,
+      onDraft: (selection, values) => {
+        showAutomaticTranslationDraft(selection, values);
+        if ((selection.purpose ?? 'automatic') === 'automatic') {
+          scheduleAutomaticTranslation();
+        }
+      },
       onCommitted: (selection, chapterId) => {
         void markAutomaticTranslationCommitted(selection, chapterId);
       },
@@ -2600,7 +2702,21 @@ const applyRetranslationDecision = async (replace: boolean) => {
     message.success(
       replace ? '当前章译文已替换' : '已保留原译文，重翻结果仍在缓存中',
     );
+    const runtime = activeAutomaticTranslationRuntime;
+    if (
+      pending.nextChapterId !== undefined &&
+      runtime !== undefined &&
+      automaticTranslationSession.isActive(pending.selection)
+    ) {
+      runtime.targetChapterId = pending.nextChapterId;
+      retranslationChapterId.value = pending.nextChapterId;
+      scheduleAutomaticTranslation();
+    } else {
+      haltAutomaticTranslationRuntime();
+      retranslationChapterId.value = undefined;
+    }
   } catch (reason) {
+    haltAutomaticTranslationRuntime();
     message.error(`无法处理重翻结果：${String(reason)}`);
     await restoreRetranslationChapterDisplay(pending.chapterId, pending.bookId);
   }
@@ -2617,12 +2733,21 @@ const handleRetranslationComplete = async (
   ) {
     return;
   }
-  haltAutomaticTranslationRuntime();
+  const runtime = activeAutomaticTranslationRuntime;
+  const nextChapterId =
+    runtime?.retranslation === undefined || result.value?.kind !== 'ready'
+      ? undefined
+      : resolveNextReaderRetranslationChapter(
+          result.value.chapters,
+          chapterId,
+          runtime.retranslation,
+        );
   pendingRetranslation.value = {
     bookId: bookId.value,
     selection,
     chapterId,
     translation,
+    nextChapterId,
   };
   if (settings.value.retranslationPolicy === 'replace') {
     await applyRetranslationDecision(true);
@@ -2785,6 +2910,7 @@ const startAutomaticTranslation = async (
   notify = true,
   purpose: ReaderAutomaticTranslationSelection['purpose'] = 'automatic',
   targetChapterId?: string,
+  retranslation?: ReaderRetranslationOptions,
 ) => {
   const request = ++automaticTranslationStartRequest;
   const worker = resolveConfiguredAutomaticTranslationWorker(source);
@@ -2840,6 +2966,7 @@ const startAutomaticTranslation = async (
       concurrency: normalizeTranslationConcurrency(worker.concurrency),
       glossary: { ...volume.glossary },
       targetChapterId,
+      retranslation,
     };
     automaticTranslationSource.value = source;
     retranslationChapterId.value =
@@ -2864,7 +2991,11 @@ const startAutomaticTranslation = async (
     if (notify) {
       message.success(
         purpose === 'retranslate'
-          ? `已开始使用 ${source === 'gpt' ? 'GPT' : 'Sakura'} 重翻当前章`
+          ? `已开始使用 ${source === 'gpt' ? 'GPT' : 'Sakura'} ${
+              retranslation?.scope === 'continuous'
+                ? '连续重新翻译'
+                : '重新翻译当前章'
+            }`
           : `已开启 ${source === 'gpt' ? 'GPT' : 'Sakura'} 自动翻译`,
       );
     }
@@ -2882,7 +3013,6 @@ const startAutomaticTranslation = async (
 const isCurrentChapterRetranslating = computed(
   () =>
     retranslationChapterId.value !== undefined &&
-    retranslationChapterId.value === currentChapterSummary.value?.id &&
     activeAutomaticTranslationRuntime?.selection.purpose === 'retranslate',
 );
 
@@ -2893,6 +3023,8 @@ const toggleCurrentChapterRetranslation = () => {
   }
   if (result.value?.kind !== 'ready') return;
   if (!canRetranslateCurrentChapter.value) return;
+  retranslationScope.value = 'chapter';
+  retranslationUntranslatedPolicy.value = 'stop';
   showTools.value = false;
   showRetranslationSelection.value = true;
 };
@@ -2906,7 +3038,10 @@ const startCurrentChapterRetranslation = async (
   }
   const chapterId = result.value.chapter.chapterId;
   showRetranslationSelection.value = false;
-  await startAutomaticTranslation(source, true, 'retranslate', chapterId);
+  await startAutomaticTranslation(source, true, 'retranslate', chapterId, {
+    scope: retranslationScope.value,
+    untranslatedPolicy: retranslationUntranslatedPolicy.value,
+  });
 };
 
 const toggleAutomaticTranslation = async (
@@ -2933,6 +3068,7 @@ const selectAutomaticTranslationWorker = async (
       false,
       runtime?.selection.purpose,
       runtime?.targetChapterId,
+      runtime?.retranslation,
     )
   ) {
     message.success(`已切换 ${source === 'gpt' ? 'GPT' : 'Sakura'} 翻译器`);
@@ -3839,6 +3975,7 @@ watch(
         false,
         runtime?.selection.purpose,
         runtime?.targetChapterId,
+        runtime?.retranslation,
       );
     }
   },
@@ -4445,11 +4582,13 @@ onBeforeUnmount(() => {
         <n-button
           v-if="requiresWholeChapterTranslation"
           :type="isCurrentChapterRetranslating ? 'primary' : 'default'"
-          :disabled="!canRetranslateCurrentChapter"
+          :disabled="
+            !isCurrentChapterRetranslating && !canRetranslateCurrentChapter
+          "
           :aria-pressed="isCurrentChapterRetranslating"
           @click="toggleCurrentChapterRetranslation"
         >
-          重翻当前章
+          重新翻译
         </n-button>
         <n-button
           v-if="requiresWholeChapterTranslation"
@@ -4462,11 +4601,37 @@ onBeforeUnmount(() => {
 
     <ReaderBottomSheet
       v-model:show="showRetranslationSelection"
-      title="重翻当前章"
+      title="重新翻译"
     >
       <p class="book-reader__retranslation-description">
-        将从本章原文开始完整重翻；完成前只保存到阅读缓存，不会修改正式译文。
+        从当前章原文开始重新翻译；完成前只保存到阅读缓存，不会修改正式译文。
       </p>
+      <div class="book-reader__retranslation-options">
+        <c-action-wrapper title="范围" align="center">
+          <c-radio-group
+            v-model:value="retranslationScope"
+            :options="[
+              { label: '仅本章', value: 'chapter' },
+              { label: '连续重翻', value: 'continuous' },
+            ]"
+            size="small"
+          />
+        </c-action-wrapper>
+        <c-action-wrapper
+          v-if="retranslationScope === 'continuous'"
+          title="遇到未翻译章"
+          align="center"
+        >
+          <c-radio-group
+            v-model:value="retranslationUntranslatedPolicy"
+            :options="[
+              { label: '停止', value: 'stop' },
+              { label: '继续', value: 'continue' },
+            ]"
+            size="small"
+          />
+        </c-action-wrapper>
+      </div>
       <div class="book-reader__retranslation-actions">
         <n-button
           :disabled="automaticGptWorkerOptions.length === 0"
@@ -4494,12 +4659,14 @@ onBeforeUnmount(() => {
       "
     >
       <p class="book-reader__retranslation-description">
-        当前章已完整重翻，是否用新结果替换现有译文？不替换时结果仍会保留在阅读缓存中。
+        当前章已完整重翻，是否用新结果替换现有译文？不替换原有翻译时，结果仍会保留在阅读缓存中。
       </p>
       <div class="book-reader__retranslation-actions">
-        <n-button @click="applyRetranslationDecision(false)">不替换</n-button>
+        <n-button @click="applyRetranslationDecision(false)">
+          不替换原有翻译
+        </n-button>
         <n-button type="primary" @click="applyRetranslationDecision(true)">
-          替换译文
+          替换原有翻译
         </n-button>
       </div>
     </ReaderBottomSheet>
@@ -4797,8 +4964,8 @@ onBeforeUnmount(() => {
               v-model:value="settings.retranslationPolicy"
               :options="[
                 { label: '询问', value: 'ask' },
-                { label: '替换', value: 'replace' },
-                { label: '不替换', value: 'keep' },
+                { label: '替换原有翻译', value: 'replace' },
+                { label: '不替换原有翻译', value: 'keep' },
               ]"
             />
           </n-form-item>
@@ -5178,6 +5345,12 @@ onBeforeUnmount(() => {
   margin: 0 0 16px;
   color: var(--reader-muted-color);
   line-height: 1.7;
+}
+
+.book-reader__retranslation-options {
+  display: grid;
+  margin-bottom: 16px;
+  gap: 10px;
 }
 
 .book-reader__retranslation-actions {

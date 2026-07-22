@@ -6,6 +6,7 @@ import {
   getReaderAutomaticTranslationSelectionCacheKey,
   planReaderAutomaticTranslationWindow,
   ReaderAutomaticTranslationSession,
+  resolveNextReaderRetranslationChapter,
   resolveReaderAutomaticTranslationWorker,
   type ReaderAutomaticTranslationSelection,
 } from '@/pages/reader/core/ReaderAutoTranslation';
@@ -82,6 +83,44 @@ describe('reader automatic translation window', () => {
       '0-3',
     ]);
     expect(planned.prefetchCharacterBudget).toBe(20);
+  });
+});
+
+describe('reader continuous retranslation', () => {
+  const chapters = [
+    { id: '0', translationStatus: 'complete' as const },
+    { id: '1', translationStatus: 'partial' as const },
+    { id: '2', translationStatus: 'none' as const },
+  ];
+
+  it('stays in the current chapter for chapter-only mode', () => {
+    expect(
+      resolveNextReaderRetranslationChapter(chapters, '0', {
+        scope: 'chapter',
+        untranslatedPolicy: 'continue',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('continues through translated chapters and applies the untranslated boundary policy', () => {
+    expect(
+      resolveNextReaderRetranslationChapter(chapters, '0', {
+        scope: 'continuous',
+        untranslatedPolicy: 'stop',
+      }),
+    ).toBe('1');
+    expect(
+      resolveNextReaderRetranslationChapter(chapters, '1', {
+        scope: 'continuous',
+        untranslatedPolicy: 'stop',
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveNextReaderRetranslationChapter(chapters, '1', {
+        scope: 'continuous',
+        untranslatedPolicy: 'continue',
+      }),
+    ).toBe('2');
   });
 });
 

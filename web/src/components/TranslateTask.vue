@@ -7,6 +7,8 @@ import type {
 } from '@/domain/translate';
 import { translate } from '@/domain/translate';
 import type {
+  TranslateChapterProgress,
+  TranslateJobProgress,
   TranslateTaskDesc,
   TranslateTaskParams,
 } from '@/model/Translator';
@@ -18,9 +20,11 @@ import CTaskCard from './CTaskCard.vue';
 const props = withDefaults(
   defineProps<{
     concurrency?: number;
+    showLog?: boolean;
   }>(),
   {
     concurrency: 1,
+    showLog: false,
   },
 );
 
@@ -42,17 +46,7 @@ const elapsedMs = ref(0);
 let taskStartedAt = 0;
 let remainingChapterIds = new Set<string>();
 
-type ChapterProgressEntry = {
-  key: string;
-  chapterIndex?: number;
-  chapterTotal?: number;
-  totalSegments: number;
-  successSegments: number;
-  failureSegments: number;
-  status: 'running' | 'success' | 'failure';
-};
-
-const chapterProgress = ref<ChapterProgressEntry[]>([]);
+const chapterProgress = ref<TranslateChapterProgress[]>([]);
 
 const refreshChapterProgress = () => {
   chapterProgress.value = [...chapterProgress.value].sort((a, b) => {
@@ -78,7 +72,7 @@ const ensureChapterEntry = (info: SegmentProgressInfo) => {
       totalSegments: info.segmentTotal ?? 0,
       successSegments: 0,
       failureSegments: 0,
-      status: 'running',
+      status: 'waiting',
     };
     chapterProgress.value = [...chapterProgress.value, entry];
   } else {
@@ -125,18 +119,40 @@ const handleSegmentProgress = (info: SegmentProgressInfo) => {
   refreshChapterProgress();
 };
 
-const formatChapterLabel = (chapter: ChapterProgressEntry) => {
+const finishChapterProgress = (
+  chapterId: string,
+  status: 'success' | 'failure',
+) => {
+  const entry = chapterProgress.value.find(
+    (chapter) => chapter.key === chapterId,
+  );
+  if (!entry) return;
+  entry.status = status;
+  if (entry.totalSegments === 0) entry.totalSegments = 1;
+  if (status === 'success') {
+    entry.successSegments = entry.totalSegments;
+    entry.failureSegments = 0;
+  } else {
+    entry.failureSegments = Math.max(
+      entry.failureSegments,
+      entry.totalSegments - entry.successSegments,
+    );
+  }
+  refreshChapterProgress();
+};
+
+const formatChapterLabel = (chapter: TranslateChapterProgress) => {
   const index = chapter.chapterIndex !== undefined ? chapter.chapterIndex : '?';
   const total = chapter.chapterTotal !== undefined ? chapter.chapterTotal : '-';
   return `章节${index}/${total}`;
 };
 
-const chapterProgressPercentage = (chapter: ChapterProgressEntry) => {
+const chapterProgressPercentage = (chapter: TranslateChapterProgress) => {
   if (!chapter.totalSegments) return 0;
   return Math.round((chapter.successSegments / chapter.totalSegments) * 100);
 };
 
-const chapterProgressStatus = (chapter: ChapterProgressEntry) => {
+const chapterProgressStatus = (chapter: TranslateChapterProgress) => {
   if (chapter.status === 'failure') return 'error';
   if (chapter.status === 'success') return 'success';
   return undefined;
@@ -166,13 +182,11 @@ const running = ref(false);
 const cardRef = ref<InstanceType<typeof CTaskCard>>();
 
 type ProgressCallback = {
-  onProgressUpdated: (progress: {
-    finished: number;
-    error: number;
-    total: number;
-    elapsedMs: number;
-    remainingChapterIds: string[];
-  }) => void;
+  onProgressUpdated: (
+    progress: TranslateJobProgress & {
+      remainingChapterIds: string[];
+    },
+  ) => void;
 };
 
 type TaskExecutor = (
@@ -235,6 +249,7 @@ const runTask = async (
       error: chapterError.value,
       total: chapterTotal.value ?? 0,
       elapsedMs: elapsedMs.value,
+      chapters: chapterProgress.value.map((chapter) => ({ ...chapter })),
       remainingChapterIds: [...remainingChapterIds],
     });
   };
@@ -251,6 +266,15 @@ const runTask = async (
         onStart: (total, chapterIds) => {
           chapterTotal.value = total;
           remainingChapterIds = new Set(chapterIds);
+          chapterProgress.value = chapterIds.map((chapterId, index) => ({
+            key: chapterId,
+            chapterIndex: index,
+            chapterTotal: total,
+            totalSegments: 0,
+            successSegments: 0,
+            failureSegments: 0,
+            status: 'waiting',
+          }));
           onProgressUpdated();
         },
         onChapterSuccess: ({ chapterId, jp, zh }) => {
@@ -267,10 +291,12 @@ const runTask = async (
             }
           }
           remainingChapterIds.delete(chapterId);
+          finishChapterProgress(chapterId, 'success');
           chapterFinished.value += 1;
           onProgressUpdated();
         },
-        onChapterFailure: () => {
+        onChapterFailure: (chapterId) => {
+          finishChapterProgress(chapterId, 'failure');
           chapterError.value += 1;
           onProgressUpdated();
         },
@@ -374,6 +400,7 @@ defineExpose({
     ref="cardRef"
     :title="title"
     :running="running"
+    :show="showLog"
     v-slot="{ logExpand }"
   >
     <div

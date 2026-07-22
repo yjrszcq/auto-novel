@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import {
+  ArticleOutlined,
   BookOutlined,
   DeleteOutlineOutlined,
   MoreVertOutlined,
@@ -14,7 +15,11 @@ import {
   Translator,
 } from '@/domain/translate';
 import { TranslationCacheRepo } from '@/repos';
-import type { GptWorker, TranslateJob } from '@/model/Translator';
+import type {
+  GptWorker,
+  TranslateJob,
+  TranslateJobProgress,
+} from '@/model/Translator';
 import { TranslateTaskDescriptor } from '@/model/Translator';
 import { doAction } from '@/pages/util';
 import SoundAllTaskCompleted from '@/sound/all_task_completed.mp3';
@@ -31,6 +36,7 @@ const workspaceRef = workspace.ref;
 const showCreateWorkerModal = ref(false);
 const showLocalVolumeDrawer = ref(false);
 const showClearQueueConfirm = ref(false);
+const showTaskLog = ref(false);
 const { html: infoPanelHtml } = useRuntimePanel('html/info-gpt.html');
 const cacheMetrics =
   ref<Awaited<ReturnType<typeof TranslationCacheRepo.metrics>>>();
@@ -40,12 +46,7 @@ const refreshCacheMetrics = async () => {
 onMounted(() => void refreshCacheMetrics());
 
 type ProcessedJob = TranslateJob & {
-  progress?: {
-    finished: number;
-    error: number;
-    total: number;
-    elapsedMs: number;
-  };
+  progress?: TranslateJobProgress;
 };
 
 const emptySnapshot: GptWorkerPipelineSnapshot = {
@@ -161,6 +162,7 @@ const runQueuedJobs = async () => {
               error: progress.error,
               total: progress.total,
               elapsedMs: progress.elapsedMs,
+              chapters: progress.chapters,
             };
             void refreshCacheMetrics();
           },
@@ -172,6 +174,14 @@ const runQueuedJobs = async () => {
 
       if (state === 'abort' || state === 'fail') break;
       job.finishAt = Date.now();
+      if (job.progress) {
+        job.progress = {
+          finished: job.progress.finished,
+          error: job.progress.error,
+          total: job.progress.total,
+          elapsedMs: job.progress.elapsedMs,
+        };
+      }
       workspace.addJobRecord(job);
       workspace.deleteJob(job.task);
       if (state !== 'complete' || !automaticQueue.value) break;
@@ -180,6 +190,7 @@ const runQueuedJobs = async () => {
     taskController = undefined;
     currentJob.value = undefined;
     queueRunning.value = false;
+    if (processedAny && workspaceRef.value.jobs.length === 0) stopAllWorkers();
     void refreshCacheMetrics();
   }
 
@@ -235,24 +246,6 @@ const stopAllWorkers = () => {
   for (const worker of [...pipelineSnapshot.value.workers]) {
     stopWorker(worker.id);
   }
-};
-
-const workerControlOptions = computed(() => [
-  {
-    label: '启动全部',
-    key: 'start',
-    disabled: workspaceRef.value.workers.length === 0,
-  },
-  {
-    label: '停止全部',
-    key: 'stop',
-    disabled: pipelineSnapshot.value.workers.length === 0,
-  },
-]);
-
-const handleWorkerControl = (key: string | number) => {
-  if (key === 'start') void startAllWorkers();
-  if (key === 'stop') stopAllWorkers();
 };
 
 const activeWorkerConfigs = computed(() => {
@@ -351,11 +344,21 @@ onBeforeUnmount(() => {
       :wrap="false"
     >
       <n-h1 style="margin: 0">GPT工作区</n-h1>
-      <workspace-metrics-panel
-        :cache-metrics="cacheMetrics"
-        :pipeline-metrics="pipelineSnapshot"
-        :worker-metrics="workerMetrics"
-      />
+      <n-flex :wrap="false" align="center">
+        <c-button
+          label="日志"
+          :icon="ArticleOutlined"
+          :type="showTaskLog ? 'primary' : 'default'"
+          :aria-pressed="showTaskLog"
+          compact-on-mobile
+          @action="showTaskLog = !showTaskLog"
+        />
+        <workspace-metrics-panel
+          :cache-metrics="cacheMetrics"
+          :pipeline-metrics="pipelineSnapshot"
+          :worker-metrics="workerMetrics"
+        />
+      </n-flex>
     </n-flex>
 
     <bulletin v-if="infoPanelHtml">
@@ -370,25 +373,33 @@ onBeforeUnmount(() => {
         compact-on-mobile
         @action="showCreateWorkerModal = true"
       />
+    </section-header>
+
+    <n-flex class="workspace-operation-row" align="center" :size="8">
+      <n-text depth="3">操作</n-text>
+      <c-button
+        label="启动全部"
+        size="small"
+        secondary
+        :disabled="workspaceRef.workers.length === 0"
+        @action="startAllWorkers"
+      />
+      <c-button
+        label="停止全部"
+        size="small"
+        secondary
+        :disabled="pipelineSnapshot.workers.length === 0"
+        @action="stopAllWorkers"
+      />
       <c-button-confirm
         hint="真的要清空缓存吗？"
         label="清空缓存"
         :icon="DeleteOutlineOutlined"
-        compact-on-mobile
+        size="small"
+        secondary
         @action="clearCache"
       />
-      <n-dropdown
-        trigger="click"
-        placement="bottom-end"
-        :options="workerControlOptions"
-        :keyboard="false"
-        @select="handleWorkerControl"
-      >
-        <n-button circle aria-label="批量控制翻译器">
-          <n-icon :component="MoreVertOutlined" />
-        </n-button>
-      </n-dropdown>
-    </section-header>
+    </n-flex>
 
     <n-alert
       v-if="mixesWorkerConfigurations"
@@ -432,7 +443,11 @@ onBeforeUnmount(() => {
       启动任意 GPT 翻译器后会从当前未完成分段继续。
     </n-alert>
 
-    <TranslateTask ref="translateTask" style="margin-top: 20px" />
+    <TranslateTask
+      ref="translateTask"
+      :show-log="showTaskLog"
+      style="margin-top: 20px"
+    />
 
     <section-header title="任务队列">
       <c-button

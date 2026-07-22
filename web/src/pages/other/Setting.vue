@@ -52,8 +52,8 @@ const readerRetranslationPolicyOptions: {
   value: ReaderRetranslationPolicy;
 }[] = [
   { label: '询问', value: 'ask' },
-  { label: '替换', value: 'replace' },
-  { label: '不替换', value: 'keep' },
+  { label: '替换原有翻译', value: 'replace' },
+  { label: '不替换原有翻译', value: 'keep' },
 ];
 const readerChineseScriptOptions: {
   label: string;

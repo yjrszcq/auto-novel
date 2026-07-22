@@ -4,14 +4,15 @@ import type { ScrollbarInst } from 'naive-ui';
 const props = defineProps<{
   title: string;
   running: boolean;
+  show: boolean;
 }>();
 
-const show = ref(false);
+const hasStarted = ref(false);
 watch(
   () => props.running,
   (running) => {
     if (running) {
-      show.value = true;
+      hasStarted.value = true;
     }
   },
 );
@@ -58,7 +59,7 @@ const exposeValue = {
   clearLog,
   pushLog,
   hide: () => {
-    show.value = false;
+    hasStarted.value = false;
   },
 };
 
@@ -67,7 +68,7 @@ defineExpose(exposeValue);
 
 <template>
   <n-card
-    v-show="show"
+    v-show="show && hasStarted"
     :title="`${title} [${running ? '运行中' : '已结束'}]`"
     embedded
     :bordered="false"

@@ -1,12 +1,19 @@
 import type {
   ReaderAutomaticTranslationCache,
   ReaderChapterContent,
+  ReaderChapterSummary,
 } from '@/model/Reader';
 import type { LocalVolumeChapter } from '@/model/LocalVolume';
 import { getChapterFormalTranslationRevision } from '@/domain/translate/ChapterTranslationCompletion';
 
 export type ReaderAutomaticTranslationSource = 'gpt' | 'sakura';
 export type ReaderAutomaticTranslationPurpose = 'automatic' | 'retranslate';
+export type ReaderRetranslationScope = 'chapter' | 'continuous';
+export type ReaderRetranslationUntranslatedPolicy = 'stop' | 'continue';
+export type ReaderRetranslationOptions = {
+  scope: ReaderRetranslationScope;
+  untranslatedPolicy: ReaderRetranslationUntranslatedPolicy;
+};
 
 export interface ReaderAutomaticTranslationSelection {
   source: ReaderAutomaticTranslationSource;
@@ -30,6 +37,23 @@ export interface ReaderAutomaticTranslationWindow {
   visibleCharacterCount: number;
   prefetchCharacterBudget: number;
 }
+
+export const resolveNextReaderRetranslationChapter = (
+  chapters: Array<Pick<ReaderChapterSummary, 'id' | 'translationStatus'>>,
+  currentChapterId: string,
+  options: ReaderRetranslationOptions,
+) => {
+  if (options.scope !== 'continuous') return undefined;
+  const currentIndex = chapters.findIndex(({ id }) => id === currentChapterId);
+  const next = currentIndex < 0 ? undefined : chapters[currentIndex + 1];
+  if (
+    next === undefined ||
+    (next.translationStatus === 'none' && options.untranslatedPolicy === 'stop')
+  ) {
+    return undefined;
+  }
+  return next.id;
+};
 
 export const resolveReaderAutomaticTranslationWorker = <
   Worker extends { id: string },
