@@ -51,6 +51,7 @@ export interface TranslateJob {
   description: string;
   createAt: number;
   finishAt?: number;
+  progress?: TranslateJobProgress;
 }
 
 export type TranslateChapterProgress = {
@@ -71,9 +72,7 @@ export type TranslateJobProgress = {
   chapters?: TranslateChapterProgress[];
 };
 
-export type TranslateJobRecord = TranslateJob & {
-  progress?: TranslateJobProgress;
-};
+export type TranslateJobRecord = TranslateJob;
 
 export namespace TranslateJob {
   export const isFinished = (job: TranslateJobRecord) =>

@@ -2959,24 +2959,23 @@ test('automatically translates a reader window without persisting a partial chap
     const retranslationSourceDialog = page.getByRole('dialog', {
       name: '重新翻译',
     });
+    const retranslationScopeSetting = retranslationSourceDialog
+      .locator('.n-form-item')
+      .filter({ hasText: '范围' });
     await expect(
-      retranslationSourceDialog.getByRole('radio', {
-        name: '仅本章',
-        exact: true,
-      }),
-    ).toBeChecked();
+      retranslationScopeSetting.locator('.n-base-selection-label'),
+    ).toHaveText('仅本章');
     await expect(
       retranslationSourceDialog.getByText('遇到未翻译章', { exact: true }),
     ).toHaveCount(0);
-    await retranslationSourceDialog
-      .getByText('连续重翻', { exact: true })
-      .click();
+    await retranslationScopeSetting.locator('.n-base-selection').click();
+    await page.locator('.n-base-select-menu').getByText('连续重翻').click();
+    const untranslatedPolicySetting = retranslationSourceDialog
+      .locator('.n-form-item')
+      .filter({ hasText: '遇到未翻译章' });
     await expect(
-      retranslationSourceDialog.getByRole('radio', {
-        name: '停止',
-        exact: true,
-      }),
-    ).toBeChecked();
+      untranslatedPolicySetting.locator('.n-base-selection-label'),
+    ).toHaveText('停止');
     await page.getByRole('button', { name: '关闭重新翻译' }).click();
     await page.getByRole('button', { name: '工具', exact: true }).click();
     await expect(retranslateButton).toHaveAttribute('aria-pressed', 'false');
@@ -3987,6 +3986,17 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     const taskLog = page.locator('.n-card').filter({ hasText: 'GPT翻译' });
     await expect(logButton).toHaveAttribute('aria-pressed', 'false');
     await expect(taskLog).toBeHidden();
+    const activeJob = page.locator('.job-queue').filter({ hasText: volumeId });
+    const queuedChapters = activeJob.locator('.job-queue__chapter');
+    await expect(activeJob.getByText('等待中', { exact: true })).toBeVisible();
+    await expect(queuedChapters).toHaveCount(2);
+    await expect(activeJob.locator('.chapter-grid__progress')).toHaveCount(0);
+    expect(
+      await queuedChapters.first().evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return Math.abs(bounds.width - bounds.height);
+      }),
+    ).toBeLessThan(1);
     await firstWorker
       .getByRole('button', { name: '启动', exact: true })
       .click();
@@ -3996,9 +4006,12 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     await twoRequestsArrived;
     expect(server.activeRequests).toBe(2);
     expect(server.requests).toHaveLength(2);
-    const activeJob = page.locator('.job-queue').filter({ hasText: volumeId });
     await expect(activeJob.getByText('翻译中', { exact: true })).toBeVisible();
     await expect(activeJob.locator('.job-queue__chapter')).toHaveCount(2);
+    await expect(
+      activeJob.locator('.chapter-grid__chapter--translating'),
+    ).toHaveCount(2);
+    await expect(activeJob.locator('.chapter-grid__progress')).toHaveCount(2);
     await logButton.click();
     await expect(logButton).toHaveAttribute('aria-pressed', 'true');
     await expect(taskLog).toBeVisible();
@@ -4541,6 +4554,17 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
       )
       .toEqual(['chapter-b']);
 
+    const pausedJob = page.locator('.job-queue').filter({ hasText: volumeId });
+    await expect(pausedJob.getByText('等待中', { exact: true })).toBeVisible();
+    await expect(pausedJob.locator('.job-queue__chapter')).toHaveCount(2);
+    await expect(pausedJob.locator('.chapter-grid__chapter--done')).toHaveCount(
+      1,
+    );
+    await expect(
+      pausedJob.locator('.chapter-grid__chapter--pending'),
+    ).toHaveCount(1);
+    await expect(pausedJob.locator('.chapter-grid__bar')).toHaveCount(1);
+
     await page.getByText('继续队列', { exact: true }).click();
     await expect
       .poll(() =>
@@ -4734,10 +4758,18 @@ test('pretranslates across chapters and stops continuous retranslation at an unt
       .getByRole('button', { name: '重新翻译', exact: true })
       .click();
     const retranslation = page.getByRole('dialog', { name: '重新翻译' });
-    await retranslation.getByText('连续重翻', { exact: true }).click();
+    await retranslation
+      .locator('.n-form-item')
+      .filter({ hasText: '范围' })
+      .locator('.n-base-selection')
+      .click();
+    await page.locator('.n-base-select-menu').getByText('连续重翻').click();
     await expect(
-      retranslation.getByRole('radio', { name: '停止', exact: true }),
-    ).toBeChecked();
+      retranslation
+        .locator('.n-form-item')
+        .filter({ hasText: '遇到未翻译章' })
+        .locator('.n-base-selection-label'),
+    ).toHaveText('停止');
     await retranslation
       .getByRole('button', { name: 'GPT 自动翻译', exact: true })
       .click();

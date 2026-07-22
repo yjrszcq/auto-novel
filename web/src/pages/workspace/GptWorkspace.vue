@@ -375,30 +375,30 @@ onBeforeUnmount(() => {
       />
     </section-header>
 
-    <n-flex class="workspace-operation-row" align="center" :size="8">
-      <n-text depth="3">操作</n-text>
-      <c-button
-        label="启动全部"
-        size="small"
-        secondary
-        :disabled="workspaceRef.workers.length === 0"
-        @action="startAllWorkers"
-      />
-      <c-button
-        label="停止全部"
-        size="small"
-        secondary
-        :disabled="pipelineSnapshot.workers.length === 0"
-        @action="stopAllWorkers"
-      />
-      <c-button-confirm
-        hint="真的要清空缓存吗？"
-        label="清空缓存"
-        :icon="DeleteOutlineOutlined"
-        size="small"
-        secondary
-        @action="clearCache"
-      />
+    <n-flex vertical>
+      <c-action-wrapper title="操作" align="center">
+        <n-button-group size="small">
+          <c-button
+            label="启动全部"
+            :round="false"
+            :disabled="workspaceRef.workers.length === 0"
+            @action="startAllWorkers"
+          />
+          <c-button
+            label="停止全部"
+            :round="false"
+            :disabled="pipelineSnapshot.workers.length === 0"
+            @action="stopAllWorkers"
+          />
+          <c-button-confirm
+            hint="真的要清空缓存吗？"
+            label="清空缓存"
+            :icon="DeleteOutlineOutlined"
+            :round="false"
+            @action="clearCache"
+          />
+        </n-button-group>
+      </c-action-wrapper>
     </n-flex>
 
     <n-alert
@@ -482,25 +482,24 @@ onBeforeUnmount(() => {
       </n-dropdown>
     </section-header>
     <n-empty v-if="workspaceRef.jobs.length === 0" description="没有任务" />
-    <n-list>
-      <vue-draggable
-        v-model="workspaceRef.jobs"
-        :animation="150"
-        handle=".drag-trigger"
-      >
-        <n-list-item v-for="job of workspaceRef.jobs" :key="job.task">
-          <job-queue
-            :job="job"
-            :progress="
-              currentJob?.task === job.task ? currentJob.progress : undefined
-            "
-            @top-job="workspace.topJob(job)"
-            @bottom-job="workspace.bottomJob(job)"
-            @delete-job="deleteJob(job.task)"
-          />
-        </n-list-item>
-      </vue-draggable>
-    </n-list>
+    <vue-draggable
+      v-model="workspaceRef.jobs"
+      class="workspace-task-list"
+      :animation="150"
+      handle=".drag-trigger"
+    >
+      <job-queue
+        v-for="job of workspaceRef.jobs"
+        :key="job.task"
+        :job="job"
+        :active="currentJob?.task === job.task"
+        :progress="job.progress"
+        translator-id="gpt"
+        @top-job="workspace.topJob(job)"
+        @bottom-job="workspace.bottomJob(job)"
+        @delete-job="deleteJob(job.task)"
+      />
+    </vue-draggable>
 
     <job-record-section id="gpt" />
   </div>
@@ -523,3 +522,10 @@ onBeforeUnmount(() => {
     真的要清空队列吗？
   </n-modal>
 </template>
+
+<style scoped>
+.workspace-task-list {
+  display: grid;
+  gap: 8px;
+}
+</style>

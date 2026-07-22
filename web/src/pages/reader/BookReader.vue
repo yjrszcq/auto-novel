@@ -148,6 +148,17 @@ const showRetranslationDecision = ref(false);
 const retranslationScope = ref<ReaderRetranslationScope>('chapter');
 const retranslationUntranslatedPolicy =
   ref<ReaderRetranslationUntranslatedPolicy>('stop');
+const retranslationScopeOptions = [
+  { label: '仅本章', value: 'chapter' },
+  { label: '连续重翻', value: 'continuous' },
+] satisfies Array<{ label: string; value: ReaderRetranslationScope }>;
+const retranslationUntranslatedPolicyOptions = [
+  { label: '停止', value: 'stop' },
+  { label: '继续', value: 'continue' },
+] satisfies Array<{
+  label: string;
+  value: ReaderRetranslationUntranslatedPolicy;
+}>;
 const showReaderGlossary = ref(false);
 const readerGlossaryLoading = ref(false);
 const readerGlossaryApplying = ref(false);
@@ -4606,32 +4617,24 @@ onBeforeUnmount(() => {
       <p class="book-reader__retranslation-description">
         从当前章原文开始重新翻译；完成前只保存到阅读缓存，不会修改正式译文。
       </p>
-      <div class="book-reader__retranslation-options">
-        <c-action-wrapper title="范围" align="center">
-          <c-radio-group
+      <n-form class="book-reader__retranslation-options" label-placement="top">
+        <n-form-item label="范围" :show-feedback="false">
+          <n-select
             v-model:value="retranslationScope"
-            :options="[
-              { label: '仅本章', value: 'chapter' },
-              { label: '连续重翻', value: 'continuous' },
-            ]"
-            size="small"
+            :options="retranslationScopeOptions"
           />
-        </c-action-wrapper>
-        <c-action-wrapper
+        </n-form-item>
+        <n-form-item
           v-if="retranslationScope === 'continuous'"
-          title="遇到未翻译章"
-          align="center"
+          label="遇到未翻译章"
+          :show-feedback="false"
         >
-          <c-radio-group
+          <n-select
             v-model:value="retranslationUntranslatedPolicy"
-            :options="[
-              { label: '停止', value: 'stop' },
-              { label: '继续', value: 'continue' },
-            ]"
-            size="small"
+            :options="retranslationUntranslatedPolicyOptions"
           />
-        </c-action-wrapper>
-      </div>
+        </n-form-item>
+      </n-form>
       <div class="book-reader__retranslation-actions">
         <n-button
           :disabled="automaticGptWorkerOptions.length === 0"
@@ -5349,8 +5352,20 @@ onBeforeUnmount(() => {
 
 .book-reader__retranslation-options {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 16px;
-  gap: 10px;
+  gap: 20px;
+}
+
+.book-reader__retranslation-options :deep(.n-form-item) {
+  min-width: 0;
+}
+
+@media (max-width: 639px) {
+  .book-reader__retranslation-options {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
 }
 
 .book-reader__retranslation-actions {

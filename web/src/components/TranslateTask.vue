@@ -47,6 +47,7 @@ let taskStartedAt = 0;
 let remainingChapterIds = new Set<string>();
 
 const chapterProgress = ref<TranslateChapterProgress[]>([]);
+let publishChapterProgress: (() => void) | undefined;
 
 const refreshChapterProgress = () => {
   chapterProgress.value = [...chapterProgress.value].sort((a, b) => {
@@ -117,6 +118,7 @@ const handleSegmentProgress = (info: SegmentProgressInfo) => {
     entry.failureSegments = remaining > 0 ? remaining : entry.totalSegments;
   }
   refreshChapterProgress();
+  publishChapterProgress?.();
 };
 
 const finishChapterProgress = (
@@ -253,6 +255,7 @@ const runTask = async (
       remainingChapterIds: [...remainingChapterIds],
     });
   };
+  publishChapterProgress = onProgressUpdated;
 
   try {
     await requestKeepAlive();
@@ -311,6 +314,7 @@ const runTask = async (
     cardRef.value!.pushLog({ message: `发生未预期错误：${error}` });
   } finally {
     onProgressUpdated();
+    publishChapterProgress = undefined;
     cardRef.value!.pushLog({ message: '\n结束' });
     running.value = false;
     releaseKeepAlive();

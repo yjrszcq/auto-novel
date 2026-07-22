@@ -7,6 +7,7 @@ import type {
   LocalTranslateTaskDesc,
   TranslateTaskCallback,
   TranslateTaskParams,
+  TranslatorId,
 } from '@/model/Translator';
 import { normalizeTranslationConcurrency } from '@/model/Translator';
 import { useLocalVolumeStore } from '@/stores';
@@ -21,6 +22,40 @@ import type {
   Translator,
 } from './Translator';
 import { createCatalogTitleTranslationPlan } from './CatalogTitleTranslation';
+
+export const collectLocalTranslationChapters = (
+  metadata: LocalVolumeMetadata,
+  {
+    level,
+    startIndex,
+    endIndex,
+    chapterIds,
+  }: Pick<
+    TranslateTaskParams,
+    'level' | 'startIndex' | 'endIndex' | 'chapterIds'
+  >,
+  translatorId: TranslatorId,
+) => {
+  const requestedChapterIds = new Set(chapterIds ?? []);
+  return metadata.toc
+    .map((chapter, tocIndex) => ({ chapter, tocIndex }))
+    .slice(startIndex, endIndex)
+    .filter(
+      ({ chapter }) =>
+        chapterIds === undefined || requestedChapterIds.has(chapter.chapterId),
+    )
+    .filter(({ chapter }) => {
+      if (level === 'all') return true;
+      if (chapter[translatorId] === undefined) return true;
+      return (
+        level !== 'normal' && chapter[translatorId] !== metadata.glossaryId
+      );
+    })
+    .map(({ chapter, tocIndex }) => ({
+      chapterId: chapter.chapterId,
+      tocIndex,
+    }));
+};
 
 export const translateLocal = async (
   { volumeId }: LocalTranslateTaskDesc,
@@ -78,25 +113,11 @@ export const translateLocal = async (
     return;
   }
 
-  const requestedChapterIds = new Set(chapterIds ?? []);
-  const chapters = metadata.toc
-    .map((chapter, tocIndex) => ({ chapter, tocIndex }))
-    .slice(startIndex, endIndex)
-    .filter(
-      ({ chapter }) =>
-        chapterIds === undefined || requestedChapterIds.has(chapter.chapterId),
-    )
-    .filter(({ chapter }) => {
-      if (level === 'all') return true;
-      if (chapter[translator.id] === undefined) return true;
-      return (
-        level !== 'normal' && chapter[translator.id] !== metadata.glossaryId
-      );
-    })
-    .map(({ chapter, tocIndex }) => ({
-      chapterId: chapter.chapterId,
-      tocIndex,
-    }));
+  const chapters = collectLocalTranslationChapters(
+    metadata,
+    { level, startIndex, endIndex, chapterIds },
+    translator.id,
+  );
 
   callback.onStart(
     chapters.length,

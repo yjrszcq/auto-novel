@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import {
+  ChevronRightOutlined,
   DeleteOutlineOutlined,
   DragIndicatorOutlined,
   KeyboardDoubleArrowDownOutlined,
@@ -7,170 +8,204 @@ import {
   MenuBookOutlined,
 } from '@vicons/material';
 
+import { collectLocalTranslationChapters } from '@/domain/translate/TranslateLocal';
 import {
   TranslateTaskDescriptor,
   type TranslateChapterProgress,
   type TranslateJob,
   type TranslateJobProgress,
+  type TranslatorId,
 } from '@/model/Translator';
+import { useLocalVolumeStore } from '@/stores';
 
 const props = defineProps<{
   job: TranslateJob;
+  active: boolean;
   progress?: TranslateJobProgress;
+  translatorId: TranslatorId;
 }>();
 const emit = defineEmits<{
   topJob: [];
   bottomJob: [];
   deleteJob: [];
 }>();
-const themeVars = useThemeVars();
 
+const themeVars = useThemeVars();
+const expanded = ref(true);
 const showGlossary = ref(false);
-const volumeId = computed(() => {
+const plannedChapters = ref<TranslateChapterProgress[]>([]);
+let planRevision = 0;
+
+const parsedTask = computed(() => {
   try {
-    return TranslateTaskDescriptor.parse(props.job.task).desc.volumeId;
+    return TranslateTaskDescriptor.parse(props.job.task);
   } catch {
     return undefined;
   }
 });
+const volumeId = computed(() => parsedTask.value?.desc.volumeId);
 
-const percentage = computed(() => {
-  if (props.progress === undefined) {
-    return 0;
-  }
-  const { finished, error, total } = props.progress;
-  if (total === 0) {
-    return 100;
-  } else {
-    return Math.round((1000 * (finished + error)) / total) / 10;
-  }
-});
-const throughput = computed(() => {
-  if (!props.progress?.elapsedMs) return 0;
-  const processed = props.progress.finished + props.progress.error;
-  return (processed * 60_000) / props.progress.elapsedMs;
-});
+watch(
+  () => [props.job.task, props.translatorId] as const,
+  async () => {
+    const revision = ++planRevision;
+    const parsed = parsedTask.value;
+    if (parsed === undefined) {
+      plannedChapters.value = [];
+      return;
+    }
+    const repository = await useLocalVolumeStore();
+    const metadata = await repository.getVolume(parsed.desc.volumeId);
+    if (revision !== planRevision) return;
+    if (metadata === undefined) {
+      plannedChapters.value = [];
+      return;
+    }
+    plannedChapters.value = collectLocalTranslationChapters(
+      metadata,
+      parsed.params,
+      props.translatorId,
+    ).map(({ chapterId }, index, chapters) => ({
+      key: chapterId,
+      chapterIndex: index,
+      chapterTotal: chapters.length,
+      totalSegments: 0,
+      successSegments: 0,
+      failureSegments: 0,
+      status: 'waiting',
+    }));
+  },
+  { immediate: true },
+);
 
+const chapters = computed(() => {
+  const progressChapters = props.progress?.chapters ?? [];
+  if (plannedChapters.value.length === 0) return progressChapters;
+  const progressByKey = new Map(
+    progressChapters.map((chapter) => [chapter.key, chapter]),
+  );
+  const merged = plannedChapters.value.map(
+    (chapter) => progressByKey.get(chapter.key) ?? chapter,
+  );
+  const plannedKeys = new Set(plannedChapters.value.map(({ key }) => key));
+  return [
+    ...merged,
+    ...progressChapters.filter(({ key }) => !plannedKeys.has(key)),
+  ];
+});
 const processed = computed(
   () => (props.progress?.finished ?? 0) + (props.progress?.error ?? 0),
 );
-const chapters = computed(() => props.progress?.chapters ?? []);
-const chapterLabel = (chapter: TranslateChapterProgress) =>
-  chapter.chapterIndex ?? '?';
-const chapterSegmentLabel = (chapter: TranslateChapterProgress) =>
-  `${chapter.successSegments}/${chapter.totalSegments || '-'}`;
-const chapterStyle = (chapter: TranslateChapterProgress) => {
-  if (chapter.status === 'failure') {
-    return {
-      borderColor: themeVars.value.errorColor,
-      color: themeVars.value.errorColor,
-    };
-  }
-  if (chapter.status === 'running' || chapter.status === 'success') {
-    return {
-      borderColor: themeVars.value.primaryColor,
-      color: themeVars.value.primaryColor,
-      backgroundColor:
-        chapter.status === 'success'
-          ? `color-mix(in srgb, ${themeVars.value.primaryColor} 14%, transparent)`
-          : undefined,
-    };
-  }
-  return {
-    borderColor: themeVars.value.borderColor,
-    color: themeVars.value.textColor3,
-  };
-};
+const isComplete = computed(
+  () => props.progress !== undefined && processed.value >= props.progress.total,
+);
+const status = computed(() => {
+  if (isComplete.value) return 'done';
+  if (props.active) return 'executing';
+  return 'pending';
+});
+const total = computed(() => props.progress?.total ?? chapters.value.length);
+const throughput = computed(() => {
+  if (!props.progress?.elapsedMs) return 0;
+  return (processed.value * 60_000) / props.progress.elapsedMs;
+});
+const hasMetrics = computed(
+  () => props.progress !== undefined && props.progress.elapsedMs > 0,
+);
 </script>
 
 <template>
-  <n-thing
+  <n-card
+    size="small"
+    hoverable
     class="job-queue"
-    :style="{
-      borderColor: progress ? themeVars.primaryColor : themeVars.borderColor,
+    :class="{ 'task-card--expanded': expanded }"
+    :header-style="{
+      cursor: 'pointer',
+      padding: '10px 14px',
+      userSelect: 'none',
     }"
+    :content-style="expanded ? { padding: '0 14px 10px' } : { padding: '0' }"
   >
-    <template #avatar>
-      <n-flex vertical justify="center" style="height: 100%">
-        <n-icon
-          class="drag-trigger"
-          :size="18"
-          :depth="2"
-          :component="DragIndicatorOutlined"
-          style="cursor: move"
-        />
-      </n-flex>
-    </template>
-
     <template #header>
-      {{ job.description }}
-    </template>
-    <template #header-extra>
-      <n-flex :size="6" :wrap="false">
-        <n-tag v-if="progress" size="small" type="info">翻译中</n-tag>
-        <n-tag v-else size="small">等待中</n-tag>
-        <n-text depth="3" class="job-queue__count">
-          {{ progress ? `${processed}/${progress.total || '-'}` : '' }}
-        </n-text>
-        <c-icon-button
-          v-if="progress === undefined && volumeId !== undefined"
-          tooltip="编辑术语表"
-          :icon="MenuBookOutlined"
-          @action="showGlossary = true"
-        />
+      <div @click="expanded = !expanded">
+        <n-flex align="center" :wrap="false" style="flex: 1; min-width: 0">
+          <n-icon
+            class="drag-trigger task-drag"
+            :size="18"
+            :depth="2"
+            :component="DragIndicatorOutlined"
+            @click.stop
+          />
 
-        <c-icon-button
-          tooltip="置顶"
-          :icon="KeyboardDoubleArrowUpOutlined"
-          @action="emit('topJob')"
-        />
+          <div class="task-identity">
+            <div class="task-name">{{ job.description }}</div>
+            <div class="task-description">
+              <job-task-link :task="job.task" class="task-link" />
+              <n-text v-if="hasMetrics" depth="3" class="task-speed">
+                {{ (progress!.elapsedMs / 1000).toFixed(1) }} 秒 /
+                {{ throughput.toFixed(1) }} 章/分钟
+              </n-text>
+            </div>
+          </div>
 
-        <c-icon-button
-          tooltip="置底"
-          :icon="KeyboardDoubleArrowDownOutlined"
-          @action="emit('bottomJob')"
-        />
+          <n-flex :size="8" align="center" :wrap="false" class="task-status">
+            <n-tag v-if="status === 'executing'" size="tiny" type="info">
+              翻译中
+            </n-tag>
+            <n-tag v-else-if="status === 'done'" size="tiny" type="success">
+              已完成
+            </n-tag>
+            <n-tag v-else size="tiny">等待中</n-tag>
+            <span class="task-progress">{{ processed }}/{{ total }}</span>
+          </n-flex>
 
-        <c-icon-button
-          tooltip="删除"
-          :icon="DeleteOutlineOutlined"
-          type="error"
-          @action="emit('deleteJob')"
-        />
-      </n-flex>
-    </template>
+          <n-flex :size="4" :wrap="false" class="task-actions">
+            <c-icon-button
+              v-if="!active && volumeId !== undefined"
+              tooltip="编辑术语表"
+              :icon="MenuBookOutlined"
+              @click.stop
+              @action="showGlossary = true"
+            />
+            <c-icon-button
+              tooltip="置顶"
+              :icon="KeyboardDoubleArrowUpOutlined"
+              quaternary
+              @click.stop
+              @action="emit('topJob')"
+            />
+            <c-icon-button
+              tooltip="置底"
+              :icon="KeyboardDoubleArrowDownOutlined"
+              quaternary
+              @click.stop
+              @action="emit('bottomJob')"
+            />
+            <c-icon-button
+              tooltip="删除"
+              :icon="DeleteOutlineOutlined"
+              type="error"
+              quaternary
+              @click.stop
+              @action="emit('deleteJob')"
+            />
+          </n-flex>
 
-    <template #description>
-      <job-task-link :task="job.task" />
-      <n-text v-if="percentage" depth="3" class="job-queue__metrics">
-        {{ (progress!.elapsedMs / 1000).toFixed(1) }} 秒 /
-        {{ throughput.toFixed(1) }} 章/分钟
-      </n-text>
-    </template>
-
-    <div v-if="chapters.length" class="job-queue__chapters">
-      <div
-        v-for="chapter of chapters"
-        :key="chapter.key"
-        class="job-queue__chapter"
-        :class="`job-queue__chapter--${chapter.status}`"
-        :style="chapterStyle(chapter)"
-        :aria-label="`章节 ${chapterLabel(chapter)}，${chapterSegmentLabel(chapter)}`"
-      >
-        <strong>{{ chapterLabel(chapter) }}</strong>
-        <small>{{ chapterSegmentLabel(chapter) }}</small>
-        <span
-          class="job-queue__chapter-progress"
-          :style="{
-            backgroundColor: themeVars.primaryColor,
-            width: chapter.totalSegments
-              ? `${Math.round((chapter.successSegments / chapter.totalSegments) * 100)}%`
-              : '0%',
-          }"
-        />
+          <n-icon
+            :component="ChevronRightOutlined"
+            :class="['expand-arrow', { 'expand-arrow--rotated': expanded }]"
+          />
+        </n-flex>
       </div>
-    </div>
-  </n-thing>
+    </template>
+
+    <job-chapter-grid
+      v-if="expanded && chapters.length"
+      :active="active"
+      :chapters="chapters"
+    />
+  </n-card>
 
   <local-volume-glossary-modal
     v-if="volumeId !== undefined"
@@ -180,58 +215,72 @@ const chapterStyle = (chapter: TranslateChapterProgress) => {
 </template>
 
 <style scoped>
-.job-queue {
-  padding: 12px;
-  border: 1px solid;
+.task-card--expanded {
+  --n-border-color: v-bind('themeVars.primaryColorHover');
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
 }
 
-.job-queue__count {
-  min-width: 44px;
-  text-align: center;
+.task-drag,
+.task-status,
+.task-actions,
+.expand-arrow {
+  flex-shrink: 0;
 }
 
-.job-queue__metrics {
-  margin-left: 8px;
-  font-size: 12px;
+.task-drag {
+  cursor: move;
 }
 
-.job-queue__chapters {
-  display: flex;
-  gap: 4px;
-  margin-top: 10px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+.task-identity {
+  min-width: 0;
+  flex: 1;
 }
 
-.job-queue__chapter {
-  position: relative;
-  display: grid;
-  flex: 0 0 38px;
-  height: 42px;
-  place-content: center;
+.task-name {
   overflow: hidden;
-  border: 1px solid;
-  text-align: center;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.job-queue__chapter strong,
-.job-queue__chapter small {
-  line-height: 1.1;
+.task-description {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
 }
 
-.job-queue__chapter-progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
+.task-link {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.task-speed,
+.task-progress {
+  flex: 0 0 auto;
+  color: v-bind('themeVars.textColor3');
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.expand-arrow {
+  margin-left: 2px;
+  color: v-bind('themeVars.textColor3');
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.expand-arrow--rotated {
+  transform: rotate(90deg);
 }
 
 @media (max-width: 639px) {
-  .job-queue {
-    padding: 10px 8px;
+  .task-status {
+    gap: 4px !important;
   }
 
-  .job-queue__metrics {
+  .task-speed {
     display: none;
   }
 }
