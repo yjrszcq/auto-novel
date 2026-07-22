@@ -5123,6 +5123,18 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   expect(workerActionBounds[0]!.y).toBe(workerActionBounds[1]!.y);
   expect(workerActionBounds[2]!.y).toBe(workerActionBounds[3]!.y);
   expect(workerActionBounds[2]!.y).toBeGreaterThan(workerActionBounds[0]!.y);
+  const horizontalCenterDistance =
+    workerActionBounds[1]!.x - workerActionBounds[0]!.x;
+  const verticalCenterDistance =
+    workerActionBounds[2]!.y - workerActionBounds[0]!.y;
+  expect(
+    Math.abs(horizontalCenterDistance - verticalCenterDistance),
+  ).toBeLessThan(0.1);
+  expect(
+    workerActionBounds.every(
+      (bounds) => bounds!.width === 32 && bounds!.height === 32,
+    ),
+  ).toBe(true);
 
   const gptAutomaticQueue = page.getByRole('button', {
     name: '自动队列',
