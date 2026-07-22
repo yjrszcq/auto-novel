@@ -596,6 +596,19 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   expect(mobileActionButtonBounds[4]!.y).toBe(mobileActionButtonBounds[5]!.y);
   expect(mobileActionButtonBounds[6]!.y).toBe(mobileActionButtonBounds[7]!.y);
   expect(mobileActionButtonBounds[7]!.y).toBe(mobileActionButtonBounds[8]!.y);
+  expect(
+    Math.abs(
+      mobileActionButtonBounds[0]!.x - glossaryActionsBoundsAfterImport!.x,
+    ),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(
+      mobileActionButtonBounds[2]!.x +
+        mobileActionButtonBounds[2]!.width -
+        (glossaryActionsBoundsAfterImport!.x +
+          glossaryActionsBoundsAfterImport!.width),
+    ),
+  ).toBeLessThanOrEqual(1);
   await expect(translatorConfigButton).toHaveAttribute(
     'aria-expanded',
     'false',

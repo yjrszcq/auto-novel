@@ -546,7 +546,10 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="glossary-actions">
+    <div
+      class="glossary-actions"
+      :class="{ 'glossary-actions--has-apply': applyLabel }"
+    >
       <n-flex align="center" class="glossary-selection-actions">
         <c-button
           v-if="applyLabel"
@@ -1049,8 +1052,7 @@ onBeforeUnmount(() => {
 
   .glossary-actions {
     display: grid;
-    grid-template-columns: repeat(4, max-content);
-    justify-content: start;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
   }
 
@@ -1064,54 +1066,76 @@ onBeforeUnmount(() => {
     display: inline-flex;
   }
 
+  .glossary-action {
+    justify-self: center;
+  }
+
   .glossary-action--apply {
     grid-row: 1;
     grid-column: 1;
+    justify-self: start;
   }
 
   .glossary-action--scan {
     grid-row: 1;
-    grid-column: 2;
+    grid-column: 1;
+    justify-self: start;
   }
 
   .glossary-action--translate {
     grid-row: 1;
-    grid-column: 3;
+    grid-column: 2 / span 2;
   }
 
   .glossary-action--config {
     grid-row: 1;
     grid-column: 4;
+    justify-self: end;
+  }
+
+  .glossary-actions--has-apply .glossary-action--scan {
+    grid-column: 2;
+    justify-self: center;
+  }
+
+  .glossary-actions--has-apply .glossary-action--translate {
+    grid-column: 3;
   }
 
   .glossary-action--import {
     grid-row: 2;
     grid-column: 1;
+    justify-self: start;
   }
 
   .glossary-action--copy {
     grid-row: 2;
     grid-column: 2 / span 2;
+    justify-self: center;
   }
 
   .glossary-action--download {
     grid-row: 2;
     grid-column: 4;
+    justify-self: end;
   }
 
   .glossary-action--select {
     grid-row: 3;
     grid-column: 1;
+    justify-self: start;
   }
 
   .glossary-action--remove {
     grid-row: 3;
     grid-column: 2 / span 2;
+    justify-self: center;
   }
 
   .glossary-action--undo {
     grid-row: 3;
     grid-column: 4;
+    justify-self: end;
   }
 
   .glossary-action--cancel {
