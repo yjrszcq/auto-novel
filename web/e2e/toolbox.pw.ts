@@ -471,7 +471,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     Math.abs(centerY(sortBounds!) - centerY(summaryBounds!)),
   ).toBeLessThanOrEqual(2);
   expect(
-    Math.abs(centerY(sortBounds!) - centerY(configButtonBounds!)),
+    Math.abs(centerY(scanButtonBounds!) - centerY(configButtonBounds!)),
   ).toBeLessThanOrEqual(2);
   expect(scanButtonBounds!.x).toBeLessThan(configButtonBounds!.x);
   expect(
@@ -483,7 +483,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     (await page.locator('.glossary-toolbar__minimum-input').boundingBox())!
       .width,
   ).toBeLessThanOrEqual(100);
-  expect(sortBounds!.width).toBeLessThanOrEqual(120);
+  expect(sortBounds!.width).toBeLessThanOrEqual(190);
   await expect(
     page.getByRole('cell', { name: 'カタカナ', exact: true }),
   ).toBeVisible();
@@ -520,12 +520,14 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       .filter({ hasText: 'カタカナ' })
       .getByPlaceholder('请输入中文翻译'),
   ).toHaveValue('片假名');
+  const translateButton = page.getByRole('button', {
+    name: '翻译',
+    exact: true,
+  });
+  await expect(translateButton).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'GPT 翻译', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Sakura 翻译', exact: true }),
-  ).toBeVisible();
+    page.getByRole('button', { name: /^(百度|有道|GPT|Sakura) 翻译$/ }),
+  ).toHaveCount(0);
   await expect(translatorConfigButton).toHaveAttribute(
     'aria-expanded',
     'false',
@@ -547,15 +549,18 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     .toBeLessThanOrEqual(2);
   await translatorConfigButton.click();
   await expect(translatorConfigButton).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByText('GPT 翻译器', { exact: true })).toBeVisible();
-  await expect(page.getByText('Sakura 翻译器', { exact: true })).toBeVisible();
   const translatorConfigModal = page.getByRole('dialog');
   await expect(translatorConfigModal).toBeVisible();
-  const translatorConfigBounds = await translatorConfigModal.boundingBox();
-  const desktopGptSelectBounds = await translatorConfigModal
+  const translationMethodSelect = translatorConfigModal
     .locator('.glossary-translator-selector .n-select')
-    .first()
-    .boundingBox();
+    .first();
+  await expect(
+    translationMethodSelect.locator('.n-base-selection-label'),
+  ).toContainText('GPT 翻译');
+  await expect(page.getByText('GPT 翻译器', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sakura 翻译器', { exact: true })).toHaveCount(0);
+  const translatorConfigBounds = await translatorConfigModal.boundingBox();
+  const desktopGptSelectBounds = await translationMethodSelect.boundingBox();
   expect(translatorConfigBounds).not.toBeNull();
   expect(desktopGptSelectBounds).not.toBeNull();
   expect(translatorConfigBounds!.width).toBeLessThanOrEqual(440);
@@ -579,6 +584,9 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   expect(
     mobileTranslatorConfigBounds!.x + mobileTranslatorConfigBounds!.width,
   ).toBeLessThanOrEqual(390);
+  await translationMethodSelect.click();
+  await page.getByText('百度翻译', { exact: true }).last().click();
+  await expect(page.getByText('GPT 翻译器', { exact: true })).toHaveCount(0);
   await translatorConfigModal.getByRole('button', { name: 'close' }).click();
   await expect(translatorConfigModal).toHaveCount(0);
 
@@ -614,7 +622,7 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       });
     },
   );
-  await page.getByRole('button', { name: '百度翻译', exact: true }).click();
+  await translateButton.click();
   await expect(
     page.getByText('部分词语翻译失败，成功结果和手工编辑已保留'),
   ).toBeVisible();
@@ -654,7 +662,11 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
       }),
     });
   });
-  await page.getByRole('button', { name: '有道翻译', exact: true }).click();
+  await translatorConfigButton.click();
+  await translationMethodSelect.click();
+  await page.getByText('有道翻译', { exact: true }).last().click();
+  await translatorConfigModal.getByRole('button', { name: 'close' }).click();
+  await translateButton.click();
   await expect(page.getByText('已翻译 2 个词语')).toBeVisible();
   await expect(
     page

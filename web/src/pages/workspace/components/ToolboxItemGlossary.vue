@@ -43,6 +43,14 @@ const message = useMessage();
 const gptWorkspace = useGptWorkspaceStore().ref;
 const sakuraWorkspace = useSakuraWorkspaceStore().ref;
 const { setting } = storeToRefs(useSettingStore());
+type GlossaryTranslatorId = 'baidu' | 'youdao' | 'gpt' | 'sakura';
+const selectedTranslatorId = ref<GlossaryTranslatorId>('gpt');
+const translatorOptions = [
+  { label: '百度翻译', value: 'baidu' },
+  { label: '有道翻译', value: 'youdao' },
+  { label: 'GPT 翻译', value: 'gpt' },
+  { label: 'Sakura 翻译', value: 'sakura' },
+];
 const selectedGptWorkerId = ref(gptWorkspace.value.workers[0]?.id);
 const selectedSakuraWorkerId = ref(sakuraWorkspace.value.workers[0]?.id);
 const gptWorkerOptions = computed(() =>
@@ -311,7 +319,7 @@ const downloadGlossary = () => {
 };
 
 const translatorConfig = (
-  id: 'baidu' | 'youdao' | 'gpt' | 'sakura',
+  id: GlossaryTranslatorId,
 ): TranslatorConfig | undefined => {
   if (id === 'baidu' || id === 'youdao') {
     return Setting.translatorConfig(setting.value, id);
@@ -340,9 +348,7 @@ const translatorConfig = (
   };
 };
 
-const translateCandidates = async (
-  id: 'baidu' | 'youdao' | 'gpt' | 'sakura',
-) => {
+const translateCandidates = async (id: GlossaryTranslatorId) => {
   if (translating.value) return;
   const config = translatorConfig(id);
   if (config === undefined) {
@@ -529,32 +535,11 @@ onBeforeUnmount(() => {
 
     <n-flex align="center" class="glossary-translator-actions">
       <c-button
-        label="百度翻译"
+        label="翻译"
         :disabled="translating || activeCandidates.length === 0"
         size="small"
         :round="false"
-        @action="translateCandidates('baidu')"
-      />
-      <c-button
-        label="有道翻译"
-        :disabled="translating || activeCandidates.length === 0"
-        size="small"
-        :round="false"
-        @action="translateCandidates('youdao')"
-      />
-      <c-button
-        label="GPT 翻译"
-        :disabled="translating || activeCandidates.length === 0"
-        size="small"
-        :round="false"
-        @action="translateCandidates('gpt')"
-      />
-      <c-button
-        label="Sakura 翻译"
-        :disabled="translating || activeCandidates.length === 0"
-        size="small"
-        :round="false"
-        @action="translateCandidates('sakura')"
+        @action="translateCandidates(selectedTranslatorId)"
       />
       <c-button
         v-if="translating"
@@ -708,6 +693,19 @@ onBeforeUnmount(() => {
   >
     <n-flex align="center" class="glossary-translator-selectors">
       <label class="glossary-translator-selector">
+        <n-text depth="3">翻译方式</n-text>
+        <n-select
+          v-model:value="selectedTranslatorId"
+          :options="translatorOptions"
+          :disabled="translating"
+          aria-label="选择术语翻译方式"
+          size="small"
+        />
+      </label>
+      <label
+        v-if="selectedTranslatorId === 'gpt'"
+        class="glossary-translator-selector"
+      >
         <n-text depth="3">GPT 翻译器</n-text>
         <n-select
           v-model:value="selectedGptWorkerId"
@@ -718,7 +716,10 @@ onBeforeUnmount(() => {
           size="small"
         />
       </label>
-      <label class="glossary-translator-selector">
+      <label
+        v-if="selectedTranslatorId === 'sakura'"
+        class="glossary-translator-selector"
+      >
         <n-text depth="3">Sakura 翻译器</n-text>
         <n-select
           v-model:value="selectedSakuraWorkerId"
