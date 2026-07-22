@@ -44,16 +44,6 @@ const translatorConfig = computed(
 
 const endpointPrefix = computed(() => `${props.worker.segLength}@`);
 
-const assignmentLabel = (
-  assignment: SakuraWorkerPipelineSnapshot['workers'][number]['assignments'][number],
-) => {
-  const chapter = assignment.chapter;
-  const chapterLabel = chapter?.index
-    ? `章节 ${chapter.index}/${chapter.total ?? '-'}`
-    : '章节准备中';
-  return `${chapterLabel} · 分段 ${assignment.segmentIndex}/${assignment.segmentTotal}`;
-};
-
 const testWorker = async () => {
   if (testingTranslator.value || props.active || props.starting) return;
   testingTranslator.value = true;
@@ -94,30 +84,9 @@ const testWorker = async () => {
     </template>
 
     <template #description>
-      <n-flex
-        v-if="
-          (activity?.assignments.length ?? 0) > 0 || active || starting || error
-        "
-        vertical
-        :size="2"
-      >
+      <n-flex v-if="starting || error" vertical :size="2">
         <n-text v-if="starting" depth="3" style="font-size: 12px">
           正在连接并检测模型
-        </n-text>
-        <n-text
-          v-for="assignment of activity?.assignments ?? []"
-          :key="`${assignment.chapter?.id ?? '?'}-${assignment.segmentIndex}`"
-          depth="3"
-          style="font-size: 12px"
-        >
-          {{ assignmentLabel(assignment) }}
-        </n-text>
-        <n-text
-          v-if="active && activity?.active === 0"
-          depth="3"
-          style="font-size: 12px"
-        >
-          空闲，等待共享任务
         </n-text>
         <n-text v-if="error" type="error" style="font-size: 12px">
           启动失败：{{ error }}

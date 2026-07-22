@@ -2543,6 +2543,7 @@ test('automatically translates a reader window without persisting a partial chap
       '[data-reader-segment-id="temporary-segment-0"]',
     );
     await expect(source).toContainText('临时原文第 1 段');
+    await expect(source).not.toContainText('未翻译');
     await page.getByRole('button', { name: '工具', exact: true }).click();
     const toolsDialog = page.getByRole('dialog', { name: '阅读工具' });
     await expect(
@@ -4266,7 +4267,7 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
     await page.getByText('启动全部', { exact: true }).click();
     await twoRequestsArrived;
     expect(server.maximumActiveRequests).toBe(2);
-    await expect(page.getByText(/章节 \d\/2 · 分段 1\/1/)).toHaveCount(2);
+    await expect(page.getByText(/章节 \d\/2 · 分段 1\/1/)).toHaveCount(0);
     const incompatibleCard = page
       .locator('.n-list-item')
       .filter({ hasText: 'sakura-worker-incompatible' });

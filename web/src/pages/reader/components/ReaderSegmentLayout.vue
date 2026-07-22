@@ -253,13 +253,11 @@ onBeforeUnmount(() => {
 
       <template v-else-if="props.mode === 'translated'">
         <p
-          v-if="hasTranslation(segment)"
           class="reader-segment__translated"
           data-reader-language-side="translated"
         >
-          {{ segment.translated }}
+          {{ hasTranslation(segment) ? segment.translated : segment.original }}
         </p>
-        <p v-else class="reader-segment__missing">未翻译</p>
       </template>
 
       <template v-else-if="props.mode === 'translated-original'">
@@ -267,7 +265,7 @@ onBeforeUnmount(() => {
           class="reader-segment__translated"
           data-reader-language-side="translated"
         >
-          {{ hasTranslation(segment) ? segment.translated : '未翻译' }}
+          {{ hasTranslation(segment) ? segment.translated : segment.original }}
         </p>
         <p
           class="reader-segment__original"
@@ -288,7 +286,7 @@ onBeforeUnmount(() => {
           class="reader-segment__translated"
           data-reader-language-side="translated"
         >
-          {{ hasTranslation(segment) ? segment.translated : '未翻译' }}
+          {{ hasTranslation(segment) ? segment.translated : segment.original }}
         </p>
       </template>
     </div>
@@ -322,10 +320,6 @@ onBeforeUnmount(() => {
 }
 .reader-segment__translated {
   color: var(--reader-translation-color, inherit);
-}
-.reader-segment__missing {
-  color: var(--n-text-color-3);
-  font-style: italic;
 }
 @media only screen and (min-width: 760px) {
   .reader-segment-layout--translated-original .reader-segment,

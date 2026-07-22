@@ -138,6 +138,11 @@ for (const viewport of [
       await page.getByRole('button', { name: action, exact: true }).click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
+      if (path === '/workspace/gpt') {
+        await expect(dialog.getByPlaceholder('模型名称')).toHaveValue(
+          'deepseek-v4-flash',
+        );
+      }
       await expectWithinViewport(dialog, page);
       await page.keyboard.press('Escape');
       await expect(dialog).toHaveCount(0);

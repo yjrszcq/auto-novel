@@ -42,16 +42,6 @@ const endpointPrefix = computed(
   () => `${props.worker.model}[${props.worker.key.slice(-4)}]@`,
 );
 
-const assignmentLabel = (
-  assignment: GptWorkerPipelineSnapshot['workers'][number]['assignments'][number],
-) => {
-  const chapter = assignment.chapter;
-  const chapterLabel = chapter?.index
-    ? `章节 ${chapter.index}/${chapter.total ?? '-'}`
-    : '章节准备中';
-  return `${chapterLabel} · 分段 ${assignment.segmentIndex}/${assignment.segmentTotal}`;
-};
-
 const testWorker = async () => {
   if (testingTranslator.value || props.active || props.starting) return;
   testingTranslator.value = true;
@@ -87,30 +77,6 @@ const testWorker = async () => {
       <n-text depth="3" style="font-size: 12px; padding-left: 2px">
         {{ endpointPrefix }}{{ worker.endpoint }}
       </n-text>
-    </template>
-
-    <template #description>
-      <n-flex
-        v-if="(activity?.assignments.length ?? 0) > 0 || active"
-        vertical
-        :size="2"
-      >
-        <n-text
-          v-for="assignment of activity?.assignments ?? []"
-          :key="`${assignment.chapter?.id ?? '?'}-${assignment.segmentIndex}`"
-          depth="3"
-          style="font-size: 12px"
-        >
-          {{ assignmentLabel(assignment) }}
-        </n-text>
-        <n-text
-          v-if="active && activity?.active === 0"
-          depth="3"
-          style="font-size: 12px"
-        >
-          空闲，等待共享任务
-        </n-text>
-      </n-flex>
     </template>
 
     <template #header-extra>

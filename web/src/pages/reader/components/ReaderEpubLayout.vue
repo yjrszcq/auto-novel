@@ -243,8 +243,7 @@ const createTranslatedBlock = (original: Element, segment: ReaderSegment) => {
     .querySelectorAll(RICH_MEDIA_SELECTOR)
     .forEach((media) => translated.append(media.cloneNode(true)));
   const text = document.createElement('span');
-  text.textContent = segment.translated?.trim() || '未翻译';
-  if (!segment.translated?.trim()) text.className = 'epub-missing-translation';
+  text.textContent = segment.translated?.trim() || segment.original;
   translated.append(text);
   return translated;
 };
@@ -423,7 +422,6 @@ const renderSlice = async (
     .epub-document pre { overflow-wrap: anywhere; white-space: pre-wrap; }
     .epub-document a { color: #2faf86; text-decoration: underline; }
     .epub-translated-block { color: var(--reader-translation-color, inherit); }
-    .epub-missing-translation { opacity: .64; font-style: italic; }
     @media (min-width: 760px) {
       .epub-bilingual-block {
         box-sizing: border-box; display: inline-block !important;
