@@ -321,12 +321,8 @@ onBeforeUnmount(() => {
 .reader-segment__translated {
   color: var(--reader-translation-color, inherit);
 }
-@media only screen and (min-width: 760px) {
-  .reader-segment-layout--translated-original .reader-segment,
-  .reader-segment-layout--original-translated .reader-segment {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 36px;
-  }
+.reader-segment-layout--translated-original .reader-segment__original,
+.reader-segment-layout--original-translated .reader-segment__original {
+  color: var(--reader-muted-color, inherit);
 }
 </style>

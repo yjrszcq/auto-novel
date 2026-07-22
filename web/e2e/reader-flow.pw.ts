@@ -1713,6 +1713,28 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
     await page.keyboard.press(shortcut);
     await expect(layout).toHaveClass(expectedClass);
   };
+  const expectFirstSegmentStack = async (
+    topSide: 'original' | 'translated',
+    bottomSide: 'original' | 'translated',
+  ) => {
+    const segment = readerContent.locator('.reader-segment').first();
+    const top = await segment
+      .locator(`[data-reader-language-side="${topSide}"]`)
+      .boundingBox();
+    const bottom = await segment
+      .locator(`[data-reader-language-side="${bottomSide}"]`)
+      .boundingBox();
+    expect(top).not.toBeNull();
+    expect(bottom).not.toBeNull();
+    expect(Math.abs(top!.x - bottom!.x)).toBeLessThanOrEqual(1);
+    expect(top!.y).toBeLessThan(bottom!.y);
+    await expect(
+      segment.locator('[data-reader-language-side="original"]'),
+    ).toHaveCSS('color', 'rgb(146, 146, 146)');
+    await expect(
+      segment.locator('[data-reader-language-side="translated"]'),
+    ).toHaveCSS('color', 'rgb(201, 201, 201)');
+  };
   await chooseMode('1', /reader-segment-layout--translated$/);
   await expect(
     readerContent.locator('.reader-segment').first().locator('p'),
@@ -1721,10 +1743,12 @@ test('keeps keyboard pagination and every reading mode across responsive layout'
   await expect(
     readerContent.locator('.reader-segment').first().locator('p'),
   ).toHaveClass([/reader-segment__translated/, /reader-segment__original/]);
+  await expectFirstSegmentStack('translated', 'original');
   await chooseMode('3', /reader-segment-layout--original-translated/);
   await expect(
     readerContent.locator('.reader-segment').first().locator('p'),
   ).toHaveClass([/reader-segment__original/, /reader-segment__translated/]);
+  await expectFirstSegmentStack('original', 'translated');
   await chooseMode('4', /reader-segment-layout--original$/);
   await expect(layout).toHaveClass(/reader-segment-layout--original$/);
   await expect(

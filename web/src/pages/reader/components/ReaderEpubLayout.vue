@@ -422,11 +422,12 @@ const renderSlice = async (
     .epub-document pre { overflow-wrap: anywhere; white-space: pre-wrap; }
     .epub-document a { color: #2faf86; text-decoration: underline; }
     .epub-translated-block { color: var(--reader-translation-color, inherit); }
-    @media (min-width: 760px) {
-      .epub-bilingual-block {
-        box-sizing: border-box; display: inline-block !important;
-        width: 50%; vertical-align: top;
-      }
+    .epub-bilingual-block {
+      box-sizing: border-box; display: block !important; width: auto !important;
+    }
+    .epub-bilingual-block[data-reader-language-side="original"],
+    .epub-bilingual-block[data-reader-language-side="original"] * {
+      color: var(--reader-muted-color, inherit) !important;
     }
   `;
   content.append(baseStyle);
