@@ -585,7 +585,7 @@ onMounted(() => {
 }
 
 .translation-api-setting {
-  display: grid;
+  display: grid !important;
   grid-template-columns: 128px minmax(0, 1fr);
   align-items: center;
   gap: 16px;
@@ -598,6 +598,7 @@ onMounted(() => {
 }
 
 @media (max-width: 700px) {
+  .download-setting-row,
   .language-detection-setting,
   .reader-setting-row,
   .translation-api-setting {

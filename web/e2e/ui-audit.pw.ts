@@ -169,6 +169,27 @@ for (const viewport of [
         has: page.getByText('本地 EPUB 下载', { exact: true }),
       }),
     ).toHaveCount(0);
+    if (viewport.name === 'mobile') {
+      for (const [rows, count] of [
+        [translationApiItem.locator('.translation-api-setting'), 2],
+        [downloadItem.locator('.download-setting-row'), 3],
+      ] as const) {
+        await expect(rows).toHaveCount(count);
+        for (const row of await rows.all()) {
+          const titleBounds = await row
+            .locator(':scope > .n-text')
+            .boundingBox();
+          const controlBounds = await row
+            .locator(':scope > :not(.n-text)')
+            .boundingBox();
+          expect(titleBounds).not.toBeNull();
+          expect(controlBounds).not.toBeNull();
+          expect(controlBounds!.y).toBeGreaterThanOrEqual(
+            titleBounds!.y + titleBounds!.height,
+          );
+        }
+      }
+    }
     const originalMetadataButton = downloadItem.getByRole('button', {
       name: '原文',
       exact: true,
