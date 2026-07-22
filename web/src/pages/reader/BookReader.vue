@@ -2026,6 +2026,21 @@ type VisibleReaderSegment = {
   original: string;
 };
 
+const renderedReaderChapters = () => {
+  const ready = result.value;
+  if (ready?.kind !== 'ready') return [];
+  return [
+    ...new Map(
+      [
+        ready.chapter,
+        ...continuousChapters.value,
+        ...previousChapterPreviews.value.map(({ chapter }) => chapter),
+        ...nextChapterPreviews.value.map(({ chapter }) => chapter),
+      ].map((chapter) => [chapter.chapterId, chapter]),
+    ).values(),
+  ];
+};
+
 const getVisibleReaderSegments = (): VisibleReaderSegment[] => {
   const ready = result.value;
   if (ready?.kind !== 'ready') return [];
@@ -2040,10 +2055,7 @@ const getVisibleReaderSegments = (): VisibleReaderSegment[] => {
           left: 0,
         };
   const chapters = new Map(
-    [ready.chapter, ...continuousChapters.value].map((chapter) => [
-      chapter.chapterId,
-      chapter,
-    ]),
+    renderedReaderChapters().map((chapter) => [chapter.chapterId, chapter]),
   );
   const seen = new Set<string>();
   return getSegmentElements().flatMap((element) => {
@@ -2059,13 +2071,20 @@ const getVisibleReaderSegments = (): VisibleReaderSegment[] => {
       return [];
     }
     const root = element.getRootNode();
+    const chapterContainer = element.closest<HTMLElement>(
+      '[data-reader-chapter-id], [data-reader-preview-chapter-id]',
+    );
+    const shadowChapterContainer =
+      root instanceof ShadowRoot
+        ? root.host.closest<HTMLElement>(
+            '[data-reader-chapter-id], [data-reader-preview-chapter-id]',
+          )
+        : undefined;
     const chapterId =
-      element.closest<HTMLElement>('[data-reader-chapter-id]')?.dataset
-        .readerChapterId ??
-      (root instanceof ShadowRoot
-        ? root.host.closest<HTMLElement>('[data-reader-chapter-id]')?.dataset
-            .readerChapterId
-        : undefined) ??
+      chapterContainer?.dataset.readerChapterId ??
+      chapterContainer?.dataset.readerPreviewChapterId ??
+      shadowChapterContainer?.dataset.readerChapterId ??
+      shadowChapterContainer?.dataset.readerPreviewChapterId ??
       ready.chapter.chapterId;
     const segmentId = element.dataset.readerSegmentId;
     const key =
@@ -2116,16 +2135,9 @@ let activeAutomaticTranslationRuntime:
 let automaticTranslationStartRequest = 0;
 
 const loadedReaderChapters = () => {
-  const ready = result.value;
-  if (ready?.kind !== 'ready') return [];
-  return [
-    ...new Map(
-      [ready.chapter, ...continuousChapters.value].map((chapter) => [
-        chapter.chapterId,
-        chapter,
-      ]),
-    ).values(),
-  ].sort((left, right) => left.chapterIndex - right.chapterIndex);
+  return renderedReaderChapters().sort(
+    (left, right) => left.chapterIndex - right.chapterIndex,
+  );
 };
 
 const renderTemporaryTranslations = async (changedChapterIds: Set<string>) => {
@@ -2141,6 +2153,16 @@ const renderTemporaryTranslations = async (changedChapterIds: Set<string>) => {
   continuousChapters.value = continuousChapters.value.map(
     withTemporaryTranslations,
   );
+  previousChapterPreviews.value = previousChapterPreviews.value.map(
+    (preview) => ({
+      ...preview,
+      chapter: withTemporaryTranslations(preview.chapter),
+    }),
+  );
+  nextChapterPreviews.value = nextChapterPreviews.value.map((preview) => ({
+    ...preview,
+    chapter: withTemporaryTranslations(preview.chapter),
+  }));
   const chapter =
     continuousChapters.value.find(
       ({ chapterId }) => chapterId === ready.chapter.chapterId,
@@ -2312,8 +2334,15 @@ const collectAutomaticTranslationChapters = async (
       .filter(({ translationStatus }) => translationStatus === 'complete')
       .map(({ id }) => id),
   );
+  const visibleChapterIds = new Set(visible.map(({ chapterId }) => chapterId));
   const chapters = new Map(
-    loadedReaderChapters().map((chapter) => [chapter.chapterId, chapter]),
+    loadedReaderChapters()
+      .filter(
+        (chapter) =>
+          visibleChapterIds.has(chapter.chapterId) ||
+          !completedChapterIds.has(chapter.chapterId),
+      )
+      .map((chapter) => [chapter.chapterId, chapter]),
   );
   const visibleIndexes = visible.flatMap(({ chapterId }) => {
     const index = ready.chapters.findIndex(({ id }) => id === chapterId);
@@ -3575,6 +3604,7 @@ const applyChapterPreviews = async (
       : undefined;
   setChapterPreviews(direction, previews);
   await waitForContinuousPreviewLayout();
+  scheduleAutomaticTranslation();
   if (previousTop === undefined) return;
   const nextTop =
     getContinuousChapterElement(chapterId)?.getBoundingClientRect().top;
