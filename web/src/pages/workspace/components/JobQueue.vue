@@ -4,9 +4,10 @@ import {
   DragIndicatorOutlined,
   KeyboardDoubleArrowDownOutlined,
   KeyboardDoubleArrowUpOutlined,
+  MenuBookOutlined,
 } from '@vicons/material';
 
-import type { TranslateJob } from '@/model/Translator';
+import { TranslateTaskDescriptor, type TranslateJob } from '@/model/Translator';
 
 const props = defineProps<{
   job: TranslateJob;
@@ -22,6 +23,15 @@ const emit = defineEmits<{
   bottomJob: [];
   deleteJob: [];
 }>();
+
+const showGlossary = ref(false);
+const volumeId = computed(() => {
+  try {
+    return TranslateTaskDescriptor.parse(props.job.task).desc.volumeId;
+  } catch {
+    return undefined;
+  }
+});
 
 const percentage = computed(() => {
   if (props.progress === undefined) {
@@ -61,6 +71,13 @@ const throughput = computed(() => {
     <template #header-extra>
       <n-flex :size="6" :wrap="false">
         <c-icon-button
+          v-if="progress === undefined && volumeId !== undefined"
+          tooltip="编辑术语表"
+          :icon="MenuBookOutlined"
+          @action="showGlossary = true"
+        />
+
+        <c-icon-button
           tooltip="置顶"
           :icon="KeyboardDoubleArrowUpOutlined"
           @action="emit('topJob')"
@@ -92,4 +109,10 @@ const throughput = computed(() => {
       </template>
     </template>
   </n-thing>
+
+  <local-volume-glossary-modal
+    v-if="volumeId !== undefined"
+    v-model:show="showGlossary"
+    :volume-id="volumeId"
+  />
 </template>

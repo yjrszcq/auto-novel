@@ -5033,6 +5033,107 @@ test('keeps shared GPT worker controls usable on mobile', async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
+test('edits and auto-scans an empty glossary for a queued book', async ({
+  page,
+}) => {
+  const volumeId = 'queued-glossary.txt';
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: '轻小说机翻机器人' }),
+  ).toBeVisible();
+  await page.evaluate(async (bookId) => {
+    localStorage.setItem(
+      'auto-novel:workspace:gpt',
+      JSON.stringify({
+        workers: [],
+        jobs: [
+          {
+            task: `local/${bookId}?level=normal&translateMetadata=true&forceMetadata=false&startIndex=0&endIndex=65535&formatRetryCount=3`,
+            description: bookId,
+            createAt: 1,
+          },
+        ],
+        jobRecords: [],
+      }),
+    );
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const transaction = database.transaction(['metadata', 'file'], 'readwrite');
+    transaction.objectStore('metadata').put({
+      id: bookId,
+      createAt: 1,
+      toc: [],
+      sourceFormat: 'txt',
+      glossaryId: 'empty-glossary',
+      glossary: {},
+      favoredId: 'default',
+      sourceBookMetadata: { title: bookId, languages: ['ja'] },
+    });
+    transaction.objectStore('file').put({
+      id: bookId,
+      file: new File(['テスト\n'.repeat(12)], bookId, {
+        type: 'text/plain',
+      }),
+    });
+    await new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  }, volumeId);
+  await page.goto('/workspace/gpt');
+
+  const queueItem = page.locator('.n-list-item').filter({ hasText: volumeId });
+  const editGlossary = queueItem.getByRole('button', {
+    name: '编辑术语表',
+  });
+  await expect(editGlossary).toBeVisible();
+  await editGlossary.click();
+
+  const dialog = page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('heading', { name: '编辑术语表' }) });
+  await expect(dialog).toBeVisible();
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  const row = dialog.locator('tbody tr').filter({ hasText: 'テスト' });
+  await expect(row).toBeVisible();
+  await row.locator('input').fill('队列译名');
+  await dialog.getByRole('button', { name: '保存到本书' }).click();
+  await expect(
+    page.getByText('术语表已保存到本书', { exact: true }),
+  ).toBeVisible();
+
+  const glossary = await page.evaluate(async (bookId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('volumes');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+    const request = database
+      .transaction('metadata', 'readonly')
+      .objectStore('metadata')
+      .get(bookId);
+    const value = await new Promise<{
+      glossary: Record<string, string>;
+      glossaryCandidateCounts?: Record<string, number>;
+    }>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    return value;
+  }, volumeId);
+  expect(glossary.glossary).toEqual({ テスト: '队列译名' });
+  expect(glossary.glossaryCandidateCounts).toEqual({ テスト: 12 });
+});
+
 test('loads only the current GPT workspace schema', async ({ page }) => {
   await page.goto('/workspace/gpt');
   await page.evaluate(() => {
