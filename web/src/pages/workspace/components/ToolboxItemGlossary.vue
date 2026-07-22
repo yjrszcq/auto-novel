@@ -488,7 +488,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <n-flex align="center">
+    <n-flex align="center" class="glossary-selection-actions">
       <c-button
         v-if="applyLabel"
         :label="applyLabel"
@@ -565,7 +565,7 @@ onBeforeUnmount(() => {
       />
     </n-flex>
 
-    <n-flex align="center">
+    <n-flex align="center" class="glossary-export-actions">
       <c-button
         label="复制术语表"
         :disabled="
@@ -735,8 +735,14 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .glossary-table {
+  box-sizing: border-box;
+  width: 100%;
   max-width: 920px;
   max-height: 60vh;
+}
+
+.glossary-table :deep(table) {
+  min-width: 680px;
 }
 
 .glossary-table__translation {
@@ -796,6 +802,12 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.glossary-selection-actions,
+.glossary-translator-actions,
+.glossary-export-actions {
+  flex-wrap: wrap;
+}
+
 .glossary-empty-state {
   padding-top: clamp(48px, 8vh, 80px);
 }
@@ -806,7 +818,12 @@ onBeforeUnmount(() => {
 
 @media (max-width: 639px) {
   .glossary-table {
-    max-width: calc(100vw - 32px);
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .glossary-table :deep(.n-scrollbar-container) {
+    overflow-x: auto;
   }
 
   .glossary-table__translation {
@@ -841,7 +858,7 @@ onBeforeUnmount(() => {
 
   .glossary-toolbar__row--secondary {
     display: grid;
-    grid-template-columns: 120px minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .glossary-toolbar__minimum-input {
@@ -870,6 +887,12 @@ onBeforeUnmount(() => {
   .glossary-toolbar__row--secondary > :last-child {
     margin-left: 0;
     justify-self: end;
+  }
+
+  .glossary-selection-actions,
+  .glossary-translator-actions,
+  .glossary-export-actions {
+    align-items: stretch;
   }
 }
 </style>

@@ -103,6 +103,7 @@ const applyGlossary = async (glossary: Glossary, excludedWords: string[]) => {
   <c-modal
     :show="show"
     title="编辑术语表"
+    style="width: min(960px, calc(100vw - 16px))"
     @update:show="emit('update:show', $event)"
   >
     <div v-if="loading" class="local-volume-glossary-modal__loading">

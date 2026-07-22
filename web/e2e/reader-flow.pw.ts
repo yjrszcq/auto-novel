@@ -5413,7 +5413,7 @@ test('edits and auto-scans an empty glossary for a queued book', async ({
   }, volumeId);
   await page.goto('/workspace/gpt');
 
-  const queueItem = page.locator('.n-list-item').filter({ hasText: volumeId });
+  const queueItem = page.locator('.job-queue').filter({ hasText: volumeId });
   const editGlossary = queueItem.getByRole('button', {
     name: '编辑术语表',
   });
@@ -5428,6 +5428,25 @@ test('edits and auto-scans an empty glossary for a queued book', async ({
   expect(bounds).not.toBeNull();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  expect(
+    await dialog.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth,
+    ),
+  ).toBe(true);
+  expect(
+    await dialog
+      .locator('.glossary-toolbar__row--secondary')
+      .evaluate(
+        (element) =>
+          getComputedStyle(element).gridTemplateColumns.split(' ').length,
+      ),
+  ).toBe(2);
+  const tableBounds = await dialog.locator('.glossary-table').boundingBox();
+  expect(tableBounds).not.toBeNull();
+  expect(tableBounds!.x).toBeGreaterThanOrEqual(bounds!.x);
+  expect(tableBounds!.x + tableBounds!.width).toBeLessThanOrEqual(
+    bounds!.x + bounds!.width,
+  );
   const row = dialog.locator('tbody tr').filter({ hasText: 'テスト' });
   await expect(row).toBeVisible();
   await row.locator('input').fill('队列译名');
@@ -5482,7 +5501,7 @@ test('edits and auto-scans an empty glossary for a queued book', async ({
 
   await page.goto('/workspace/gpt');
   const refreshedQueueItem = page
-    .locator('.n-list-item')
+    .locator('.job-queue')
     .filter({ hasText: volumeId });
   await refreshedQueueItem.getByRole('button', { name: '编辑术语表' }).click();
   const refreshedDialog = page
