@@ -3989,6 +3989,8 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     const activeJob = page.locator('.job-queue').filter({ hasText: volumeId });
     const queuedChapters = activeJob.locator('.job-queue__chapter');
     await expect(activeJob.getByText('等待中', { exact: true })).toBeVisible();
+    await expect(queuedChapters).toHaveCount(0);
+    await activeJob.locator('.task-identity').click();
     await expect(queuedChapters).toHaveCount(2);
     await expect(activeJob.locator('.chapter-grid__progress')).toHaveCount(0);
     expect(
@@ -4351,6 +4353,7 @@ test('shares one Sakura job across compatible workers', async ({ page }) => {
     await twoRequestsArrived;
     expect(server.maximumActiveRequests).toBe(2);
     const activeJob = page.locator('.job-queue').filter({ hasText: volumeId });
+    await activeJob.locator('.task-identity').click();
     await expect(activeJob.locator('.job-queue__chapter')).toHaveCount(2);
     const incompatibleCard = page
       .locator('.n-list-item')
@@ -4559,14 +4562,7 @@ test('stops and resumes only unfinished GPT chapters', async ({ page }) => {
 
     const pausedJob = page.locator('.job-queue').filter({ hasText: volumeId });
     await expect(pausedJob.getByText('等待中', { exact: true })).toBeVisible();
-    await expect(pausedJob.locator('.job-queue__chapter')).toHaveCount(2);
-    await expect(pausedJob.locator('.chapter-grid__chapter--done')).toHaveCount(
-      1,
-    );
-    await expect(
-      pausedJob.locator('.chapter-grid__chapter--pending'),
-    ).toHaveCount(1);
-    await expect(pausedJob.locator('.chapter-grid__bar')).toHaveCount(1);
+    await expect(pausedJob.locator('.job-queue__chapter')).toHaveCount(0);
 
     await page.getByText('继续队列', { exact: true }).click();
     await expect

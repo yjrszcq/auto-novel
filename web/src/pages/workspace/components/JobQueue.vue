@@ -31,7 +31,7 @@ const emit = defineEmits<{
 }>();
 
 const themeVars = useThemeVars();
-const expanded = ref(true);
+const expanded = ref(false);
 const showGlossary = ref(false);
 const plannedChapters = ref<TranslateChapterProgress[]>([]);
 let planRevision = 0;
@@ -128,7 +128,7 @@ const hasMetrics = computed(
     :content-style="expanded ? { padding: '0 14px 10px' } : { padding: '0' }"
   >
     <template #header>
-      <div @click="expanded = !expanded">
+      <div :aria-expanded="expanded" @click="expanded = !expanded">
         <n-flex
           class="task-header"
           align="center"
