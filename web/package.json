@@ -18,9 +18,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:performance": "vitest run tests/translation-performance.test.ts tests/concurrency.test.ts tests/shared-worker-pool.test.ts tests/gpt-worker-pipeline.test.ts tests/sakura-worker-pipeline.test.ts tests/translator-http-integration.test.ts tests/translate-local-concurrency.test.ts tests/translation-cache.test.ts tests/local-volume-reader-adapter.test.ts tests/reader-segment-window.test.ts tests/txt-catalog-parser.test.ts tests/txt-catalog-worker.test.ts",
-    "test:gate": "pnpm lint && pnpm test && pnpm build && pnpm test:pwa:dist && pnpm test:e2e",
+    "test:gate": "pnpm lint && pnpm test:runtime-config-init && pnpm test && pnpm build && pnpm test:pwa:dist && pnpm test:e2e",
     "test:pwa": "pnpm build && pnpm test:pwa:dist",
     "test:pwa:dist": "node scripts/pwa-smoke.mjs",
+    "test:runtime-config-init": "sh scripts/runtime-config-init-smoke.sh",
     "test:runtime-smoke": "node scripts/runtime-smoke.mjs",
     "prepare": "cd .. && husky web/.husky || true",
     "test:e2e": "playwright test"

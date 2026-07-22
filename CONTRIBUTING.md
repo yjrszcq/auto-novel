@@ -54,6 +54,6 @@ EPUB 导入必须优先使用 EPUB3 nav 或 EPUB2 NCX，并保持目录标题、
 
 阅读器外壳适配自 Candle Reader v1.0.2。修改相关交互时请保留 `THIRD_PARTY_NOTICES.md` 中的 MIT 声明，不要提交 TaleBook 宿主模板、Candle Reader 预构建 bundle、Vuetify 或远程阅读服务。`auto` 阅读流在电脑上解析为横向分页、手机上解析为纵向滚动；两种流都必须验证稳定进度、目录、双语模式、书签、批注、朗读和选中文本交接。
 
-运行时默认配置位于 `web/config/`。Docker 镜像会将其复制到 `/app/default-config`，并在启动时为挂载的 `/app/config` 补齐当前结构中缺失的文件。请通过挂载目录修改 `config.json`、`html/info*.html` 和 `images/` 中的本地图片；`config.json` 中的图片路径均相对 `/app/config`。根目录旧版 `info*.html` 不会被读取或迁移。不要将个人配置或密钥提交到仓库。
+运行时默认配置位于 `web/config/`。Docker 镜像会将其复制到 `/app/default-config`，并在启动时用它初始化空的 `/app/config` 挂载目录；非空目录不会被覆盖。请通过挂载目录修改 `config.json`、`html/info*.html` 和 `images/` 中的本地图片；`config.json` 中的图片路径均相对 `/app/config`。根目录旧版 `info*.html` 不会被读取或迁移。不要将个人配置或密钥提交到仓库。
 
 提交前请至少运行与改动相符的检查；涉及构建、路由、任务模型或运行时配置时，运行 `pnpm lint`、`pnpm test` 与 `pnpm run build`。依赖变更还应运行 `pnpm audit --prod` 和 `pnpm outdated`；涉及阅读器交互或响应式布局时还必须运行 `pnpm run test:e2e`。

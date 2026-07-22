@@ -11,10 +11,9 @@ RUN pnpm run build
 FROM caddy:2.11.4-alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /web/dist /app/dist
-COPY config/. /app/config/
 COPY config/. /app/default-config/
 COPY scripts/initialize-runtime-config.sh /usr/local/bin/initialize-runtime-config.sh
 RUN chmod +x /usr/local/bin/initialize-runtime-config.sh
 
 ENTRYPOINT ["/usr/local/bin/initialize-runtime-config.sh"]
-CMD ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

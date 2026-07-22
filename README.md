@@ -107,7 +107,7 @@ corepack pnpm test:runtime-smoke http://127.0.0.1:8011 docker
 
 2. 浏览器访问 `http://localhost:8011`
 
-容器首次启动时会在 `/app/config` 中补齐缺失的默认配置文件；因此应始终挂载该目录，保存自己的配置。首页背景、Logo 与无封面书籍的默认封面可通过挂载目录中的 `config.json` 配置：
+仓库内的 `web/config` 会作为默认配置保存在镜像的 `/app/default-config`。容器启动时，如果挂载的 `/app/config` 为空，会从该镜像内目录复制完整默认配置；已有配置的非空目录不会被覆盖。因此应始终挂载 `/app/config`，保存自己的配置。首页背景、Logo 与无封面书籍的默认封面可通过挂载目录中的 `config.json` 配置：
 
 ```json
 {
