@@ -129,7 +129,12 @@ const hasMetrics = computed(
   >
     <template #header>
       <div @click="expanded = !expanded">
-        <n-flex align="center" :wrap="false" style="flex: 1; min-width: 0">
+        <n-flex
+          class="task-header"
+          align="center"
+          :wrap="false"
+          style="flex: 1; min-width: 0"
+        >
           <n-icon
             class="drag-trigger task-drag"
             :size="18"
@@ -220,6 +225,11 @@ const hasMetrics = computed(
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
 }
 
+.job-queue {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .task-drag,
 .task-status,
 .task-actions,
@@ -276,6 +286,38 @@ const hasMetrics = computed(
 }
 
 @media (max-width: 639px) {
+  .task-header {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .task-drag {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+  }
+
+  .task-identity {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .task-status {
+    grid-row: 2;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .task-actions {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .expand-arrow {
+    grid-row: 2;
+    grid-column: 3;
+    justify-self: end;
+  }
+
   .task-status {
     gap: 4px !important;
   }

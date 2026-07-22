@@ -68,6 +68,11 @@ const percentage = (chapter: TranslateChapterProgress) => {
 }
 
 .chapter-grid__chapter {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
   aspect-ratio: 1;
   padding: 2px;
   border: 1px solid v-bind('themeVars.borderColor');

@@ -528,6 +528,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .workspace-task-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 </style>
