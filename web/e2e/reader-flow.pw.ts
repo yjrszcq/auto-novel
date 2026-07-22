@@ -4017,6 +4017,9 @@ test('completes, persists, exports, and reads a concurrent GPT job', async ({
     await logButton.click();
     await expect(logButton).toHaveAttribute('aria-pressed', 'true');
     await expect(taskLog).toBeVisible();
+    await expect(taskLog.getByText('章节1/2', { exact: true })).toBeVisible();
+    await expect(taskLog.getByText('章节2/2', { exact: true })).toBeVisible();
+    await expect(taskLog.getByText('章节0/2', { exact: true })).toHaveCount(0);
     await logButton.click();
     await expect(taskLog).toBeHidden();
     await page.getByRole('button', { name: '翻译器运行统计' }).click();

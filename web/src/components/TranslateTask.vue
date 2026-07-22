@@ -269,7 +269,7 @@ const runTask = async (
           remainingChapterIds = new Set(chapterIds);
           chapterProgress.value = chapterIds.map((chapterId, index) => ({
             key: chapterId,
-            chapterIndex: index,
+            chapterIndex: index + 1,
             chapterTotal: total,
             totalSegments: 0,
             successSegments: 0,
