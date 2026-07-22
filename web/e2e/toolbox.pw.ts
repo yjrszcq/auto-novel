@@ -404,25 +404,28 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
     );
   });
   await page.goto('/workspace/toolbox');
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'glossary.txt',
-    mimeType: 'text/plain',
-    buffer: Buffer.from('カタカナ ｶﾀｶﾅ ベータ ベータ ガンマ ガンマ アルファ'),
-  });
+  await page
+    .locator('input[type="file"]')
+    .first()
+    .setInputFiles({
+      name: 'glossary.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('カタカナ ｶﾀｶﾅ ベータ ベータ ガンマ ガンマ アルファ'),
+    });
 
   const emptyState = page.locator('.glossary-empty-state');
   await expect(emptyState).toBeVisible();
   const emptyIconBounds = await emptyState
     .locator('.n-empty__icon')
     .boundingBox();
-  const translatorActionsBounds = await page
-    .locator('.glossary-translator-actions')
+  const glossaryActionsBounds = await page
+    .locator('.glossary-actions')
     .boundingBox();
   expect(emptyIconBounds).not.toBeNull();
-  expect(translatorActionsBounds).not.toBeNull();
+  expect(glossaryActionsBounds).not.toBeNull();
   expect(
     emptyIconBounds!.y -
-      (translatorActionsBounds!.y + translatorActionsBounds!.height),
+      (glossaryActionsBounds!.y + glossaryActionsBounds!.height),
   ).toBeGreaterThanOrEqual(40);
 
   const scanButton = page.getByRole('button', { name: '扫描', exact: true });
@@ -528,6 +531,41 @@ test('manages and exports normalized glossary candidates', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: /^(百度|有道|GPT|Sakura) 翻译$/ }),
   ).toHaveCount(0);
+  const importButton = page.getByRole('button', {
+    name: '导入术语表',
+    exact: true,
+  });
+  await expect(importButton).toBeVisible();
+  const importFileInput = page.getByLabel('选择要导入的术语表文件');
+  await importFileInput.setInputFiles({
+    name: 'imported-glossary.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('インポート => 导入词\nニュー => 新词'),
+  });
+  await expect(
+    page.getByText('已导入 2 个词语', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'ニュー' })
+      .getByPlaceholder('请输入中文翻译'),
+  ).toHaveValue('新词');
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ hasText: 'インポート' })
+      .getByPlaceholder('请输入中文翻译'),
+  ).toHaveValue('导入词');
+  const glossaryActionsBoundsAfterImport = await page
+    .locator('.glossary-actions')
+    .boundingBox();
+  expect(glossaryActionsBoundsAfterImport).not.toBeNull();
+  expect(glossaryActionsBoundsAfterImport!.x).toBeGreaterThanOrEqual(0);
+  expect(
+    glossaryActionsBoundsAfterImport!.x +
+      glossaryActionsBoundsAfterImport!.width,
+  ).toBeLessThanOrEqual(390);
   await expect(translatorConfigButton).toHaveAttribute(
     'aria-expanded',
     'false',

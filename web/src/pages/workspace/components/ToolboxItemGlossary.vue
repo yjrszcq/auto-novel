@@ -86,6 +86,7 @@ const translations = ref<Record<string, string>>({});
 const manuallyEdited = shallowRef(new Set<string>());
 const translationFailures = shallowRef(new Map<string, unknown>());
 const translating = ref(false);
+const glossaryImportInput = ref<HTMLInputElement>();
 const translationProgress = ref<GlossaryTranslationProgress>({
   total: 0,
   completed: 0,
@@ -318,6 +319,51 @@ const downloadGlossary = () => {
   );
 };
 
+const importGlossary = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (file === undefined) return;
+  try {
+    const imported = Glossary.fromText(await file.text());
+    if (imported === undefined) {
+      message.error('导入失败：术语表格式不正确');
+      return;
+    }
+    const entries = Object.entries(imported).filter(
+      ([word, translation]) => word.trim() && translation.trim(),
+    );
+    if (entries.length === 0) {
+      message.error('导入失败：术语表为空');
+      return;
+    }
+    const counts = new Map(sourceCounts.value);
+    const nextTranslations = { ...translations.value };
+    const nextManuallyEdited = new Set(manuallyEdited.value);
+    const nextDeletedWords = new Set(deletedWords.value);
+    const failures = new Map(translationFailures.value);
+    const importedCount = Math.max(1, minimumCount.value || 1);
+    for (const [rawWord, rawTranslation] of entries) {
+      const word = rawWord.trim();
+      counts.set(word, Math.max(counts.get(word) ?? 0, importedCount));
+      nextTranslations[word] = rawTranslation.trim();
+      nextManuallyEdited.add(word);
+      nextDeletedWords.delete(word);
+      failures.delete(word);
+    }
+    sourceCounts.value = counts;
+    emit('scan', Object.fromEntries(counts));
+    translations.value = nextTranslations;
+    manuallyEdited.value = nextManuallyEdited;
+    deletedWords.value = nextDeletedWords;
+    translationFailures.value = failures;
+    scanCompleted.value = true;
+    message.success(`已导入 ${entries.length} 个词语`);
+  } catch (error) {
+    message.error(`导入失败：${error}`);
+  }
+};
+
 const translatorConfig = (
   id: GlossaryTranslatorId,
 ): TranslatorConfig | undefined => {
@@ -494,82 +540,96 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <n-flex align="center" class="glossary-selection-actions">
-      <c-button
-        v-if="applyLabel"
-        :label="applyLabel"
-        :disabled="
-          !scanCompleted || extractionLoading || translating || applying
-        "
-        :loading="applying"
-        type="primary"
-        size="small"
-        :round="false"
-        @action="applyGlossary"
-      />
-      <c-button
-        :label="allVisibleSelected ? '取消全选' : '全选当前'"
-        :disabled="visibleCandidates.length === 0"
-        size="small"
-        :round="false"
-        @action="toggleSelectAll"
-      />
-      <c-button
-        label="移除所选"
-        :disabled="selectedWords.length === 0"
-        size="small"
-        :round="false"
-        @action="removeWords(selectedWords)"
-      />
-      <c-button
-        label="撤销删除"
-        :disabled="deletionHistory.length === 0"
-        size="small"
-        :round="false"
-        @action="undoDelete"
-      />
-      <n-text v-if="lastDeletedHint" depth="3">
-        最近删除：{{ lastDeletedHint }}
-      </n-text>
-    </n-flex>
+    <div class="glossary-actions">
+      <n-flex align="center" class="glossary-selection-actions">
+        <c-button
+          v-if="applyLabel"
+          :label="applyLabel"
+          :disabled="
+            !scanCompleted || extractionLoading || translating || applying
+          "
+          :loading="applying"
+          type="primary"
+          size="small"
+          :round="false"
+          @action="applyGlossary"
+        />
+        <c-button
+          :label="allVisibleSelected ? '取消全选' : '全选当前'"
+          :disabled="visibleCandidates.length === 0"
+          size="small"
+          :round="false"
+          @action="toggleSelectAll"
+        />
+        <c-button
+          label="移除所选"
+          :disabled="selectedWords.length === 0"
+          size="small"
+          :round="false"
+          @action="removeWords(selectedWords)"
+        />
+        <c-button
+          label="撤销删除"
+          :disabled="deletionHistory.length === 0"
+          size="small"
+          :round="false"
+          @action="undoDelete"
+        />
+        <n-text v-if="lastDeletedHint" depth="3">
+          最近删除：{{ lastDeletedHint }}
+        </n-text>
+      </n-flex>
 
-    <n-flex align="center" class="glossary-translator-actions">
-      <c-button
-        label="翻译"
-        :disabled="translating || activeCandidates.length === 0"
-        size="small"
-        :round="false"
-        @action="translateCandidates(selectedTranslatorId)"
-      />
-      <c-button
-        v-if="translating"
-        label="取消翻译"
-        size="small"
-        :round="false"
-        @action="cancelTranslation"
-      />
-    </n-flex>
-
-    <n-flex align="center" class="glossary-export-actions">
-      <c-button
-        label="复制术语表"
-        :disabled="
-          extractionLoading || translating || activeCandidates.length === 0
-        "
-        size="small"
-        :round="false"
-        @action="copyGlossary"
-      />
-      <c-button
-        label="下载术语表"
-        :disabled="
-          extractionLoading || translating || activeCandidates.length === 0
-        "
-        size="small"
-        :round="false"
-        @action="downloadGlossary"
-      />
-    </n-flex>
+      <n-flex align="center" class="glossary-utility-actions">
+        <c-button
+          label="翻译"
+          :disabled="translating || activeCandidates.length === 0"
+          size="small"
+          :round="false"
+          @action="translateCandidates(selectedTranslatorId)"
+        />
+        <c-button
+          v-if="translating"
+          label="取消翻译"
+          size="small"
+          :round="false"
+          @action="cancelTranslation"
+        />
+        <c-button
+          label="导入术语表"
+          :disabled="extractionLoading || translating || applying"
+          size="small"
+          :round="false"
+          @action="glossaryImportInput?.click()"
+        />
+        <c-button
+          label="复制术语表"
+          :disabled="
+            extractionLoading || translating || activeCandidates.length === 0
+          "
+          size="small"
+          :round="false"
+          @action="copyGlossary"
+        />
+        <c-button
+          label="下载术语表"
+          :disabled="
+            extractionLoading || translating || activeCandidates.length === 0
+          "
+          size="small"
+          :round="false"
+          @action="downloadGlossary"
+        />
+        <input
+          ref="glossaryImportInput"
+          class="glossary-import-input"
+          type="file"
+          accept=".txt,.json,text/plain,application/json"
+          aria-label="选择要导入的术语表文件"
+          @change="importGlossary"
+        />
+      </n-flex>
+    </div>
 
     <n-alert v-if="extractionError" type="error">
       提取失败：{{ extractionError }}
@@ -803,10 +863,25 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.glossary-actions {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .glossary-selection-actions,
-.glossary-translator-actions,
-.glossary-export-actions {
+.glossary-utility-actions {
   flex-wrap: wrap;
+}
+
+.glossary-utility-actions {
+  justify-content: flex-end;
+}
+
+.glossary-import-input {
+  display: none;
 }
 
 .glossary-empty-state {
@@ -863,7 +938,7 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .glossary-translator-actions,
+  .glossary-utility-actions,
   .glossary-translator-selectors {
     width: 100%;
   }
@@ -922,10 +997,19 @@ onBeforeUnmount(() => {
     justify-self: end;
   }
 
+  .glossary-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .glossary-selection-actions,
-  .glossary-translator-actions,
-  .glossary-export-actions {
+  .glossary-utility-actions {
+    width: 100%;
     align-items: stretch;
+  }
+
+  .glossary-utility-actions {
+    justify-content: flex-start;
   }
 }
 </style>
